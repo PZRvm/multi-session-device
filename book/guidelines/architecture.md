@@ -1,0 +1,56 @@
+---
+description: multi-session-device 的长期架构规则——边界不变量、模块地图、技术基线、数据归属
+---
+
+# 架构
+
+> 本文件承载本项目的长期架构真相：边界不变量、模块地图、技术基线、数据归属。*今天*存在的东西放 `docs/architecture/` 快照（见《项目骨架》）；必须**永远**为真的东西放这里。
+
+## 边界不变量
+
+一条边界规则点名两个关注点并把它们分开，附上 reviewer 能核对的理由：
+
+| 规则 | 理由 |
+|------|-----|
+| 会话 ≠ 模拟器数据 | 每会话独占一个 AVD 数据分区 / Simulator data container；任何跨会话共享数据的改动都直接违背产品承诺（登录态互不影响是产品的一等公民语义） |
+| renderer ≠ Node/Electron API | renderer 只经 preload 白名单 `window.api` 通信；直访会绕过通道守卫，IPC 纪律整体失效 |
+| 通道名 ≠ 调用点字面量 | IPC 通道名只在 `src/shared/` 定义；散落字符串会让三进程契约漂移 |
+| 主进程 ≠ 事实源镜像 | 实例列表、运行状态的唯一事实源在主进程；renderer 只持镜像 + 发命令，不造主进程没有的事实 |
+| 流生命周期 ≠ 解码渲染 | 主进程只编排画面流的生命周期与归属；解码（WebCodecs）与渲染（canvas）只在 renderer——混流会把窗口编排和媒体处理耦合 |
+| 会话编排 ≠ 平台采集 | 会话/Tab 编排不得感知具体平台的画面采集与注入方式；安卓（scrcpy + WebCodecs）与 iOS（ScreenCaptureKit + idb）的差异收敛在平台适配器内 |
+| iOS 能力 ≠ 隐式跨平台 | 涉及 iOS 的代码路径必须显式门控 darwin（simctl / ScreenCaptureKit / 辅助功能注入仅 macOS）；静默的平台假设在 Windows 构建上必然炸 |
+
+写 review 里能执行的规则。一条规则没法对着 diff 核对，它就只是愿望。
+
+## 模块地图
+
+| 模块 | 职责（一句话） |
+|------|--------------|
+| `main/index.ts` | 应用装配入口：建窗与各模块组装接线——跨模块的接线改动都在这里 |
+| `main/emulator/` | 安卓实例生命周期：SDK 检测引导（sdk）、AVD 增删克隆（avd）、模拟器子进程池与崩溃重启（runner） |
+| `main/simulator/` | iOS 实例生命周期：simctl 管理、ScreenCaptureKit 画面采集、idb 触控注入（仅 macOS） |
+| `main/scrcpy/` | 安卓画面流：ADB 连接池与 scrcpy server 生命周期 |
+| `main/store.ts` | 实例元数据落盘唯一写入口（单文件原子写） |
+| `preload/` | `window.api` 白名单桥——刻意不暴露原始 ipcRenderer |
+| `renderer/` | 纯 UI：会话栏、Tab 条、DeviceCanvas 画面嵌入端；零 Node/Electron 直访、零落盘 |
+| `shared/` | 三进程契约单源：类型、通道名、运行时守卫——修改需三进程同步 |
+
+## 技术基线
+
+- 语言与运行时：TypeScript + Electron 39 + electron-vite 5 + React 19；包管理只用 npm
+- 画面链路：安卓 = scrcpy 协议 + WebCodecs 解码；iOS = ScreenCaptureKit 采集 + idb/CGEvent 注入——更换任一环走适配器，不走重写
+- UI 组件库与状态库：未拍板（候选：antd 6 + zustand 5，自姊妹项目平移）——拍板时更新本行并记 ADR
+- 无后端：一切能力在本地三进程内；引入任何远端服务前必须先立 ADR
+
+## 数据归属
+
+| 数据 | 唯一写入者 |
+|------|-----------|
+| 实例元数据（名称、状态、归属） | 主进程落盘模块（单文件原子写）；renderer 零落盘 |
+| 模拟器内部数据 | 该实例自己的 AVD 数据分区 / Simulator data container |
+| 用户偏好（外观、语言等） | 主进程设置域（单文件，逐键容错） |
+
+## 维护
+
+- 边界规则只能通过 `book/docs/decisions/` 里的 ADR 修改。
+- 现实和本文件漂移时，修现实或修文件——绝不允许悄悄不一致。

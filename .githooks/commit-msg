@@ -1,0 +1,9 @@
+#!/bin/sh
+# Clean Commit 主题校验（契约见 book/guidelines/git-workflow.md）。
+# 每个 clone 启用一次：git config core.hooksPath .githooks
+# commit-msg 收到提交消息文件路径；合并/回退主题由校验脚本自行跳过。
+# 取第一个非空、非 # 注释行作主题——编辑器模板残留和 --cleanup=verbatim 的
+# 消息不会以莫名的结构错误拦下提交。
+root="$(git rev-parse --show-toplevel)"
+subject=$(grep -Ev '^[[:space:]]*(#|$)' "$1" | head -n 1)
+exec node "$root/scripts/check-commit-message.mjs" "$subject"

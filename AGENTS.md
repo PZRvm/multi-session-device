@@ -5,7 +5,8 @@ AI agent 在本仓库工作的入口规则。
 ## 项目结构
 
 - 仓库本体是 Electron 应用（electron-vite + React + TypeScript），源码在 `src/`。
-- `book/` 是文档与知识库：`guidelines/`（规则书）、`stage/`（开发阶段跟踪）、`notes/`（learn / issue / task / think-report）、`docs/`（快照、契约、ADR）、`plans/`（施工图）。总览见 `book/README.md`。
+- `book/` 是文档与知识库：`guidelines/`（规则书）、`stage/`（开发阶段跟踪）、`notes/`（learn / issue / task / think-report）、`docs/`（快照、契约、ADR）、`plans/`（施工图）。总览见 `book/README.md`——它是 `npm run book:index` 的生成物，勿手改。
+- `scripts/` 是 book 的零依赖工具：`book:index` 重新生成总索引，`book:release-check` 发版前卫生检查（垃圾文件 + 索引新鲜度）。
 
 ## stage/ 的权限边界
 
@@ -21,7 +22,7 @@ stage 由人主导（定阶段、定步骤、调顺序）。agent：
 1. 勾选 `book/stage/` 里对应的步骤，附一行结果（效果如何、遗留什么）。
 2. 踩坑写 `book/notes/learn/`；发现但不修的问题写 `book/notes/issue/`——只记录，不顺手修。
 3. 对应 plan 状态翻 `completed`。
-4. book 结构有增删时（新目录、新分类），同步更新 `book/README.md`。
+4. book 结构有增删时（新目录、新分类），跑 `npm run book:index` 重新生成索引，并在 `scripts/gen-book-index.mjs` 的目录用途表里为新目录补一行用途。
 
 ## 其他
 
