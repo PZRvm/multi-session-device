@@ -8,4 +8,8 @@ out
 # 本地工具产物
 .zcode/
 .agents/
+.codex/
+.opencode/
 .vscode/
+.obsidian/
+skills-zh/

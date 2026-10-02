@@ -1,0 +1,205 @@
+---
+description: 一期 Android 需求唯一依据——应用内新建隔离模拟器、左侧列表管理、右侧投屏全量操控、测试辅助、SDK 独立引导，含验收标准、技术规格与路线图
+---
+
+# PRD：多设备测试工具（一期 Android）
+
+> 产品名：TBD（仓库名 `multi-session-device`）
+> 状态：已批复。决策来源：`book/think-report/20260929011713-安卓与iOS多实例模拟器工具.md`（2026-09-29 批复）+ 2026-09-30 需求拷问会话（含三处推翻/新增，见第 6 节决策记录）。
+> 系列参考：`multi-session-browser` 仓库（壳层、设置窗、设计语言的前身）。
+
+## 1. 概要
+
+**问题**：移动端测试人员并行测多账号/多环境时，靠 Android Studio 手动管 AVD，多台模拟器窗口散落桌面，无法在一个界面里集中新建、投屏、操控；且模拟器建在默认目录，和其他用途的 AVD 混在一起，容易被误删误改。
+
+**方案**：Electron 桌面应用。应用内三步向导新建完全隔离的 AVD（独立 SDK 根 + 独立 AVD 目录，对 Android Studio 隐身），左侧设备列表管生命周期，右侧单画面投屏 + 全量操控 + 测试辅助（截屏/录屏/装应用/剪贴板/断网/日志）。运行中的设备走共享 adb server，Flutter / React Native / Android Studio 可直通部署调试。
+
+**成功标准**（可测）：
+
+1. PoC 达标：单 AVD 无头启动 + 取流 + 操控，交互场景帧率 ≥30fps，触摸端到端延迟 ≤150ms。
+2. 从后台设备切回画面恢复 ≤1 秒；后台设备的日志与 adb 连接不中断。
+3. 新建设备向导 ≤3 步进入创建；未安装的系统镜像在向导内一键下载，不需外部工具。
+4. 直通部署：`flutter run -d <serial>` 与 `react-native run-android --deviceId <serial>` 能装上被测 app，热重载可用。
+5. 8GB 内存机器并发运行 2 台（产品基线）；并发上限与内存水位提醒可配置且生效。
+6. 模拟器冷启动 20–60 秒全程 UI 不阻塞，状态机在设备行可见、启动可取消。
+7. 本工具创建的 AVD 不出现在 Android Studio Device Manager；运行中的设备出现在 IDE 部署目标里。
+
+## 2. 用户体验与功能
+
+### 2.1 用户画像
+
+软件测试工程师，测移动端 app（Flutter / RN 跨端项目为主）。懂设备画像、系统镜像这些概念，但机器上不一定装 Android Studio；期望装完本工具就能新建设备开测。
+
+### 2.2 界面骨架
+
+左右结构。左侧设备列表（默认 280px，可拖 220–420px，5px 分隔条），右侧当前设备画面。无分组、无过滤、无批量、无 tab 条、无独立窗口——左侧列表是唯一切换入口。
+
+设计语言沿用系列「发信板」：tokens 从 `multi-session-browser` 的 `src/shared/themeSystems.ts` 平移（亮暗双态 + 三主题色），左侧列表区 1px 发丝线、无阴影；右侧画布区用深色工作台底。界面实现走 impeccable 流程；`DESIGN.md` 用 impeccable `document` 从浏览器仓库反推生成，不从零写。
+
+### 2.3 用户故事与验收标准
+
+**A. 设备列表（左侧）**
+
+- 作为测试人员，我要在左侧看到全部设备及其状态（创建中/启动中/运行中/停止/删除中），以便知道哪些能直接用。
+  - AC：设备行显示名称、设备画像、API 版本、状态点；运行中行显示 serial（如 `emulator-5554`）且可一键复制。
+  - AC：状态变化实时反映，启动中显示可取消。
+- 作为测试人员，我要在行内直接启动/停止设备，以便不进菜单就能开关。
+  - AC：行内启动/停止按钮；点启动后立即进入「启动中」，UI 不阻塞。
+- 作为测试人员，我要拖拽排序、行内重命名、右键删除，以便整理常用设备。
+  - AC：排序与元数据重启后保留；删除需确认（破坏性操作，确认框列明后果：AVD 目录将被永久删除）。
+
+**B. 新建设备向导（三步 + 折叠高级项）**
+
+- 作为测试人员，我要选设备画像 → 选系统镜像 → 命名，就能得到一台新设备。
+  - AC：设备画像来自 `avdmanager list device`（Pixel 8 等，决定屏幕/分辨率/密度）。
+  - AC：系统镜像按 API 版本 × 变体（Google APIs / Google Play / AOSP）× arm64-v8a 列出；未安装的显示「下载 x.x GB」按钮，下载完成前不能创建。
+  - AC：名称默认「设备画像名 + API 版本」，可改。
+- 作为测试人员，我要在高级项里调朝向、内存、内部存储、SD 卡，以便匹配被测 app 的最低配置。
+  - AC：RAM 默认跟随设备画像，建议 ≥2048MB（Android Q+ 镜像最低要求 2GB）。
+  - AC：内部存储默认 6GB，旁边提示「创建后不可扩容」。
+
+**C. 右侧画面与操控**
+
+- 作为测试人员，我要在右侧直接操作设备——点、滑、捏合、打字、按物理键、转屏、调音量——以便不碰外部模拟器窗口就完成测试操作。
+  - AC：单指触摸/滑动、多指捏合缩放、键盘输入、back/home/概览/电源键、音量加减、屏幕旋转、宿主↔设备剪贴板共享全部可用（scrcpy 协议 + adb 注入）。
+  - AC：画面按设备分辨率等比缩放居中，不裁切。
+- 作为测试人员，我要切换设备时秒级恢复，以便多台并行来回对照。
+  - AC：后台设备保持 scrcpy 连接、停解码；点选后 ≤1s 恢复画面；后台设备的 adb 与日志持续。
+
+**D. 测试辅助**
+
+- 截屏：一键存当前画面（`adb exec-out screencap`）。
+- 录屏：开始/停止，产出视频文件（scrcpy `--record` 或 `screenrecord`）。
+- 拖拽安装：拖 APK 进画面即 `adb install`，显示安装结果。
+- 断网开关：一键切飞行模式开/关（`adb shell cmd connectivity airplane-mode`），供断网边界测试。
+- 日志面板：当前设备 logcat 流 + 关键字过滤 + 暂停/继续（一期最简，不做导出、不做按 app 过滤）。
+
+**E. SDK 独立引导（零 Android Studio 依赖）**
+
+- 作为没装 Android Studio 的测试人员，我要装完本工具就能用。
+  - AC：安装包内置 bootstrap（精简 JRE + cmdline-tools）；emulator、platform-tools、系统镜像按需下载到应用自有 SDK 根（`~/Library/Application Support/<产品名>/AndroidSDK/`）。
+  - AC：首次下载前弹 Android SDK 许可确认，同意后写入 licenses 哈希文件（等效 `sdkmanager --licenses`）。
+  - AC：包体增量 100–200MB。
+  - AC：设置里可自定义 SDK 路径（高级项），默认全自动。
+
+**F. 与 IDE 共存（隔离 + 直通）**
+
+- 作为测试人员，我要 Android Studio 删不掉也改不动本工具的设备。
+  - AC：AVD 存放于 `ANDROID_AVD_HOME` 指向的应用自有目录，Android Studio Device Manager 不可见。
+- 作为测试人员，我要 Android Studio / Flutter / RN 能直接把 app 部署到运行中的设备上。
+  - AC：与系统 adb server（端口 5037）共享，运行设备出现在 `adb devices` 与 IDE 部署目标；优先复用用户已有 platform-tools 的 adb，版本不一致时提示（防 adb server 重启闪断 IDE 连接）。
+  - AC：设备命名带标识（如 `MST-03 · Pixel 8`），IDE 设备下拉里可辨认。
+
+**G. 设置窗口（复用浏览器仓库骨架）**
+
+- 通用：外观三态（跟随系统/白天/黑夜）+ 三主题色。
+- 模拟器（替代原「浏览」分类）：SDK 路径、并行实例数上限（默认 2）、内存水位提醒阈值。
+- 快捷键、关于：照浏览器仓库。
+- 危险区：「删除本工具创建的全部设备」，两步确认（后果清单 + 输入确认词）。
+
+**H. 资源防线**
+
+- AC：并发启动受「并行实例数上限」拦截，超限时提示；内存水位超阈值提醒。
+- AC：16GB 机器建议 ≤6 台并行的提示文案按内存动态给出。
+
+### 2.4 Non-Goals（一期不做）
+
+- iOS / Xcode 模拟器（二期，平台抽象层预留口子）
+- 仿真层（AS Extended Controls 对应物）：GPS 定位、蜂窝精细整形（网络类型/信号/漫游）、电池、指纹、传感器、短信、相机虚拟场景——二期；一期用「断网开关」覆盖最常用边界场景
+- 分组/工作区/过滤/批量操作、tab 条、独立窗口 tear-off
+- 真机（USB 物理设备）支持
+- Windows / Linux（一期 macOS only）
+- 日志导出、按 app 精确过滤日志、启动自动排队
+- AVD 数据擦除（erase，区别于删除）——二期候选
+
+## 3. AI 系统需求
+
+不适用。
+
+## 4. 技术规格
+
+### 4.1 架构总览
+
+electron-vite 5 + Electron 39 + React 19 + styled-components + zustand 5（2026-10-01 拍板：不用组件库、不引入 tailwind；确认框与反馈提示统一走主进程 `dialog`，不用 Notification，见第 6 节）。三进程 + 契约层：
+
+```
+src/main/        sdk.ts（bootstrap/下载/许可）  avd.ts（create/delete/对账）
+                 runner.ts（emulator 子进程池、端口分配、崩溃处理）
+                 scrcpy/（Tango ADB 连接、scrcpy-server 推送、流分发）
+                 settings.ts / i18n / dialogs
+src/preload/     contextBridge 唯一通道（window.api）
+src/renderer/    设备面板 / DeviceCanvas（WebCodecs 解码 + canvas）/ 工具条 / 日志面板 / 向导 / 设置窗
+src/shared/      类型 + IPC channel 常量 + 主题 tokens + i18n 字典（单源契约）
+```
+
+- IPC 纪律平移浏览器仓库：invoke 拉取 + `changed` 推送；写操作整单校验、零部分成功。
+- 画面链路：主进程 Tango 连 adbd → 推 scrcpy-server（版本锁定，随包分发）→ H.264 流经 IPC 送 renderer → WebCodecs 硬解 → canvas 渲染；指针/键盘事件反向编码为 scrcpy 控制消息。
+- 状态机：`创建中 → 停止 ⇄ 启动中（可取消） → 运行中 → 删除中`；`emulator -no-window -port <n>`，控制台端口空间 5554–5682（官方上限 64 并发）。
+
+### 4.2 隔离与数据归属
+
+- 独立 SDK 根与独立 AVD 目录均在应用数据目录下；`avdmanager` / `emulator` 子进程注入 `ANDROID_AVD_HOME` 等 env，不写 `~/.android/avd`。
+- 持久化：应用自有 JSON 只存元数据（名称、创建参数、排序）；AVD 目录本身是 source of truth。启动时对账：元数据有、AVD 目录无 → 标记失效并提示（用户在 IDE 侧手动删除的场景）。
+- 模拟器控制台 auth token 落应用自有目录，避免污染用户 `~/.android`。
+
+### 4.3 集成点
+
+| 对象 | 方式 | 纪律 |
+|------|------|------|
+| adb server 5037 | 共享，不另起隔离 server | 优先复用用户 platform-tools 的 adb；版本不一致先提示 |
+| avdmanager / sdkmanager | 子进程（Java，bootstrap JRE 运行） | 许可经应用内确认后写 licenses 哈希 |
+| emulator | 子进程，`-no-window -gpu` 可降级 swiftshader | 端口分配避让已占用；崩溃检测 + 状态回写 |
+| Flutter / RN / Android Studio | 经共享 adb 直通 | 本工具只负责启动设备，不代管部署 |
+| scrcpy-server | 随包分发，版本与客户端锁定 | 升级需成对验证 |
+
+### 4.4 性能预算
+
+帧率 ≥30fps（交互场景）；触摸端到端 ≤150ms；后台切换恢复 ≤1s；单设备解码资源在「保持连接停解码」策略下后台近似为零；包体增量 100–200MB（bootstrap），系统镜像按需 1.2–1.6GB/个，AVD 磁盘 2GB+/台。
+
+### 4.5 安全与隐私
+
+- 全本地运行，无自启服务；对外只暴露 adb 标准端口行为（共享系统 server）。
+- 录屏/截屏产物落用户可见目录，App 不上传任何数据。
+- Android SDK 许可必须经用户应用内确认，不静默接受。
+- scrcpy-server 二进制随包完整性校验。
+
+## 5. 风险与路线图
+
+### 5.1 阶段
+
+1. **阶段 0 · PoC**（1–2 天）：单 AVD 无头启动 + Tango 取流 + canvas 操控，量出帧率/延迟 → 过不过第 1 节验收线。
+2. **一期 MVP**：本 PRD 全量（设备生命周期 + 投屏操控 + 辅助四件套 + 断网 + 日志 + SDK 引导 + 设置窗）。
+3. **v1.1 候选**：快照恢复（`-snapshot` 缩短冷启动）、AVD 擦除、启动排队。
+4. **二期**：iOS（Xcode 模拟器，需 PoC：ScreenCaptureKit 采集 + idb 注入 + 两项系统授权，3–5 天）、仿真层 Extended Controls、蜂窝精细整形、Windows/Linux 评估。
+
+### 5.2 技术风险
+
+| 风险 | 应对 |
+|------|------|
+| scrcpy 协议与 Tango 版本耦合 | server 版本锁定随包分发，升级成对验证 |
+| 多实例资源竞争（已知不稳定源） | 并发上限 + 内存水位提醒；8GB 基线 2 台 |
+| adb 版本不一致导致 server 重启、闪断 IDE | 复用用户 adb、启动前版本检测提示 |
+| 冷启动 20–60s 体验差 | 状态机全异步可取消；快照恢复放 v1.1 |
+| 镜像/JRE 下载依赖外网与 Google 可达性 | 下载失败可重试；SDK 路径可自定义 |
+| AVD 对账边界（外部删除/移动） | 启动对账 + 失效标记，不静默清理 |
+
+## 6. 决策记录（2026-09-30 拷问会话）
+
+| 决策 | 内容 |
+|------|------|
+| 平台分期 | 先安卓，iOS 二期（沿用 09-29 批复） |
+| 设备来源 | 仅应用内新建；「纳管已有 AVD」不做 |
+| **推翻** | 右侧无 tab 条（09-29 报告第 8 节的「tab 切换」作废）——左侧列表唯一切换入口 |
+| 辅助功能扩容 | 原批复仅日志面板；现截屏/录屏/拖拽安装/剪贴板 + 断网开关全进一期 |
+| AS 功能对齐 | 操控层全量一期；仿真层（Extended Controls）二期 |
+| 断网测试 | 一期飞行模式开关覆盖；蜂窝精细整形二期 |
+| 资源基线 | 8GB 支持并发 2 台（推翻报告「8GB 稳定 1 台」的保守口径），内存水位提醒升为必做 |
+| 隔离边界 | 存储层隔离（SDK 根 + AVD 目录，对 AS 隐身）；运行时总线共享（adb 5037）——两者不冲突：IDE 看不到设备定义，但能部署到运行中的设备 |
+| 后台策略 | 保持连接、停解码（否决全断重连方案） |
+| UI 栈改选（2026-10-01） | 否决 antd 6：styled-components + zustand 5，不引 tailwind；确认框/提示统一走主进程 `dialog`（不用 Notification，免通知权限）；icon 用 lucide-react |
+
+## 7. 待定项（TBD）
+
+- 产品名（影响 SDK 目录路径、许可弹窗、关于页）。
+- 界面语言：一期简体中文确定；是否复刻浏览器仓库的三语 i18n（简中/繁中/英文）未拍板，机制预留。
+- 录屏是否带音频（scrcpy 2.0+ 支持，待一期实现时定）。

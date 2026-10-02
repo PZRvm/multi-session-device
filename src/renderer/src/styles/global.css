@@ -1,0 +1,19 @@
+:root {
+  /* 主题系统在 stage 02 落地前先锁浅色，避免深色系统下文字不可见 */
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #ffffff;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
