@@ -9,5 +9,18 @@ export const IPC_CHANNELS = {
   devicesSetRunning: 'devices:set-running',
   devicesChanged: 'devices:changed',
   wizardOpen: 'wizard:open',
-  wizardClose: 'wizard:close'
+  wizardClose: 'wizard:close',
+  // ---- PoC dev harness（stage 04 步骤 1，仅 MSD_POC=1 dev 环境注册；步骤 5 产品化后移除）----
+  pocSetup: 'poc:setup',
+  pocEmulatorStart: 'poc:emulator-start',
+  pocEmulatorStop: 'poc:emulator-stop',
+  /** renderer invoke 后，main 建立视频通道并以 poc:stream-port 回送 MessagePort */
+  pocStreamStart: 'poc:stream-start',
+  /** main → renderer：回送视频包 MessagePort（postMessage 传输） */
+  pocStreamPort: 'poc:stream-port',
+  pocStopStream: 'poc:stop-stream',
+  pocInject: 'poc:inject',
+  pocTeardown: 'poc:teardown',
+  pocReport: 'poc:report',
+  pocLog: 'poc:log'
 } as const

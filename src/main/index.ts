@@ -3,6 +3,7 @@ import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createMainWindow } from './window'
 import { registerIpcHandlers } from './ipc'
 import { appIcon } from './app-icon'
+import { createPocWindow, registerPocIpc } from './poc'
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron')
@@ -13,10 +14,20 @@ app.whenReady().then(() => {
   })
 
   registerIpcHandlers()
-  createMainWindow()
+
+  // PoC dev harness（stage 04 步骤 1）：MSD_POC=1 时开 PoC 页而非主窗
+  if (process.env['MSD_POC'] === '1') {
+    registerPocIpc()
+    createPocWindow()
+  } else {
+    createMainWindow()
+  }
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      if (process.env['MSD_POC'] === '1') createPocWindow()
+      else createMainWindow()
+    }
   })
 })
 

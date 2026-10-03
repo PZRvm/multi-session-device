@@ -48,3 +48,47 @@ export interface CreateDeviceInput {
   variant: ImageVariant
   name: string
 }
+
+// ---- PoC dev harness 消息（stage 04 步骤 1；步骤 5 产品化后随 harness 一起移除）----
+
+export type PoCGpuMode = 'host' | 'swiftshader_indirect'
+
+/** 归一化坐标（0..1，相对画面尺寸），main 侧按视频分辨率换算设备像素 */
+export interface PoCTapInput {
+  kind: 'tap'
+  x: number
+  y: number
+}
+
+export interface PoCSwipeInput {
+  kind: 'swipe'
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  durationMs: number
+}
+
+export type PoCInjectInput = PoCTapInput | PoCSwipeInput
+
+export interface PoCLogEntry {
+  ts: number
+  message: string
+}
+
+export interface PoCReport {
+  gpuMode: PoCGpuMode
+  videoWidth: number
+  videoHeight: number
+  scrcpyServerVersion: string
+  idle: { durationMs: number; frames: number; fps: number }
+  interaction: { durationMs: number; frames: number; fps: number; swipes: number }
+  latency: {
+    samples: number
+    timeouts: number
+    minMs: number
+    medianMs: number
+    p95Ms: number
+    maxMs: number
+  }
+}

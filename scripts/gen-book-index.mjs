@@ -53,6 +53,7 @@ const DIR_PURPOSE = {
   'docs/api': '接口契约：对外/模块间接口长什么样',
   'docs/architecture': '架构快照：模块划分与数据流的当前状态',
   'docs/decisions': 'ADR 决策记录：一条记一个选择及其理由',
+  'docs/poc': 'PoC 实测报告：闸门验收的原始数据、方法与结论',
   plans: '施工图：一个功能一篇，Phase 2 设计确认后落盘，agent 照着施工'
 }
 

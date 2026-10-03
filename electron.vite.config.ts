@@ -22,10 +22,12 @@ export default defineConfig({
     plugins: [react()],
     build: {
       rollupOptions: {
-        // 双页：index = 主窗；wizard = 新建设备原生模态子窗（main/window/wizard.ts 加载）
+        // 三页：index = 主窗；wizard = 新建设备模态子窗（main/window/wizard.ts 加载）；
+        // poc = 投屏链路 PoC dev 页（MSD_POC=1 时 main/poc 加载，产品化后移除）
         input: {
           index: resolve('src/renderer/index.html'),
-          wizard: resolve('src/renderer/wizard.html')
+          wizard: resolve('src/renderer/wizard.html'),
+          poc: resolve('src/renderer/poc.html')
         }
       }
     }
