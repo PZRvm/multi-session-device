@@ -18,8 +18,8 @@ type BoardHeadProps = {
   panelWidth: number
 }
 
-/** 左栏板头（40px 拖拽带，契约同姊妹仓库 .board-head）：darwin 三灯占位（原生灯
- * 浮于上方）+ 右端主题/设置/计数三件套。交互钮一律 no-drag，空白区拖窗。 */
+/** 左栏板头（40px）：窗口标题与拖拽由标准原生标题条承担（四轮终裁），这里只是
+ * 外观/设置/计数控件行——右对齐。 */
 const BoardHead = ({ count, panelWidth }: BoardHeadProps): React.JSX.Element => {
   const mode = useThemeStore((state) => state.mode)
   const setMode = useThemeStore((state) => state.setMode)
@@ -48,11 +48,6 @@ const BoardHead = ({ count, panelWidth }: BoardHeadProps): React.JSX.Element => 
 
   return (
     <Wrapper>
-      {window.api.platform === 'darwin' ? (
-        <TrafficSpacer aria-hidden="true" />
-      ) : (
-        <HeadTitle>多会话设备</HeadTitle>
-      )}
       <HeadRight>
         <AppearanceRoot ref={appearanceRootRef}>
           {wide ? (
@@ -129,27 +124,12 @@ const Wrapper = styled.div`
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
   flex: none;
   height: 40px;
   padding: 0 14px;
   border-bottom: 1px solid var(--board-hairline);
-  /* 板头整行是窗口拖拽带（darwin 原生标题条已去）；行内交互钮 no-drag */
-  -webkit-app-region: drag;
-`
-
-/* 原生三灯占位（darwin，hiddenInset + trafficLightPosition 定位到板头行左端）：
-   三灯由系统绘制浮于内容上方，页面内容避让即可，不参与交互 */
-const TrafficSpacer = styled.span`
-  flex: none;
-  width: 60px;
-`
-
-const HeadTitle = styled.span`
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--board-ink);
 `
 
 const HeadRight = styled.span`
@@ -157,7 +137,6 @@ const HeadRight = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  -webkit-app-region: no-drag;
 `
 
 const AppearanceRoot = styled.span`

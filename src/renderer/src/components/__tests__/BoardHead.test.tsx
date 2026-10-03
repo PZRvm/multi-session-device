@@ -10,7 +10,6 @@ describe('BoardHead', () => {
   beforeEach(() => {
     window.localStorage.clear()
     useThemeStore.setState({ systemId: 'amber', mode: 'system' })
-    ;(window as unknown as { api: unknown }).api = { platform: 'darwin' }
   })
 
   const countText = (): string => screen.getByLabelText(/^设备/).textContent ?? ''
@@ -93,14 +92,5 @@ describe('BoardHead', () => {
   it('设置钮禁用占位（stage 05 接入）', () => {
     render(<BoardHead count={0} panelWidth={280} />)
     expect((screen.getByRole('button', { name: '设置' }) as HTMLButtonElement).disabled).toBe(true)
-  })
-
-  it('darwin 渲染三灯占位，非 darwin 渲染页内标题', () => {
-    const { rerender } = render(<BoardHead count={0} panelWidth={280} />)
-    expect(document.querySelector('span[aria-hidden]')).toBeTruthy()
-
-    ;(window as unknown as { api: unknown }).api = { platform: 'win32' }
-    rerender(<BoardHead count={0} panelWidth={280} />)
-    expect(screen.getByText('多会话设备')).toBeTruthy()
   })
 })
