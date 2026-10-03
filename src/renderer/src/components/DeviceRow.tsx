@@ -145,8 +145,9 @@ const Wrapper = styled.div`
     outline-offset: -2px;
   }
 
-  /* 删除钮悬停浮现（键盘聚焦同样浮现，见 IconButton） */
-  &:hover button:nth-child(2) {
+  /* 删除钮悬停浮现（键盘聚焦同样浮现，见 IconButton）；选中行常显 */
+  &:hover button:nth-child(2),
+  &[aria-current] button:nth-child(2) {
     opacity: 1;
   }
 `
@@ -226,7 +227,8 @@ const IconButton = styled.button`
     outline-offset: 1px;
   }
 
-  /* 删除钮（行尾第 2 颗）默认隐藏，行 hover 或自身键盘聚焦时浮现 */
+  /* 删除钮（行尾第 2 颗）默认隐藏；行 hover、自身键盘聚焦、所在行选中（aria-current
+     常显，参考姊妹仓库选中行操作钮可见的形态）时浮现 */
   &:nth-child(2) {
     opacity: 0;
   }

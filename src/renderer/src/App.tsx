@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { Plus } from 'lucide-react'
 import styled from 'styled-components'
-import type { CreateDeviceInput, Device } from '@shared/types'
+import type { Device } from '@shared/types'
 import { toApiResult } from './api'
+import BoardHead from './components/BoardHead'
+import Button from './components/Button'
 import CanvasPlaceholder from './components/CanvasPlaceholder'
 import DeviceListPane from './components/DeviceListPane'
-import DeviceWizard from './components/DeviceWizard'
 import ResizeHandle from './components/ResizeHandle'
 import { useDeviceStore } from './stores/deviceStore'
 
@@ -13,14 +15,12 @@ const App = (): React.JSX.Element => {
   const selectedId = useDeviceStore((state) => state.selectedId)
   const load = useDeviceStore((state) => state.load)
   const applyDevices = useDeviceStore((state) => state.applyDevices)
-  const createDevice = useDeviceStore((state) => state.create)
   const renameDevice = useDeviceStore((state) => state.rename)
   const removeDevice = useDeviceStore((state) => state.remove)
   const setRunning = useDeviceStore((state) => state.setRunning)
   const setSelected = useDeviceStore((state) => state.setSelected)
 
   const [listWidth, setListWidth] = useState(280)
-  const [wizardOpen, setWizardOpen] = useState(false)
 
   useEffect(() => {
     void load()
@@ -31,10 +31,10 @@ const App = (): React.JSX.Element => {
     await toApiResult(window.api.dialog.show({ title, message, buttons: ['知道了'] }))
   }
 
-  const handleCreate = async (input: CreateDeviceInput): Promise<void> => {
-    const result = await createDevice(input)
-    if (result.ok) setWizardOpen(false)
-    else await showAlert('创建失败', result.error)
+  // 新建设备走原生模态子窗（main/window/wizard.ts）；创建结果经 devices:changed 广播回流
+  const openWizard = async (): Promise<void> => {
+    const result = await toApiResult(window.api.wizard.open())
+    if (!result.ok) await showAlert('打开向导失败', result.error)
   }
 
   const handleRename = async (id: string, name: string): Promise<void> => {
@@ -69,6 +69,7 @@ const App = (): React.JSX.Element => {
   return (
     <Shell>
       <ListPane style={{ width: listWidth }}>
+        <BoardHead count={devices.length} />
         <DeviceListPane
           devices={devices}
           selectedId={selectedId}
@@ -76,16 +77,19 @@ const App = (): React.JSX.Element => {
           onToggleRunning={handleToggleRunning}
           onDelete={handleDelete}
           onRename={handleRename}
-          onCreate={() => setWizardOpen(true)}
         />
+        <Foot>
+          <Button variant="primary" onClick={openWizard}>
+            <NewLabel>
+              <Plus size={14} />
+              新建设备
+            </NewLabel>
+          </Button>
+        </Foot>
       </ListPane>
       <ResizeHandle width={listWidth} onResize={setListWidth} />
       <CanvasArea>
-        {wizardOpen ? (
-          <DeviceWizard onCancel={() => setWizardOpen(false)} onCreate={handleCreate} />
-        ) : (
-          <CanvasPlaceholder device={selected} onCreate={() => setWizardOpen(true)} />
-        )}
+        <CanvasPlaceholder device={selected} onCreate={openWizard} />
       </CanvasArea>
     </Shell>
   )
@@ -98,8 +102,26 @@ const Shell = styled.div`
 `
 
 const ListPane = styled.div`
+  display: flex;
+  flex-direction: column;
   flex: none;
   min-width: 0;
+`
+
+const Foot = styled.footer`
+  flex: none;
+  padding: 12px;
+  border-top: 1px solid var(--board-hairline);
+
+  & > button {
+    width: 100%;
+  }
+`
+
+const NewLabel = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 `
 
 const CanvasArea = styled.main`

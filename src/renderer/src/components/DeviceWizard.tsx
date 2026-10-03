@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import styled from 'styled-components'
 import type { CreateDeviceInput, ImageVariant } from '@shared/types'
@@ -45,18 +45,36 @@ const STEP_TITLES: Record<1 | 2 | 3, string> = {
   3: '命名设备'
 }
 
+type WizardVariant = 'panel' | 'window'
+
 type DeviceWizardProps = {
+  /** panel = 主窗右栏内嵌卡片；window = 原生模态子窗整页（Esc 关闭） */
+  variant?: WizardVariant
   onCreate: (input: CreateDeviceInput) => void
   onCancel: () => void
 }
 
-/** 三步向导（画像 → 镜像 → 命名），占据右栏画布区——非模态，左栏始终可见 */
-const DeviceWizard = ({ onCreate, onCancel }: DeviceWizardProps): React.JSX.Element => {
+/** 三步向导（画像 → 镜像 → 命名）：panel 占主窗画布区；window 填满模态子窗视口 */
+const DeviceWizard = ({
+  variant = 'panel',
+  onCreate,
+  onCancel
+}: DeviceWizardProps): React.JSX.Element => {
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [profile, setProfile] = useState<MockProfile | null>(null)
   const [image, setImage] = useState<MockImage | null>(null)
   const [name, setName] = useState('')
   const [nameTouched, setNameTouched] = useState(false)
+
+  // window 变体是独立窗体：焦点不在任何元素上时 Esc 也应能取消（panel 无此语义）
+  useEffect(() => {
+    if (variant !== 'window') return
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onCancel()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [variant, onCancel])
 
   const defaultName = profile && image ? `${profile.label} API ${image.apiLevel}` : ''
   const effectiveName = nameTouched ? name : defaultName
@@ -79,7 +97,7 @@ const DeviceWizard = ({ onCreate, onCancel }: DeviceWizardProps): React.JSX.Elem
   }
 
   return (
-    <Wrapper>
+    <Wrapper $variant={variant}>
       <Header>
         <Heading>新建设备</Heading>
         <StepIndicator>
@@ -171,13 +189,23 @@ const DeviceWizard = ({ onCreate, onCancel }: DeviceWizardProps): React.JSX.Elem
   )
 }
 
-const Wrapper = styled.div`
+const Wrapper = styled.div<{ $variant: WizardVariant }>`
   display: flex;
   flex-direction: column;
-  width: min(480px, 100%);
-  max-height: 100%;
-  background: var(--board-bg-raised);
-  border: 1px solid var(--board-hairline);
+
+  ${({ $variant }) =>
+    $variant === 'panel'
+      ? `
+        width: min(480px, 100%);
+        max-height: 100%;
+        background: var(--board-bg-raised);
+        border: 1px solid var(--board-hairline);
+      `
+      : `
+        width: 100%;
+        height: 100%;
+        background: var(--board-bg);
+      `}
 `
 
 const Header = styled.header`

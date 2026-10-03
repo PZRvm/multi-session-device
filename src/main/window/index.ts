@@ -9,6 +9,12 @@ export function createMainWindow(): BrowserWindow {
     height: 670,
     show: false,
     autoHideMenuBar: true,
+    // darwin 去原生标题条，三灯浮于 renderer 板头行左端（BoardHead 40px，灯高 16，
+    // y=(40-16)/2=12，x 与板头内边距对齐——契约同姊妹仓库 main/index.ts，板头高度
+    // 变更须连校本值）；其余平台保持系统框
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hidden' as const, trafficLightPosition: { x: 14, y: 12 } }
+      : {}),
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

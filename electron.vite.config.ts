@@ -19,6 +19,15 @@ export default defineConfig({
         ...sharedAlias
       }
     },
-    plugins: [react()]
+    plugins: [react()],
+    build: {
+      rollupOptions: {
+        // 双页：index = 主窗；wizard = 新建设备原生模态子窗（main/window/wizard.ts 加载）
+        input: {
+          index: resolve('src/renderer/index.html'),
+          wizard: resolve('src/renderer/wizard.html')
+        }
+      }
+    }
   }
 })
