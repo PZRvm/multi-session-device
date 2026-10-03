@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import DeviceWizard from '../DeviceWizard'
 
@@ -71,6 +71,39 @@ describe('DeviceWizard', () => {
       variant: 'google_play',
       name: '我的测试机'
     })
+  })
+
+  // issue 2026-10-04-wizard-create-no-double-click-guard：异步创建窗口期连点只发一次
+  it('创建中防连击：连点只回调一次，promise 结束后按钮恢复', async () => {
+    let resolveCreate: () => void = () => {}
+    const onCreate = vi.fn<() => Promise<void>>(
+      () => new Promise<void>((resolve) => (resolveCreate = resolve))
+    )
+    render(<DeviceWizard onCreate={onCreate} onCancel={vi.fn()} />)
+    gotoNameStep()
+    const button = screen.getByRole('button', { name: '创建' }) as HTMLButtonElement
+    fireEvent.click(button)
+    fireEvent.click(button)
+    fireEvent.click(button)
+    expect(onCreate).toHaveBeenCalledTimes(1)
+    expect(button.disabled).toBe(true)
+
+    resolveCreate()
+    await waitFor(() => expect(button.disabled).toBe(false))
+  })
+
+  // 同一 tick 内的原生连点（冒烟实测过的穿透场景）：React 批处理不刷新 state，
+  // 只有 ref 守卫拦得住——单 act 包两次原生 click，之间不 flush
+  it('同一 tick 原生连点也只回调一次（ref 守卫）', async () => {
+    const onCreate = vi.fn<() => Promise<void>>()
+    render(<DeviceWizard onCreate={onCreate} onCancel={vi.fn()} />)
+    gotoNameStep()
+    const button = screen.getByRole('button', { name: '创建' }) as HTMLButtonElement
+    act(() => {
+      button.click()
+      button.click()
+    })
+    expect(onCreate).toHaveBeenCalledTimes(1)
   })
 
   it('第三步名字清空后「创建」禁用', () => {

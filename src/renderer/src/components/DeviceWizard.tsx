@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import styled from 'styled-components'
 import type { CreateDeviceInput, ImageVariant } from '@shared/types'
@@ -50,7 +50,8 @@ type WizardVariant = 'panel' | 'window'
 type DeviceWizardProps = {
   /** panel = 主窗右栏内嵌卡片；window = 原生模态子窗整页（Esc 关闭） */
   variant?: WizardVariant
-  onCreate: (input: CreateDeviceInput) => void
+  /** 返回 promise 时按钮进入创建中禁用态（防连击，issue 2026-10-04-wizard-create-no-double-click-guard） */
+  onCreate: (input: CreateDeviceInput) => void | Promise<void>
   onCancel: () => void
 }
 
@@ -65,6 +66,10 @@ const DeviceWizard = ({
   const [image, setImage] = useState<MockImage | null>(null)
   const [name, setName] = useState('')
   const [nameTouched, setNameTouched] = useState(false)
+  const [creating, setCreating] = useState(false)
+  // 防连击的同步守卫：React 状态在同一 tick 内不刷新（冒烟实测连点两击同毫秒建了
+  // 两台设备），ref 跨越批处理时序立即可见——disabled 与 state 只是视觉层
+  const creatingRef = useRef(false)
 
   // window 变体是独立窗体：焦点不在任何元素上时 Esc 也应能取消（panel 无此语义）
   useEffect(() => {
@@ -85,15 +90,24 @@ const DeviceWizard = ({
     else if (step === 2 && image) setStep(3)
   }
 
-  const create = (): void => {
-    if (!profile || !image || !canCreate) return
-    onCreate({
-      profileId: profile.id,
-      profileLabel: profile.label,
-      apiLevel: image.apiLevel,
-      variant: image.variant,
-      name: effectiveName.trim()
-    })
+  // 防连击三层：ref 守卫（同 tick 连点）+ 按钮 disabled + state（跨 tick 视觉/语义）
+  const create = async (): Promise<void> => {
+    if (!profile || !image || !canCreate || creatingRef.current) return
+    creatingRef.current = true
+    setCreating(true)
+    try {
+      await onCreate({
+        profileId: profile.id,
+        profileLabel: profile.label,
+        apiLevel: image.apiLevel,
+        variant: image.variant,
+        name: effectiveName.trim()
+      })
+    } finally {
+      // 成功路径窗体随 IPC 关闭，此处 setState 落在卸载后是 no-op；失败路径恢复可重试
+      creatingRef.current = false
+      setCreating(false)
+    }
   }
 
   return (
@@ -180,7 +194,7 @@ const DeviceWizard = ({
             下一步
           </Button>
         ) : (
-          <Button variant="primary" disabled={!canCreate} onClick={create}>
+          <Button variant="primary" disabled={!canCreate || creating} onClick={create}>
             创建
           </Button>
         )}

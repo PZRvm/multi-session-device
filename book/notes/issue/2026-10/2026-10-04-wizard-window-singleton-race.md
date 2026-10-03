@@ -9,3 +9,7 @@ description: openWizardWindow 单例判断无互斥——极窄窗口内两次 w
 - **Suggested direction**: 与 `devices` 域的 ensureLoaded 一并处理——单例 promise / 简单 mutex 家族化收口（见 2026-10-03-devices-ensure-loaded-concurrent-double-read）。
 
 严重级：P3（人手触发几乎不可能；与 ensureLoaded 同族，建议同轮修）。
+
+## 跟进（2026-10-04）——已修
+
+按建议方向落地：`openWizardWindow` 增 `opening` 互斥标记——已存在则 focus、正在开（new 与 ready-to-show 之间）则静默返回（窗随本轮一起 show+focus）；`ready-to-show` 与 `closed` 双点复位（加载失败无 ready-to-show 时靠关闭兜底解锁）。同族的 devices 域 ensureLoaded 竞态（2026-10-03 条目）仍挂账，留待 stage 04 一并家族化收口。

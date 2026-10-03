@@ -5,6 +5,9 @@ import { IPC_CHANNELS } from '@shared/ipc-channels'
 
 // 新建设备模态窗单例：主窗重复点「新建设备」= 聚焦既有窗而非再开一扇
 let wizardWindow: BrowserWindow | null = null
+// open 互斥（issue 2026-10-04-wizard-window-singleton-race）：new 与 ready-to-show
+// 之间的窗口期里并发 open 都会看到引用为空而各建一扇——opening 标记收口同轮只建一扇
+let opening = false
 
 const isWizardSender = (window: BrowserWindow | null): boolean =>
   window !== null && window === wizardWindow
@@ -14,6 +17,9 @@ export function openWizardWindow(parent: BrowserWindow): void {
     wizardWindow.focus()
     return
   }
+  // 已在开（本轮 ready-to-show 未到）：静默返回，窗随本轮一起 show + focus
+  if (opening) return
+  opening = true
   const window = new BrowserWindow({
     width: 440,
     height: 560,
@@ -31,13 +37,16 @@ export function openWizardWindow(parent: BrowserWindow): void {
     }
   })
 
-  // 父窗销毁时 Electron 会带走模态子窗；这里只清引用防悬挂
+  // 父窗销毁时 Electron 会带走模态子窗；这里只清引用防悬挂（含 opening 复位——
+  // 加载失败没有 ready-to-show 时靠关闭兜底解除互斥）
   window.on('closed', () => {
     wizardWindow = null
+    opening = false
   })
   window.once('ready-to-show', () => {
     window.show()
     window.focus()
+    opening = false
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
