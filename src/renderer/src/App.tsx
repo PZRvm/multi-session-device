@@ -69,7 +69,7 @@ const App = (): React.JSX.Element => {
   return (
     <Shell>
       <ListPane style={{ width: listWidth }}>
-        <BoardHead count={devices.length} />
+        <BoardHead count={devices.length} panelWidth={listWidth} />
         <DeviceListPane
           devices={devices}
           selectedId={selectedId}
