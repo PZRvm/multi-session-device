@@ -78,9 +78,9 @@ describe('BoardHead', () => {
     })
   })
 
-  describe('宽态（panelWidth ≥ 390）：三段分段', () => {
+  describe('宽态（panelWidth ≥ 340）：三段分段', () => {
     it('渲染分段组，当前态 aria-checked，点选即切', () => {
-      render(<BoardHead count={0} panelWidth={390} />)
+      render(<BoardHead count={0} panelWidth={340} />)
       const group = screen.getByRole('radiogroup', { name: '外观模式' })
       expect(group).toBeTruthy()
       expect(screen.queryByRole('menu')).toBeNull()
@@ -92,10 +92,10 @@ describe('BoardHead', () => {
       expect(screen.getByRole('radio', { name: '黑夜' }).getAttribute('aria-checked')).toBe('true')
     })
 
-    it('390 阈值边界：389 窄态、390 宽态', () => {
-      const { rerender } = render(<BoardHead count={0} panelWidth={389} />)
+    it('340 阈值边界：339 窄态、340 宽态', () => {
+      const { rerender } = render(<BoardHead count={0} panelWidth={339} />)
       expect(screen.queryByRole('radiogroup', { name: '外观模式' })).toBeNull()
-      rerender(<BoardHead count={0} panelWidth={390} />)
+      rerender(<BoardHead count={0} panelWidth={340} />)
       expect(screen.getByRole('radiogroup', { name: '外观模式' })).toBeTruthy()
     })
   })

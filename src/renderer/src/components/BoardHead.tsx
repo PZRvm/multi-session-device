@@ -4,7 +4,9 @@ import styled from 'styled-components'
 import { useThemeStore, type ThemeMode } from '../stores/themeStore'
 import { toApiResult } from '../api'
 
-const APPEARANCE_SEGMENTED_MIN_WIDTH = 390
+// 外观入口两态阈值（2026-10-04 用户裁决 340，低于姊妹仓库的 390）：左栏 ≥340 时
+// 升级为三段分段，更窄维持图标 + 弹出菜单
+const APPEARANCE_SEGMENTED_MIN_WIDTH = 340
 
 const MODES: ReadonlyArray<{ value: ThemeMode; label: string; Icon: typeof Sun }> = [
   { value: 'system', label: '跟随系统', Icon: Monitor },
@@ -15,7 +17,7 @@ const MODES: ReadonlyArray<{ value: ThemeMode; label: string; Icon: typeof Sun }
 type BoardHeadProps = {
   /** 设备总数，两位补零展示，上限 99 */
   count: number
-  /** 左栏当前宽度——≥390 外观入口升级为三段分段，更窄为图标 + 弹出菜单（同姊妹仓库阈值） */
+  /** 左栏当前宽度——≥340 外观入口升级为三段分段，更窄为图标 + 弹出菜单 */
   panelWidth: number
 }
 
