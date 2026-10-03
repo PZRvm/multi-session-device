@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Monitor, Moon, Settings, Sun } from 'lucide-react'
 import styled from 'styled-components'
 import { useThemeStore, type ThemeMode } from '../stores/themeStore'
+import { toApiResult } from '../api'
 
 const APPEARANCE_SEGMENTED_MIN_WIDTH = 390
 
@@ -18,14 +19,21 @@ type BoardHeadProps = {
   panelWidth: number
 }
 
-/** 左栏板头（40px 拖拽带，契约同姊妹仓库 .board-head）：darwin 三灯占位 + 右端
+/** 左栏板头（40px 拖拽带，契约同姊妹仓库 .board-head）：darwin 自绘三灯 + 右端
  * 主题/设置/计数三件套。交互钮一律 no-drag，空白区拖窗。 */
 const BoardHead = ({ count, panelWidth }: BoardHeadProps): React.JSX.Element => {
   const mode = useThemeStore((state) => state.mode)
   const setMode = useThemeStore((state) => state.setMode)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [focused, setFocused] = useState(true)
   const appearanceRootRef = useRef<HTMLSpanElement>(null)
   const current = MODES.find((entry) => entry.value === mode) ?? MODES[0]
+
+  // 主进程 focus/blur 推送——自绘三灯切色（聚焦 mac 三色 / 失焦置灰）
+  useEffect(() => {
+    if (window.api.platform !== 'darwin') return
+    return window.api.window.onFocusChanged(setFocused)
+  }, [])
 
   // 菜单开着时：点外部或 Esc 收起（监听只挂菜单存活期）
   useEffect(() => {
@@ -49,7 +57,7 @@ const BoardHead = ({ count, panelWidth }: BoardHeadProps): React.JSX.Element => 
   return (
     <Wrapper>
       {window.api.platform === 'darwin' ? (
-        <TrafficSpacer aria-hidden="true" />
+        <TrafficLights focused={focused} />
       ) : (
         <HeadTitle>多会话设备</HeadTitle>
       )}
@@ -139,10 +147,67 @@ const Wrapper = styled.div`
   -webkit-app-region: drag;
 `
 
-const TrafficSpacer = styled.span`
+const Lights = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   flex: none;
   width: 60px;
+  -webkit-app-region: no-drag;
 `
+
+const Light = styled.button<{ $color?: string }>`
+  flex: none;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  /* 失焦无 $color = control-line 灰（主题自适应），恒可见——自绘的初衷 */
+  background: ${({ $color }) => $color ?? 'var(--board-control-line)'};
+  cursor: pointer;
+  transition: filter 0.12s;
+
+  &:hover {
+    filter: brightness(0.9);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+`
+
+const TRAFFIC_COLORS = ['#ff5f57', '#febc2e', '#28c840'] as const
+
+/** 自绘三灯（原生灯已永久隐藏）：关闭 = window.close()（姊妹仓库 a49bcae 先例），
+ * 最小化/全屏走 window:* IPC。聚焦 mac 三色，失焦置灰（control-line token 随主题） */
+const TrafficLights = ({ focused }: { focused: boolean }): React.JSX.Element => (
+  <Lights>
+    <Light
+      type="button"
+      aria-label="关闭窗口"
+      $color={focused ? TRAFFIC_COLORS[0] : undefined}
+      onClick={() => window.close()}
+    />
+    <Light
+      type="button"
+      aria-label="最小化窗口"
+      $color={focused ? TRAFFIC_COLORS[1] : undefined}
+      onClick={() => {
+        void toApiResult(window.api.window.minimize())
+      }}
+    />
+    <Light
+      type="button"
+      aria-label="进入或退出全屏"
+      $color={focused ? TRAFFIC_COLORS[2] : undefined}
+      onClick={() => {
+        void toApiResult(window.api.window.toggleFullscreen())
+      }}
+    />
+  </Lights>
+)
 
 const HeadTitle = styled.span`
   font-size: 13px;

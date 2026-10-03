@@ -203,7 +203,7 @@ const Wrapper = styled.div<{ $variant: WizardVariant }>`
       `
       : `
         width: 100%;
-        height: 100%;
+        height: 100vh;
         background: var(--board-bg);
       `}
 `

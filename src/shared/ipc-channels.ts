@@ -8,5 +8,8 @@ export const IPC_CHANNELS = {
   devicesSetRunning: 'devices:set-running',
   devicesChanged: 'devices:changed',
   wizardOpen: 'wizard:open',
-  wizardClose: 'wizard:close'
+  wizardClose: 'wizard:close',
+  windowMinimize: 'window:minimize',
+  windowToggleFullscreen: 'window:toggle-fullscreen',
+  windowFocusChanged: 'window:focus-changed'
 } as const
