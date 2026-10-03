@@ -1,9 +1,10 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ThemeSystemId } from '@shared/themeSystems'
+import type { ThemeMode } from '@shared/types'
 
 /** 亮暗模式三态：跟随系统 / 亮 / 暗 */
-export type ThemeMode = 'system' | 'light' | 'dark'
+export type { ThemeMode } from '@shared/types'
 
 interface ThemeState {
   systemId: ThemeSystemId

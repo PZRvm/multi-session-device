@@ -1,8 +1,9 @@
-import { useLayoutEffect, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, type ReactNode } from 'react'
 import { ThemeProvider } from 'styled-components'
 import { THEME_SYSTEMS } from '@shared/themeSystems'
 import { useThemeStore } from '../stores/themeStore'
 import { applyTheme, resolveMode, type BoardTheme } from './apply'
+import { toApiResult } from '../api'
 
 /**
  * styled-components 主题 Provider + token 注入链挂载。
@@ -13,6 +14,13 @@ export function DeviceThemeProvider({ children }: { children: ReactNode }): Reac
   const systemId = useThemeStore((s) => s.systemId)
   const mode = useThemeStore((s) => s.mode)
   const resolved = resolveMode(mode)
+
+  useEffect(() => {
+    if (window.api.platform !== 'darwin') return
+    void toApiResult(window.api.theme.setMode(mode)).then((result) => {
+      if (!result.ok) console.error('同步原生外观失败:', result.error)
+    })
+  }, [mode])
 
   // useLayoutEffect：绘制前注入，深色用户首帧不闪浅色
   useLayoutEffect(() => {

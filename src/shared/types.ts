@@ -1,3 +1,6 @@
+/** 应用与原生窗口共用的亮暗选择 */
+export type ThemeMode = 'system' | 'light' | 'dark'
+
 /** 原生对话框入参——Electron MessageBoxOptions 的白名单子集 */
 export interface DialogOptions {
   title: string

@@ -6,20 +6,13 @@ import BoardHead from '../BoardHead'
 // vitest 未开 globals，RTL 的自动 cleanup 不注册——显式清理防多次 render 堆叠
 afterEach(cleanup)
 
-const windowStubs = {
-  minimize: vi.fn<() => Promise<void>>(),
-  toggleFullscreen: vi.fn<() => Promise<void>>(),
-  onFocusChanged: vi.fn<(callback: (focused: boolean) => void) => () => void>(() => () => {})
-}
-
 describe('BoardHead', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     window.localStorage.clear()
     useThemeStore.setState({ systemId: 'amber', mode: 'system' })
     ;(window as unknown as { api: unknown }).api = {
-      platform: 'darwin',
-      window: windowStubs
+      platform: 'darwin'
     }
   })
 
@@ -105,26 +98,23 @@ describe('BoardHead', () => {
     expect((screen.getByRole('button', { name: '设置' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  describe('自绘三灯（darwin，带图形）', () => {
-    it('渲染三颗灯钮，各含 svg 图形，且订阅 focus 推送', () => {
+  describe('原生三灯占位', () => {
+    it('macOS 不渲染窗口控制钮和页面标题，外观与设置仍可用', () => {
       render(<BoardHead count={0} panelWidth={280} />)
       for (const label of ['关闭窗口', '最小化窗口', '进入或退出全屏']) {
-        const light = screen.getByRole('button', { name: label })
-        expect(light.querySelector('svg')).toBeTruthy()
+        expect(screen.queryByRole('button', { name: label })).toBeNull()
       }
-      expect(windowStubs.onFocusChanged).toHaveBeenCalledTimes(1)
+      expect(screen.queryByText('多会话设备')).toBeNull()
+      expect(screen.getAllByRole('button')).toHaveLength(2)
+      expect(screen.getByRole('button', { name: '外观：跟随系统' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: '设置' })).toBeTruthy()
     })
 
-    it('点击最小化/全屏走 window IPC；关闭走 window.close()', () => {
-      const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => {})
+    it.each(['win32', 'linux'])('非 macOS（%s）保留页面标题', (platform) => {
+      ;(window as unknown as { api: unknown }).api = { platform }
       render(<BoardHead count={0} panelWidth={280} />)
-      fireEvent.click(screen.getByRole('button', { name: '最小化窗口' }))
-      expect(windowStubs.minimize).toHaveBeenCalledTimes(1)
-      fireEvent.click(screen.getByRole('button', { name: '进入或退出全屏' }))
-      expect(windowStubs.toggleFullscreen).toHaveBeenCalledTimes(1)
-      fireEvent.click(screen.getByRole('button', { name: '关闭窗口' }))
-      expect(closeSpy).toHaveBeenCalledTimes(1)
-      closeSpy.mockRestore()
+      expect(screen.getByText('多会话设备')).toBeTruthy()
+      expect(screen.getAllByRole('button')).toHaveLength(2)
     })
   })
 })
