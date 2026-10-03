@@ -2,6 +2,7 @@
 description: 本机 perl -pi 原地替换对以全角标点结尾的词会静默漏替换，管道 -pe 或显式 lookaround 才可靠
 tags: [perl, inplace-edit, cjk, regex, word-boundary, silent-fail, pitfall]
 ---
+
 # 本机（macOS, LC_CTYPE=UTF-8）`perl -pi` 配 `\b` 处理中文文本会静默漏替换
 
 - **Scenario**: 用 `perl -pi -E 's/\b词\b/替换/g'` 批量改含中文的 markdown/文档，且目标词后面紧跟全角标点（`（` `，` `。` 等）时。

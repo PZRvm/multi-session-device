@@ -2,6 +2,7 @@
 description: eslint 的 TS 推荐规则会打到零依赖 .mjs 脚本上要求返回类型标注——scripts/ 每个新脚本头部带文件级 disable
 tags: [eslint, mjs, tooling, zero-dep, lint-error]
 ---
+
 # 零依赖 .mjs 脚本过不了本仓 eslint——TS 规则要求返回类型，而 .mjs 写不了 TS 标注
 
 - **Scenario**: 在 `scripts/` 下新建零依赖 .mjs 工具脚本（要能被 node 直接跑，不能上 tsx/ts-node），`npx eslint scripts/` 报 `@typescript-eslint/explicit-function-return-type`。

@@ -9,7 +9,7 @@ description: 编码基线——目录与组件结构、命名、样式与图标�
 ## 语言与工具链
 
 - Electron 39 + electron-vite 5 + TypeScript 5.9 + React 19，包管理只用 npm
-- 标准跑法：`npm run typecheck`、`npm run lint`、`npm run dev`；前两个不过不算完成
+- 标准跑法：`npm run typecheck`、`npm run lint`、`npm run test`、`npm run dev`；前三者不过不算完成
 
 ## 目录与组件结构
 
@@ -32,6 +32,7 @@ export default DeviceList
 
 - 组件 ≥600 行才拆目录：`components/DeviceList/`——`index.tsx` 是主文件，子组件按组件名命名文件，组件私有 hooks 进该目录的 `hooks/`
 - 全局 hooks 放 `renderer/src/hooks/`；跨组件状态放 `renderer/src/stores/`（zustand）
+- 测试与源码同目录共置：放同级 `__tests__/` 子目录，命名 `<模块名>.test.ts(x)`（如 `components/__tests__/Button.test.tsx`）——vitest 通配自动发现，组件挪目录时测试随行；不建独立顶层测试树（单测同置、将来 E2E 进独立 `e2e/`）
 
 ## 命名
 

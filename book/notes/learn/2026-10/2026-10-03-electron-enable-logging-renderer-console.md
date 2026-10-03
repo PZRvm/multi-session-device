@@ -2,6 +2,7 @@
 description: Electron dev 终端看不到 renderer 控制台——ELECTRON_ENABLE_LOGGING=1 让 console 进 stdout，是无测试框架时验证 preload/renderer 的主要手段
 tags: [electron, logging, preload, sandbox, smoke-test, devtools]
 ---
+
 # renderer 的 console 默认不进终端——ELECTRON_ENABLE_LOGGING=1 打开
 
 - **场景**：`npm run dev` 想确认 preload 是否加载成功、renderer 有没有报错（比如翻 sandbox 后验证），终端默认一片安静。

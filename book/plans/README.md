@@ -21,22 +21,28 @@ status: draft | approved | in_progress | completed
 # <功能> — plan
 
 ## Requirements brief
+
 <Step 0 的要点——背景、作用域、排除项>
 
 ## Impact range
+
 <Phase 1 产出：受影响的文件、模块、数据流>
 
 ## Design
+
 <Phase 2 产出：数据流、文件清单、接口>
 
 ## Build order
+
 1. <步骤，每步带自己的验证>
 2. ...
 
 ## Test plan
+
 <Phase 4 的覆盖维度>
 
 ## Done criteria
+
 <明确的终点线——测试全绿、review 记录在案、book 已同步、索引已重建，加上功能特有的一切>
 ```
 

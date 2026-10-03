@@ -2,6 +2,7 @@
 description: 同一套 SKILL.md 要在 ZCode/Codex/OpenCode 三家统一前缀命名：ZCode 想要冒号得走插件（本项目已弃），三家实际统一用 .agents/skills 的连字符前缀副本
 tags: [skills, zcode, codex, opencode, plugin, namespace, skill-install]
 ---
+
 # 三家 agent 工具的 skill 命名空间机制不同，`plugin:skill` 冒号命名只有 ZCode 插件能做到
 
 - **Scenario**: 想把同一组 SKILL.md 装进 ZCode、Codex、OpenCode，并让它们带统一前缀（如 `bocode:`）时。

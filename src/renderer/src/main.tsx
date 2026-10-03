@@ -3,9 +3,12 @@ import './styles/global.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { DeviceThemeProvider } from './theme'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <DeviceThemeProvider>
+      <App />
+    </DeviceThemeProvider>
   </StrictMode>
 )

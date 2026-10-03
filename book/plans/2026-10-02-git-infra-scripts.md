@@ -31,15 +31,15 @@ created: 2026-10-02
 
 ## Impact range（Phase 1）
 
-| 文件 | 动作 |
-|------|------|
-| `scripts/check-commit-message.mjs` | 新建 |
-| `.githooks/commit-msg` | 新建 + 可执行位 |
-| `.github/workflows/git-policy.yml` | 新建 |
-| 本 clone 的 `git config core.hooksPath` | 设为 `.githooks` |
-| `dev` 分支 | 新建（指向 main 当前 tip） |
-| `book/notes/learn/` | +1（eslint 打 .mjs 的坑，本任务中第二次踩） |
-| `book/notes/issue/2026-10/2026-10-01-book-infra-scripts-missing.md` | 追加跟进段，本条收口 |
+| 文件                                                                | 动作                                        |
+| ------------------------------------------------------------------- | ------------------------------------------- |
+| `scripts/check-commit-message.mjs`                                  | 新建                                        |
+| `.githooks/commit-msg`                                              | 新建 + 可执行位                             |
+| `.github/workflows/git-policy.yml`                                  | 新建                                        |
+| 本 clone 的 `git config core.hooksPath`                             | 设为 `.githooks`                            |
+| `dev` 分支                                                          | 新建（指向 main 当前 tip）                  |
+| `book/notes/learn/`                                                 | +1（eslint 打 .mjs 的坑，本任务中第二次踩） |
+| `book/notes/issue/2026-10/2026-10-01-book-infra-scripts-missing.md` | 追加跟进段，本条收口                        |
 
 **风险**：旧提交误伤——已排除（Merge/Revert 跳过 + 新分支首推跳过 + 只校验范围提交）。emoji 变体选择符（🗑️/⚙️ 带 VS16）比对误报——脚本内统一去 VS16 再比对。
 

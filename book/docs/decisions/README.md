@@ -14,12 +14,12 @@ description: 这里怎么写 ADR——章节、命名、编号，以及什么决
 
 ## 格式
 
-| 章节 | 内容 |
-|---------|---------|
-| Status | Proposed / Accepted / Superseded by ADR-NNN |
-| Context | 做这个决定时的各种力量——约束、考虑过的替代方案 |
-| Decision | 选了什么，一两句话 |
-| Consequences | 什么变好了、什么变难了、我们接受了什么 |
+| 章节         | 内容                                           |
+| ------------ | ---------------------------------------------- |
+| Status       | Proposed / Accepted / Superseded by ADR-NNN    |
+| Context      | 做这个决定时的各种力量——约束、考虑过的替代方案 |
+| Decision     | 选了什么，一两句话                             |
+| Consequences | 什么变好了、什么变难了、我们接受了什么         |
 
 ## 命名
 

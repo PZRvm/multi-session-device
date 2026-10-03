@@ -1,6 +1,7 @@
 ---
 description: git-policy.yml 两处待加固：GitHub 表达式直接内插进 shell 有注入面，首推 main 会被方向守卫误伤
 ---
+
 # git-policy.yml 的注入面与首推 main 误伤
 
 - **Observed**: 2026-10-02 Phase 5 review 发现两处，都在 `.github/workflows/git-policy.yml`。① `commit-subjects` job 把 `${{ github.event.pull_request.base.ref }}`、`${{ github.head.sha }}`、`${{ github.event.before }}`、`${{ github.sha }}` 直接内插进 `run: |` 的 shell——`base.ref` 是分支名，恶意分支名（如含 `$(...)` 或分号）可注入命令。② `branch-direction` job 对任何直推 `main` 的 push 一律报错，没有豁免"仓库首次建立、`before` 为零值"的引导场景——首次把 `main` 推上 GitHub 会吃红灯。

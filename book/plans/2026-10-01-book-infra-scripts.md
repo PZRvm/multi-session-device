@@ -32,15 +32,15 @@ created: 2026-10-01
 
 ## Impact range（Phase 1）
 
-| 文件 | 动作 |
-|------|------|
-| `scripts/gen-book-index.mjs` | 新建（上游适配版） |
-| `scripts/check-book-clean.mjs` | 新建（上游语义重写版） |
-| `package.json` | +2 npm scripts |
-| `book/guidelines/{workflow,writing-style,git-workflow}.md`、`book/docs/README.md` | 失效引用改真话 |
-| `AGENTS.md` | README 标注生成物、收尾第 4 条改索引、项目结构补 scripts/ |
-| `book/think-report/20260929011713-*.md` | 补 frontmatter description（索引检查揪出的唯一违规） |
-| `book/README.md` | 从手写导览变为生成索引 |
+| 文件                                                                              | 动作                                                      |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `scripts/gen-book-index.mjs`                                                      | 新建（上游适配版）                                        |
+| `scripts/check-book-clean.mjs`                                                    | 新建（上游语义重写版）                                    |
+| `package.json`                                                                    | +2 npm scripts                                            |
+| `book/guidelines/{workflow,writing-style,git-workflow}.md`、`book/docs/README.md` | 失效引用改真话                                            |
+| `AGENTS.md`                                                                       | README 标注生成物、收尾第 4 条改索引、项目结构补 scripts/ |
+| `book/think-report/20260929011713-*.md`                                           | 补 frontmatter description（索引检查揪出的唯一违规）      |
+| `book/README.md`                                                                  | 从手写导览变为生成索引                                    |
 
 **风险**：手写 book/README.md 的独有内容丢失。核对结论：目录用途进脚本用途表并在生成物重现；stage 替代 summary 的说明在 stage/README.md；三类笔记模板在 notes/README.md；docs 地图在 docs/README.md；"当前状态"注记本已过期（称 decisions/ 为空，实际已有 3 篇 ADR），随生成物一并退场。
 
