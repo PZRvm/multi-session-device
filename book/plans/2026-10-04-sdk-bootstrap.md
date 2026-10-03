@@ -1,6 +1,6 @@
 ---
 description: stage04 步骤 2 施工图——SDK bootstrap：检测/下载 JRE+cmdline-tools+platform-tools+emulator 四件套到应用自有 SDK 根，许可应用内确认写哈希，路径以 IPC 参数可自定义
-status: approved
+status: completed
 created: 2026-10-04
 ---
 
@@ -102,3 +102,5 @@ preload sdk.bootstrap(root?) → main sdk 域
 ## Done criteria
 
 四件套真实落进应用自有 SDK 根且许可文件在案（真机集成通过）；单测/回归/typecheck/lint 全绿；「SDK 路径可自定义」以参数化根落地并在导出函数签名可见（设置 UI 记 stage 05）；`sdk:progress` 事件链路 IPC → preload 可订阅；review 发现只记 issue；stage/04 步骤 2 勾选附结果；`npm run book:index` 重刷。
+
+> 完成记录（2026-10-04）：真机集成通过——bootstrap 装齐四件套到应用自有 SDK 根（`~/Library/Application Support/multi-session-device/AndroidSDK`，1.8GB）：JRE Temurin 21.0.12.1（sha256 校验）、cmdline-tools 23.0（钉版 build 16111833，sha1 校验）、platform-tools 37.0.1 与 emulator 37.2.12（sdkmanager --sdk_root 跑包 + 进度解析），许可两文件在案；`sdkmanager --list_installed` 三包可见；下载解压走 .tmp 临时目录 + 原子改名。87/87 测试绿（新增 sdk 域 11：detect/plan/license/progress/编排 fake 全链/no-op）。钉版常量：Temurin 21.0.12.1+1 JRE + cmdline-tools mac_arm64-16111833，升级显式改 `src/main/emulator/sdk.ts` 顶部。偏差两处：① 许可确认对话框为原生交互，自动化集成以「许可已写入」路径验证下载编排（拒绝路径待真机 UI 人工验证，stage 05 设置窗一并）；② 「SDK 路径可自定义」以 bootstrap/status 的显式 root 参数落地，持久化偏好属 stage 05。sdkmanager 环境隔离：JAVA_HOME 指 <root>/jre，ANDROID_USER_HOME 指 <root>/android-user，不写 ~/.android。

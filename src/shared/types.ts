@@ -92,3 +92,46 @@ export interface PoCReport {
     maxMs: number
   }
 }
+
+// ---- SDK 域（stage 04 步骤 2/3 共用）----
+
+export type SdkComponentName = 'licenses' | 'jre' | 'cmdline-tools' | 'platform-tools' | 'emulator'
+
+export interface SdkComponentStatus {
+  present: boolean
+  version?: string
+}
+
+/** SDK 根四件套 + 许可状态（detectSdk 快照，renderer 镜像展示用） */
+export interface SdkSnapshot {
+  root: string
+  jre: SdkComponentStatus
+  cmdlineTools: SdkComponentStatus
+  platformTools: SdkComponentStatus
+  emulator: SdkComponentStatus
+  licensed: boolean
+}
+
+export interface SdkProgress {
+  stage: SdkComponentName | 'done'
+  percent?: number
+  message: string
+}
+
+/** 系统镜像清单条目（步骤 3 向导数据；manifest 解析 + SDK 根已装探测） */
+export interface ImageEntry {
+  /** manifest 包路径，如 system-images;android-36;google_apis;arm64-v8a */
+  packageName: string
+  apiLevel: number
+  variant: ImageVariant
+  abi: 'arm64-v8a'
+  installed: boolean
+  /** 下载体积（字节，manifest archives.complete.size） */
+  sizeBytes: number
+}
+
+/** avdmanager 设备画像（向导第一步） */
+export interface DeviceProfile {
+  id: string
+  name: string
+}

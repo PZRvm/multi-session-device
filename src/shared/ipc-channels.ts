@@ -10,6 +10,11 @@ export const IPC_CHANNELS = {
   devicesChanged: 'devices:changed',
   wizardOpen: 'wizard:open',
   wizardClose: 'wizard:close',
+  // ---- SDK 域（stage 04 步骤 2 bootstrap；步骤 3 扩展镜像/画像通道）----
+  sdkStatus: 'sdk:status',
+  sdkBootstrap: 'sdk:bootstrap',
+  /** bootstrap 进度推送（main → renderer） */
+  sdkProgress: 'sdk:progress',
   // ---- PoC dev harness（stage 04 步骤 1，仅 MSD_POC=1 dev 环境注册；步骤 5 产品化后移除）----
   pocSetup: 'poc:setup',
   pocEmulatorStart: 'poc:emulator-start',
