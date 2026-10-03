@@ -1,15 +1,26 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useThemeStore, type ThemeMode } from '../../stores/themeStore'
 import BoardHead from '../BoardHead'
 
 // vitest 未开 globals，RTL 的自动 cleanup 不注册——显式清理防多次 render 堆叠
 afterEach(cleanup)
 
+const windowStubs = {
+  minimize: vi.fn<() => Promise<void>>(),
+  toggleFullscreen: vi.fn<() => Promise<void>>(),
+  onFocusChanged: vi.fn<(callback: (focused: boolean) => void) => () => void>(() => () => {})
+}
+
 describe('BoardHead', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     window.localStorage.clear()
     useThemeStore.setState({ systemId: 'amber', mode: 'system' })
+    ;(window as unknown as { api: unknown }).api = {
+      platform: 'darwin',
+      window: windowStubs
+    }
   })
 
   const countText = (): string => screen.getByLabelText(/^设备/).textContent ?? ''
@@ -92,5 +103,28 @@ describe('BoardHead', () => {
   it('设置钮禁用占位（stage 05 接入）', () => {
     render(<BoardHead count={0} panelWidth={280} />)
     expect((screen.getByRole('button', { name: '设置' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  describe('自绘三灯（darwin，带图形）', () => {
+    it('渲染三颗灯钮，各含 svg 图形，且订阅 focus 推送', () => {
+      render(<BoardHead count={0} panelWidth={280} />)
+      for (const label of ['关闭窗口', '最小化窗口', '进入或退出全屏']) {
+        const light = screen.getByRole('button', { name: label })
+        expect(light.querySelector('svg')).toBeTruthy()
+      }
+      expect(windowStubs.onFocusChanged).toHaveBeenCalledTimes(1)
+    })
+
+    it('点击最小化/全屏走 window IPC；关闭走 window.close()', () => {
+      const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => {})
+      render(<BoardHead count={0} panelWidth={280} />)
+      fireEvent.click(screen.getByRole('button', { name: '最小化窗口' }))
+      expect(windowStubs.minimize).toHaveBeenCalledTimes(1)
+      fireEvent.click(screen.getByRole('button', { name: '进入或退出全屏' }))
+      expect(windowStubs.toggleFullscreen).toHaveBeenCalledTimes(1)
+      fireEvent.click(screen.getByRole('button', { name: '关闭窗口' }))
+      expect(closeSpy).toHaveBeenCalledTimes(1)
+      closeSpy.mockRestore()
+    })
   })
 })
