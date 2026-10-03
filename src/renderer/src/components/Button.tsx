@@ -63,6 +63,13 @@ const Wrapper = styled.button<{ $variant: ButtonVariant }>`
     outline-offset: 2px;
   }
 
+  /* 禁用态视觉（逻辑禁用由调用方负责，如向导未选列表项时）：降不透明度 + 不吃指针
+     ——hover/active 变体样式随之失效，无需逐变体压制；口径同 BoardHead 设置钮 0.45 */
+  &:disabled {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+
   ${({ $variant }) => stylesByVariant[$variant]}
 `
 
