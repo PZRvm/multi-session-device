@@ -2,6 +2,7 @@ import { BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
+import { appIcon } from '../app-icon'
 
 // 新建设备模态窗单例：主窗重复点「新建设备」= 聚焦既有窗而非再开一扇
 let wizardWindow: BrowserWindow | null = null
@@ -27,6 +28,7 @@ export function openWizardWindow(parent: BrowserWindow): void {
     modal: true,
     show: false,
     title: '新建设备',
+    icon: appIcon,
     resizable: false,
     minimizable: false,
     fullscreenable: false,

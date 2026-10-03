@@ -1,6 +1,7 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { DialogOptions, DialogResult } from '@shared/types'
+import { appIcon } from '../app-icon'
 
 const isDialogOptions = (value: unknown): value is DialogOptions => {
   if (typeof value !== 'object' || value === null) return false
@@ -31,9 +32,10 @@ export function registerDialogIpc(): void {
       throw new Error(`${IPC_CHANNELS.dialogShow}: 非法的 options`)
     }
     const window = BrowserWindow.fromWebContents(event.sender)
+    const options = { ...raw, icon: appIcon }
     const result = window
-      ? await dialog.showMessageBox(window, raw)
-      : await dialog.showMessageBox(raw)
+      ? await dialog.showMessageBox(window, options)
+      : await dialog.showMessageBox(options)
     return { response: result.response, checkboxChecked: result.checkboxChecked }
   })
 }

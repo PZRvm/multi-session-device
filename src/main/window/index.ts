@@ -2,7 +2,7 @@ import { BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
-import icon from '../../../resources/icon.png?asset'
+import { appIcon } from '../app-icon'
 
 export function createMainWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
@@ -16,7 +16,7 @@ export function createMainWindow(): BrowserWindow {
     // 时不占版面，cmd-tab/任务切换器显示用；page-title-updated 拦截防渲染层覆写
     title: '多会话设备',
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const } : {}),
-    ...(process.platform === 'linux' ? { icon } : {}),
+    icon: appIcon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true
