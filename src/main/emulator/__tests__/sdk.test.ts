@@ -123,7 +123,9 @@ describe('writeLicenseFiles', () => {
 
 describe('parseSdkManagerPercent', () => {
   it('识别进度行', () => {
-    expect(parseSdkManagerPercent('[=======================================] 100% Preparing SDK')).toBe(100)
+    expect(
+      parseSdkManagerPercent('[=======================================] 100% Preparing SDK')
+    ).toBe(100)
     expect(parseSdkManagerPercent('[===  12%] Unpacking…')).toBe(12)
     expect(parseSdkManagerPercent('  0% Computing updates')).toBe(0)
   })

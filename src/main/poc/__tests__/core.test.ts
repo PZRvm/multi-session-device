@@ -78,7 +78,8 @@ describe('isPoCReport', () => {
   })
 
   it('缺 latency 字段拒绝', () => {
-    const { latency: _latency, ...rest } = base
+    const rest = { ...base }
+    delete (rest as Partial<PoCReport>).latency
     expect(isPoCReport(rest)).toBe(false)
   })
 

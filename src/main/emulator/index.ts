@@ -1,12 +1,18 @@
 import { BrowserWindow, app, dialog, ipcMain } from 'electron'
 import { join } from 'node:path'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
-import type { SdkProgress, SdkSnapshot } from '@shared/types'
+import type { SdkImageProgress, SdkProgress, SdkSnapshot } from '@shared/types'
 import { appIcon } from '../app-icon'
-import { bootstrapSdk, detectSdk } from './sdk'
+import { bootstrapSdk, detectSdk, runSdkManagerPackages } from './sdk'
+import { DEVICE_PROFILES } from './profiles'
+import { listImagesWithState } from './catalog'
+import type { ImageEntry } from '@shared/types'
 
 /** 应用自有 SDK 根（PRD E：userData/AndroidSDK；设置自定义路径属 stage 05） */
 export const defaultSdkRoot = (): string => join(app.getPath('userData'), 'AndroidSDK')
+
+/** 应用自有 AVD 根（ANDROID_AVD_HOME 语义） */
+export const defaultAvdHome = (): string => join(app.getPath('userData'), 'avd-home')
 
 const resolveRoot = (raw: unknown): string => {
   if (raw === undefined || raw === null) return defaultSdkRoot()
@@ -14,11 +20,14 @@ const resolveRoot = (raw: unknown): string => {
   throw new Error('sdk: 非法的 SDK 根')
 }
 
-const pushProgress = (progress: SdkProgress): void => {
+const pushToAllWindows = (channel: string, payload: unknown): void => {
   for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send(IPC_CHANNELS.sdkProgress, progress)
+    window.webContents.send(channel, payload)
   }
 }
+
+const pushProgress = (progress: SdkProgress): void =>
+  pushToAllWindows(IPC_CHANNELS.sdkProgress, progress)
 
 /** 许可确认——PRD 4.5：必须应用内确认，不静默接受 */
 const confirmLicenses = async (): Promise<void> => {
@@ -38,6 +47,20 @@ const confirmLicenses = async (): Promise<void> => {
   if (result.response !== 0) throw new Error('用户拒绝 Android SDK 许可，bootstrap 中止')
 }
 
+// 镜像清单缓存（60s）：向导内反复进出不打 manifest
+let imagesCache: { at: number; root: string; images: ImageEntry[] } | null = null
+const IMAGES_CACHE_MS = 60_000
+
+// 镜像下载互斥：同一时刻只允许一个下载（需求只约束「下载完成前不能创建」）
+let downloading: string | null = null
+
+const requireSdkReady = async (root: string): Promise<void> => {
+  const snapshot = await detectSdk(root)
+  if (!snapshot.cmdlineTools.present || !snapshot.jre.present) {
+    throw new Error('SDK 尚未就绪（缺 cmdline-tools 或 JRE），先完成 SDK 引导')
+  }
+}
+
 export function registerSdkIpc(): void {
   ipcMain.handle(IPC_CHANNELS.sdkStatus, (_event, raw: unknown): Promise<SdkSnapshot> =>
     detectSdk(resolveRoot(raw))
@@ -48,5 +71,51 @@ export function registerSdkIpc(): void {
     const snapshot = await detectSdk(root)
     if (!snapshot.licensed) await confirmLicenses()
     return bootstrapSdk(root, {}, pushProgress)
+  })
+
+  // 画像来自内置目录（avdmanager list device 失效，issue 2026-10-04-avdmanager-sdk-root-null）
+  ipcMain.handle(IPC_CHANNELS.sdkProfiles, () => DEVICE_PROFILES)
+
+  ipcMain.handle(IPC_CHANNELS.sdkImages, async (_event, raw: unknown): Promise<ImageEntry[]> => {
+    const root = resolveRoot(raw)
+    const now = Date.now()
+    if (imagesCache && imagesCache.root === root && now - imagesCache.at < IMAGES_CACHE_MS) {
+      return imagesCache.images
+    }
+    const images = await listImagesWithState(root)
+    imagesCache = { at: now, root, images }
+    return images
+  })
+
+  ipcMain.handle(IPC_CHANNELS.sdkDownloadImage, async (_event, raw: unknown): Promise<void> => {
+    if (
+      typeof raw !== 'object' ||
+      raw === null ||
+      typeof (raw as Record<string, unknown>).packageName !== 'string'
+    ) {
+      throw new Error(`${IPC_CHANNELS.sdkDownloadImage}: 非法的入参`)
+    }
+    const packageName = (raw as Record<string, unknown>).packageName as string
+    if (
+      !/^system-images;android-\d+;(default|google_apis|google_apis_playstore);arm64-v8a$/.test(
+        packageName
+      )
+    ) {
+      throw new Error(`${IPC_CHANNELS.sdkDownloadImage}: 未知镜像包 ${packageName}`)
+    }
+    if (downloading) throw new Error(`已有镜像在下载（${downloading}），请等待完成`)
+    const root = resolveRoot(undefined)
+    await requireSdkReady(root)
+    downloading = packageName
+    try {
+      // 下载会改变已装状态——失效清单缓存
+      imagesCache = null
+      await runSdkManagerPackages(root, [packageName], (percent) => {
+        const progress: SdkImageProgress = { packageName, percent, message: `下载 ${packageName}` }
+        pushToAllWindows(IPC_CHANNELS.sdkImageProgress, progress)
+      })
+    } finally {
+      downloading = null
+    }
   })
 }

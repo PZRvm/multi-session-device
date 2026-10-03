@@ -1,22 +1,70 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
+import type { DeviceProfile, ImageEntry } from '@shared/types'
 import DeviceWizard from '../DeviceWizard'
 
 // vitest 未开 globals，RTL 的自动 cleanup 不注册——显式清理防多次 render 堆叠
 afterEach(cleanup)
 
-type SetupHandlers = {
-  onCreate: Mock<(input: unknown) => void>
-  onCancel: Mock<() => void>
-}
-
-const setup = (): SetupHandlers => {
-  const handlers: SetupHandlers = {
-    onCreate: vi.fn(),
-    onCancel: vi.fn()
+const PROFILES: DeviceProfile[] = [
+  {
+    id: 'pixel_8',
+    name: 'Pixel 8',
+    lcdWidth: 1080,
+    lcdHeight: 2400,
+    density: 420,
+    ramSize: 2048
+  },
+  {
+    id: 'pixel_tablet',
+    name: 'Pixel Tablet',
+    lcdWidth: 1600,
+    lcdHeight: 2560,
+    density: 276,
+    ramSize: 2048
   }
-  render(<DeviceWizard onCreate={handlers.onCreate} onCancel={handlers.onCancel} />)
-  return handlers
+]
+
+const image = (overrides: Partial<ImageEntry>): ImageEntry => ({
+  packageName: `system-images;android-${overrides.apiLevel ?? 36};google_apis_playstore;arm64-v8a`,
+  apiLevel: 36,
+  variant: 'google_play',
+  abi: 'arm64-v8a',
+  installed: true,
+  sizeBytes: 1_500_000_000,
+  ...overrides
+})
+
+const IMAGES: ImageEntry[] = [
+  image({ apiLevel: 36, variant: 'google_play', installed: true }),
+  image({
+    apiLevel: 35,
+    variant: 'google_apis',
+    packageName: 'system-images;android-35;google_apis;arm64-v8a',
+    installed: false,
+    sizeBytes: 1_300_000_000
+  }),
+  image({ apiLevel: 34, variant: 'google_play', installed: true })
+]
+
+const setup = (handlers?: {
+  onCreate?: Mock<(input: unknown) => void>
+  onCancel?: Mock<() => void>
+  onDownloadImage?: Mock<(packageName: string) => Promise<void>>
+}): { onCreate: Mock<(input: unknown) => void>; onCancel: Mock<() => void> } => {
+  const result = {
+    onCreate: handlers?.onCreate ?? vi.fn(),
+    onCancel: handlers?.onCancel ?? vi.fn()
+  }
+  render(
+    <DeviceWizard
+      onCreate={result.onCreate}
+      onCancel={result.onCancel}
+      onDownloadImage={handlers?.onDownloadImage}
+      data={{ profiles: PROFILES, images: IMAGES }}
+    />
+  )
+  return result
 }
 
 // 选项可访问名 = 标题+副行无分隔拼接，用标题文本就近找按钮更稳
@@ -28,7 +76,7 @@ const pickProfile = (): void => {
 }
 
 const pickImage = (): void => {
-  fireEvent.click(profileButton('API 34 · Google Play'))
+  fireEvent.click(profileButton('API 36 · Google Play'))
 }
 
 const gotoNameStep = (): void => {
@@ -39,23 +87,54 @@ const gotoNameStep = (): void => {
 }
 
 describe('DeviceWizard', () => {
-  it('第一步未选画像时「下一步」禁用；选中后可进第二步', () => {
+  it('第一步未选画像时「下一步」禁用；选中后可进第二步；画像副行带硬件参数', () => {
     setup()
     const next = screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement
     expect(next.disabled).toBe(true)
     pickProfile()
     expect(next.disabled).toBe(false)
+    expect(screen.getByText('1080×2400 · 420dpi · 2048MB')).toBeTruthy()
     fireEvent.click(next)
     expect(screen.getByText(/第 2 \/ 3 步/)).toBeTruthy()
     expect(screen.getByRole('group', { name: '选择系统镜像' })).toBeTruthy()
   })
 
-  it('第二步未选镜像时禁用；第三步默认名 = 画像名 + API 版本', () => {
+  it('第二步未装镜像显示下载按钮且不可选；已装可选；第三步默认名 = 画像名 + API 版本', () => {
     setup()
-    gotoNameStep()
+    pickProfile()
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    // 未装行：有下载按钮（带 aria-label），行本身不可把镜像置为已选
+    const missing = screen.getByRole('button', { name: '下载 API 35 Google APIs' })
+    expect(missing).toBeTruthy()
+    expect(profileButton('API 35 · Google APIs').getAttribute('aria-pressed')).toBe('false')
+    pickImage()
+    expect(profileButton('API 36 · Google Play').getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
     expect(screen.getByText(/第 3 \/ 3 步/)).toBeTruthy()
     const name = screen.getByLabelText('设备名称') as HTMLInputElement
-    expect(name.value).toBe('Pixel 8 API 34')
+    expect(name.value).toBe('Pixel 8 API 36')
+  })
+
+  it('下载：点下载钮触发 onDownloadImage，不给选中', async () => {
+    const onDownloadImage = vi.fn<(packageName: string) => Promise<void>>()
+    setup({ onDownloadImage })
+    pickProfile()
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    fireEvent.click(screen.getByRole('button', { name: '下载 API 35 Google APIs' }))
+    await waitFor(() =>
+      expect(onDownloadImage).toHaveBeenCalledWith('system-images;android-35;google_apis;arm64-v8a')
+    )
+    expect(profileButton('API 35 · Google APIs').getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('镜像选择不是已装镜像时无法进入第三步（下一步禁用）', () => {
+    setup()
+    pickProfile()
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    // 未选任何镜像
+    expect((screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
   })
 
   it('创建：回调完整 CreateDeviceInput（自定义名生效）', () => {
@@ -67,7 +146,7 @@ describe('DeviceWizard', () => {
     expect(onCreate).toHaveBeenCalledWith({
       profileId: 'pixel_8',
       profileLabel: 'Pixel 8',
-      apiLevel: 34,
+      apiLevel: 36,
       variant: 'google_play',
       name: '我的测试机'
     })
@@ -79,7 +158,13 @@ describe('DeviceWizard', () => {
     const onCreate = vi.fn<() => Promise<void>>(
       () => new Promise<void>((resolve) => (resolveCreate = resolve))
     )
-    render(<DeviceWizard onCreate={onCreate} onCancel={vi.fn()} />)
+    render(
+      <DeviceWizard
+        onCreate={onCreate}
+        onCancel={vi.fn()}
+        data={{ profiles: PROFILES, images: IMAGES }}
+      />
+    )
     gotoNameStep()
     const button = screen.getByRole('button', { name: '创建' }) as HTMLButtonElement
     fireEvent.click(button)
@@ -96,7 +181,13 @@ describe('DeviceWizard', () => {
   // 只有 ref 守卫拦得住——单 act 包两次原生 click，之间不 flush
   it('同一 tick 原生连点也只回调一次（ref 守卫）', async () => {
     const onCreate = vi.fn<() => Promise<void>>()
-    render(<DeviceWizard onCreate={onCreate} onCancel={vi.fn()} />)
+    render(
+      <DeviceWizard
+        onCreate={onCreate}
+        onCancel={vi.fn()}
+        data={{ profiles: PROFILES, images: IMAGES }}
+      />
+    )
     gotoNameStep()
     const button = screen.getByRole('button', { name: '创建' }) as HTMLButtonElement
     act(() => {
@@ -119,7 +210,7 @@ describe('DeviceWizard', () => {
     gotoNameStep()
     fireEvent.click(screen.getByRole('button', { name: '上一步' }))
     expect(screen.getByText(/第 2 \/ 3 步/)).toBeTruthy()
-    expect(profileButton('API 34 · Google Play').getAttribute('aria-pressed')).toBe('true')
+    expect(profileButton('API 36 · Google Play').getAttribute('aria-pressed')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: '上一步' }))
     expect(screen.getByText(/第 1 \/ 3 步/)).toBeTruthy()
     expect(profileButton('Pixel 8').getAttribute('aria-pressed')).toBe('true')

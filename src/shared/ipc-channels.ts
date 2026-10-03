@@ -15,6 +15,11 @@ export const IPC_CHANNELS = {
   sdkBootstrap: 'sdk:bootstrap',
   /** bootstrap 进度推送（main → renderer） */
   sdkProgress: 'sdk:progress',
+  sdkProfiles: 'sdk:profiles',
+  sdkImages: 'sdk:images',
+  sdkDownloadImage: 'sdk:download-image',
+  /** 镜像下载进度推送（main → renderer） */
+  sdkImageProgress: 'sdk:image-progress',
   // ---- PoC dev harness（stage 04 步骤 1，仅 MSD_POC=1 dev 环境注册；步骤 5 产品化后移除）----
   pocSetup: 'poc:setup',
   pocEmulatorStart: 'poc:emulator-start',

@@ -1,6 +1,6 @@
 ---
 description: stage04 步骤 3 施工图——AVD 新建/删除接真：avdmanager 画像与 manifest 镜像清单（API × 变体 × arm64）、未装镜像向导内下载、create/delete + ANDROID_AVD_HOME 隔离
-status: approved
+status: completed
 created: 2026-10-04
 ---
 
@@ -111,3 +111,5 @@ created: 2026-10-04
 ## Done criteria
 
 真机全链路：向导选画像 × 未装镜像 → 下载（进度可见）→ 创建成功 → 设备行与 `avdmanager list avd` 一致 → 删除后目录消失、`~/.android` 零写入；删除运行中设备被拦截；既有 mock 行为（重命名/启停 mock 交互）不回归；单测/回归/typecheck/lint 全绿；review 发现只记 issue；stage/04 步骤 3 勾选附结果；`npm run book:index` 重刷。
+
+> 完成记录（2026-10-04）：真机全链路通过。① 画像：avdmanager list device 不可用（issue 2026-10-04-avdmanager-sdk-root-null），改内置画像目录（9 个 Pixel 系手机/平板，含硬件参数，shared DeviceProfile 契约）——**对 plan 的设计偏差**，扩充/来源化留后续版本；② 镜像清单：3 份公开 manifest 直读（channel-0 × arm64-v8a，API 窗口 5，15 条），已装状态探测 SDK 根目录，60s 缓存；③ 镜像下载：sdkmanager 跑包 + 进度推送 + 单下载互斥 + 完成失效缓存，真机实测下载 android-33 AOSP 0.7GB → 已装标记正确；④ 创建：devices:create 守卫（未知画像/镜像未装/非法 payload 拒绝）→ 手写 .ini + config.ini（零部分成功：先 AVD 后元数据）→ 真机创建成功且 `emulator -list-avds` 认出、`~/.android` 零写入；⑤ 删除：运行中拒绝 + 真删 AVD 目录（force 容忍缺失）→ 元数据移除，真机验证目录消失；⑥ 向导：真数据三步流（含下载按钮/进度/错误态重试），CDP 驱动真实清单创建成功。109/109 测试绿（新增 22：catalog 解析与守卫回归（含 split 错位 bug 的回归锁）+ avd 创建删除 + devices 域接真 + 向导真数据改造），typecheck/lint/prettier 全绿。已知边界：SDK 未就绪时向导报错引导（全新机器自动 bootstrap 属 stage 05）；镜像下载取消未做（plan 排除项）；遗留 stage03 mock 元数据行（无真实 AVD）由对账步骤（stage [suggested]）接管。

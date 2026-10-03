@@ -27,7 +27,20 @@ const LICENSE_FILES: Record<string, string> = {
 /** bootstrap 交付的包（镜像不在此列——向导内按需下载） */
 export const SDK_PACKAGES = ['platform-tools', 'emulator'] as const
 
-export const sdkPaths = (root: string) => ({
+export const sdkPaths = (
+  root: string
+): {
+  root: string
+  jreHome: string
+  javaBin: string
+  cmdlineToolsMarker: string
+  sdkmanagerBin: string
+  avdmanagerBin: string
+  adbBin: string
+  emulatorBin: string
+  licensesDir: string
+  userHome: string
+} => ({
   root,
   jreHome: join(root, 'jre', 'Contents', 'Home'),
   javaBin: join(root, 'jre', 'Contents', 'Home', 'bin', 'java'),
@@ -165,7 +178,9 @@ const defaultFetcher = async (url: string): Promise<Buffer> => {
 const verifyChecksum = (buffer: Buffer, expected: string, algorithm: 'sha256' | 'sha1'): void => {
   const actual = createHash(algorithm).update(buffer).digest('hex')
   if (actual !== expected) {
-    throw new Error(`校验和不匹配（${algorithm}）：期望 ${expected.slice(0, 16)}…，实际 ${actual.slice(0, 16)}…`)
+    throw new Error(
+      `校验和不匹配（${algorithm}）：期望 ${expected.slice(0, 16)}…，实际 ${actual.slice(0, 16)}…`
+    )
   }
 }
 
@@ -185,7 +200,9 @@ const defaultUnpacker = async (archive: Buffer, dest: string): Promise<void> => 
         if (code === 0) resolve()
         else {
           reject(
-            new Error(`解压失败（exit ${code}）：${Buffer.concat(stderr).toString('utf8').slice(-400)}`)
+            new Error(
+              `解压失败（exit ${code}）：${Buffer.concat(stderr).toString('utf8').slice(-400)}`
+            )
           )
         }
       })
@@ -193,6 +210,15 @@ const defaultUnpacker = async (archive: Buffer, dest: string): Promise<void> => 
   } finally {
     await rm(archivePath, { force: true })
   }
+}
+
+/** sdkmanager 跑包（镜像下载复用）：进度行解析为 0-100 */
+export async function runSdkManagerPackages(
+  root: string,
+  packages: string[],
+  onPercent: (percent: number) => void
+): Promise<void> {
+  return defaultRunner(root, packages, onPercent)
 }
 
 /** 默认 sdkmanager：stdout 逐行喂给 onPercent（进度行重复出现，取最后一次即可） */
@@ -203,11 +229,10 @@ const defaultRunner = async (
 ): Promise<void> => {
   const paths = sdkPaths(root)
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(
-      paths.sdkmanagerBin,
-      ['--sdk_root', root, ...packages],
-      { env: sdkManagerEnv(root), stdio: ['ignore', 'pipe', 'pipe'] }
-    )
+    const child = spawn(paths.sdkmanagerBin, ['--sdk_root', root, ...packages], {
+      env: sdkManagerEnv(root),
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
     const stderr: Buffer[] = []
     child.stdout?.on('data', (chunk: Buffer) => {
       for (const line of chunk.toString('utf8').split('\r')) {

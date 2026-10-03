@@ -118,6 +118,13 @@ export interface SdkProgress {
   message: string
 }
 
+/** 镜像下载进度（sdkmanager 跑包） */
+export interface SdkImageProgress {
+  packageName: string
+  percent: number
+  message: string
+}
+
 /** 系统镜像清单条目（步骤 3 向导数据；manifest 解析 + SDK 根已装探测） */
 export interface ImageEntry {
   /** manifest 包路径，如 system-images;android-36;google_apis;arm64-v8a */
@@ -130,8 +137,13 @@ export interface ImageEntry {
   sizeBytes: number
 }
 
-/** avdmanager 设备画像（向导第一步） */
+/** 设备画像（内置目录；写 config.ini 的硬件参数一并下发） */
 export interface DeviceProfile {
   id: string
   name: string
+  lcdWidth: number
+  lcdHeight: number
+  density: number
+  /** MB；Android Q+ 镜像最低 2048 */
+  ramSize: number
 }

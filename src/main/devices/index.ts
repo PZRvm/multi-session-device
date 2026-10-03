@@ -1,8 +1,16 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, app, ipcMain } from 'electron'
+import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { CreateDeviceInput, Device, DeviceMeta } from '@shared/types'
 import { isImageVariant, readDeviceMetas, writeDeviceMetas } from '../store'
+import { createAvd, deleteAvd } from '../emulator/avd'
+import { findDeviceProfile } from '../emulator/profiles'
+import { isPackageNameInstalled, packageNameFor } from '../emulator/catalog'
+
+// 应用自有目录（与 emulator IPC 层同源：userData/AndroidSDK + userData/avd-home）
+const sdkRoot = (): string => join(app.getPath('userData'), 'AndroidSDK')
+const avdHome = (): string => join(app.getPath('userData'), 'avd-home')
 
 const MAX_NAME_LENGTH = 50
 
@@ -98,6 +106,12 @@ export function registerDevicesIpc(): void {
       throw new Error(`${IPC_CHANNELS.devicesCreate}: 非法的入参`)
     }
     await ensureLoaded()
+    const profile = findDeviceProfile(raw.profileId)
+    if (!profile) throw new Error(`未知设备画像（${raw.profileId}）`)
+    const packageName = packageNameFor(raw.apiLevel, raw.variant)
+    if (!(await isPackageNameInstalled(sdkRoot(), packageName))) {
+      throw new Error('系统镜像未安装，请先在向导中下载')
+    }
     const device: Device = {
       id: randomUUID(),
       name: raw.name.trim(),
@@ -108,6 +122,22 @@ export function registerDevicesIpc(): void {
       createdAt: Date.now(),
       status: 'stopped'
     }
+    // 零部分成功：先真建 AVD，成功才写元数据；AVD 建失败则无元数据落盘
+    await createAvd(
+      {
+        avdName: device.id,
+        profile,
+        entry: {
+          packageName,
+          apiLevel: raw.apiLevel,
+          variant: raw.variant,
+          abi: 'arm64-v8a',
+          installed: true,
+          sizeBytes: 0
+        }
+      },
+      { avdHome: avdHome() }
+    )
     devices = [...devices, device]
     await persistMetas()
     broadcastChanged()
@@ -132,7 +162,12 @@ export function registerDevicesIpc(): void {
       throw new Error(`${IPC_CHANNELS.devicesDelete}: 非法的入参`)
     }
     await ensureLoaded()
-    requireDevice(raw.id)
+    const device = requireDevice(raw.id)
+    if (device.status === 'running') {
+      throw new Error('设备正在运行，先停止再删除')
+    }
+    // 零部分成功：先删 AVD 目录（force 容忍已缺），成功才删元数据
+    await deleteAvd(raw.id, { avdHome: avdHome() })
     devices = devices.filter((entry) => entry.id !== raw.id)
     await persistMetas()
     broadcastChanged()
