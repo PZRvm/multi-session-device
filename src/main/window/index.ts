@@ -1,7 +1,6 @@
 import { BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
-import { IPC_CHANNELS } from '@shared/ipc-channels'
 import icon from '../../../resources/icon.png?asset'
 
 export function createMainWindow(): BrowserWindow {
@@ -10,29 +9,21 @@ export function createMainWindow(): BrowserWindow {
     height: 670,
     show: false,
     autoHideMenuBar: true,
-    // darwin 去原生标题条（hiddenInset 保留标准阴影/圆角），三灯由 renderer 自绘
-    // （BoardHead 圆点钮）——原生灯在 hidden 系样式下失焦会整组消失/置灰到不可见
-    // （2026-10-04 两轮用户报障，learn 2026-10-04-titlebar-hidden-blur-traffic-lights），
-    // 故建窗后永久隐藏原生灯，聚焦/失焦全靠自绘；trafficLightPosition 随之废弃。
-    // 窗口最小化/全屏经 window:minimize / window:toggle-fullscreen（controls.ts）
-    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const } : {}),
+    // darwin 去原生标题条，原生三灯浮于 renderer 板头行左端（BoardHead 40px，灯高
+    // 16，y=(40-16)/2=12，x 与板头内边距对齐——契约同姊妹仓库 main/index.ts，板头
+    // 高度变更须连校本值）。
+    // hiddenInset（2026-10-04 三轮用户拍板：要原生灯，失焦灰态可接受）：失焦置灰
+    // 是 macOS 标准形态；hidden 才是失焦整组消失的坑。自绘方案（1c86331）经用户
+    // 裁决回退——learn 2026-10-04-titlebar-hidden-blur-traffic-lights 记全程
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 12 } }
+      : {}),
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true
     }
   })
-
-  if (process.platform === 'darwin') {
-    // 自绘三灯的先决条件：原生灯永久退场（悬浮于内容上方，不藏会叠画）
-    mainWindow.setWindowButtonVisibility(false)
-    // focus/blur 推送——renderer 圆点切色（聚焦 mac 三色 / 失焦置灰）
-    const pushFocus = (focused: boolean): void => {
-      mainWindow.webContents.send(IPC_CHANNELS.windowFocusChanged, focused)
-    }
-    mainWindow.on('focus', () => pushFocus(true))
-    mainWindow.on('blur', () => pushFocus(false))
-  }
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
