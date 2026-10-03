@@ -1,166 +1,114 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import styled from 'styled-components'
-import { useAppStore } from './stores/appStore'
-import { useThemeStore, type ThemeMode } from './stores/themeStore'
+import type { CreateDeviceInput, Device } from '@shared/types'
 import { toApiResult } from './api'
-import Button from './components/Button'
-import Divider from './components/Divider'
-import Input from './components/Input'
-import ListRow from './components/ListRow'
-import SegmentedControl from './components/SegmentedControl'
-
-const modeOptions: ReadonlyArray<{ value: ThemeMode; label: string }> = [
-  { value: 'system', label: '跟随系统' },
-  { value: 'light', label: '亮' },
-  { value: 'dark', label: '暗' }
-]
+import CanvasPlaceholder from './components/CanvasPlaceholder'
+import DeviceListPane from './components/DeviceListPane'
+import DeviceWizard from './components/DeviceWizard'
+import ResizeHandle from './components/ResizeHandle'
+import { useDeviceStore } from './stores/deviceStore'
 
 const App = (): React.JSX.Element => {
-  const count = useAppStore((state) => state.count)
-  const increment = useAppStore((state) => state.increment)
-  const mode = useThemeStore((state) => state.mode)
-  const setMode = useThemeStore((state) => state.setMode)
-  const [lastResult, setLastResult] = useState('无')
-  const [sessionName, setSessionName] = useState('')
-  const [selectedRow, setSelectedRow] = useState('pixel-8')
+  const devices = useDeviceStore((state) => state.devices)
+  const selectedId = useDeviceStore((state) => state.selectedId)
+  const load = useDeviceStore((state) => state.load)
+  const applyDevices = useDeviceStore((state) => state.applyDevices)
+  const createDevice = useDeviceStore((state) => state.create)
+  const renameDevice = useDeviceStore((state) => state.rename)
+  const removeDevice = useDeviceStore((state) => state.remove)
+  const setRunning = useDeviceStore((state) => state.setRunning)
+  const setSelected = useDeviceStore((state) => state.setSelected)
 
-  const showConfirm = async (): Promise<void> => {
+  const [listWidth, setListWidth] = useState(280)
+  const [wizardOpen, setWizardOpen] = useState(false)
+
+  useEffect(() => {
+    void load()
+    return window.api.devices.onChanged(applyDevices)
+  }, [load, applyDevices])
+
+  const showAlert = async (title: string, message: string): Promise<void> => {
+    await toApiResult(window.api.dialog.show({ title, message, buttons: ['知道了'] }))
+  }
+
+  const handleCreate = async (input: CreateDeviceInput): Promise<void> => {
+    const result = await createDevice(input)
+    if (result.ok) setWizardOpen(false)
+    else await showAlert('创建失败', result.error)
+  }
+
+  const handleRename = async (id: string, name: string): Promise<void> => {
+    const result = await renameDevice(id, name)
+    if (!result.ok) await showAlert('重命名失败', result.error)
+  }
+
+  const handleDelete = async (device: Device): Promise<void> => {
     const result = await toApiResult(
       window.api.dialog.show({
-        title: '骨架自检 · 确认框',
-        message: '多按钮确认框',
-        detail: '点了哪个按钮，下方就显示哪个下标（按 Esc 应返回 0）',
-        buttons: ['取消', '确定'],
+        title: '删除设备',
+        message: `删除「${device.name}」？`,
+        detail:
+          '此操作不可撤销：\n· AVD 目录将被永久删除\n· 设备内所有数据（登录态、应用、文件）一并消失',
+        buttons: ['取消', '删除'],
         cancelId: 0
       })
     )
-    if (result.ok) setLastResult(`确认框返回下标 ${result.data.response}`)
-    else setLastResult(`对话框出错：${result.error}`)
+    if (!result.ok) return
+    if (result.data.response !== 1) return
+    const removed = await removeDevice(device.id)
+    if (!removed.ok) await showAlert('删除失败', removed.error)
   }
 
-  const showAlert = async (): Promise<void> => {
-    const result = await toApiResult(
-      window.api.dialog.show({
-        title: '骨架自检 · 提示',
-        message: '单按钮提示弹窗（原 toast 的替代形态）',
-        buttons: ['知道了']
-      })
-    )
-    if (result.ok) setLastResult('提示框已关闭')
-    else setLastResult(`对话框出错：${result.error}`)
+  const handleToggleRunning = async (id: string, running: boolean): Promise<void> => {
+    const result = await setRunning(id, running)
+    if (!result.ok) await showAlert('切换状态失败', result.error)
   }
+
+  const selected = devices.find((device) => device.id === selectedId) ?? null
 
   return (
-    <Wrapper>
-      <Header>
-        <h1>多会话设备 · 骨架自检</h1>
-        <SegmentedControl
-          options={modeOptions}
-          value={mode}
-          onChange={setMode}
-          ariaLabel="外观模式"
+    <Shell>
+      <ListPane style={{ width: listWidth }}>
+        <DeviceListPane
+          devices={devices}
+          selectedId={selectedId}
+          onSelect={setSelected}
+          onToggleRunning={handleToggleRunning}
+          onDelete={handleDelete}
+          onRename={handleRename}
+          onCreate={() => setWizardOpen(true)}
         />
-      </Header>
-
-      <SectionLabel>元素基线 · 按钮 / 输入</SectionLabel>
-      <ButtonRow>
-        <Button variant="primary" onClick={showConfirm}>
-          原生确认框（primary）
-        </Button>
-        <Button onClick={showAlert}>原生提示框（ghost）</Button>
-        <Input
-          value={sessionName}
-          onChange={(event) => setSessionName(event.target.value)}
-          placeholder="会话名称"
-        />
-      </ButtonRow>
-
-      <Divider />
-
-      <SectionLabel>元素基线 · 列表行（选中 = 整行反白）</SectionLabel>
-      <ListBlock>
-        <ListRow
-          title="Android · Pixel 8"
-          subtitle="运行中 · scrcpy 通道就绪"
-          selected={selectedRow === 'pixel-8'}
-          onSelect={() => setSelectedRow('pixel-8')}
-        />
-        <ListRow
-          title="Android · Pixel 8（副本）"
-          subtitle="空闲"
-          selected={selectedRow === 'pixel-8-copy'}
-          onSelect={() => setSelectedRow('pixel-8-copy')}
-        />
-        <ListRow
-          title="iOS · iPhone 16"
-          subtitle="空闲 · stage 04 接入"
-          selected={selectedRow === 'iphone-16'}
-          onSelect={() => setSelectedRow('iphone-16')}
-        />
-      </ListBlock>
-
-      <Divider />
-
-      <StatusLine>
-        计数：{count} ｜ 最近对话框结果：{lastResult} ｜ 输入值：{sessionName || '（空）'}
-      </StatusLine>
-      <ButtonRow>
-        <Button onClick={increment}>zustand 计数 +1</Button>
-      </ButtonRow>
-    </Wrapper>
+      </ListPane>
+      <ResizeHandle width={listWidth} onResize={setListWidth} />
+      <CanvasArea>
+        {wizardOpen ? (
+          <DeviceWizard onCancel={() => setWizardOpen(false)} onCreate={handleCreate} />
+        ) : (
+          <CanvasPlaceholder device={selected} onCreate={() => setWizardOpen(true)} />
+        )}
+      </CanvasArea>
+    </Shell>
   )
 }
 
-const Wrapper = styled.div`
-  max-width: 560px;
-  margin: 48px auto;
-  padding: 0 24px;
+const Shell = styled.div`
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
 `
 
-const Header = styled.header`
+const ListPane = styled.div`
+  flex: none;
+  min-width: 0;
+`
+
+const CanvasArea = styled.main`
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--board-hairline);
-
-  & h1 {
-    margin: 0;
-    font-size: 15px;
-    font-weight: 600;
-    line-height: 1.5;
-  }
-`
-
-const SectionLabel = styled.p`
-  margin: 14px 0 8px;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--board-ink-dim);
-`
-
-const ButtonRow = styled.div`
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 8px;
-`
-
-const ListBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--board-hairline);
-
-  & > button:first-child {
-    border-top: none;
-  }
-`
-
-const StatusLine = styled.p`
-  margin: 0 0 8px;
-  font-size: 12px;
-  color: var(--board-ink-dim);
+  justify-content: center;
+  background: var(--board-bg);
 `
 
 export default App

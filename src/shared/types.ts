@@ -15,3 +15,33 @@ export interface DialogResult {
   response: number
   checkboxChecked: boolean
 }
+
+/** 系统镜像变体（avdmanager tag 的白名单子集，闭集守卫用） */
+export type ImageVariant = 'aosp' | 'google_apis' | 'google_play'
+
+/** 设备元数据——devices.json 持久化的全部字段（stage 03 mock，stage 04 接真数据） */
+export interface DeviceMeta {
+  id: string
+  name: string
+  profileId: string
+  profileLabel: string
+  apiLevel: number
+  variant: ImageVariant
+  createdAt: number
+}
+
+/** 运行态不入盘：重启一律回到「停止」，主进程内存持有 */
+export type DeviceStatus = 'stopped' | 'running'
+
+export interface Device extends DeviceMeta {
+  status: DeviceStatus
+}
+
+/** 新建向导第三步的产物——主进程补 id/createdAt/status */
+export interface CreateDeviceInput {
+  profileId: string
+  profileLabel: string
+  apiLevel: number
+  variant: ImageVariant
+  name: string
+}

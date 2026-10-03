@@ -8,8 +8,8 @@
 //   （src/renderer/src/theme/apply.ts）经 themeCssVariables 全量覆盖。两处字面量
 //   改一处须同步另一处。
 // - 主进程窗口背景色（建窗注入 + 全窗 setBackgroundColor）经 themeBoardBackground
-//   从本文件派生，主进程不解析 CSS、不拼颜色字符串——主进程消费为 stage 02 留白
-//   （stage 03 分栏落地时接），函数先备。
+//   从本文件派生，主进程不解析 CSS、不拼颜色字符串——消费方顺延 stage 05 设置域
+//   （2026-10-03 拍板：首帧正确依赖主进程侧主题持久化，那是设置窗的活），函数先备。
 // - 新增一套主题 = 在 THEME_SYSTEMS 增加一条配置（Record 键类型强制三件套齐全），
 //   CSS 与组件零改动；增删系统后同步 THEME_SYSTEM_IDS 闭集即可。
 //
@@ -290,7 +290,7 @@ export function themeCssVariables(
   }
 }
 
-/** 建窗背景色（主进程消费，stage 03 接入）：= 该系统该态的纸面底（防首帧底色闪差的单源） */
+/** 建窗背景色（主进程消费，stage 05 设置域接入）：= 该系统该态的纸面底（防首帧底色闪差的单源） */
 export function themeBoardBackground(id: ThemeSystemId, resolved: 'light' | 'dark'): string {
   return THEME_SYSTEMS[id][resolved].bg
 }
