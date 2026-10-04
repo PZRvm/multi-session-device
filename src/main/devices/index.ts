@@ -18,6 +18,7 @@ import {
   candidateAdbPaths,
   listAdbSerials,
   resolveAdbExecutable,
+  scrubAdbEnv,
   type AdbExecutable
 } from '../emulator/adb'
 import { PortAllocator, tcpProbe } from '../emulator/ports'
@@ -85,6 +86,21 @@ const requireAdb = async (): Promise<AdbExecutable> => {
 const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
+/** scrcpy 会话与 runner 共用：已解析的 adb 二进制（未解析时回落应用自有路径） */
+export const adbBinaryPath = (): string =>
+  adbExecutable?.path ?? join(sdkRoot(), 'platform-tools', 'adb')
+
+/** 工具子进程统一环境：SDK 与用户目录全部指进应用自有目录（architecture 隔离不变量） */
+export const androidToolEnv = (): NodeJS.ProcessEnv =>
+  scrubAdbEnv({
+    ...process.env,
+    ANDROID_SDK_ROOT: sdkRoot(),
+    ANDROID_HOME: sdkRoot(),
+    ANDROID_AVD_HOME: avdHome(),
+    ANDROID_USER_HOME: join(sdkRoot(), 'android-user'),
+    ANDROID_EMULATOR_HOME: join(sdkRoot(), 'android-user')
+  })
+
 const ports = new PortAllocator({
   probeTcp: tcpProbe,
   // server 尚不可用时按无外部登记处理，spawn 前还有一道 serial 检查兜底
@@ -106,6 +122,17 @@ let loadPromise: Promise<void> | null = null
 let writeQueue: Promise<void> = Promise.resolve()
 let acceptingCommands = true
 const deleteFlights = new Map<string, Promise<DeviceSnapshot>>()
+
+/** 投屏会话桥（ipc 层装配）：running 建流，stopped/beforeKill 释放流资源 */
+const streamBridge: {
+  running?: (id: string, runId: string, serial: string) => void
+  stopped?: (id: string) => void
+  beforeKill?: (id: string, runId: string) => Promise<void>
+} = {}
+
+export function attachDeviceStreamBridge(bridge: typeof streamBridge): void {
+  Object.assign(streamBridge, bridge)
+}
 
 /** 单次加载（issue 2026-10-03 双读的收口）：并发调用共享同一 Promise，失败可重试 */
 const ensureLoaded = (): Promise<void> => {
@@ -190,6 +217,7 @@ const handleRunning = (id: string, runId: string, serial: string): void => {
   device.status = 'running'
   device.serial = serial
   broadcastChanged()
+  streamBridge.running?.(id, runId, serial)
 }
 
 const handleUnexpectedExit = (
@@ -205,6 +233,7 @@ const handleUnexpectedExit = (
   device.serial = undefined
   device.runId = undefined
   broadcastChanged()
+  streamBridge.stopped?.(id)
   emitRuntimeError({
     eventId: randomUUID(),
     deviceId: id,
@@ -227,6 +256,7 @@ const runner = createRunner({
       console.log(`[devices] 复用共享 adb server（协议 v${descriptor.protocolVersion}）`)
     }
   },
+  beforeKill: (id, runId) => streamBridge.beforeKill?.(id, runId) ?? Promise.resolve(),
   onRunning: handleRunning,
   onUnexpectedExit: handleUnexpectedExit
 })
@@ -293,6 +323,7 @@ const stopDevice = async (id: string): Promise<DeviceSnapshot> => {
     target.serial = undefined
     target.runId = undefined
     broadcastChanged()
+    streamBridge.stopped?.(target.id)
   }
   return snapshotNow()
 }
@@ -330,6 +361,7 @@ const cancelStartDevice = async (id: string): Promise<DeviceSnapshot> => {
     target.serial = undefined
     target.runId = undefined
     broadcastChanged()
+    streamBridge.stopped?.(target.id)
   }
   return snapshotNow()
 }
@@ -443,6 +475,7 @@ export async function prepareAppShutdown(): Promise<{ leftovers: string[] }> {
         device.status = 'stopped'
         device.serial = undefined
         device.runId = undefined
+        streamBridge.stopped?.(device.id)
       }
     }
   }

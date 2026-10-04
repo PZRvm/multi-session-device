@@ -37,11 +37,21 @@ export class PortAllocator {
     const serials = await this.deps.adbSerials()
     for (let index = 0; index < EMULATOR_PORT_PAIRS; index += 1) {
       const port = EMULATOR_PORT_FIRST + index * 2
+      // 先同步占坑再探测：并发 acquire 不会拿到同一对（探测在外部抢占时会退让换对）
       if (this.#reserved.has(port)) continue
-      if (serials.has(serialForPort(port))) continue
-      if (await this.deps.probeTcp(port)) continue
-      if (await this.deps.probeTcp(port + 1)) continue
       this.#reserved.set(port, deviceId)
+      if (serials.has(serialForPort(port))) {
+        this.#reserved.delete(port)
+        continue
+      }
+      if (await this.deps.probeTcp(port)) {
+        this.#reserved.delete(port)
+        continue
+      }
+      if (await this.deps.probeTcp(port + 1)) {
+        this.#reserved.delete(port)
+        continue
+      }
       return port
     }
     throw new Error(

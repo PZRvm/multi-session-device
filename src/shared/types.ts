@@ -86,48 +86,88 @@ export interface CreateDeviceInput {
   name: string
 }
 
-// ---- PoC dev harness 消息（stage 04 步骤 1；步骤 5 产品化后随 harness 一起移除）----
+// ---- 投屏与操控域（stage 04 步骤 5；scrcpy 3.3.3 + H.264 + adb forward 裸 TCP）----
 
-export type PoCGpuMode = 'host' | 'swiftshader_indirect'
-
-/** 归一化坐标（0..1，相对画面尺寸），main 侧按视频分辨率换算设备像素 */
-export interface PoCTapInput {
-  kind: 'tap'
-  x: number
-  y: number
+export interface ScreenFormat {
+  codec: 'h264'
+  width: number
+  height: number
 }
 
-export interface PoCSwipeInput {
-  kind: 'swipe'
-  x1: number
-  y1: number
-  x2: number
-  y2: number
-  durationMs: number
+export type ScreenStatus = 'connecting' | 'ready' | 'error' | 'closed'
+
+/** 所有 screen 消息共用的归属字段——main 按 token/generation/代次守卫，旧归属一律拒收 */
+export interface ScreenEnvelope {
+  deviceId: string
+  runId: string
+  streamId: string
+  generation: number
+  /** renderer 视图代次（renderer 生成、activate 时登记） */
+  viewToken: string
 }
 
-export type PoCInjectInput = PoCTapInput | PoCSwipeInput
-
-export interface PoCLogEntry {
-  ts: number
-  message: string
+export interface ScreenStateMessage extends ScreenEnvelope {
+  status: ScreenStatus
+  format?: ScreenFormat
+  error?: string
 }
 
-export interface PoCReport {
-  gpuMode: PoCGpuMode
-  videoWidth: number
-  videoHeight: number
-  scrcpyServerVersion: string
-  idle: { durationMs: number; frames: number; fps: number }
-  interaction: { durationMs: number; frames: number; fps: number; swipes: number }
-  latency: {
-    samples: number
-    timeouts: number
-    minMs: number
-    medianMs: number
-    p95Ms: number
-    maxMs: number
-  }
+export type ScreenPacketType = 'configuration' | 'data'
+
+export interface ScreenPacketMessage extends ScreenEnvelope {
+  /** 会话内单调递增；renderer 据此发现丢弃产生的空洞并重同步 */
+  seq: number
+  type: ScreenPacketType
+  /** 编码器 PTS（µs） */
+  pts?: number
+  keyframe?: boolean
+  data: Uint8Array
+}
+
+export interface ScreenAckMessage {
+  viewToken: string
+  generation: number
+  throughSeq: number
+}
+
+/** 工具条物理键（main 白名单映射 Android keycode，成对 Down/Up） */
+export type ScreenToolbarButton =
+  'back' | 'home' | 'overview' | 'power' | 'volume-up' | 'volume-down'
+
+/** 画布键盘白名单（renderer 传逻辑名，main 映射 keycode） */
+export type ScreenKeycodeName =
+  | 'enter'
+  | 'backspace'
+  | 'tab'
+  | 'arrow-up'
+  | 'arrow-down'
+  | 'arrow-left'
+  | 'arrow-right'
+  | 'escape'
+
+export type ScreenInput =
+  | {
+      kind: 'touch'
+      action: 'down' | 'move' | 'up' | 'cancel'
+      /** renderer 稳定指针 id（0/1） */
+      pointerId: number
+      /** 已归一化坐标（0..1） */
+      x: number
+      y: number
+      pressure: number
+    }
+  | { kind: 'button'; button: ScreenToolbarButton }
+  | { kind: 'keycode'; key: ScreenKeycodeName; down: boolean }
+  /** 普通文本（injectText 分段）；ime=true 为 IME 组合提交（走设备剪贴板+粘贴） */
+  | { kind: 'text'; text: string; ime: boolean }
+  | { kind: 'rotate' }
+  | { kind: 'release-all' }
+
+export interface ScreenInputRequest extends ScreenEnvelope {
+  /** renderer 声明的画面尺寸（main 校验与当前 generation 一致后才换算像素） */
+  width: number
+  height: number
+  input: ScreenInput
 }
 
 // ---- SDK 域（stage 04 步骤 2/3 共用）----

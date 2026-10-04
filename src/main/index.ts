@@ -1,10 +1,9 @@
 import { app, BrowserWindow, dialog } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createMainWindow } from './window'
-import { registerIpcHandlers } from './ipc'
+import { registerIpcHandlers, shutdownStreams } from './ipc'
 import { prepareAppShutdown, resumeAfterShutdown } from './devices'
 import { appIcon } from './app-icon'
-import { createPocWindow, registerPocIpc } from './poc'
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron')
@@ -16,18 +15,11 @@ app.whenReady().then(() => {
 
   registerIpcHandlers()
 
-  // PoC dev harness（stage 04 步骤 1）：MSD_POC=1 时开 PoC 页而非主窗
-  if (process.env['MSD_POC'] === '1') {
-    registerPocIpc()
-    createPocWindow()
-  } else {
-    createMainWindow()
-  }
+  createMainWindow()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      if (process.env['MSD_POC'] === '1') createPocWindow()
-      else createMainWindow()
+      createMainWindow()
     }
   })
 })
@@ -46,6 +38,7 @@ app.on('before-quit', (event) => {
   event.preventDefault()
   void (async () => {
     const { leftovers } = await prepareAppShutdown()
+    await shutdownStreams()
     if (leftovers.length === 0) {
       quitGuard = true
       app.quit()

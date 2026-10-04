@@ -51,6 +51,31 @@ describe('PortAllocator', () => {
     expect(port).toBe(EMULATOR_PORT_FIRST + 2)
   })
 
+  it('并发 acquire（同 tick 两台）：探测在途时后续调用拿下一对', async () => {
+    // 慢探测模拟真实 TCP 往返：第一次调用挂在探测上时，第二次必须看到预留
+    let resolveFirst = (): void => {}
+    let calls = 0
+    const allocator = new PortAllocator({
+      probeTcp: async (port) => {
+        calls += 1
+        if (calls === 1) {
+          await new Promise<void>((resolve) => {
+            resolveFirst = resolve
+          })
+        }
+        void port
+        return false
+      },
+      adbSerials: async () => new Set()
+    })
+    const first = allocator.acquire('d1')
+    const second = allocator.acquire('d2')
+    await new Promise((resolve) => setTimeout(resolve, 10)) // 让两次 acquire 推进到阻塞探测
+    resolveFirst()
+    const [a, b] = await Promise.all([first, second])
+    expect(b).toBe(a + 2)
+  })
+
   it('release(deviceId) 只释放该设备的预留', async () => {
     const allocator = new PortAllocator(makeDeps())
     await allocator.acquire('d1')

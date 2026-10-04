@@ -6,6 +6,7 @@ import { toApiResult } from './api'
 import BoardHead from './components/BoardHead'
 import Button from './components/Button'
 import CanvasPlaceholder from './components/CanvasPlaceholder'
+import DeviceCanvas from './components/DeviceCanvas'
 import DeviceListPane from './components/DeviceListPane'
 import ResizeHandle from './components/ResizeHandle'
 import { useDeviceStore } from './stores/deviceStore'
@@ -123,7 +124,11 @@ const App = (): React.JSX.Element => {
       </ListPane>
       <ResizeHandle width={listWidth} onResize={setListWidth} />
       <CanvasArea>
-        <CanvasPlaceholder device={selected} onCreate={openWizard} />
+        {selected && selected.status === 'running' ? (
+          <DeviceCanvas device={selected} />
+        ) : (
+          <CanvasPlaceholder device={selected} onCreate={openWizard} />
+        )}
       </CanvasArea>
     </Shell>
   )

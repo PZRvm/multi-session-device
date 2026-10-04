@@ -3,7 +3,7 @@ import { devicesApi } from './devices'
 import { sdkApi } from './sdk'
 import { wizardApi } from './wizard'
 import { themeApi } from './theme'
-import { pocApi } from './poc'
+import { screenApi } from './screen'
 
 export const api = {
   platform: process.platform,
@@ -12,7 +12,7 @@ export const api = {
   sdk: sdkApi,
   wizard: wizardApi,
   theme: themeApi,
-  poc: pocApi
+  screen: screenApi
 }
 
 export type Api = typeof api
