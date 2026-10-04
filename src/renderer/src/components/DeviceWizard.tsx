@@ -178,9 +178,6 @@ const DeviceWizard = ({
               onClick={() => setProfile(entry)}
             >
               <OptionTitle>{entry.name}</OptionTitle>
-              <OptionSub>
-                {entry.lcdWidth}×{entry.lcdHeight} · {entry.density}dpi · {entry.ramSize}MB
-              </OptionSub>
             </OptionButton>
           ))}
         </OptionGroup>

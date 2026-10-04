@@ -137,13 +137,8 @@ export interface ImageEntry {
   sizeBytes: number
 }
 
-/** 设备画像（内置目录；写 config.ini 的硬件参数一并下发） */
+/** 设备画像（avdmanager list device 的手机/平板条目） */
 export interface DeviceProfile {
   id: string
   name: string
-  lcdWidth: number
-  lcdHeight: number
-  density: number
-  /** MB；Android Q+ 镜像最低 2048 */
-  ramSize: number
 }

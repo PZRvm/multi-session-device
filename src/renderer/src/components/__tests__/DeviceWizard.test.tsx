@@ -7,22 +7,8 @@ import DeviceWizard from '../DeviceWizard'
 afterEach(cleanup)
 
 const PROFILES: DeviceProfile[] = [
-  {
-    id: 'pixel_8',
-    name: 'Pixel 8',
-    lcdWidth: 1080,
-    lcdHeight: 2400,
-    density: 420,
-    ramSize: 2048
-  },
-  {
-    id: 'pixel_tablet',
-    name: 'Pixel Tablet',
-    lcdWidth: 1600,
-    lcdHeight: 2560,
-    density: 276,
-    ramSize: 2048
-  }
+  { id: 'pixel_8', name: 'Pixel 8' },
+  { id: 'pixel_tablet', name: 'Pixel Tablet' }
 ]
 
 const image = (overrides: Partial<ImageEntry>): ImageEntry => ({
@@ -93,7 +79,6 @@ describe('DeviceWizard', () => {
     expect(next.disabled).toBe(true)
     pickProfile()
     expect(next.disabled).toBe(false)
-    expect(screen.getByText('1080×2400 · 420dpi · 2048MB')).toBeTruthy()
     fireEvent.click(next)
     expect(screen.getByText(/第 2 \/ 3 步/)).toBeTruthy()
     expect(screen.getByRole('group', { name: '选择系统镜像' })).toBeTruthy()

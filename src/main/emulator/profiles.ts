@@ -1,67 +1,60 @@
+import { spawn } from 'node:child_process'
+import { join } from 'node:path'
 import type { DeviceProfile } from '@shared/types'
 
-/** 内置画像 = 共享 DeviceProfile 契约（硬件参数写 config.ini 用，取公开设备定义常用档位） */
-export type DeviceProfileDef = DeviceProfile
-
 /**
- * 设备画像目录（手机/平板）。
- * avdmanager list device 在 cmdline-tools 19/20 上不可用（issue 2026-10-04-avdmanager-sdk-root-null），
- * 一期改为内置目录：一期 macOS + arm64 + 常用 Pixel 系画像即可覆盖目标用户；
- * 扩充/来源化（avdmanager 或 devices.xml 解析）留待后续版本。
+ * 设备画像：`avdmanager list device` 真数据。
+ * 输出里带 `Tag :` 行的定义是非手机类（automotive/wear/tv/desktop/xr/ai-glasses），
+ * 手机/平板条目没有 Tag 行——以此过滤；id/Name 之外的字段一期不展示。
+ * （内置目录方案随 2026-10-05 avdmanager 修复退役，见 plan 2026-10-04-avd-create-delete 变更记录。）
  */
-export const DEVICE_PROFILES: DeviceProfileDef[] = [
-  {
-    id: 'pixel_6a',
-    name: 'Pixel 6a',
-    lcdWidth: 1080,
-    lcdHeight: 2400,
-    density: 420,
-    ramSize: 2048
-  },
-  { id: 'pixel_7', name: 'Pixel 7', lcdWidth: 1080, lcdHeight: 2400, density: 420, ramSize: 2048 },
-  {
-    id: 'pixel_7_pro',
-    name: 'Pixel 7 Pro',
-    lcdWidth: 1440,
-    lcdHeight: 3120,
-    density: 560,
-    ramSize: 2048
-  },
-  { id: 'pixel_8', name: 'Pixel 8', lcdWidth: 1080, lcdHeight: 2400, density: 420, ramSize: 2048 },
-  {
-    id: 'pixel_8a',
-    name: 'Pixel 8a',
-    lcdWidth: 1080,
-    lcdHeight: 2400,
-    density: 420,
-    ramSize: 2048
-  },
-  {
-    id: 'pixel_8_pro',
-    name: 'Pixel 8 Pro',
-    lcdWidth: 1344,
-    lcdHeight: 2992,
-    density: 480,
-    ramSize: 2048
-  },
-  { id: 'pixel_9', name: 'Pixel 9', lcdWidth: 1080, lcdHeight: 2424, density: 420, ramSize: 2048 },
-  {
-    id: 'pixel_9_pro',
-    name: 'Pixel 9 Pro',
-    lcdWidth: 1280,
-    lcdHeight: 2856,
-    density: 480,
-    ramSize: 2048
-  },
-  {
-    id: 'pixel_tablet',
-    name: 'Pixel Tablet',
-    lcdWidth: 1600,
-    lcdHeight: 2560,
-    density: 276,
-    ramSize: 2048
-  }
-]
 
-export const findDeviceProfile = (id: string): DeviceProfileDef | undefined =>
-  DEVICE_PROFILES.find((profile) => profile.id === id)
+export interface ProfileListDeps {
+  /** 执行器接缝：默认 spawn avdmanager list device；单测注入固定输出 */
+  runner?: (avdmanagerPath: string) => Promise<string>
+  avdmanagerPath: string
+}
+
+const defaultRunner = (avdmanagerPath: string): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const child = spawn(avdmanagerPath, ['list', 'device'], {
+      env: { ...process.env },
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    const out: Buffer[] = []
+    const err: Buffer[] = []
+    child.stdout?.on('data', (chunk: Buffer) => out.push(chunk))
+    child.stderr?.on('data', (chunk: Buffer) => err.push(chunk))
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code === 0) resolve(Buffer.concat(out).toString('utf8'))
+      else {
+        reject(
+          new Error(
+            `avdmanager list device 失败（exit ${code}）：${Buffer.concat(err).toString('utf8').slice(-400)}`
+          )
+        )
+      }
+    })
+  })
+
+/** 解析 list device 输出：无 `Tag :` 行的定义（手机/平板），按名称排序 */
+export const parseDeviceProfiles = (output: string): DeviceProfile[] => {
+  const profiles: DeviceProfile[] = []
+  for (const block of output.split(/-{5,}/)) {
+    const id = block.match(/id:\s*\d+\s+or\s+"([^"]+)"/)?.[1]
+    const name = block.match(/Name:\s*(.+)/)?.[1]?.trim()
+    if (!id || !name) continue
+    if (/^\s*Tag\s*:/m.test(block)) continue
+    profiles.push({ id, name })
+  }
+  return profiles.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
+}
+
+export const avdmanagerPathFor = (sdkRoot: string): string =>
+  join(sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager')
+
+export async function listDeviceProfiles(deps: ProfileListDeps): Promise<DeviceProfile[]> {
+  const output = await (deps.runner ?? defaultRunner)(deps.avdmanagerPath)
+  return parseDeviceProfiles(output)
+}

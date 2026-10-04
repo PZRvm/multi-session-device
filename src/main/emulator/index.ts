@@ -4,9 +4,9 @@ import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { SdkImageProgress, SdkProgress, SdkSnapshot } from '@shared/types'
 import { appIcon } from '../app-icon'
 import { bootstrapSdk, detectSdk, runSdkManagerPackages } from './sdk'
-import { DEVICE_PROFILES } from './profiles'
+import { avdmanagerPathFor, listDeviceProfiles } from './profiles'
 import { listImagesWithState } from './catalog'
-import type { ImageEntry } from '@shared/types'
+import type { DeviceProfile, ImageEntry } from '@shared/types'
 
 /** 应用自有 SDK 根（PRD E：userData/AndroidSDK；设置自定义路径属 stage 05） */
 export const defaultSdkRoot = (): string => join(app.getPath('userData'), 'AndroidSDK')
@@ -47,6 +47,10 @@ const confirmLicenses = async (): Promise<void> => {
   if (result.response !== 0) throw new Error('用户拒绝 Android SDK 许可，bootstrap 中止')
 }
 
+// 画像缓存（5min）：avdmanager list device 是 Java 子进程（秒级），不必每次向导都跑
+let profilesCache: { at: number; profiles: DeviceProfile[] } | null = null
+const PROFILES_CACHE_MS = 300_000
+
 // 镜像清单缓存（60s）：向导内反复进出不打 manifest
 let imagesCache: { at: number; root: string; images: ImageEntry[] } | null = null
 const IMAGES_CACHE_MS = 60_000
@@ -73,8 +77,18 @@ export function registerSdkIpc(): void {
     return bootstrapSdk(root, {}, pushProgress)
   })
 
-  // 画像来自内置目录（avdmanager list device 失效，issue 2026-10-04-avdmanager-sdk-root-null）
-  ipcMain.handle(IPC_CHANNELS.sdkProfiles, () => DEVICE_PROFILES)
+  // 画像来自 avdmanager list device（手机/平板过滤；5min 缓存）
+  ipcMain.handle(IPC_CHANNELS.sdkProfiles, async (): Promise<DeviceProfile[]> => {
+    const root = resolveRoot(undefined)
+    await requireSdkReady(root)
+    const now = Date.now()
+    if (profilesCache && now - profilesCache.at < PROFILES_CACHE_MS) {
+      return profilesCache.profiles
+    }
+    const profiles = await listDeviceProfiles({ avdmanagerPath: avdmanagerPathFor(root) })
+    profilesCache = { at: now, profiles }
+    return profiles
+  })
 
   ipcMain.handle(IPC_CHANNELS.sdkImages, async (_event, raw: unknown): Promise<ImageEntry[]> => {
     const root = resolveRoot(raw)

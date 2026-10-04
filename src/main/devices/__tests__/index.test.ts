@@ -2,7 +2,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { DeviceMeta } from '@shared/types'
-import { findDeviceProfile } from '../../emulator/profiles'
 
 const mocks = vi.hoisted(() => ({
   handle: vi.fn(),
@@ -31,6 +30,7 @@ vi.mock('../../emulator/avd', () => ({
   createAvd: mocks.createAvd,
   deleteAvd: mocks.deleteAvd
 }))
+// 'assert on args' helper lives inline in tests below
 vi.mock('../../emulator/catalog', () => ({
   isPackageNameInstalled: mocks.isPackageNameInstalled,
   packageNameFor: (apiLevel: number, variant: string): string =>
@@ -70,7 +70,7 @@ describe('devices 域接真（create/delete）', () => {
     mocks.deleteAvd.mockResolvedValue(undefined)
   })
 
-  it('create：镜像已装 → 真建 AVD（avdName=设备 id）→ 元数据落盘', async () => {
+  it('create：镜像已装 → 真建 AVD（avdName=设备 id，profileId 透传给 avdmanager）→ 元数据落盘', async () => {
     const { handlerFor } = await freshDomain()
     const devices = (await handlerFor(IPC_CHANNELS.devicesCreate)({}, validCreateInput)) as Array<
       DeviceMeta & { status: string }
@@ -80,9 +80,17 @@ describe('devices 域接真（create/delete）', () => {
     expect(created.name).toBe('测试机')
     expect(created.status).toBe('stopped')
     expect(mocks.createAvd).toHaveBeenCalledTimes(1)
-    const call = mocks.createAvd.mock.calls[0][0] as { avdName: string; profile: { id: string } }
+    const call = mocks.createAvd.mock.calls[0][0] as {
+      avdName: string
+      profileId: string
+      packageName: string
+    }
     expect(call.avdName).toBe(created.id)
-    expect(call.profile.id).toBe('pixel_8')
+    expect(call.profileId).toBe('pixel_8')
+    expect(call.packageName).toBe('system-images;android-36;google_apis_playstore;arm64-v8a')
+    const callDirs = mocks.createAvd.mock.calls[0][1] as { avdHome: string; sdkRoot: string }
+    expect(callDirs.avdHome).toBe('/userdata/avd-home')
+    expect(callDirs.sdkRoot).toBe('/userdata/AndroidSDK')
     const persisted = mocks.writeDeviceMetas.mock.calls[0][0] as DeviceMeta[]
     expect(persisted).toHaveLength(1)
     expect(persisted[0].id).toBe(created.id)
@@ -93,12 +101,13 @@ describe('devices 域接真（create/delete）', () => {
     )
   })
 
-  it('create：未知画像直接拒绝', async () => {
+  it('create：avdmanager 拒绝未知画像 → 错误上抛且不写元数据（-d 校验交给 avdmanager）', async () => {
+    mocks.createAvd.mockRejectedValue(new Error('Error: Device definition nope is not valid'))
     const { handlerFor } = await freshDomain()
     await expect(
       handlerFor(IPC_CHANNELS.devicesCreate)({}, { ...validCreateInput, profileId: 'nope' })
-    ).rejects.toThrow('未知设备画像')
-    expect(mocks.createAvd).not.toHaveBeenCalled()
+    ).rejects.toThrow('nope')
+    expect(mocks.writeDeviceMetas).not.toHaveBeenCalled()
   })
 
   it('create：镜像未装拒绝且不写元数据（零部分成功）', async () => {
@@ -148,14 +157,10 @@ describe('devices 域接真（create/delete）', () => {
     const deleteHandler = handlerFor(IPC_CHANNELS.devicesDelete)
     const after = (await deleteHandler({}, { id })) as DeviceMeta[]
     expect(after).toHaveLength(0)
-    expect(mocks.deleteAvd).toHaveBeenCalledWith(id, { avdHome: '/userdata/avd-home' })
+    expect(mocks.deleteAvd).toHaveBeenCalledWith(id, {
+      avdHome: '/userdata/avd-home',
+      sdkRoot: '/userdata/AndroidSDK'
+    })
     expect(mocks.writeDeviceMetas).toHaveBeenLastCalledWith([])
-  })
-
-  it('create 的画像契约与内置目录一致（pixel_8 存在且带硬件参数）', () => {
-    const profile = findDeviceProfile('pixel_8')
-    expect(profile).toBeTruthy()
-    expect(profile?.lcdWidth).toBeGreaterThan(0)
-    expect(profile?.ramSize).toBeGreaterThanOrEqual(2048)
   })
 })
