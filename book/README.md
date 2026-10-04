@@ -87,7 +87,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-03-devices-ensure-loaded-concurrent-double-read.md](notes/issue/2026-10/2026-10-03-devices-ensure-loaded-concurrent-double-read.md) — devices 域 ensureLoaded 无互斥——首个命令与并发 IPC 同窗口时可能双读落盘文件，后者覆盖前者
 - [2026-10-03-devices-persist-failure-divergence.md](notes/issue/2026-10/2026-10-03-devices-persist-failure-divergence.md) — devices 变更先改内存再落盘，写盘失败时内存与磁盘分叉且 renderer 无感知——零部分成功在该路径不成立
 - [2026-10-03-segmented-roving-focus.md](notes/issue/2026-10/2026-10-03-segmented-roving-focus.md) — SegmentedControl 方向键切换后 DOM 焦点未随 roving tabindex 移到新选中瓣——键盘用户连按方向键无效
-- [2026-10-04-avdmanager-sdk-root-null.md](notes/issue/2026-10/2026-10-04-avdmanager-sdk-root-null.md) — cmdline-tools 19/20 的 avdmanager 在本机无法解析 SDK 根——--sdk_root 被移除、env 不生效，create avd 报 "Valid system image paths are: null"
+- [2026-10-04-avdmanager-sdk-root-null.md](notes/issue/2026-10/2026-10-04-avdmanager-sdk-root-null.md) — avdmanager create avd 报 "Valid system image paths are: null"——根因是 SDK 的 cmdline-tools 符号链接把根推断带到了 Homebrew 空壳目录（2026-10-05 已修复并更正根因）
 - [2026-10-04-emulator-snapshot-resume-crash.md](notes/issue/2026-10/2026-10-04-emulator-snapshot-resume-crash.md) — 手写 config 的 AVD 在快照恢复路径原生崩溃（SIGABRT）——PoC 固定 -no-snapshot 冷启动，快照加速在 v1.1 前需先解决
 - [2026-10-04-messageport-bridge-no-delivery.md](notes/issue/2026-10/2026-10-04-messageport-bridge-no-delivery.md) — MessagePortMain 经 contextBridge 回传后 port 对象可达但不投递消息——视频包通道退回 webContents.send（每帧拷贝），产品化时可再评估
 - [2026-10-04-wizard-create-no-double-click-guard.md](notes/issue/2026-10/2026-10-04-wizard-create-no-double-click-guard.md) — 向导窗创建按钮无创建中禁用/防连击——双击可建出两台同名设备，stage 04 真实创建变慢后会被放大
