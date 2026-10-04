@@ -3,19 +3,29 @@ import styled from 'styled-components'
 import type { Device } from '@shared/types'
 import Button from './Button'
 
+const STATE_HINTS: Record<Device['status'], string> = {
+  creating: '正在创建 AVD，完成后可启动',
+  stopped: '设备已停止，从左侧列表启动它',
+  starting: '正在启动模拟器，等待系统 boot 完成',
+  running: '设备运行中，投屏与操控在下一步接入',
+  stopping: '正在停止模拟器并回收端口',
+  deleting: '正在删除 AVD 与元数据'
+}
+
 type CanvasPlaceholderProps = {
   device: Device | null
   onCreate: () => void
 }
 
-/** 右栏画面占位区：stage 04 在这里接模拟器投屏（DeviceCanvas） */
+/** 右栏画面占位区：反映选中设备的真实状态；投屏（DeviceCanvas）在步骤 5 接入 */
 const CanvasPlaceholder = ({ device, onCreate }: CanvasPlaceholderProps): React.JSX.Element => (
   <Wrapper>
     {device ? (
       <>
         <Title>{device.name}</Title>
-        <Hint>设备画面将在 stage 04 接入模拟器投屏</Hint>
-        <SubHint>当前为会话管理壳：列表与启停均为 mock 交互</SubHint>
+        <Hint>{STATE_HINTS[device.status]}</Hint>
+        {device.serial ? <SubHint>serial：{device.serial}</SubHint> : null}
+        {device.lastError ? <ErrorHint>{device.lastError.message}</ErrorHint> : null}
       </>
     ) : (
       <>
@@ -61,6 +71,15 @@ const SubHint = styled.p`
   margin: 0 0 8px;
   font-size: 11px;
   color: var(--board-ink-dim);
+  font-family: ui-monospace, monospace;
+`
+
+const ErrorHint = styled.p`
+  margin: 4px 0 0;
+  max-width: 420px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--board-tile-ink);
 `
 
 const NewLabel = styled.span`

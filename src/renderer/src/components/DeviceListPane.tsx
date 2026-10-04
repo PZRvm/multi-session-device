@@ -6,7 +6,10 @@ type DeviceListPaneProps = {
   devices: Device[]
   selectedId: string | null
   onSelect: (id: string) => void
-  onToggleRunning: (id: string, running: boolean) => void
+  onStart: (id: string) => void
+  onStop: (id: string) => void
+  onCancelStart: (id: string) => void
+  onCopySerial: (id: string) => void
   onDelete: (device: Device) => void
   onRename: (id: string, name: string) => void
 }
@@ -16,7 +19,10 @@ const DeviceListPane = ({
   devices,
   selectedId,
   onSelect,
-  onToggleRunning,
+  onStart,
+  onStop,
+  onCancelStart,
+  onCopySerial,
   onDelete,
   onRename
 }: DeviceListPaneProps): React.JSX.Element => (
@@ -31,7 +37,10 @@ const DeviceListPane = ({
             device={device}
             selected={device.id === selectedId}
             onSelect={() => onSelect(device.id)}
-            onToggleRunning={(running) => onToggleRunning(device.id, running)}
+            onStart={() => onStart(device.id)}
+            onStop={() => onStop(device.id)}
+            onCancelStart={() => onCancelStart(device.id)}
+            onCopySerial={() => onCopySerial(device.id)}
             onDelete={() => onDelete(device)}
             onRename={(name) => onRename(device.id, name)}
           />

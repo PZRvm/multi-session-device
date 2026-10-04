@@ -1,30 +1,44 @@
 import { useState } from 'react'
-import { Play, Square, Trash2 } from 'lucide-react'
+import { Copy, Loader2, Play, Square, Trash2, X } from 'lucide-react'
 import styled from 'styled-components'
-import type { Device } from '@shared/types'
+import type { Device, DeviceStatus } from '@shared/types'
 import Input from './Input'
 
-const STATUS_LABELS: Record<Device['status'], string> = {
+const STATUS_LABELS: Record<DeviceStatus, string> = {
+  creating: '创建中',
   stopped: '停止',
-  running: '运行中'
+  starting: '启动中',
+  running: '运行中',
+  stopping: '停止中',
+  deleting: '删除中'
 }
+
+/** 过渡态（非停止/运行）用琥珀点提示忙碌 */
+const isTransitional = (status: DeviceStatus): boolean =>
+  status !== 'stopped' && status !== 'running'
 
 type DeviceRowProps = {
   device: Device
   selected: boolean
   onSelect: () => void
-  onToggleRunning: (running: boolean) => void
+  onStart: () => void
+  onStop: () => void
+  onCancelStart: () => void
+  onCopySerial: () => void
   onDelete: () => void
   onRename: (name: string) => void
 }
 
-/** 设备行：ListRow 视觉（选中整行反白）+ 状态点 + 行内启停/删除 + 双击行内重命名。
+/** 设备行：ListRow 视觉（选中整行反白）+ 状态点 + 行内启停/取消/复制/删除 + 双击行内重命名。
  * 行内含按钮，根元素不能用 button（按钮不套按钮），键盘语义手动补。 */
 const DeviceRow = ({
   device,
   selected,
   onSelect,
-  onToggleRunning,
+  onStart,
+  onStop,
+  onCancelStart,
+  onCopySerial,
   onDelete,
   onRename
 }: DeviceRowProps): React.JSX.Element => {
@@ -32,6 +46,7 @@ const DeviceRow = ({
   const [draft, setDraft] = useState(device.name)
 
   const startRename = (): void => {
+    if (device.status === 'creating' || device.status === 'deleting') return
     setDraft(device.name)
     setRenaming(true)
   }
@@ -48,9 +63,17 @@ const DeviceRow = ({
     setRenaming(false)
   }
 
+  const subtitle =
+    device.status === 'running' && device.serial
+      ? `${device.profileLabel} · API ${device.apiLevel} · ${device.serial}`
+      : `${device.profileLabel} · API ${device.apiLevel} · ${STATUS_LABELS[device.status]}`
+
+  const deleteDisabled = device.status !== 'stopped' && device.status !== 'running'
+
   return (
     <Wrapper
       aria-current={selected || undefined}
+      title={device.lastError?.message}
       tabIndex={0}
       onClick={onSelect}
       onDoubleClick={startRename}
@@ -86,9 +109,12 @@ const DeviceRow = ({
       ) : (
         <TextBlock>
           <Title>{device.name}</Title>
-          <Subtitle $selected={selected}>
-            {device.profileLabel} · API {device.apiLevel} · {STATUS_LABELS[device.status]}
-          </Subtitle>
+          <Subtitle $selected={selected}>{subtitle}</Subtitle>
+          {device.lastError ? (
+            <ErrorLine $selected={selected} title={device.lastError.message}>
+              {device.lastError.message}
+            </ErrorLine>
+          ) : null}
         </TextBlock>
       )}
       {/* 行尾动作区整体拦停冒泡，行点击/双击不因误触按钮触发 */}
@@ -96,18 +122,68 @@ const DeviceRow = ({
         onClick={(event) => event.stopPropagation()}
         onDoubleClick={(event) => event.stopPropagation()}
       >
-        <IconButton
-          type="button"
-          aria-label={device.status === 'running' ? `停止 ${device.name}` : `启动 ${device.name}`}
-          title={device.status === 'running' ? '停止' : '启动'}
-          onClick={() => onToggleRunning(device.status !== 'running')}
-        >
-          {device.status === 'running' ? <Square size={14} /> : <Play size={14} />}
-        </IconButton>
+        {device.status === 'stopped' ? (
+          <IconButton
+            type="button"
+            aria-label={`启动 ${device.name}`}
+            title="启动"
+            onClick={onStart}
+          >
+            <Play size={14} />
+          </IconButton>
+        ) : null}
+        {device.status === 'starting' ? (
+          <>
+            <BusyIcon role="img" aria-label={`启动中 ${device.name}`} />
+            <IconButton
+              type="button"
+              aria-label={`取消启动 ${device.name}`}
+              title="取消启动"
+              onClick={onCancelStart}
+            >
+              <X size={14} />
+            </IconButton>
+          </>
+        ) : null}
+        {device.status === 'running' ? (
+          <>
+            <IconButton
+              type="button"
+              aria-label={`停止 ${device.name}`}
+              title="停止"
+              onClick={onStop}
+            >
+              <Square size={14} />
+            </IconButton>
+            <IconButton
+              type="button"
+              aria-label={`复制 serial（${device.serial ?? ''}）`}
+              title="复制 serial"
+              onClick={onCopySerial}
+            >
+              <Copy size={14} />
+            </IconButton>
+          </>
+        ) : null}
+        {device.status === 'stopping' ? (
+          <>
+            <BusyIcon role="img" aria-label={`停止中 ${device.name}`} />
+            {/* 停止失败保留重试入口；未失败时点击无害（合并到在途清理） */}
+            <IconButton
+              type="button"
+              aria-label={`重试停止 ${device.name}`}
+              title="停止"
+              onClick={onStop}
+            >
+              <Square size={14} />
+            </IconButton>
+          </>
+        ) : null}
         <IconButton
           type="button"
           aria-label={`删除 ${device.name}`}
           title="删除"
+          disabled={deleteDisabled}
           onClick={onDelete}
         >
           <Trash2 size={14} />
@@ -146,12 +222,28 @@ const Wrapper = styled.div`
   }
 `
 
-const StatusDot = styled.span<{ $status: Device['status'] }>`
+const StatusDot = styled.span<{ $status: DeviceStatus }>`
   flex: none;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: ${({ $status }) => ($status === 'running' ? 'var(--loading)' : 'var(--idle)')};
+  background: ${({ $status }) =>
+    $status === 'running'
+      ? 'var(--loading)'
+      : isTransitional($status)
+        ? 'var(--board-tile-ink)'
+        : 'var(--idle)'};
+`
+
+const BusyIcon = styled(Loader2).attrs({ size: 14 })`
+  flex: none;
+  animation: spin 1.2s linear infinite;
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 `
 
 const TextBlock = styled.span`
@@ -187,6 +279,22 @@ const Subtitle = styled.span<{ $selected: boolean }>`
     `}
 `
 
+const ErrorLine = styled.span<{ $selected: boolean }>`
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--board-tile-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  ${({ $selected }) =>
+    $selected &&
+    `
+      color: inherit;
+      opacity: 0.85;
+    `}
+`
+
 const RenameInput = styled(Input)`
   flex: 1;
   min-width: 0;
@@ -212,8 +320,13 @@ const IconButton = styled.button`
   cursor: pointer;
   transition: background-color 0.12s;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: var(--board-hover-veil);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
   }
 
   &:focus-visible {

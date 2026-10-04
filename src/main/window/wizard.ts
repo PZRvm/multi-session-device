@@ -13,6 +13,11 @@ let opening = false
 const isWizardSender = (window: BrowserWindow | null): boolean =>
   window !== null && window === wizardWindow
 
+/** devices 域 sender 守卫用：仅向导窗有权发起创建 */
+export function wizardOwns(sender: Electron.WebContents): boolean {
+  return isWizardSender(BrowserWindow.fromWebContents(sender))
+}
+
 export function openWizardWindow(parent: BrowserWindow): void {
   if (wizardWindow && !wizardWindow.isDestroyed()) {
     wizardWindow.focus()

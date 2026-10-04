@@ -33,7 +33,10 @@ const fakeRunner =
     expect(env.ANDROID_USER_HOME).toBe(join('/sdk-root', 'android-user'))
   }
 
-const dirs = (avdHome: string) => ({ avdHome, sdkRoot: '/sdk-root' })
+const dirs = (avdHome: string): { avdHome: string; sdkRoot: string } => ({
+  avdHome,
+  sdkRoot: '/sdk-root'
+})
 const input = {
   avdName: 'mst-it-1',
   profileId: 'pixel_8',

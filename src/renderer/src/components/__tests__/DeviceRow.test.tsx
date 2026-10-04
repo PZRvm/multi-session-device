@@ -6,7 +6,7 @@ import DeviceRow from '../DeviceRow'
 // vitest 未开 globals，RTL 的自动 cleanup 不注册——显式清理防多次 render 堆叠
 afterEach(cleanup)
 
-const stoppedDevice: Device = {
+const baseDevice: Device = {
   id: 'd1',
   name: 'Pixel 8 API 34',
   profileId: 'pixel_8',
@@ -24,15 +24,21 @@ type SetupOptions = {
 
 type SetupHandlers = {
   onSelect: Mock<() => void>
-  onToggleRunning: Mock<(running: boolean) => void>
+  onStart: Mock<() => void>
+  onStop: Mock<() => void>
+  onCancelStart: Mock<() => void>
+  onCopySerial: Mock<() => void>
   onDelete: Mock<() => void>
   onRename: Mock<(name: string) => void>
 }
 
-const setup = ({ device = stoppedDevice, selected = false }: SetupOptions = {}): SetupHandlers => {
+const setup = ({ device = baseDevice, selected = false }: SetupOptions = {}): SetupHandlers => {
   const handlers: SetupHandlers = {
     onSelect: vi.fn(),
-    onToggleRunning: vi.fn(),
+    onStart: vi.fn(),
+    onStop: vi.fn(),
+    onCancelStart: vi.fn(),
+    onCopySerial: vi.fn(),
     onDelete: vi.fn(),
     onRename: vi.fn()
   }
@@ -41,7 +47,10 @@ const setup = ({ device = stoppedDevice, selected = false }: SetupOptions = {}):
       device={device}
       selected={selected}
       onSelect={handlers.onSelect}
-      onToggleRunning={handlers.onToggleRunning}
+      onStart={handlers.onStart}
+      onStop={handlers.onStop}
+      onCancelStart={handlers.onCancelStart}
+      onCopySerial={handlers.onCopySerial}
       onDelete={handlers.onDelete}
       onRename={handlers.onRename}
     />
@@ -57,17 +66,65 @@ describe('DeviceRow', () => {
     expect(screen.getByRole('img', { name: '状态：停止' })).toBeTruthy()
   })
 
-  it('停止态：按钮语义为启动，点按回调 onToggleRunning(true)', () => {
-    const { onToggleRunning } = setup()
+  it('停止态：启动钮回调 onStart；删除可用', () => {
+    const { onStart } = setup()
     fireEvent.click(screen.getByRole('button', { name: '启动 Pixel 8 API 34' }))
-    expect(onToggleRunning).toHaveBeenCalledWith(true)
+    expect(onStart).toHaveBeenCalledTimes(1)
+    expect(
+      (screen.getByRole('button', { name: '删除 Pixel 8 API 34' }) as HTMLButtonElement).disabled
+    ).toBe(false)
   })
 
-  it('运行态：副行显示运行中，按钮语义为停止，点按回调 onToggleRunning(false)', () => {
-    const { onToggleRunning } = setup({ device: { ...stoppedDevice, status: 'running' } })
-    expect(screen.getByText('Pixel 8 · API 34 · 运行中')).toBeTruthy()
+  it('运行态：副行带 serial；停止/复制 serial/删除可用', () => {
+    const { onStop, onCopySerial } = setup({
+      device: { ...baseDevice, status: 'running', serial: 'emulator-5554' }
+    })
+    expect(screen.getByText('Pixel 8 · API 34 · emulator-5554')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '停止 Pixel 8 API 34' }))
-    expect(onToggleRunning).toHaveBeenCalledWith(false)
+    expect(onStop).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: '复制 serial（emulator-5554）' }))
+    expect(onCopySerial).toHaveBeenCalledTimes(1)
+  })
+
+  it('启动中：忙态 + 取消启动钮；删除禁用', () => {
+    const { onCancelStart } = setup({
+      device: { ...baseDevice, status: 'starting', serial: 'emulator-5554' }
+    })
+    expect(screen.getByRole('img', { name: '启动中 Pixel 8 API 34' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '取消启动 Pixel 8 API 34' }))
+    expect(onCancelStart).toHaveBeenCalledTimes(1)
+    expect(
+      (screen.getByRole('button', { name: '删除 Pixel 8 API 34' }) as HTMLButtonElement).disabled
+    ).toBe(true)
+  })
+
+  it('停止中：重试停止入口在；删除禁用；lastError 行内可见', () => {
+    const { onStop } = setup({
+      device: {
+        ...baseDevice,
+        status: 'stopping',
+        lastError: { code: 'stop-failed', message: '停止失败：停止超时' }
+      }
+    })
+    expect(screen.getByText('停止失败：停止超时')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '重试停止 Pixel 8 API 34' }))
+    expect(onStop).toHaveBeenCalledTimes(1)
+    expect(
+      (screen.getByRole('button', { name: '删除 Pixel 8 API 34' }) as HTMLButtonElement).disabled
+    ).toBe(true)
+  })
+
+  it('创建中/删除中：无启停钮、删除禁用、双击不进重命名', () => {
+    for (const status of ['creating', 'deleting'] as const) {
+      setup({ device: { ...baseDevice, status } })
+      expect(screen.queryByRole('button', { name: '启动 Pixel 8 API 34' })).toBeNull()
+      expect(
+        (screen.getByRole('button', { name: '删除 Pixel 8 API 34' }) as HTMLButtonElement).disabled
+      ).toBe(true)
+      fireEvent.doubleClick(screen.getByText('Pixel 8 API 34'))
+      expect(screen.queryByLabelText('重命名设备')).toBeNull()
+      cleanup()
+    }
   })
 
   it('点删除钮回调 onDelete；行点击回调 onSelect', () => {

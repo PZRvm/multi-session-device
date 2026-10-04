@@ -3,8 +3,15 @@ import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { appIcon } from '../app-icon'
 
+// 主窗登记（devices 域 sender 白名单的判定源）：引用随窗口销毁清空
+let mainWindow: BrowserWindow | null = null
+
+export function getMainWindow(): BrowserWindow | null {
+  return mainWindow !== null && !mainWindow.isDestroyed() ? mainWindow : null
+}
+
 export function createMainWindow(): BrowserWindow {
-  const mainWindow = new BrowserWindow({
+  const window = new BrowserWindow({
     width: 900,
     height: 670,
     show: false,
@@ -22,22 +29,27 @@ export function createMainWindow(): BrowserWindow {
     }
   })
 
-  mainWindow.on('page-title-updated', (event) => event.preventDefault())
+  window.on('page-title-updated', (event) => event.preventDefault())
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+  window.on('closed', () => {
+    mainWindow = null
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  window.on('ready-to-show', () => {
+    window.show()
+  })
+
+  window.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    void window.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    void window.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  return mainWindow
+  mainWindow = window
+  return window
 }

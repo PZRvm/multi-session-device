@@ -6,8 +6,14 @@ export const IPC_CHANNELS = {
   devicesCreate: 'devices:create',
   devicesRename: 'devices:rename',
   devicesDelete: 'devices:delete',
-  devicesSetRunning: 'devices:set-running',
+  devicesStart: 'devices:start',
+  devicesStop: 'devices:stop',
+  devicesCancelStart: 'devices:cancel-start',
+  /** 复制当前登记 serial——受控文本复制通道，不开放任意剪贴板读写 */
+  devicesCopySerial: 'devices:copy-serial',
   devicesChanged: 'devices:changed',
+  /** 后台运行故障推送（main → 主窗）：spawn/崩溃/停止失败等，renderer 按 eventId 去重 */
+  devicesRuntimeError: 'devices:runtime-error',
   wizardOpen: 'wizard:open',
   wizardClose: 'wizard:close',
   // ---- SDK 域（stage 04 步骤 2 bootstrap；步骤 3 扩展镜像/画像通道）----
