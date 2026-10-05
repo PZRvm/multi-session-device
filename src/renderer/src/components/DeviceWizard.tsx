@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, X } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import styled from 'styled-components'
 import type {
   CreateDeviceInput,
@@ -352,7 +352,7 @@ const DeviceWizard = ({
   const selectedVerdict =
     selectedImage === null ? null : (verdicts.get(selectedImage.packageName) ?? null)
 
-  // 独立窗体：焦点不在任何元素上时 Esc 也应能取消
+  // 独立窗体（无 X 按钮）：Esc 是键盘关闭路径，原生红绿灯/底部取消是另两条
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onCancel()
@@ -569,13 +569,11 @@ const DeviceWizard = ({
   return (
     <Wrapper>
       <Header>
+        {window.api?.platform === 'darwin' ? <TrafficSpacer aria-hidden="true" /> : null}
         <Heading>新建设备</Heading>
         <StepIndicator>
           第 {page} / 2 页 · {PAGE_TITLES[page]}
         </StepIndicator>
-        <CloseButton type="button" aria-label="取消新建" onClick={onCancel}>
-          <X size={16} />
-        </CloseButton>
       </Header>
 
       <Body>{renderPage()}</Body>
@@ -614,8 +612,18 @@ const Header = styled.header`
   align-items: baseline;
   gap: 8px;
   flex: none;
-  padding: 12px 16px;
+  padding: 12px 16px 12px 14px;
   border-bottom: 1px solid var(--board-hairline);
+  /* 板头整行是窗口拖拽带（darwin 原生标题条已去，对齐主窗 BoardHead 模式） */
+  -webkit-app-region: drag;
+`
+
+/** darwin 原生三灯让位（对齐主窗：trafficLightPosition 14,12 + 60px no-drag 占位） */
+const TrafficSpacer = styled.span`
+  flex: none;
+  width: 60px;
+  align-self: center;
+  -webkit-app-region: no-drag;
 `
 
 const Heading = styled.h3`
@@ -626,33 +634,9 @@ const Heading = styled.h3`
 
 const StepIndicator = styled.span`
   flex: 1;
+  padding-right: 24px;
   font-size: 11px;
   color: var(--board-ink-dim);
-`
-
-const CloseButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--board-ink-dim);
-  cursor: pointer;
-  transition: background-color 0.12s;
-
-  &:hover {
-    background: var(--board-hover-veil);
-    color: var(--board-ink);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
 `
 
 const Body = styled.div`

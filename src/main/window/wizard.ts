@@ -47,6 +47,10 @@ export function openWizardWindow(parent: BrowserWindow): void {
     show: false,
     title: '新建设备',
     icon: appIcon,
+    // darwin 去原生标题条、三灯嵌入（对齐主窗）；其他平台保留系统标题栏（含关闭钮）
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 12 } }
+      : {}),
     resizable: true,
     minimizable: false,
     fullscreenable: false,

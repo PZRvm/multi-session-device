@@ -6,6 +6,8 @@ created: 2026-10-06
 
 > **实现记录（2026-10-06，feature/wizard-independent-window）**：按 Build order 完成。`window/wizard.ts` 的 `modal` 改 `false`（parent 保留层级跟随），新增导出 `closeWizardWindow()`；主窗 `closed` 事件显式带走向导窗（非模态子窗不随父窗自动销毁的 Electron 行为差异点）。open 单例互斥、创建成功关窗+主窗刷新、Esc/取消路径全部未动。主 plan 设计 3 两处「模态」表述已修订（PRD 经查无模态字样）。真机 CDP 冒烟（dev 6176 + 调试口 9334）全过：向导窗创建、两窗并存、向导渲染正常、单例聚焦不新增窗、主窗 `window.close()` 后向导 target 消失且 app 干净退出（macOS 上若联动失效向导会残留孤儿 target——区分度成立）；向导窗截图留证 /tmp（本地证据）。证据局限如实记录：`bringToFront` 后主窗 `hasFocus=false` 系 CDP 不转移 macOS key window 所致，OS 级「主窗可点击」由 `modal: false` 的框架语义保证，未做系统级点击模拟。274 测试、typecheck/lint 0 错。无 review 发现（改动面两文件+文档）。
 
+> **追加轮（2026-10-06 用户反馈）**：窗口顶部的系统标题条与 Header 右侧 X 去除，改为对齐主窗的原生三灯——`wizard.ts` darwin 加 `titleBarStyle: 'hiddenInset'` + `trafficLightPosition {14,12}`（其他平台保留系统标题栏的关闭钮）；`DeviceWizard.tsx` Header 整行 `-webkit-app-region: drag`（成为窗口拖拽带）、darwin 侧 60px no-drag Spacer 给三灯让位（BoardHead 同模式）、删 X（关闭路径收敛为红绿灯/Esc/底部取消）。视觉冒烟（CDP DOM 断言 + macOS 系统级截图核验）：三灯存在、无标题条、无 X、标题 left=82 不遮挡、Header app-region=drag。
+
 # 向导独立窗口（非模态） — plan
 
 > 用户需求：新建设备的模态框固定在屏幕上，希望可移动、像独立窗口一样；点击创建后主页面列表更新即可，向导窗口不影响主窗口操作。关联 [emulator-wizard 主计划](2026-10-05-emulator-wizard.md) 设计 3（「保留现有原生模态单例」的本轮调整即修订该点）与 [wizard 窗口单例](2026-10-04-shell-polish-原生向导与板头.md) 的 open 互斥设计。
