@@ -2,9 +2,11 @@ import { ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type {
   DeviceProfile,
+  DeviceSkinSummary,
   ImageCatalogResult,
   SdkImageProgress,
   SdkProgress,
+  SdkSkinProgress,
   SdkSnapshot,
   WizardCapabilities
 } from '@shared/types'
@@ -41,6 +43,23 @@ export const sdkApi = {
     ipcRenderer.on(IPC_CHANNELS.sdkImageProgress, listener)
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.sdkImageProgress, listener)
+    }
+  },
+  /** 机型皮肤清单（SDK 已装 + 导入/下载库） */
+  deviceSkins: (): Promise<DeviceSkinSummary[]> => ipcRenderer.invoke(IPC_CHANNELS.sdkDeviceSkins),
+  /** 原生选择器导入皮肤压缩包（向导窗专用通道） */
+  chooseDeviceSkin: (): Promise<DeviceSkinSummary> =>
+    ipcRenderer.invoke(IPC_CHANNELS.wizardChooseDeviceSkin),
+  /** 受控下载官方皮肤（向导窗专用通道；进度经 onSkinProgress 推送） */
+  downloadDeviceSkin: (skinName: string): Promise<DeviceSkinSummary> =>
+    ipcRenderer.invoke(IPC_CHANNELS.sdkDownloadDeviceSkin, { skinName }),
+  onSkinProgress: (callback: (progress: SdkSkinProgress) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, progress: SdkSkinProgress): void => {
+      callback(progress)
+    }
+    ipcRenderer.on(IPC_CHANNELS.sdkSkinProgress, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.sdkSkinProgress, listener)
     }
   }
 }

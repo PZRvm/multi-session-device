@@ -8,7 +8,21 @@ import { avdmanagerPathFor, listDeviceProfiles } from './profiles'
 import { jarFingerprint, sdklibJarPathFor } from './profileMetadata'
 import { listImagesWithState, scanLocalImages, splitPackageName } from './catalog'
 import { buildCapabilities, readEmulatorVersion } from './settings'
-import type { DeviceProfile, ImageCatalogResult, WizardCapabilities } from '@shared/types'
+import {
+  downloadSkin,
+  importSkinArchive,
+  scanImportedSkins,
+  scanSdkSkins,
+  type SkinRecord
+} from './skins'
+import { wizardOwns } from '../window/wizard'
+import type {
+  DeviceProfile,
+  DeviceSkinSummary,
+  ImageCatalogResult,
+  SdkSkinProgress,
+  WizardCapabilities
+} from '@shared/types'
 
 /** 应用自有 SDK 根（PRD E：userData/AndroidSDK；设置自定义路径属 stage 05） */
 export const defaultSdkRoot = (): string => join(app.getPath('userData'), 'AndroidSDK')
@@ -60,6 +74,36 @@ const IMAGES_CACHE_MS = 60_000
 
 // 镜像下载互斥：同一时刻只允许一个下载（需求只约束「下载完成前不能创建」）
 let downloading: string | null = null
+
+// 皮肤清单缓存（导入/下载后失效）与皮肤下载互斥
+let skinsCache: SkinRecord[] | null = null
+let skinDownloading: string | null = null
+
+const toSkinSummary = (record: SkinRecord): DeviceSkinSummary => {
+  const portrait = record.layout.portrait
+  if (portrait === null) {
+    throw new Error(`皮肤 ${record.id} 缺 portrait 布局，不应入库`)
+  }
+  return {
+    id: record.id,
+    name: record.name,
+    skinRef: record.skinRef,
+    source: record.source,
+    portrait: {
+      frameWidth: portrait.frameWidth,
+      frameHeight: portrait.frameHeight,
+      screenWidth: portrait.screenWidth,
+      screenHeight: portrait.screenHeight
+    }
+  }
+}
+
+/** 向导专用通道的 sender 守卫（plan 设计 9）：非向导窗调用直接拒绝 */
+const requireWizardSender = (channel: string, event: Electron.IpcMainInvokeEvent): void => {
+  if (!wizardOwns(event.sender)) {
+    throw new Error(`${channel}: 非向导窗调用`)
+  }
+}
 
 const requireSdkReady = async (root: string): Promise<void> => {
   const snapshot = await detectSdk(root)
@@ -148,6 +192,66 @@ export function registerSdkIpc(): void {
         imagePackageName: input.imagePackageName,
         emulatorVersion: await readEmulatorVersion(root)
       })
+    }
+  )
+
+  // ---- 机型皮肤域（plan 设计 6/9）：清单只读（主窗+向导）；导入与下载仅向导窗 ----
+
+  ipcMain.handle(IPC_CHANNELS.sdkDeviceSkins, async (): Promise<DeviceSkinSummary[]> => {
+    if (skinsCache !== null) return skinsCache.map(toSkinSummary)
+    const root = resolveRoot(undefined)
+    const [sdkSkins, imported] = await Promise.all([
+      scanSdkSkins(root),
+      scanImportedSkins(app.getPath('userData'))
+    ])
+    skinsCache = [...sdkSkins, ...imported]
+    return skinsCache.map(toSkinSummary)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.wizardChooseDeviceSkin, async (event): Promise<DeviceSkinSummary> => {
+    requireWizardSender(IPC_CHANNELS.wizardChooseDeviceSkin, event)
+    const wizard = BrowserWindow.fromWebContents(event.sender)
+    if (wizard === null) {
+      throw new Error(`${IPC_CHANNELS.wizardChooseDeviceSkin}: 向导窗已不可用`)
+    }
+    const picked = await dialog.showOpenDialog(wizard, {
+      title: '导入机型皮肤压缩包',
+      filters: [{ name: '皮肤压缩包', extensions: ['zip'] }],
+      properties: ['openFile']
+    })
+    if (picked.canceled || picked.filePaths.length === 0) {
+      throw new Error('未选择皮肤压缩包')
+    }
+    const record = await importSkinArchive(picked.filePaths[0], app.getPath('userData'))
+    skinsCache = null
+    return toSkinSummary(record)
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.sdkDownloadDeviceSkin,
+    async (event, raw: unknown): Promise<DeviceSkinSummary> => {
+      requireWizardSender(IPC_CHANNELS.sdkDownloadDeviceSkin, event)
+      if (typeof raw !== 'object' || raw === null) {
+        throw new Error(`${IPC_CHANNELS.sdkDownloadDeviceSkin}: 非法的入参`)
+      }
+      const skinName = (raw as Record<string, unknown>).skinName
+      if (typeof skinName !== 'string' || !/^[A-Za-z0-9_.-]+$/.test(skinName)) {
+        throw new Error(`${IPC_CHANNELS.sdkDownloadDeviceSkin}: 非法的皮肤名`)
+      }
+      if (skinDownloading) {
+        throw new Error(`已有皮肤在下载（${skinDownloading}），请等待完成`)
+      }
+      skinDownloading = skinName
+      try {
+        const record = await downloadSkin(skinName, app.getPath('userData'), (percent) => {
+          const progress: SdkSkinProgress = { skinName, percent }
+          pushToAllWindows(IPC_CHANNELS.sdkSkinProgress, progress)
+        })
+        skinsCache = null
+        return toSkinSummary(record)
+      } finally {
+        skinDownloading = null
+      }
     }
   )
 

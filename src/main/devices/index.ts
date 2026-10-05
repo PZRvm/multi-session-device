@@ -40,6 +40,16 @@ import { PortAllocator, tcpProbe } from '../emulator/ports'
 import { createRunner } from '../emulator/runner'
 import { getMainWindow } from '../window'
 import { wizardOwns } from '../window/wizard'
+import { importedSkinsRoot } from '../emulator/skins'
+
+/** skinRef → 皮肤目录（sdk:* 解析 SDK skins；其余查应用库）；未知返回 null */
+const skinDirectoryFor = (skinRef: string): string | null => {
+  if (skinRef.startsWith('sdk:')) {
+    return join(sdkRoot(), 'skins', skinRef.slice(4))
+  }
+  const id = skinRef.replace(/^(imported|downloaded):/, '')
+  return join(importedSkinsRoot(app.getPath('userData')), id)
+}
 
 // 应用自有目录（与 emulator IPC 层同源：userData/AndroidSDK + userData/avd-home）
 const sdkRoot = (): string => join(app.getPath('userData'), 'AndroidSDK')
@@ -511,7 +521,16 @@ const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult>
     // → 才转停止；任一失败撤回临时行并回滚 AVD
     await createAvd({ avdName: device.id, profileId: raw.profileId, packageName }, avdDirs())
     if (advancedSettings !== null) {
-      await patchAvdConfig(device.id, avdDirs(), settingsToConfigPatch(advancedSettings))
+      const patch = settingsToConfigPatch(advancedSettings)
+      // 导入/下载皮肤：config 写绝对 skin.path（应用自有目录，随库稳定）
+      if (
+        advancedSettings.skinRef !== null &&
+        !advancedSettings.skinRef.startsWith('sdk:') &&
+        skinDirectoryFor(advancedSettings.skinRef) !== null
+      ) {
+        patch['skin.path'] = skinDirectoryFor(advancedSettings.skinRef) as string
+      }
+      await patchAvdConfig(device.id, avdDirs(), patch)
     }
     // 临时行已在内存里：按 id upsert，避免重复条目
     await commitMetas((metas) => [...metas.filter((meta) => meta.id !== device.id), toMeta(device)])

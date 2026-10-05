@@ -180,6 +180,9 @@ const DeviceWizard = ({
   }>({ phase: 'idle', data: null, error: null })
   const [advancedSettings, setAdvancedSettings] = useState<DeviceAdvancedSettings | null>(null)
   const capabilityGenerationRef = useRef(0)
+  // 皮肤域：清单（导入/下载后刷新）、下载互斥与进度
+  const [skins, setSkins] = useState<Array<{ skinRef: string; name: string; source: string }>>([])
+  const [skinDownloading, setSkinDownloading] = useState<string | null>(null)
 
   // 首载：无注入数据时两份清单并发发起，成功失败各自接住，互不拖住
   useEffect(() => {
@@ -199,6 +202,52 @@ const DeviceWizard = ({
       }
     })
   }, [data, reloadImages])
+
+  const reloadSkins = async (): Promise<void> => {
+    try {
+      const list = data
+        ? [] // 注入场景（测试）不拉真实皮肤清单
+        : await window.api.sdk.deviceSkins()
+      setSkins(
+        list.map((skin) => ({ skinRef: skin.skinRef, name: skin.name, source: skin.source }))
+      )
+    } catch {
+      setSkins([])
+    }
+  }
+
+  useEffect(() => {
+    // 装载动作走 async——列表落位在 promise 回调，不在 effect 内同步 setState
+    if (data === undefined && page === 2) {
+      void (async () => {
+        await reloadSkins()
+      })()
+    }
+  }, [data, page])
+
+  const importSkin = async (): Promise<void> => {
+    try {
+      const added = await window.api.sdk.chooseDeviceSkin()
+      await reloadSkins()
+      setAdvancedSettings((prev) => (prev === null ? prev : { ...prev, skinRef: added.skinRef }))
+    } catch {
+      // 取消选择器或导入失败：清单保持，错误由对话框域呈现
+    }
+  }
+
+  const downloadSkinByName = async (skinName: string): Promise<void> => {
+    if (skinDownloading !== null) return
+    setSkinDownloading(skinName)
+    try {
+      const added = await window.api.sdk.downloadDeviceSkin(skinName)
+      await reloadSkins()
+      setAdvancedSettings((prev) => (prev === null ? prev : { ...prev, skinRef: added.skinRef }))
+    } catch {
+      // 下载失败：保持现状（进度通道已结束）
+    } finally {
+      setSkinDownloading(null)
+    }
+  }
 
   const download = async (entry: ImageEntry): Promise<void> => {
     if (downloadingRef.current) return
@@ -478,6 +527,10 @@ const DeviceWizard = ({
                   value={advancedSettings}
                   errors={settingsCheck.errors}
                   onChange={setAdvancedSettings}
+                  skins={skins}
+                  onImportSkin={importSkin}
+                  onDownloadSkin={downloadSkinByName}
+                  skinDownloading={skinDownloading}
                 />
               ) : null}
             </SettingsPane>

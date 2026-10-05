@@ -187,6 +187,26 @@ export interface WizardCapabilities {
   skinIds: string[]
 }
 
+/** 皮肤清单条目（main → renderer 只读摘要；renderer 不拿任意路径读取能力） */
+export interface DeviceSkinSummary {
+  id: string
+  name: string
+  skinRef: string
+  source: 'sdk' | 'imported' | 'downloaded'
+  portrait: {
+    frameWidth: number
+    frameHeight: number
+    screenWidth: number
+    screenHeight: number
+  }
+}
+
+/** 皮肤下载进度推送 */
+export interface SdkSkinProgress {
+  skinName: string
+  percent: number
+}
+
 // ---- 投屏与操控域（stage 04 步骤 5；scrcpy 3.3.3 + H.264 + adb forward 裸 TCP）----
 
 export interface ScreenFormat {

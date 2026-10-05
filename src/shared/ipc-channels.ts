@@ -40,5 +40,13 @@ export const IPC_CHANNELS = {
   /** 镜像下载进度推送（main → renderer） */
   sdkImageProgress: 'sdk:image-progress',
   /** 向导设置能力：defaults/枚举/边界/禁用原因（按画像×镜像×emulator 版本） */
-  sdkWizardCapabilities: 'sdk:wizard-capabilities'
+  sdkWizardCapabilities: 'sdk:wizard-capabilities',
+  /** 机型皮肤清单（SDK 已装 + 导入/下载库；主窗与向导只读） */
+  sdkDeviceSkins: 'sdk:device-skins',
+  /** 原生文件选择器选皮肤压缩包并导入（仅向导窗） */
+  wizardChooseDeviceSkin: 'wizard:choose-device-skin',
+  /** 受控下载官方皮肤（仅向导窗） */
+  sdkDownloadDeviceSkin: 'sdk:download-device-skin',
+  /** 皮肤下载进度推送（main → renderer） */
+  sdkSkinProgress: 'sdk:skin-progress'
 } as const

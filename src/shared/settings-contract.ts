@@ -160,9 +160,14 @@ export const normalizeAdvancedSettings = (
   const bootMode: 'cold' | 'quick' =
     raw.bootMode === 'quick' && capabilities.quickBootAvailable ? 'quick' : 'cold'
 
+  // 皮肤：必须在能力枚举内（sdk:* / imported:* / downloaded:*），否则拒绝
+  if (raw.skinRef !== null && !capabilities.skinIds.includes(raw.skinRef)) {
+    errors.skinRef = '皮肤不在可用清单中，请重新选择'
+  }
+
   return {
     settings: {
-      skinRef: null,
+      skinRef: raw.skinRef,
       frontCamera: frontCamera ?? { mode: 'emulated', deviceId: null },
       rearCamera: rearCamera ?? { mode: 'emulated', deviceId: null },
       networkSpeed: raw.networkSpeed,
@@ -196,6 +201,10 @@ export const settingsToConfigPatch = (settings: DeviceAdvancedSettings): Record<
   }
   if (settings.orientation !== null) {
     patch['hw.initialOrientation'] = settings.orientation
+  }
+  if (settings.skinRef !== null) {
+    // sdk:<name> 写 skin.name（随 SDK 目录解析）；导入/下载皮肤由 main 补 skin.path
+    patch['skin.name'] = settings.skinRef.replace(/^(sdk|imported|downloaded):/, '')
   }
   return patch
 }

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import styled from 'styled-components'
 import type {
   DeviceAdvancedSettings,
@@ -18,14 +19,25 @@ export interface SettingsFormProps {
   value: DeviceAdvancedSettings
   errors: Record<string, string>
   onChange: (next: DeviceAdvancedSettings) => void
+  /** 皮肤清单（DeviceWizard 拉取）；空 = 无可用皮肤 */
+  skins: Array<{ skinRef: string; name: string; source: string }>
+  /** 导入/下载触发（向导窗专用通道）；完成后清单由父层刷新 */
+  onImportSkin: () => Promise<void>
+  onDownloadSkin: (skinName: string) => Promise<void>
+  skinDownloading: string | null
 }
 
 const SettingsForm = ({
   capabilities,
   value,
   errors,
-  onChange
+  onChange,
+  skins,
+  onImportSkin,
+  onDownloadSkin,
+  skinDownloading
 }: SettingsFormProps): React.JSX.Element => {
+  const [downloadName, setDownloadName] = useState('')
   const field = (key: string): SettingFieldCapability | null => capabilities.fields[key] ?? null
   const disabledReasonOf = (key: string): string | null => field(key)?.disabledReason ?? null
   const num = (
@@ -105,7 +117,36 @@ const SettingsForm = ({
     <Form>
       <Group>
         <GroupTitle>皮肤</GroupTitle>
-        <Hint>{disabledReasonOf('skinRef') ?? '未选择时使用通用外框'}</Hint>
+        {select(
+          'skinRef',
+          '机型皮肤',
+          value.skinRef,
+          skins.map((skin) => ({ value: skin.skinRef, label: `${skin.name}（${skin.source}）` })),
+          (next) => onChange({ ...value, skinRef: next })
+        )}
+        <SkinActions>
+          <SkinButton type="button" onClick={() => void onImportSkin()}>
+            导入压缩包…
+          </SkinButton>
+          <SkinInput
+            type="text"
+            value={downloadName}
+            placeholder="官方皮肤名（如 pixel_7）"
+            aria-label="官方皮肤名"
+            onChange={(event) => setDownloadName(event.target.value)}
+          />
+          <SkinButton
+            type="button"
+            disabled={skinDownloading !== null || downloadName.trim().length === 0}
+            onClick={() => void onDownloadSkin(downloadName.trim())}
+          >
+            {skinDownloading !== null ? `${skinDownloading.slice(0, 12)}…下载中` : '下载官方皮肤'}
+          </SkinButton>
+        </SkinActions>
+        <Hint>
+          {disabledReasonOf('skinRef') ??
+            '未选择时使用通用外框。官方独立下载源核实中（机型皮肤当前随 SDK emulator 包分发），可导入本地压缩包或使用 SDK 自带皮肤。'}
+        </Hint>
       </Group>
 
       <Group>
@@ -356,3 +397,49 @@ const FieldError = styled.p`
 `
 
 export default SettingsForm
+
+const SkinActions = styled.div`
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+`
+
+const SkinButton = styled.button`
+  padding: 5px 10px;
+  border: 1px solid var(--board-hairline);
+  border-radius: 4px;
+  background: var(--board-bg-raised);
+  color: var(--board-ink);
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--board-hover-veil);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+`
+
+const SkinInput = styled.input`
+  width: 180px;
+  padding: 5px 8px;
+  border: 1px solid var(--board-hairline);
+  border-radius: 4px;
+  background: var(--board-bg);
+  color: var(--board-ink);
+  font-size: 11px;
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+`
