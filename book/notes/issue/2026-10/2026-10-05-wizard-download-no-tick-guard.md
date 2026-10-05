@@ -9,3 +9,7 @@ description: DeviceWizard download() 跨 tick 无互斥守卫——下载按钮�
 - **Suggested direction**: 加 `downloadingRef` 同步守卫（口径同 `creatingRef`：ref 跨批处理立即可见，disabled 只是视觉层）。
 
 严重级：P3（真实浏览器路径被行禁用挡住；自动化与竞速路径可穿透）。
+
+## 跟进（2026-10-05）——已修
+
+`download()` 加 `downloadingRef` 同步守卫（口径同 `creatingRef`：进入即置位、finally 复位），同 tick 连点与穿透行禁用的点击只放行第一次；回归测试「下载同 tick 原生连点只触发一次下载（ref 守卫）」在案。语义附注：进度 100% 先行清 `downloading` 状态、ref 等重拉完成才释放——该窗口内再点下载会被静默串行化，刷新行有「正在刷新系统镜像…」反馈在位。

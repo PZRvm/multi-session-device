@@ -143,6 +143,9 @@ const DeviceWizard = ({
     message: string
     packageName: string
   } | null>(null)
+  // 下载触发的同步守卫（口径同 creatingRef）：下载钮是 disabled 行内的 span，
+  // jsdom/极端竞速能穿透行禁用，同 tick 连点只有 ref 拦得住
+  const downloadingRef = useRef(false)
 
   // 首载：无注入数据时两份清单并发发起，成功失败各自接住，互不拖住
   useEffect(() => {
@@ -164,6 +167,8 @@ const DeviceWizard = ({
   }, [data, reloadImages])
 
   const download = async (entry: ImageEntry): Promise<void> => {
+    if (downloadingRef.current) return
+    downloadingRef.current = true
     setDownloading({ packageName: entry.packageName, percent: 0 })
     setDownloadError(null)
     try {
@@ -174,6 +179,7 @@ const DeviceWizard = ({
     } catch (error) {
       setDownloadError({ message: messageOf(error), packageName: entry.packageName })
     } finally {
+      downloadingRef.current = false
       setDownloading(null)
     }
   }

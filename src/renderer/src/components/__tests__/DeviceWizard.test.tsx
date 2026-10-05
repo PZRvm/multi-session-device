@@ -116,6 +116,23 @@ describe('DeviceWizard', () => {
     expect(profileButton('API 35 · Google APIs').getAttribute('aria-pressed')).toBe('false')
   })
 
+  // issue 2026-10-05-wizard-download-no-tick-guard：下载钮是 disabled 行内的 span，
+  // jsdom 连点可穿透行禁用——同 tick 两次原生 click，ref 守卫只放行一次
+  it('下载同 tick 原生连点只触发一次下载（ref 守卫）', async () => {
+    const gate = deferred<void>()
+    const onDownloadImage = vi.fn<(packageName: string) => Promise<void>>(() => gate.promise)
+    setup({ onDownloadImage })
+    pickProfile()
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    const button = screen.getByRole('button', { name: '下载 API 35 Google APIs' })
+    act(() => {
+      button.click()
+      button.click()
+    })
+    expect(onDownloadImage).toHaveBeenCalledTimes(1)
+    gate.resolve()
+  })
+
   it('镜像选择不是已装镜像时无法进入第三步（下一步禁用）', () => {
     setup()
     pickProfile()
