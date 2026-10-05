@@ -26,6 +26,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 | `docs/poc/` | PoC 实测报告：闸门验收的原始数据、方法与结论 |
 | `guidelines/` | 规则书：人和 agent 永远怎么工作，长期稳定 |
 | `notes/` | 过程笔记：开发中发生了什么，只增不改 |
+| `notes/issue/` | 发现但不修的问题——只记录，修复是另一份工作 |
 | `notes/issue/2026-10/` | 归档于 notes/issue/，按月份分组 |
 | `notes/learn/` | 经验与教训，写码前后按 tags 检索，按月份归档 |
 | `notes/learn/2026-09/` | 归档于 notes/learn/，按月份分组 |
@@ -74,6 +75,10 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 ### notes/
 
 - [README.md](notes/README.md) — 三类笔记（learn、task、issue）、各自何时写、检索顺序，以及每类的模板
+
+### notes/issue/
+
+- [2026-10-06-向导独立窗口-review.md](notes/issue/2026-10-06-向导独立窗口-review.md) — 向导独立窗口分支（5 提交）的 code review 发现——两处注释腐化、span 嵌 h3 不合法、dead CSS、非 darwin 标题双显与两条备查信息
 
 ### notes/issue/2026-10/
 
@@ -179,4 +184,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261005221831-模拟器向导分类与附加设置.md](think-report/20261005221831-模拟器向导分类与附加设置.md) — 已确认的向导范围：画像分类、API镜像与附加设置，含机型皮肤和真实摄像头；SD卡暂缓，跨架构二期
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 101 documents -->
+<!-- 102 documents -->
