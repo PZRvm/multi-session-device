@@ -25,7 +25,7 @@ created: 2026-10-06
 | `src/shared/types.ts`、`src/shared/ipc-channels.ts` | `sdkUninstallImage: 'sdk:uninstall-image'` 通道；无新持久化类型 |
 | `src/main/emulator/sdk.ts` | 复用 `runSdkManagerPackages` 形态补 `uninstallSdkManagerPackage`（spawn `--uninstall`，stderr 尾部进错误） |
 | `src/main/emulator/index.ts` | handler：可信目录核验（installed 且三件套完整）→ 设备引用守卫（读 devices 域）→ 下载互斥守卫 → 卸载 → 失效 imagesCache |
-| `src/main/devices/index.ts` | 导出只读查询「按 imagePackageName 引用的设备名清单」（不暴露内部数组） |
+| `src/main/devices/index.ts` | 导出只读查询「按 imagePackageName 引用的设备名清单」（不暴露内部数组）+ 设备事务互斥（卸载与创建同域串行，关掉引用守卫竞态窗口） |
 | `src/renderer/src/components/wizard/ImageTable.tsx` | 已装行加删除按钮（破坏性操作二次确认走原生 dialog 域） |
 | `src/renderer/src/components/DeviceWizard.tsx`、`src/preload/api/sdk.ts` | 卸载动作接线与注入接缝（测试） |
 | `__tests__/`（emulator + devices + wizard） | 守卫与 UI 用例 |
@@ -38,7 +38,7 @@ created: 2026-10-06
 2. **main 守卫链**（顺序固定，逐条中文拒绝）：
    a. 入参为合法 packageName 且在当前可信目录中、`installed === true`（半安装同样拒绝——先修复才有删除资格，避免删一半之谜）；
    b. 下载互斥：`downloading !== null` 拒绝；
-   c. 设备引用：devices 域查询 `listDeviceNamesReferencing(packageName)`——含 `creating` 态设备；非空时拒绝并附设备名清单（renderer 直接展示 main 返回的错误文案，不做二次拼装）；
+   c. 设备引用：devices 域查询 `listDeviceNamesReferencing(packageName)`——含 `creating` 态设备；非空时拒绝并附设备名清单（renderer 直接展示 main 返回的错误文案，不做二次拼装）。**竞态收口**：守卫查询与卸载执行之间不允许插入新的创建事务——卸载执行放进 devices 域的设备事务互斥（与 createDevice 的元数据写队列同域串行），创建接纳时反之也查一次「该包是否在卸载中」，两侧互斥后窗口关闭；
    d. 运行态设备引用属 c 的子集（运行设备的 imagePackageName 即引用），无需单独检查。
 3. **卸载执行**：spawn `sdkmanager --uninstall <package>`（env 同安装路径）。成功判据 exit 0；随后 `scanLocalImages` 复核该包已消失——目录仍在（sdkmanager 卸载残目录的兜底：核验不过则报「卸载后仍检测到残留目录」并列路径，不静默 rm）。`imagesCache = null` 让下次拉取反映状态。
 4. **renderer 联动**：卸载成功后 `reloadImages()`（复用下载完成路径）；当前选中镜像若正是被删包，选择核验派生自动清空（已有机制，验证即可）。

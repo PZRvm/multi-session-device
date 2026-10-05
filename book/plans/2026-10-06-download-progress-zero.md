@@ -51,7 +51,7 @@ manifest 字段实证（google_apis_playstore 源 android-36.1 条目）：`<com
 1. **manifest 透出**：`parseSysImgManifest` 已读 `archives.archive.complete` 的 `size`；补读同节点的 `url`（相对 `https://dl.google.com/android/repository/` 拼绝对地址）与 `checksum`（sha1）。`ImageEntry` 加 `zipUrl: string | null`、`zipSha1: string | null`（local-only 条目为 null）。
 2. **下载执行体**（`downloader.ts`；取消接缝——[下载取消 plan](2026-10-06-download-cancel.md) 依赖本设计原生携带 AbortSignal，两 plan 的耦合点在此登记）：
    - 下载守卫前置：包必须在可信目录、arm64、`zipUrl` 非空（无 URL 的条目报「该包不支持应用内下载」而不是退化）。
-   - 流式 fetch：按接收字节数 ÷ manifest size 推 `onPercent`（节流 ≥1% 或 ≥500ms 一次，避免每 chunk 刷 IPC）；流写入 `.tmp`（目标目录旁）。
+   - 流式 fetch：按接收字节数 ÷ manifest size 推 `onPercent`（节流 ≥1% 或 ≥500ms 一次，避免每 chunk 刷 IPC）；流写入 `.tmp`（目标目录旁）。进度分母固定用 manifest size（提前已知且可信）；响应 `Content-Length` 若存在且与之不符，记警告日志继续按 manifest 显示——最终正确性由 sha1 校验兜底（服务器给错文件时校验拒绝），进度只是显示层，不为它引入歧义分支。
    - 校验：sha1 与 manifest `checksum` 比对（有值必校验）；不匹配删除临时文件报中文错误。
    - 解压落位：zip 内首层即包目录树，解压到 `system-images/` 下合并；解压完成做三件套核验（package.xml + source.properties + system.img），不过则整体回滚本次目录并报「安装核验失败」。
    - 互斥/取消语义：沿用 main 侧 `downloading` 对象与「不宣称取消」口径；本期无断点续传，失败重下从 0 开始。
