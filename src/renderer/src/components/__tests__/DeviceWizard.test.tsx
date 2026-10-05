@@ -1,10 +1,14 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { DeviceProfile, ImageEntry } from '@shared/types'
+import type { DeviceProfile, ImageEntry, SdkImageProgress } from '@shared/types'
 import DeviceWizard from '../DeviceWizard'
 
 // vitest 未开 globals，RTL 的自动 cleanup 不注册——显式清理防多次 render 堆叠
 afterEach(cleanup)
+// 非注入用例挂的 window.api 桩同理：测后拆掉，不渗进注入用例
+afterEach(() => {
+  delete (window as { api?: unknown }).api
+})
 
 const PROFILES: DeviceProfile[] = [
   { id: 'pixel_8', name: 'Pixel 8' },
@@ -112,6 +116,23 @@ describe('DeviceWizard', () => {
     expect(profileButton('API 35 · Google APIs').getAttribute('aria-pressed')).toBe('false')
   })
 
+  // issue 2026-10-05-wizard-download-no-tick-guard：下载钮是 disabled 行内的 span，
+  // jsdom 连点可穿透行禁用——同 tick 两次原生 click，ref 守卫只放行一次
+  it('下载同 tick 原生连点只触发一次下载（ref 守卫）', async () => {
+    const gate = deferred<void>()
+    const onDownloadImage = vi.fn<(packageName: string) => Promise<void>>(() => gate.promise)
+    setup({ onDownloadImage })
+    pickProfile()
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    const button = screen.getByRole('button', { name: '下载 API 35 Google APIs' })
+    act(() => {
+      button.click()
+      button.click()
+    })
+    expect(onDownloadImage).toHaveBeenCalledTimes(1)
+    gate.resolve()
+  })
+
   it('镜像选择不是已装镜像时无法进入第三步（下一步禁用）', () => {
     setup()
     pickProfile()
@@ -209,5 +230,319 @@ describe('DeviceWizard', () => {
     fireEvent.click(screen.getByRole('button', { name: '取消新建' }))
     expect(onCancel).toHaveBeenCalledTimes(1)
     expect(onCreate).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 清单加载反馈（plan 2026-10-05-wizard-catalog-loading）：非注入场景走 window.api.sdk
+// ---------------------------------------------------------------------------
+
+interface Deferred<T> {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason?: unknown) => void
+}
+
+const deferred = <T,>(): Deferred<T> => {
+  let resolve: (value: T) => void = () => {}
+  let reject: (reason?: unknown) => void = () => {}
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+/** 非注入场景的 sdk 桩：挂在 window.api 上，afterEach 统一拆除 */
+const installSdkStub = (sdk: {
+  profiles?: Mock<() => Promise<DeviceProfile[]>>
+  images?: Mock<() => Promise<ImageEntry[]>>
+  downloadImage?: Mock<(packageName: string) => Promise<void>>
+}): { emitProgress: (progress: SdkImageProgress) => void } => {
+  let listener: ((progress: SdkImageProgress) => void) | undefined
+  const onImageProgress = vi.fn((callback: (progress: SdkImageProgress) => void) => {
+    listener = callback
+    return () => {}
+  })
+  Object.defineProperty(window, 'api', {
+    value: { sdk: { ...sdk, onImageProgress } },
+    configurable: true
+  })
+  return { emitProgress: (progress) => listener?.(progress) }
+}
+
+const PKG_MISSING = 'system-images;android-35;google_apis;arm64-v8a'
+
+describe('DeviceWizard 清单加载反馈', () => {
+  it('首载未返回：第一页显示加载等待，下一步禁用，取消可用，不出现空态', () => {
+    installSdkStub({
+      profiles: vi.fn(() => deferred<DeviceProfile[]>().promise),
+      images: vi.fn(() => deferred<ImageEntry[]>().promise)
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    expect(screen.getByRole('status').textContent).toContain('正在加载设备画像')
+    expect(screen.queryByText('画像清单为空')).toBeNull()
+    expect((screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
+    expect(screen.getByRole('button', { name: '取消新建' })).toBeTruthy()
+  })
+
+  it('画像先到、镜像悬着：画像可选可进第二步，第二步显示镜像加载中且下一步禁用', async () => {
+    const dProfiles = deferred<DeviceProfile[]>()
+    const dImages = deferred<ImageEntry[]>()
+    installSdkStub({
+      profiles: vi.fn(() => dProfiles.promise),
+      images: vi.fn(() => dImages.promise)
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    dProfiles.resolve(PROFILES)
+    await screen.findByText('Pixel 8')
+    pickProfile()
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    expect(screen.getByRole('status').textContent).toContain('正在加载系统镜像')
+    expect(screen.queryByText('清单为空')).toBeNull()
+    expect((screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
+    dImages.resolve(IMAGES)
+    await screen.findByText('API 36 · Google Play')
+    expect(screen.queryByText('正在加载系统镜像…')).toBeNull()
+  })
+
+  it('仅画像失败：第一步显示中文错误与重试，重试只打画像接口并回到加载态', async () => {
+    const dRetry = deferred<DeviceProfile[]>()
+    const dProfiles = deferred<DeviceProfile[]>()
+    dProfiles.reject(new Error('avdmanager 不可用'))
+    const profilesMock = vi
+      .fn<() => Promise<DeviceProfile[]>>()
+      .mockReturnValueOnce(dProfiles.promise)
+      .mockReturnValueOnce(dRetry.promise)
+    const imagesMock = vi.fn(() => deferred<ImageEntry[]>().promise)
+    installSdkStub({ profiles: profilesMock, images: imagesMock })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('avdmanager 不可用')
+    expect(screen.queryByText('画像清单为空')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+    expect(profilesMock).toHaveBeenCalledTimes(2)
+    expect(imagesMock).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('status').textContent).toContain('正在加载设备画像')
+  })
+
+  it('仅镜像失败：第二步显示错误与镜像重试，画像数据保留可回退', async () => {
+    const dProfiles = deferred<DeviceProfile[]>()
+    const dImages = deferred<ImageEntry[]>()
+    dImages.reject(new Error('镜像清单拉取失败'))
+    const imagesMock = vi
+      .fn<() => Promise<ImageEntry[]>>()
+      .mockReturnValueOnce(dImages.promise)
+      .mockReturnValueOnce(deferred<ImageEntry[]>().promise)
+    const profilesMock = vi.fn(() => dProfiles.promise)
+    installSdkStub({ profiles: profilesMock, images: imagesMock })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    dProfiles.resolve(PROFILES)
+    await screen.findByText('Pixel 8')
+    pickProfile()
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('镜像清单拉取失败')
+    expect(screen.queryByText('清单为空')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+    expect(imagesMock).toHaveBeenCalledTimes(2)
+    expect(profilesMock).toHaveBeenCalledTimes(1)
+    // 画像成功数据仍在：回退第一步可见
+    fireEvent.click(screen.getByRole('button', { name: '上一步' }))
+    expect(screen.getByText('Pixel 8')).toBeTruthy()
+  })
+
+  it('成功但空数组：画像空显示画像空态；镜像空显示清单为空，均不残留加载', async () => {
+    const dProfiles = deferred<DeviceProfile[]>()
+    const dImages = deferred<ImageEntry[]>()
+    installSdkStub({
+      profiles: vi.fn(() => dProfiles.promise),
+      images: vi.fn(() => dImages.promise)
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    dProfiles.resolve([])
+    dImages.resolve([])
+    await screen.findByText('画像清单为空')
+    expect(screen.queryByText('正在加载设备画像…')).toBeNull()
+  })
+
+  it('注入空数组：直接进入空态，不显示加载', () => {
+    render(
+      <DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} data={{ profiles: [], images: [] }} />
+    )
+    expect(screen.getByText('画像清单为空')).toBeTruthy()
+    expect(screen.queryByText('正在加载设备画像…')).toBeNull()
+  })
+
+  it('缓存快速命中：立即 resolve 直接出列表，无加载残留', async () => {
+    installSdkStub({
+      profiles: vi.fn(() => Promise.resolve(PROFILES)),
+      images: vi.fn(() => Promise.resolve(IMAGES))
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText('Pixel 8')
+    expect(screen.queryByText('正在加载设备画像…')).toBeNull()
+  })
+
+  it('代次守卫：旧请求迟到的结果不覆盖新请求已展示的数据', async () => {
+    const dProfiles = deferred<DeviceProfile[]>()
+    const dImages1 = deferred<ImageEntry[]>()
+    const dImages2 = deferred<ImageEntry[]>()
+    const imagesMock = vi
+      .fn<() => Promise<ImageEntry[]>>()
+      .mockReturnValueOnce(dImages1.promise)
+      .mockReturnValueOnce(dImages2.promise)
+    const stub = installSdkStub({
+      profiles: vi.fn(() => dProfiles.promise),
+      images: imagesMock
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    dProfiles.resolve(PROFILES)
+    await screen.findByText('Pixel 8')
+    pickProfile()
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    expect(screen.getByText('正在加载系统镜像…')).toBeTruthy()
+    // 下载完成事件触发重拉（第 2 代请求），旧请求仍挂起
+    act(() => stub.emitProgress({ packageName: PKG_MISSING, percent: 100, message: '下载中' }))
+    await waitFor(() => expect(imagesMock).toHaveBeenCalledTimes(2))
+    dImages2.resolve(IMAGES)
+    await screen.findByText('API 36 · Google Play')
+    // 旧请求此刻才返回不同的清单：不得覆盖
+    await act(async () => {
+      dImages1.resolve([
+        image({ apiLevel: 30, packageName: 'system-images;android-30;aosp;arm64-v8a' })
+      ])
+    })
+    expect(screen.getByText('API 36 · Google Play')).toBeTruthy()
+    expect(screen.queryByText(/API 30/)).toBeNull()
+  })
+
+  it('卸载后迟到 resolve/reject 不抛未处理拒绝', async () => {
+    const dProfiles = deferred<DeviceProfile[]>()
+    const dImages = deferred<ImageEntry[]>()
+    installSdkStub({
+      profiles: vi.fn(() => dProfiles.promise),
+      images: vi.fn(() => dImages.promise)
+    })
+    const { unmount } = render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    unmount()
+    await act(async () => {
+      dProfiles.resolve(PROFILES)
+      dImages.reject(new Error('迟到的失败'))
+    })
+  })
+
+  it('下载：百分比与行互斥保留，完成后重拉显示刷新反馈，期间下一步禁用，完成后已装更新', async () => {
+    const dProfiles = deferred<DeviceProfile[]>()
+    const dImages1 = deferred<ImageEntry[]>()
+    const dImages2 = deferred<ImageEntry[]>()
+    const dDownload = deferred<void>()
+    const downloadMock = vi.fn(() => dDownload.promise)
+    const imagesMock = vi
+      .fn<() => Promise<ImageEntry[]>>()
+      .mockReturnValueOnce(dImages1.promise)
+      .mockReturnValueOnce(dImages2.promise)
+    const stub = installSdkStub({
+      profiles: vi.fn(() => dProfiles.promise),
+      images: imagesMock,
+      downloadImage: downloadMock as Mock<(packageName: string) => Promise<void>>
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    dProfiles.resolve(PROFILES)
+    dImages1.resolve(IMAGES)
+    await screen.findByText('Pixel 8')
+    pickProfile()
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    await screen.findByText('API 36 · Google Play')
+    pickImage()
+    fireEvent.click(screen.getByRole('button', { name: '下载 API 35 Google APIs' }))
+    await waitFor(() => expect(downloadMock).toHaveBeenCalledWith(PKG_MISSING))
+    // 下载中：行禁用互斥 + 百分比展示
+    expect((profileButton('API 36 · Google Play') as HTMLButtonElement).disabled).toBe(true)
+    act(() => stub.emitProgress({ packageName: PKG_MISSING, percent: 42, message: '下载中' }))
+    expect(screen.getByText('42%')).toBeTruthy()
+    // 下载完成触发重拉：列表保留 + 顶部紧凑刷新反馈；刷新未确认前下一步禁用
+    dDownload.resolve()
+    await screen.findByText('正在刷新系统镜像…')
+    expect(screen.getByText('API 36 · Google Play')).toBeTruthy()
+    expect((screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
+    dImages2.resolve(IMAGES.map((entry) => ({ ...entry, installed: true })))
+    await waitFor(() => expect(screen.queryByText('正在刷新系统镜像…')).toBeNull())
+    expect(screen.getAllByText(/已安装/).length).toBeGreaterThan(0)
+    expect((screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement).disabled).toBe(
+      false
+    )
+  })
+
+  it('下载失败：显示中文错误与重试下载，重试再次调用 downloadImage', async () => {
+    const dProfiles = deferred<DeviceProfile[]>()
+    const dImages = deferred<ImageEntry[]>()
+    const dDownload1 = deferred<void>()
+    const dDownload2 = deferred<void>()
+    const downloadMock = vi
+      .fn<(packageName: string) => Promise<void>>()
+      .mockReturnValueOnce(dDownload1.promise)
+      .mockReturnValueOnce(dDownload2.promise)
+    installSdkStub({
+      profiles: vi.fn(() => dProfiles.promise),
+      images: vi.fn(() => dImages.promise),
+      downloadImage: downloadMock
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    dProfiles.resolve(PROFILES)
+    dImages.resolve(IMAGES)
+    await screen.findByText('Pixel 8')
+    pickProfile()
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    await screen.findByText('API 36 · Google Play')
+    fireEvent.click(screen.getByRole('button', { name: '下载 API 35 Google APIs' }))
+    await waitFor(() => expect(downloadMock).toHaveBeenCalledTimes(1))
+    dDownload1.reject(new Error('网络中断'))
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('网络中断')
+    fireEvent.click(screen.getByRole('button', { name: '重试下载' }))
+    await waitFor(() => expect(downloadMock).toHaveBeenCalledTimes(2))
+    expect(downloadMock).toHaveBeenLastCalledWith(PKG_MISSING)
+  })
+
+  it('下载后重拉失败：旧清单保留，错误可见且可重试', async () => {
+    const dProfiles = deferred<DeviceProfile[]>()
+    const dImages1 = deferred<ImageEntry[]>()
+    const dImages2 = deferred<ImageEntry[]>()
+    const dDownload = deferred<void>()
+    const imagesMock = vi
+      .fn<() => Promise<ImageEntry[]>>()
+      .mockReturnValueOnce(dImages1.promise)
+      .mockReturnValueOnce(dImages2.promise)
+      .mockReturnValueOnce(deferred<ImageEntry[]>().promise)
+    installSdkStub({
+      profiles: vi.fn(() => dProfiles.promise),
+      images: imagesMock,
+      downloadImage: vi.fn(() => dDownload.promise)
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    dProfiles.resolve(PROFILES)
+    dImages1.resolve(IMAGES)
+    await screen.findByText('Pixel 8')
+    pickProfile()
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    await screen.findByText('API 36 · Google Play')
+    fireEvent.click(screen.getByRole('button', { name: '下载 API 35 Google APIs' }))
+    // 等重拉请求真正挂上 await 之后再 reject，避免窗口期无人接住
+    dDownload.resolve()
+    await waitFor(() => expect(imagesMock).toHaveBeenCalledTimes(2))
+    dImages2.reject(new Error('清单刷新失败'))
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('清单刷新失败')
+    // 旧数据保留：列表仍在
+    expect(screen.getByText('API 36 · Google Play')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+    await waitFor(() => expect(imagesMock).toHaveBeenCalledTimes(3))
   })
 })
