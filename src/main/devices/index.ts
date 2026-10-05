@@ -41,6 +41,7 @@ import { createRunner } from '../emulator/runner'
 import { getMainWindow } from '../window'
 import { wizardOwns } from '../window/wizard'
 import { importedSkinsRoot } from '../emulator/skins'
+import { listWebcams } from '../emulator/cameras'
 
 /** skinRef → 皮肤目录（sdk:* 解析 SDK skins；其余查应用库）；未知返回 null */
 const skinDirectoryFor = (skinRef: string): string | null => {
@@ -311,6 +312,39 @@ const startDevice = async (id: string): Promise<DeviceSnapshot> => {
     broadcastChanged()
     throw new Error(device.lastError.message)
   }
+  // 真实摄像头启动重核验（plan 设计 7）：配置的 webcam 拔出/消失时拒绝启动
+  const webcams =
+    device.advancedSettings?.frontCamera.mode === 'webcam' ||
+    device.advancedSettings?.rearCamera.mode === 'webcam'
+  if (webcams === true && device.advancedSettings !== null) {
+    try {
+      const available = new Set((await listWebcams(sdkRoot())).map((entry) => entry.id))
+      const missing: string[] = []
+      for (const camera of [
+        device.advancedSettings.frontCamera,
+        device.advancedSettings.rearCamera
+      ]) {
+        if (
+          camera.mode === 'webcam' &&
+          camera.deviceId !== null &&
+          !available.has(camera.deviceId)
+        ) {
+          missing.push(camera.deviceId)
+        }
+      }
+      if (missing.length > 0) {
+        device.lastError = {
+          code: 'webcam-missing',
+          message: `宿主摄像头（${missing.join('、')}）已不可用，请重新选择摄像头后启动`
+        }
+        broadcastChanged()
+        throw new Error(device.lastError.message)
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('不可用')) throw error
+      // 枚举本身失败不阻断启动（emulator 启动时会给出自己的错误）
+    }
+  }
   device.status = 'starting'
   device.lastError = undefined
   broadcastChanged()
@@ -488,6 +522,28 @@ const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult>
     throw new Error(`附加设置不合法（${first[0]}）：${first[1]}`)
   }
   const advancedSettings = normalized.settings
+  // 真实摄像头占用核验：同一宿主摄像头不能同时配给两台设备（plan 设计 7）
+  if (advancedSettings !== null) {
+    const occupied = new Set<string>()
+    for (const existing of devices) {
+      for (const camera of [
+        existing.advancedSettings?.frontCamera,
+        existing.advancedSettings?.rearCamera
+      ]) {
+        if (camera?.mode === 'webcam' && camera.deviceId !== null) {
+          occupied.add(camera.deviceId)
+        }
+      }
+    }
+    for (const [field, camera] of [
+      ['frontCamera', advancedSettings.frontCamera],
+      ['rearCamera', advancedSettings.rearCamera]
+    ] as const) {
+      if (camera.mode === 'webcam' && camera.deviceId !== null && occupied.has(camera.deviceId)) {
+        throw new Error(`附加设置不合法（${field}）：摄像头 ${camera.deviceId} 已被其他设备占用`)
+      }
+    }
+  }
   const apiDisplay =
     major === null
       ? (splitPackageName(packageName)?.platformSegment ?? null)

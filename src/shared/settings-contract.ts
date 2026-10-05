@@ -61,13 +61,19 @@ const isNetworkPreset = (value: unknown): value is NetworkPreset =>
   typeof value === 'string' &&
   ([...NETWORK_SPEED_PRESETS, ...NETWORK_DELAY_PRESETS] as string[]).includes(value)
 
-const normalizeCamera = (value: unknown): CameraConfig | null => {
+const normalizeCamera = (value: unknown, webcamIds: string[]): CameraConfig | null => {
   if (typeof value !== 'object' || value === null) return null
   const config = value as Record<string, unknown>
   if (config.mode === 'none' || config.mode === 'emulated' || config.mode === 'virtualScene') {
     return { mode: config.mode, deviceId: null }
   }
-  // webcam 需枚举到的设备 id（批次 8 前不接受）
+  // webcam：deviceId 必须是能力接口枚举到的宿主摄像头 id
+  if (config.mode === 'webcam') {
+    const deviceId = config.deviceId
+    if (typeof deviceId === 'string' && webcamIds.includes(deviceId)) {
+      return { mode: 'webcam', deviceId }
+    }
+  }
   return null
 }
 
@@ -132,12 +138,14 @@ export const normalizeAdvancedSettings = (
     'CPU 核数'
   )
 
-  const frontCamera = normalizeCamera(raw.frontCamera)
-  if (frontCamera === null)
-    errors.frontCamera = '前摄像头取值不合法（当前支持 none/emulated/virtualScene）'
-  const rearCamera = normalizeCamera(raw.rearCamera)
-  if (rearCamera === null)
-    errors.rearCamera = '后摄像头取值不合法（当前支持 none/emulated/virtualScene）'
+  const frontCamera = normalizeCamera(raw.frontCamera, capabilities.webcamDeviceIds)
+  if (frontCamera === null) {
+    errors.frontCamera = '前摄像头取值不合法（none/emulated/virtualScene/webcam<枚举 id>）'
+  }
+  const rearCamera = normalizeCamera(raw.rearCamera, capabilities.webcamDeviceIds)
+  if (rearCamera === null) {
+    errors.rearCamera = '后摄像头取值不合法（none/emulated/virtualScene/webcam<枚举 id>）'
+  }
 
   if (!isGpuMode(raw.graphics)) errors.graphics = 'GPU 模式取值不合法'
   if (
@@ -196,8 +204,14 @@ export const settingsToConfigPatch = (settings: DeviceAdvancedSettings): Record<
     'vm.heapSize': String(settings.vmHeapMiB),
     'hw.gpu.mode': settings.graphics,
     'disk.dataPartition.size': `${settings.internalStorageMiB}M`,
-    'hw.camera.front': settings.frontCamera.mode,
-    'hw.camera.back': settings.rearCamera.mode
+    'hw.camera.front':
+      settings.frontCamera.mode === 'webcam'
+        ? (settings.frontCamera.deviceId ?? 'webcam0')
+        : settings.frontCamera.mode,
+    'hw.camera.back':
+      settings.rearCamera.mode === 'webcam'
+        ? (settings.rearCamera.deviceId ?? 'webcam0')
+        : settings.rearCamera.mode
   }
   if (settings.orientation !== null) {
     patch['hw.initialOrientation'] = settings.orientation
@@ -216,12 +230,12 @@ export const settingsToRunnerArgs = (settings: DeviceAdvancedSettings): string[]
   if (settings.networkLatency !== null) args.push('-netdelay', settings.networkLatency)
   // 用户显式选择 GPU 时不固定 host（auto 交由 emulator 自选）
   if (settings.graphics !== 'auto') args.push('-gpu', settings.graphics)
-  if (settings.frontCamera.mode !== 'emulated') {
-    args.push('-camera-front', settings.frontCamera.mode)
-  }
-  if (settings.rearCamera.mode !== 'emulated') {
-    args.push('-camera-back', settings.rearCamera.mode)
-  }
+  const cameraValue = (camera: CameraConfig): string | null =>
+    camera.mode === 'webcam' ? camera.deviceId : camera.mode === 'emulated' ? null : camera.mode
+  const front = cameraValue(settings.frontCamera)
+  if (front !== null) args.push('-camera-front', front)
+  const rear = cameraValue(settings.rearCamera)
+  if (rear !== null) args.push('-camera-back', rear)
   if (settings.bootMode === 'cold') {
     args.push('-no-snapshot')
   }

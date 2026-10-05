@@ -14,6 +14,54 @@ import { NETWORK_SPEED_LABELS, NETWORK_DELAY_LABELS, GPU_LABELS } from './labels
  * 值变更走 onChange（整对象上抛）；校验错误定位到字段（红边 + 文案）。
  */
 
+/** 摄像头选择：none/emulated/virtualScene + 枚举到的宿主 webcam（带权限归属说明） */
+const cameraSelect = (
+  key: 'frontCamera' | 'rearCamera',
+  label: string,
+  value: DeviceAdvancedSettings,
+  onChange: (next: DeviceAdvancedSettings) => void,
+  capabilities: WizardCapabilities
+): React.JSX.Element => {
+  const current = value[key]
+  const options: Array<{ value: string; label: string }> = [
+    { value: 'none', label: '关闭' },
+    { value: 'emulated', label: '模拟画面' },
+    { value: 'virtualScene', label: '虚拟场景' },
+    ...capabilities.webcamDeviceIds.map((id) => ({ value: id, label: `真实摄像头 ${id}` }))
+  ]
+  return (
+    <Field>
+      <Label htmlFor={`setting-${key}`}>{label}</Label>
+      <Select
+        id={`setting-${key}`}
+        value={current.mode === 'webcam' ? (current.deviceId ?? '') : current.mode}
+        onChange={(event) => {
+          const picked = event.target.value
+          if (picked === 'none' || picked === 'emulated' || picked === 'virtualScene') {
+            onChange({ ...value, [key]: { mode: picked, deviceId: null } })
+          } else {
+            onChange({ ...value, [key]: { mode: 'webcam', deviceId: picked } })
+          }
+        }}
+      >
+        <option value="emulated">模拟画面</option>
+        {options
+          .filter((option) => option.value !== 'emulated')
+          .map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+      </Select>
+      <Hint>
+        {capabilities.webcamDeviceIds.length === 0
+          ? '未枚举到宿主摄像头（或枚举失败）；macOS 授权归属模拟器进程'
+          : '真实摄像头首次使用时 macOS 会向模拟器进程请求授权；同一摄像头不能同时配给两台设备'}
+      </Hint>
+    </Field>
+  )
+}
+
 export interface SettingsFormProps {
   capabilities: WizardCapabilities
   value: DeviceAdvancedSettings
@@ -151,36 +199,8 @@ const SettingsForm = ({
 
       <Group>
         <GroupTitle>摄像头</GroupTitle>
-        {select(
-          'frontCamera',
-          '前置摄像头',
-          value.frontCamera.mode === 'emulated' ? null : value.frontCamera.mode,
-          [
-            { value: 'none', label: '关闭' },
-            { value: 'emulated', label: '模拟画面' },
-            { value: 'virtualScene', label: '虚拟场景' }
-          ],
-          (next) =>
-            onChange({
-              ...value,
-              frontCamera: { mode: next ?? 'emulated', deviceId: null }
-            })
-        )}
-        {select(
-          'rearCamera',
-          '后置摄像头',
-          value.rearCamera.mode === 'emulated' ? null : value.rearCamera.mode,
-          [
-            { value: 'none', label: '关闭' },
-            { value: 'emulated', label: '模拟画面' },
-            { value: 'virtualScene', label: '虚拟场景' }
-          ],
-          (next) =>
-            onChange({
-              ...value,
-              rearCamera: { mode: next ?? 'emulated', deviceId: null }
-            })
-        )}
+        {cameraSelect('frontCamera', '前置摄像头', value, onChange, capabilities)}
+        {cameraSelect('rearCamera', '后置摄像头', value, onChange, capabilities)}
       </Group>
 
       <Group>

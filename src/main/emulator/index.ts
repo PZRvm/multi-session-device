@@ -16,6 +16,7 @@ import {
   type SkinRecord
 } from './skins'
 import { wizardOwns } from '../window/wizard'
+import { listWebcams } from './cameras'
 import type {
   DeviceProfile,
   DeviceSkinSummary,
@@ -187,11 +188,33 @@ export function registerSdkIpc(): void {
       if (imageRecord === undefined) {
         throw new Error(`${IPC_CHANNELS.sdkWizardCapabilities}: 镜像未安装，能力不可用`)
       }
-      return buildCapabilities({
+      const capabilities = buildCapabilities({
         profile,
         imagePackageName: input.imagePackageName,
         emulatorVersion: await readEmulatorVersion(root)
       })
+      // 皮肤能力：SDK 已装 + 导入库的 skinRef（皮肤域开放，字段解锁）
+      const [sdkSkins, importedSkins] = await Promise.all([
+        scanSdkSkins(root),
+        scanImportedSkins(app.getPath('userData'))
+      ])
+      capabilities.skinIds = [...sdkSkins, ...importedSkins].map((record) => record.skinRef)
+      capabilities.fields.skinRef =
+        capabilities.skinIds.length > 0
+          ? { disabledReason: null, min: null, max: null, step: null }
+          : {
+              disabledReason: '未找到可用皮肤（SDK 未装或库为空）',
+              min: null,
+              max: null,
+              step: null
+            }
+      // 摄像头能力：宿主枚举（失败不禁用字段，只是没有 webcam 选项）
+      try {
+        capabilities.webcamDeviceIds = (await listWebcams(root)).map((entry) => entry.id)
+      } catch {
+        capabilities.webcamDeviceIds = []
+      }
+      return capabilities
     }
   )
 
