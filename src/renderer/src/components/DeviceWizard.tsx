@@ -610,32 +610,34 @@ const Wrapper = styled.div`
 `
 
 const Header = styled.header`
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
   flex: none;
   height: 40px;
   padding: 0 14px;
   border-bottom: 1px solid var(--board-hairline);
   /* 板头整行是窗口拖拽带（darwin 原生标题条已去，对齐主窗 BoardHead 模式）；
-     40px 定高居中 + 三灯 y=14——标题与红绿灯共中线（用户裁决：居中对齐） */
+     标题组绝对定位水平居中于窗口中线（用户裁决），垂直仍落板头中线（与三灯 y=14 共线） */
   -webkit-app-region: drag;
 `
 
-/** darwin 原生三灯让位（对齐主窗：60px no-drag 占位，标题起排 x=82） */
+/** darwin 原生三灯让位（60px no-drag 占位；标题组改绝对居中后，占位只负责三灯区禁拖） */
 const TrafficSpacer = styled.span`
   flex: none;
   width: 60px;
   -webkit-app-region: no-drag;
 `
 
-/** 标题组：两段字号不同（14/11px）在组内基线对齐，整组在 40px 板头里垂直居中 */
+/** 标题组：两段字号不同（14/11px）在组内基线对齐；整组绝对定位——水平居中于窗口、垂直居中于板头 */
 const TitleGroup = styled.span`
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   align-items: baseline;
   gap: 8px;
-  flex: 1;
-  min-width: 0;
 `
 
 const Heading = styled.h3`
@@ -645,8 +647,6 @@ const Heading = styled.h3`
 `
 
 const StepIndicator = styled.span`
-  flex: 1;
-  padding-right: 24px;
   font-size: 11px;
   color: var(--board-ink-dim);
 `
