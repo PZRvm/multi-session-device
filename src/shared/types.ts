@@ -328,6 +328,8 @@ export interface SdkImageProgress {
   packageName: string
   percent: number
   message: string
+  /** 任务失败广播（发起窗口可能已关，广播给在听的窗口）；进度消息里为空 */
+  error?: string
 }
 
 /**
@@ -385,6 +387,11 @@ export interface ImageCatalogResult {
   sourceWarnings: string[]
   offline: boolean
   fetchedAt: number
+  /**
+   * 当前进行中的镜像下载任务（main 实时快照；null = 无）。向导重开时由此
+   * 恢复下载状态——关闭向导不取消后台下载（plan 设计 3/9），后续进度走事件流。
+   */
+  activeDownload: { packageName: string; percent: number } | null
 }
 
 /** 画像形态（官方分类规则：特殊 tag 优先，无 tag 按屏幕尺寸判定；unknown = 数据不足不硬猜） */

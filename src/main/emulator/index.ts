@@ -73,8 +73,9 @@ const PROFILES_CACHE_MS = 300_000
 let imagesCache: { at: number; root: string; result: ImageCatalogResult } | null = null
 const IMAGES_CACHE_MS = 60_000
 
-// 镜像下载互斥：同一时刻只允许一个下载（需求只约束「下载完成前不能创建」）
-let downloading: string | null = null
+// 镜像下载互斥 + 实时任务快照：同一时刻只允许一个下载（需求只约束「下载
+// 完成前不能创建」）；进度随推送更新，向导重开经 sdk:images 的 activeDownload 恢复
+let downloading: { packageName: string; percent: number } | null = null
 
 // 皮肤清单缓存（导入/下载后失效）与皮肤下载互斥
 let skinsCache: SkinRecord[] | null = null
@@ -147,12 +148,13 @@ export function registerSdkIpc(): void {
     async (_event, raw: unknown): Promise<ImageCatalogResult> => {
       const root = resolveRoot(raw)
       const now = Date.now()
+      // activeDownload 是实时状态：缓存命中也按当前任务合并（重开向导即由此恢复）
       if (imagesCache && imagesCache.root === root && now - imagesCache.at < IMAGES_CACHE_MS) {
-        return imagesCache.result
+        return { ...imagesCache.result, activeDownload: downloading }
       }
       const result = await listImagesWithState(root)
       imagesCache = { at: now, root, result }
-      return result
+      return { ...result, activeDownload: downloading }
     }
   )
 
@@ -301,15 +303,31 @@ export function registerSdkIpc(): void {
     if (entry.abi !== 'arm64-v8a') {
       throw new Error(`${IPC_CHANNELS.sdkDownloadImage}: 跨架构镜像（${entry.abi}）本期不支持下载`)
     }
-    if (downloading) throw new Error(`已有镜像在下载（${downloading}），请等待完成`)
-    downloading = packageName
+    if (downloading) {
+      throw new Error(
+        `已有镜像在下载（${downloading.packageName}，${downloading.percent}%），请等待完成`
+      )
+    }
+    downloading = { packageName, percent: 0 }
     try {
       // 下载会改变已装状态——失效清单缓存
       imagesCache = null
       await runSdkManagerPackages(root, [packageName], (percent) => {
+        if (downloading !== null) downloading.percent = percent
         const progress: SdkImageProgress = { packageName, percent, message: `下载 ${packageName}` }
         pushToAllWindows(IPC_CHANNELS.sdkImageProgress, progress)
       })
+    } catch (error) {
+      // 发起下载的向导窗可能已关闭（invoke 拒绝对它无意义）——失败广播给
+      // 在听的窗口，重开的向导据此显示错误与重试入口（plan 设计 9）
+      const message = error instanceof Error ? error.message : String(error)
+      pushToAllWindows(IPC_CHANNELS.sdkImageProgress, {
+        packageName,
+        percent: 0,
+        message: `下载失败 ${packageName}`,
+        error: message
+      } satisfies SdkImageProgress)
+      throw error
     } finally {
       downloading = null
     }

@@ -4,7 +4,7 @@ status: in-progress
 created: 2026-10-05
 ---
 
-> **进度（2026-10-06，feature/wizard-category-settings）**：批次 1–9 已实现——真实 fixture 与 PRD 同步、六类画像元数据（本机 96 画像分布验证）、六源精确镜像目录（276 条目实测）、store v2 与写保护、两页向导、设置契约/能力 IPC/config patch/runner argv、皮肤解析+导入+SDK 扫描、webcam 枚举与占用核验、Quick 实现路径。全部单测绿（272 过）、typecheck/lint 0 错；AVD 创建+config patch+回滚真机冒烟通过。**未完成**：皮肤独立下载源（核实无果，源清单为空）、皮肤投屏显示（挂通用外框几何依赖）、Quick 稳定性门槛（选择器保持禁用）、六类真机验收——详见 issue 2026-10-06-wizard-plan-remaining-acceptance；plan 不翻 completed。
+> **进度（2026-10-06，feature/wizard-category-settings）**：批次 1–9 已实现——真实 fixture 与 PRD 同步、六类画像元数据（本机 96 画像分布验证）、六源精确镜像目录（276 条目实测）、store v2 与写保护、两页向导、设置契约/能力 IPC/config patch/runner argv、皮肤解析+导入+SDK 扫描、webcam 枚举与占用核验、Quick 实现路径。全部单测绿（272 过）、typecheck/lint 0 错；AVD 创建+config patch+回滚真机冒烟通过。**未完成**：皮肤独立下载源（核实无果，源清单为空）、皮肤投屏显示（挂通用外框几何依赖）、Quick 稳定性门槛（选择器保持禁用）、六类真机验收——详见 issue 2026-10-06-wizard-plan-remaining-acceptance；plan 不翻 completed。设计 3/9 的「重开可查询状态」当日补齐：sdk:images 附带进行中任务快照（activeDownload），向导重开自动恢复进度，后台下载失败经进度通道广播错误与重试入口。
 
 # 模拟器向导分类与附加设置 — plan
 

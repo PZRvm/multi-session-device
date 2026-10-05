@@ -91,11 +91,15 @@ const fetchProfiles = async (): Promise<DeviceProfile[]> => {
   return window.api.sdk.profiles()
 }
 
+/** 最近一次清单响应携带的下载任务（向导重开恢复用；ref 避免绕过请求代次守卫） */
+let lastActiveDownload: { packageName: string; percent: number } | null = null
+
 const fetchImages = async (): Promise<ImageEntry[]> => {
   if (typeof window === 'undefined' || !window.api?.sdk) {
     throw new Error('sdk api 不可用')
   }
   const catalog = await window.api.sdk.images()
+  lastActiveDownload = catalog.activeDownload
   return catalog.images
 }
 
@@ -172,6 +176,19 @@ const DeviceWizard = ({
   // jsdom/极端竞速能穿透行禁用，同 tick 连点只有 ref 拦得住
   const downloadingRef = useRef(false)
 
+  // 重开恢复（plan 设计 3/9）：清单就绪且本地无下载状态时，从最近响应的
+  // activeDownload 恢复后台任务进度。恢复即消费——不清 ref 会在失败事件清空
+  // 状态后依赖重跑，把旧快照设回去（乒乓）；后续进度继续走事件订阅
+  useEffect(() => {
+    if (images.phase === 'ready' && downloading === null && lastActiveDownload !== null) {
+      const restore = lastActiveDownload
+      lastActiveDownload = null
+      // 一次性恢复（记录已消费）——不构成级联渲染
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDownloading({ ...restore })
+    }
+  }, [images.phase, downloading])
+
   // 设置能力（画像×镜像选定后拉取；代次守卫防陈旧覆盖）与用户设置值
   const [capabilities, setCapabilities] = useState<{
     phase: 'idle' | 'loading' | 'ready' | 'error'
@@ -191,10 +208,18 @@ const DeviceWizard = ({
     void reloadImages()
   }, [data, reloadProfiles, reloadImages])
 
-  // 下载进度订阅：同包名写进度，完成后重拉清单（拿已装标记；已有数据 → 紧凑刷新反馈）
+  // 下载进度订阅：同包名写进度，完成后重拉清单（拿已装标记；已有数据 → 紧凑刷新
+  // 反馈）；error 非空 = 后台任务失败广播（发起窗口可能已关）——显示错误并解锁
   useEffect(() => {
     if (data) return
     return window.api.sdk.onImageProgress((progress) => {
+      if (progress.error !== undefined) {
+        setDownloading((current) =>
+          current?.packageName === progress.packageName ? null : current
+        )
+        setDownloadError({ message: progress.error, packageName: progress.packageName })
+        return
+      }
       setDownloading({ packageName: progress.packageName, percent: progress.percent })
       if (progress.percent >= 100) {
         setDownloading(null)

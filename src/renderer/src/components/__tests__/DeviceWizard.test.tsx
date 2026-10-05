@@ -93,12 +93,16 @@ const IMAGES: ImageEntry[] = [
   image({ apiMajor: 34, installed: true })
 ]
 
-/** sdk.images() 返回 ImageCatalogResult——mock 统一包一层 */
-const catalogOf = (images: ImageEntry[]): ImageCatalogResult => ({
+/** sdk.images() 返回 ImageCatalogResult——mock 统一包一层（默认无进行中下载） */
+const catalogOf = (
+  images: ImageEntry[],
+  activeDownload: ImageCatalogResult['activeDownload'] = null
+): ImageCatalogResult => ({
   images,
   sourceWarnings: [],
   offline: false,
-  fetchedAt: 0
+  fetchedAt: 0,
+  activeDownload
 })
 
 /** 固定能力样本（与 main buildCapabilities 的默认形态对齐；Quick 关闭） */
@@ -590,6 +594,62 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     expect(await screen.findByText('重拉失败')).toBeTruthy()
     expect(screen.getByText('API 36')).toBeTruthy()
     expect(screen.getByRole('button', { name: '重试' })).toBeTruthy()
+  })
+
+  it('重开向导：清单带回进行中的下载 → 行显示进度、下载钮互斥、后续事件继续更新', async () => {
+    // 场景：上个窗口发起下载后关闭——main 的任务仍在，重开拉清单带 activeDownload；
+    // 任务完成后的重拉则不再携带（真实 main 的 activeDownload 已清空）
+    let calls = 0
+    const imagesMock = vi.fn(async () => {
+      calls += 1
+      return calls === 1
+        ? catalogOf(IMAGES, { packageName: PKG_MISSING, percent: 42 })
+        : catalogOf(
+            IMAGES.map((entry) =>
+              entry.packageName === PKG_MISSING ? { ...entry, installed: true } : entry
+            )
+          )
+    })
+    const handle = installSdkStub({ images: imagesMock })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    fireEvent.click(screen.getByText('API 36'))
+    // 恢复的进度立即可见（35 行的下载钮显示 42%）——后台任务续接，无需重发下载
+    await waitFor(() => expect(screen.getByText('42%')).toBeTruthy())
+    // 后续进度事件继续驱动同一任务
+    act(() => handle.emitProgress({ packageName: PKG_MISSING, percent: 80, message: '下载中' }))
+    expect(screen.getByText('80%')).toBeTruthy()
+    // 完成事件重拉清单：任务清空、按钮恢复
+    act(() => handle.emitProgress({ packageName: PKG_MISSING, percent: 100, message: '下载中' }))
+    await waitFor(() => expect(imagesMock.mock.calls.length).toBeGreaterThanOrEqual(2))
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(
+        false
+      )
+    )
+  })
+
+  it('后台下载失败广播：重开的向导显示错误与重试，下载状态解锁', async () => {
+    const handle = installSdkStub({
+      images: vi.fn(async () => catalogOf(IMAGES, { packageName: PKG_MISSING, percent: 60 }))
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    await waitFor(() => expect(screen.getByText('60%')).toBeTruthy())
+    // main 广播失败（发起窗口已关，错误经进度通道送达）
+    act(() =>
+      handle.emitProgress({
+        packageName: PKG_MISSING,
+        percent: 0,
+        message: '下载失败',
+        error: '网络中断'
+      })
+    )
+    expect(await screen.findByText('网络中断')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '重试下载' })).toBeTruthy()
+    expect(screen.queryByText('60%')).toBeNull()
   })
 
   it('下载同 tick 原生连点只触发一次下载（ref 守卫）', async () => {
