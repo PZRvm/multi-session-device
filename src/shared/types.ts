@@ -370,11 +370,17 @@ export interface ImageEntry {
   services: ImageService[]
   /** 特征标签原文（page_size_16kb / ai_glasses_compatible 等），不参与服务判定 */
   featureTags: string[]
+  /** type-details 原始 tag id 列表（直连安装生成 package.xml 用原形回填） */
+  tagIds: string[]
   abi: string
   channel: number | null
   revision: ImageRevision | null
   /** 下载体积（字节，manifest archives.complete.size；本地-only 为 null） */
   sizeBytes: number | null
+  /** zip 绝对地址（manifest url 拼 dl.google.com 基址；本地-only 为 null） */
+  zipUrl: string | null
+  /** manifest sha1 校验值（有值必校验；本地-only 为 null） */
+  zipSha1: string | null
   /** 完整安装：package.xml + source.properties + system.img 核验通过 */
   installed: boolean
   /** remote+local = 远端清单与本地合并；local-only = 仅本地存在（离线/已下架） */

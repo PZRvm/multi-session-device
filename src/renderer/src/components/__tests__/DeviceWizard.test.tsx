@@ -62,10 +62,13 @@ const image = (overrides: Partial<ImageEntry> & { apiMajor?: number }): ImageEnt
     },
     services: ['google_play'],
     featureTags: [],
+    tagIds: ['google_apis_playstore'],
     abi: 'arm64-v8a',
     channel: 0,
     revision: null,
     sizeBytes: 1_500_000_000,
+    zipUrl: null,
+    zipSha1: null,
     installed: true,
     source: 'remote+local',
     ...rest

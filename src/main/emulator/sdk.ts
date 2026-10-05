@@ -218,6 +218,9 @@ export async function runSdkManagerPackages(
   packages: string[],
   onPercent: (percent: number) => void
 ): Promise<void> {
+  // 注意：sdkmanager 在非 TTY 管道下 stdout 全缓冲，且新版非交互无进度行——
+  // 镜像下载已改走 manifest 直连（downloader.ts，plan 2026-10-06-download-progress-zero），
+  // 此执行体的 onPercent 对镜像包不会收到中间值；仅 bootstrap 等场景继续使用。
   return defaultRunner(root, packages, onPercent)
 }
 

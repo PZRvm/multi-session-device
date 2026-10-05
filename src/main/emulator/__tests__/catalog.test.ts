@@ -43,6 +43,15 @@ describe('parseSysImgManifest（真实 manifest，结构化解析）', () => {
     expect(entry?.tagIds).toEqual(['google_apis_playstore'])
   })
 
+  it('zip 下载三元组：size/sha1/相对 url 从 archives.complete 透出（直连下载的数据源）', () => {
+    const entry = playstoreEntries.find(
+      (pkg) => pkg.packageName === 'system-images;android-36.1;google_apis_playstore;arm64-v8a'
+    )
+    expect(entry?.sizeBytes).toBeGreaterThan(1_000_000_000)
+    expect(entry?.zipSha1).toMatch(/^[0-9a-f]{40}$/)
+    expect(entry?.zipUrl).toMatch(/^arm64-v8a-36\.1_r\d+\.zip$/)
+  })
+
   it('同 API 的 ps16k 变体是独立包：服务相同、特征标签不同、包名不合并', () => {
     const plain = playstoreEntries.find(
       (pkg) => pkg.packageName === 'system-images;android-36;google_apis_playstore;arm64-v8a'
@@ -191,10 +200,13 @@ describe('scanLocalImages（注入接缝）与 mergeCatalog', () => {
       },
       services: classifyTags(pkg.tagIds).services,
       featureTags: classifyTags(pkg.tagIds).featureTags,
+      tagIds: pkg.tagIds,
       abi: pkg.abi,
       channel: pkg.channel,
       revision: pkg.revision,
       sizeBytes: pkg.sizeBytes,
+      zipUrl: pkg.zipUrl,
+      zipSha1: pkg.zipSha1,
       installed: false,
       source: 'remote+local' as const
     })

@@ -36,3 +36,10 @@
 - `-netdelay`：`gsm` / `hscsd` / `gprs` / `umts` / `edge` / `hsdpa` / `lte` / `evdo` / `5g` / `none` + `<num>` / `<min>:<max>`。
 - 摄像头枚举入口：`emulator -avd <任意名> -webcam-list`，输出 `webcam0/webcam1…` 及设备 UUID；实际取流权限归 emulator/QEMU 进程（macOS TCC）。
 - config 键白名单（hw.cpu.ncore / hw.ramSize / vm.heapSize / hw.gpu.mode / hw.initialOrientation / hw.camera.front|back / disk.dataPartition.size / skin.*）以所装 emulator schema 为准，接入前在 settings 模块锁成可测常量。
+
+## 系统镜像 zip 布局（2026-10-06 真机实证，arm64-v8a-21_r04.zip）
+
+- 首层是 `<abi>/`（如 `arm64-v8a/system.img`），**不带** `<platform>/<tag>/` 层——落位路径由包名推导（sdkmanager 同语义）。
+- zip **不含 package.xml**（sdkmanager 从 repo 元数据生成）；含 source.properties。
+- `userdata.img` 解压后恰为 2147483648 字节（2^31）——adm-zip 单条目 Buffer 分配撞 Node 上限直接崩，镜像解压必须走系统 `unzip`（zip64 支持）。
+- manifest `archives.complete` 含 size/sha1/相对 url（基址 `sys-img/<源>/`）；绝对 URL 实测 200 且 `accept-ranges: bytes`。

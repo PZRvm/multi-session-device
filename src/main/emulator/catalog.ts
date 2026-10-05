@@ -137,6 +137,9 @@ interface RawRemotePackage {
   channel: number | null
   revision: ImageRevision | null
   sizeBytes: number | null
+  /** zip 相对路径（相对 sys-img/<source>/；无 archive 时 null） */
+  zipUrl: string | null
+  zipSha1: string | null
 }
 
 /** 解析一份 sys-img manifest（namespace 变体由 removeNSPrefix 吸收） */
@@ -161,7 +164,14 @@ export const parseSysImgManifest = (xml: string): RawRemotePackage[] => {
     if (abi === null) continue
     const archives = (pkg.archives as Record<string, unknown> | undefined)?.archive
     const firstArchive = toArray<Record<string, unknown>>(archives)[0]
-    const sizeNode = (firstArchive?.complete as Record<string, unknown> | undefined)?.size
+    const complete = firstArchive?.complete as Record<string, unknown> | undefined
+    const sizeNode = complete?.size
+    // checksum 节点带 type 属性：fast-xml-parser 可能为 { '@_type': 'sha1', '#text': 值 }
+    const checksumNode = complete?.checksum
+    const checksumText =
+      typeof checksumNode === 'string'
+        ? checksumNode
+        : text((checksumNode as Record<string, unknown> | undefined)?.['#text'])
     packages.push({
       packageName,
       displayName: text(pkg['display-name']),
@@ -182,7 +192,9 @@ export const parseSysImgManifest = (xml: string): RawRemotePackage[] => {
           .match(/channel-(\d+)/)?.[1]
       ),
       revision: parseRevision(pkg.revision),
-      sizeBytes: intOrNull(sizeNode)
+      sizeBytes: intOrNull(sizeNode),
+      zipUrl: text(complete?.url),
+      zipSha1: checksumText
     })
   }
   return packages
@@ -206,10 +218,14 @@ const remotePackageToEntry = (pkg: RawRemotePackage): ImageEntry => {
     },
     services,
     featureTags,
+    tagIds: pkg.tagIds,
     abi: pkg.abi,
     channel: pkg.channel,
     revision: pkg.revision,
     sizeBytes: pkg.sizeBytes,
+    // 相对 url 由 fetchImageCatalog 按 manifest 源拼绝对地址
+    zipUrl: pkg.zipUrl,
+    zipSha1: pkg.zipSha1,
     installed: false,
     source: 'remote+local'
   }
@@ -351,10 +367,13 @@ const localRecordToEntry = (record: LocalImageRecord): ImageEntry => {
     },
     services,
     featureTags,
+    tagIds: record.tagIds,
     abi: record.abi,
     channel: null,
     revision: record.revision,
     sizeBytes: null,
+    zipUrl: null,
+    zipSha1: null,
     installed: record.verified,
     source: 'local-only'
   }
@@ -406,7 +425,12 @@ export async function fetchImageCatalog(
   const settled = await Promise.allSettled(
     MANIFEST_SOURCES.map(async (source) => {
       const xml = await fetcher(`${MANIFEST_BASE}/${source}/sys-img2-3.xml`)
-      return parseSysImgManifest(xml).map(remotePackageToEntry)
+      return parseSysImgManifest(xml).map((pkg) => {
+        const entry = remotePackageToEntry(pkg)
+        // manifest url 是相对路径，基址即该源 manifest 所在目录（实测 200，见 plan 排查记录）
+        if (pkg.zipUrl !== null) entry.zipUrl = `${MANIFEST_BASE}/${source}/${pkg.zipUrl}`
+        return entry
+      })
     })
   )
 

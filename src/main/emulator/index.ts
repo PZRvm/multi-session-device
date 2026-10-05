@@ -3,10 +3,11 @@ import { join } from 'node:path'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { SdkImageProgress, SdkProgress, SdkSnapshot } from '@shared/types'
 import { appIcon } from '../app-icon'
-import { bootstrapSdk, detectSdk, runSdkManagerPackages } from './sdk'
+import { bootstrapSdk, detectSdk } from './sdk'
 import { avdmanagerPathFor, listDeviceProfiles } from './profiles'
 import { jarFingerprint, sdklibJarPathFor } from './profileMetadata'
 import { listImagesWithState, scanLocalImages, splitPackageName } from './catalog'
+import { downloadImagePackage } from './downloader'
 import { buildCapabilities, readEmulatorVersion } from './settings'
 import {
   downloadSkin,
@@ -312,11 +313,37 @@ export function registerSdkIpc(): void {
     try {
       // 下载会改变已装状态——失效清单缓存
       imagesCache = null
-      await runSdkManagerPackages(root, [packageName], (percent) => {
-        if (downloading !== null) downloading.percent = percent
-        const progress: SdkImageProgress = { packageName, percent, message: `下载 ${packageName}` }
-        pushToAllWindows(IPC_CHANNELS.sdkImageProgress, progress)
-      })
+      // 直连下载（plan 2026-10-06-download-progress-zero）：官方 CLI 无进度流，
+      // sdkmanager 执行体退役为 bootstrap 等场景；此处用 manifest zip 流式下载
+      await downloadImagePackage(
+        root,
+        {
+          packageName,
+          zipUrl: entry.zipUrl,
+          zipSha1: entry.zipSha1,
+          sizeBytes: entry.sizeBytes,
+          displayName: entry.displayName,
+          apiLevelText:
+            entry.api.major === null
+              ? entry.api.platformSegment.replace(/^android-/, '')
+              : entry.api.minor !== null
+                ? `${entry.api.major}.${entry.api.minor}`
+                : `${entry.api.major}`,
+          extensionLevel: entry.api.extensionLevel,
+          tagIds: entry.tagIds,
+          abi: entry.abi,
+          revision: entry.revision
+        },
+        (percent) => {
+          if (downloading !== null) downloading.percent = percent
+          const progress: SdkImageProgress = {
+            packageName,
+            percent,
+            message: `下载 ${packageName}`
+          }
+          pushToAllWindows(IPC_CHANNELS.sdkImageProgress, progress)
+        }
+      )
     } catch (error) {
       // 发起下载的向导窗可能已关闭（invoke 拒绝对它无意义）——失败广播给
       // 在听的窗口，重开的向导据此显示错误与重试入口（plan 设计 9）
