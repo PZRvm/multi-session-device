@@ -1,13 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, X } from 'lucide-react'
 import styled from 'styled-components'
-import type { CreateDeviceInput, DeviceFormFactor, DeviceProfile, ImageEntry } from '@shared/types'
+import type {
+  CreateDeviceInput,
+  DeviceAdvancedSettings,
+  DeviceFormFactor,
+  DeviceProfile,
+  ImageEntry,
+  WizardCapabilities
+} from '@shared/types'
 import { assessImageCompatibility } from '@shared/compatibility'
+import { normalizeAdvancedSettings } from '@shared/settings-contract'
 import Button from './Button'
 import Input from './Input'
 import ProfilePage from './wizard/ProfilePage'
 import ImageTable, { type ImageFilters } from './wizard/ImageTable'
 import SummaryPanel from './wizard/SummaryPanel'
+import SettingsForm from './wizard/SettingsForm'
 import { apiDisplay, messageOf } from './wizard/shared'
 
 /**
@@ -100,6 +109,11 @@ type DeviceWizardProps = {
   data?: DeviceWizardData
   /** 下载触发注入（测试用）；缺省走 sdk.downloadImage */
   onDownloadImage?: (packageName: string) => Promise<void>
+  /** 能力查询注入（测试用）；缺省走 sdk.wizardCapabilities */
+  onWizardCapabilities?: (
+    profileId: string,
+    imagePackageName: string
+  ) => Promise<WizardCapabilities>
 }
 
 const PAGE_TITLES: Record<1 | 2, string> = {
@@ -111,7 +125,8 @@ const DeviceWizard = ({
   onCreate,
   onCancel,
   data,
-  onDownloadImage
+  onDownloadImage,
+  onWizardCapabilities
 }: DeviceWizardProps): React.JSX.Element => {
   const [page, setPage] = useState<1 | 2>(1)
   // 画像页筛选
@@ -156,6 +171,15 @@ const DeviceWizard = ({
   // 下载触发的同步守卫（口径同 creatingRef）：下载钮是 disabled 行内的 span，
   // jsdom/极端竞速能穿透行禁用，同 tick 连点只有 ref 拦得住
   const downloadingRef = useRef(false)
+
+  // 设置能力（画像×镜像选定后拉取；代次守卫防陈旧覆盖）与用户设置值
+  const [capabilities, setCapabilities] = useState<{
+    phase: 'idle' | 'loading' | 'ready' | 'error'
+    data: WizardCapabilities | null
+    error: string | null
+  }>({ phase: 'idle', data: null, error: null })
+  const [advancedSettings, setAdvancedSettings] = useState<DeviceAdvancedSettings | null>(null)
+  const capabilityGenerationRef = useRef(0)
 
   // 首载：无注入数据时两份清单并发发起，成功失败各自接住，互不拖住
   useEffect(() => {
@@ -209,6 +233,39 @@ const DeviceWizard = ({
       ? null
       : (images.data.find((entry) => entry.packageName === image.packageName) ?? null)
 
+  // 能力装载：画像×镜像都选定且清单就绪后发起；上下文（画像/镜像）变化即重拉，
+  // 迟到结果按代次丢弃。拉到新能力后设置值重置为 defaults（不静默沿用已失效输入）
+  useEffect(() => {
+    // 装载状态机的同步重置/置 loading 与 useCatalogResource 同模式：状态由
+    // effect 依赖驱动，重置不会级联（下一 render 依赖不再变化）
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (selectedProfile === null || selectedImage === null) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCapabilities({ phase: 'idle', data: null, error: null })
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAdvancedSettings(null)
+      return
+    }
+    const generation = ++capabilityGenerationRef.current
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCapabilities((prev) => ({ ...prev, phase: 'loading', error: null }))
+    const fetchCapabilities = async (): Promise<void> => {
+      try {
+        const result = onWizardCapabilities
+          ? await onWizardCapabilities(selectedProfile.id, selectedImage.packageName)
+          : await window.api.sdk.wizardCapabilities(selectedProfile.id, selectedImage.packageName)
+        if (generation !== capabilityGenerationRef.current) return
+        setCapabilities({ phase: 'ready', data: result, error: null })
+        setAdvancedSettings(result.defaults)
+      } catch (error) {
+        if (generation !== capabilityGenerationRef.current) return
+        setCapabilities({ phase: 'error', data: null, error: messageOf(error) })
+      }
+    }
+    void fetchCapabilities()
+    // selectedProfile/selectedImage 为渲染期派生的核验值，身份随清单刷新自动失效
+  }, [selectedProfile?.id, selectedImage?.packageName, onWizardCapabilities])
+
   // 逐镜像兼容性（画像未选时不判——verdict 显示为空）。创建守卫在 main，此处仅展示
   const verdicts = useMemo(() => {
     const map = new Map<string, ReturnType<typeof assessImageCompatibility>>()
@@ -239,12 +296,21 @@ const DeviceWizard = ({
   const effectiveName = nameTouched ? name : defaultName
   // 完成门槛（plan 设计 3）：兼容 supported + 镜像完整安装 + 名称合法 + 清单就绪
   // + 无下载/创建事务。下载进度 100% 只是进度信号——重拉核验通过才算数
+  const settingsCheck = useMemo(
+    () =>
+      capabilities.data === null || advancedSettings === null
+        ? { settings: null, errors: {} as Record<string, string> }
+        : normalizeAdvancedSettings(advancedSettings, capabilities.data),
+    [capabilities.data, advancedSettings]
+  )
   const canCreate =
     effectiveName.trim().length > 0 &&
     selectedImage?.installed === true &&
     selectedVerdict?.status === 'supported' &&
     images.phase === 'ready' &&
-    downloading === null
+    downloading === null &&
+    capabilities.phase === 'ready' &&
+    Object.keys(settingsCheck.errors).length === 0
 
   // 防连击三层：ref 守卫（同 tick 连点）+ 按钮 disabled + state（跨 tick 视觉/语义）
   const create = async (): Promise<void> => {
@@ -256,7 +322,8 @@ const DeviceWizard = ({
         profileId: selectedProfile.id,
         profileLabel: selectedProfile.name,
         imagePackageName: selectedImage.packageName,
-        name: effectiveName.trim()
+        name: effectiveName.trim(),
+        advancedSettings: settingsCheck.settings ?? advancedSettings ?? null
       })
     } finally {
       // 成功路径窗体随 IPC 关闭，此处 setState 落在卸载后是 no-op；失败路径恢复可重试
@@ -401,16 +468,18 @@ const DeviceWizard = ({
             </DevicePane>
           ) : (
             <SettingsPane>
-              <SettingsHint>
-                附加设置（皮肤、摄像头、网络、启动模式、内部存储、模拟性能）将在设置
-                能力就绪后开放。本次创建按镜像与画像默认值执行：Cold Boot、host GPU、 内部存储
-                6GB、RAM 跟随画像。
-              </SettingsHint>
-              <SettingsGroups aria-disabled="true">
-                {['皮肤', '摄像头', '网络', '启动', '内部存储', '模拟性能'].map((group) => (
-                  <DisabledGroup key={group}>{group}</DisabledGroup>
-                ))}
-              </SettingsGroups>
+              {capabilities.phase === 'loading' || capabilities.phase === 'idle' ? (
+                <SettingsHint>正在加载设置能力…</SettingsHint>
+              ) : capabilities.phase === 'error' ? (
+                <SettingsHint>{capabilities.error}</SettingsHint>
+              ) : capabilities.data !== null && advancedSettings !== null ? (
+                <SettingsForm
+                  capabilities={capabilities.data}
+                  value={advancedSettings}
+                  errors={settingsCheck.errors}
+                  onChange={setAdvancedSettings}
+                />
+              ) : null}
             </SettingsPane>
           )}
         </Main>
@@ -656,28 +725,15 @@ const SettingsPane = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px 16px;
+  min-height: 0;
+  flex: 1;
+  padding: 0;
 `
 
 const SettingsHint = styled.p`
   margin: 0;
   font-size: 12px;
   line-height: 1.7;
-  color: var(--board-ink-dim);
-`
-
-const SettingsGroups = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  opacity: 0.6;
-`
-
-const DisabledGroup = styled.span`
-  padding: 6px 12px;
-  border: 1px solid var(--board-hairline);
-  border-radius: 4px;
-  font-size: 12px;
   color: var(--board-ink-dim);
 `
 

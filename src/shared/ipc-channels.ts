@@ -38,5 +38,7 @@ export const IPC_CHANNELS = {
   sdkImages: 'sdk:images',
   sdkDownloadImage: 'sdk:download-image',
   /** 镜像下载进度推送（main → renderer） */
-  sdkImageProgress: 'sdk:image-progress'
+  sdkImageProgress: 'sdk:image-progress',
+  /** 向导设置能力：defaults/枚举/边界/禁用原因（按画像×镜像×emulator 版本） */
+  sdkWizardCapabilities: 'sdk:wizard-capabilities'
 } as const

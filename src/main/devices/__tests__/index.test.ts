@@ -18,6 +18,24 @@ const mocks = vi.hoisted(() => {
     readDeviceMetas: vi.fn<() => Promise<DeviceMeta[]>>(async () => []),
     writeDeviceMetas: vi.fn<(metas: DeviceMeta[]) => Promise<void>>(async () => {}),
     createAvd: vi.fn(async () => '/avd'),
+    patchAvdConfig: vi.fn(async () => {}),
+    readEmulatorVersion: vi.fn(async () => '36.1.9'),
+    buildCapabilities: vi.fn(() => ({
+      capabilityContextId: 'pixel_8|pkg|36.1.9',
+      emulatorVersion: '36.1.9',
+      defaults: null,
+      fields: {},
+      quickBootAvailable: false,
+      quickBootDisabledReason: '门槛未过',
+      webcamDeviceIds: [],
+      skinIds: []
+    })),
+    normalizeAdvancedSettings: vi.fn((raw: unknown) => ({
+      settings: raw === null ? null : raw,
+      errors: {}
+    })),
+    settingsToConfigPatch: vi.fn(() => ({})),
+    settingsToRunnerArgs: vi.fn(() => ['-no-snapshot', '-gpu', 'host']),
     deleteAvd: vi.fn<(dirs: unknown) => Promise<void>>(async () => {}),
     avdExists: vi.fn(async () => true),
     isPackageNameInstalled: vi.fn<(root: string, packageName: string) => Promise<boolean>>(
@@ -102,7 +120,15 @@ vi.mock('../../store', () => ({
 vi.mock('../../emulator/avd', () => ({
   avdExists: mocks.avdExists,
   createAvd: mocks.createAvd,
-  deleteAvd: mocks.deleteAvd
+  deleteAvd: mocks.deleteAvd,
+  patchAvdConfig: mocks.patchAvdConfig
+}))
+vi.mock('../../emulator/settings', () => ({
+  readEmulatorVersion: mocks.readEmulatorVersion,
+  buildCapabilities: mocks.buildCapabilities,
+  normalizeAdvancedSettings: mocks.normalizeAdvancedSettings,
+  settingsToConfigPatch: mocks.settingsToConfigPatch,
+  settingsToRunnerArgs: mocks.settingsToRunnerArgs
 }))
 vi.mock('../../emulator/catalog', () => ({
   isPackageNameInstalled: mocks.isPackageNameInstalled,

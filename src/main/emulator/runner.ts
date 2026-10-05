@@ -49,6 +49,11 @@ export interface RunnerDeps {
   now: () => number
   /** 启动失败后的外部占用复核：进程已退但端口仍可连 = 确认端口冲突（可换端口重试一次） */
   confirmedPortConflict: (port: number) => Promise<boolean>
+  /**
+   * 设备运行字段（settingsToRunnerArgs 的产物；devices 域按元数据构造）。
+   * 缺省 = legacy 固定 Cold/host——旧设备（advancedSettings 为 null）行为不变。
+   */
+  extraArgsFor?: (id: string) => string[]
   /** boot 完成（serial 已随事件发布，可能因端口冲突重试与本对不同） */
   onRunning: (id: string, runId: string, serial: string) => void
   /** 非预期退出：崩溃/启动失败——写回 lastError 与后台错误通知 */
@@ -209,9 +214,11 @@ export class EmulatorRunner {
   }
 
   #spawnFor(entry: RunnerEntry): void {
+    // 运行字段优先级：设备已验证设置 → legacy 固定 Cold/host（不改已有设备行为）
+    const extra = this.deps.extraArgsFor?.(entry.id) ?? ['-no-snapshot', '-gpu', 'host']
     const child = this.deps.spawnEmulator(
       this.deps.emulatorPath(),
-      ['-avd', entry.id, '-no-window', '-no-snapshot', '-gpu', 'host', '-port', String(entry.port)],
+      ['-avd', entry.id, '-no-window', ...extra, '-port', String(entry.port)],
       {
         // detached 建独立进程组：真身 qemu 与启动器同组，停止按组整组终止
         detached: true,

@@ -11,7 +11,7 @@ import type {
   RuntimeErrorMessage
 } from '@shared/types'
 import { readDeviceMetas, writeDeviceMetas } from '../store'
-import { avdExists, createAvd, deleteAvd } from '../emulator/avd'
+import { avdExists, createAvd, deleteAvd, patchAvdConfig } from '../emulator/avd'
 import {
   classifyTags,
   parseApiVersion,
@@ -19,6 +19,13 @@ import {
   splitPackageName
 } from '../emulator/catalog'
 import { assessImageCompatibility } from '@shared/compatibility'
+import {
+  buildCapabilities,
+  normalizeAdvancedSettings,
+  readEmulatorVersion,
+  settingsToConfigPatch,
+  settingsToRunnerArgs
+} from '../emulator/settings'
 import { avdmanagerPathFor, listDeviceProfiles } from '../emulator/profiles'
 import { sdklibJarPathFor } from '../emulator/profileMetadata'
 import {
@@ -62,7 +69,10 @@ const isCreateDeviceInput = (value: unknown): value is CreateDeviceInput => {
     input.profileLabel.length > 0 &&
     typeof input.imagePackageName === 'string' &&
     splitPackageName(input.imagePackageName) !== null &&
-    normalizeName(input.name) !== null
+    normalizeName(input.name) !== null &&
+    (input.advancedSettings === null ||
+      input.advancedSettings === undefined ||
+      typeof input.advancedSettings === 'object')
   )
 }
 
@@ -265,6 +275,13 @@ const runner = createRunner({
     }
   },
   beforeKill: (id, runId) => streamBridge.beforeKill?.(id, runId) ?? Promise.resolve(),
+  // 运行字段按设备自己的已验证设置构造 argv；legacy（无设置）沿用固定 Cold/host
+  extraArgsFor: (id) => {
+    const device = devices.find((entry) => entry.id === id)
+    return device?.advancedSettings
+      ? settingsToRunnerArgs(device.advancedSettings)
+      : ['-no-snapshot', '-gpu', 'host']
+  },
   onRunning: handleRunning,
   onUnexpectedExit: handleUnexpectedExit
 })
@@ -445,6 +462,22 @@ const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult>
   if (verdict.status !== 'supported') {
     throw new Error(`镜像与画像不兼容：${verdict.reasons.join('；')}`)
   }
+  // 设置归一化（能力上下文 = 当前画像×镜像×emulator）：字段错误拒绝创建，
+  // Quick 未开放回落 Cold——伪造入参不改变开放门槛
+  const capabilities = buildCapabilities({
+    profile,
+    imagePackageName: packageName,
+    emulatorVersion: await readEmulatorVersion(sdkRoot())
+  })
+  const normalized = normalizeAdvancedSettings(
+    (raw.advancedSettings as CreateDeviceInput['advancedSettings']) ?? null,
+    capabilities
+  )
+  if (Object.keys(normalized.errors).length > 0) {
+    const first = Object.entries(normalized.errors)[0] as [string, string]
+    throw new Error(`附加设置不合法（${first[0]}）：${first[1]}`)
+  }
+  const advancedSettings = normalized.settings
   const apiDisplay =
     major === null
       ? (splitPackageName(packageName)?.platformSegment ?? null)
@@ -467,15 +500,19 @@ const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult>
             diagonalInches: profile.screen.diagonalInches
           }
         : null,
-    advancedSettings: null,
+    advancedSettings,
     createdAt: Date.now(),
     status: 'creating'
   }
   devices = [...devices, device]
   broadcastChanged()
   try {
-    // 事务：AVD 真建成功 → 元数据落盘成功 → 才转停止；任一失败撤回临时行并回滚 AVD
+    // 事务：AVD 真建成功 → config patch（白名单键、保留未知键）→ 元数据落盘成功
+    // → 才转停止；任一失败撤回临时行并回滚 AVD
     await createAvd({ avdName: device.id, profileId: raw.profileId, packageName }, avdDirs())
+    if (advancedSettings !== null) {
+      await patchAvdConfig(device.id, avdDirs(), settingsToConfigPatch(advancedSettings))
+    }
     // 临时行已在内存里：按 id upsert，避免重复条目
     await commitMetas((metas) => [...metas.filter((meta) => meta.id !== device.id), toMeta(device)])
     requireDevice(device.id).status = 'stopped'

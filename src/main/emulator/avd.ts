@@ -106,3 +106,50 @@ export async function deleteAvd(avdName: string, dirs: AvdDirs): Promise<void> {
   await rm(paths.dir, { recursive: true, force: true })
   await rm(paths.ini, { force: true })
 }
+
+export interface PatchAvdDeps {
+  readFile?: (path: string) => Promise<string>
+  writeFile?: (path: string, data: string) => Promise<void>
+}
+
+/**
+ * 创建后 config patch：只覆盖白名单键、保留未知键与注释行，tmp+rename 原子替换。
+ * config.ini 是 Java properties 形态（key=value）；同键多行时以最后一处为准并
+ * 只重写该处，避免重复键造成读取歧义。
+ */
+export async function patchAvdConfig(
+  avdName: string,
+  dirs: AvdDirs,
+  patch: Record<string, string>,
+  deps: PatchAvdDeps = {}
+): Promise<void> {
+  const read = deps.readFile ?? ((path: string) => readFile(path, 'utf8'))
+  const write =
+    deps.writeFile ??
+    (async (path: string, data: string): Promise<void> => {
+      const { writeFile: writeFn } = await import('node:fs/promises')
+      await writeFn(path, data, 'utf8')
+    })
+  const configPath = join(avdPaths(avdName, dirs).dir, 'config.ini')
+  const original = await read(configPath)
+
+  const seen = new Set<string>()
+  const lines = original.split('\n').map((line) => {
+    const match = line.match(/^([A-Za-z0-9._-]+)=/)
+    if (match === null) return line
+    const key = match[1]
+    if (!(key in patch) || seen.has(key)) return line
+    seen.add(key)
+    return `${key}=${patch[key]}`
+  })
+  // config 里不存在的白名单键追加到末尾
+  const appended = Object.entries(patch)
+    .filter(([key]) => !seen.has(key))
+    .map(([key, value]) => `${key}=${value}`)
+  const next = [...lines, ...appended].join('\n')
+
+  const tmpPath = `${configPath}.tmp`
+  await write(tmpPath, next)
+  const { rename } = await import('node:fs/promises')
+  await rename(tmpPath, configPath)
+}

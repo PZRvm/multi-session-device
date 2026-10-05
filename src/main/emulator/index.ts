@@ -6,8 +6,9 @@ import { appIcon } from '../app-icon'
 import { bootstrapSdk, detectSdk, runSdkManagerPackages } from './sdk'
 import { avdmanagerPathFor, listDeviceProfiles } from './profiles'
 import { jarFingerprint, sdklibJarPathFor } from './profileMetadata'
-import { listImagesWithState } from './catalog'
-import type { DeviceProfile, ImageCatalogResult } from '@shared/types'
+import { listImagesWithState, scanLocalImages, splitPackageName } from './catalog'
+import { buildCapabilities, readEmulatorVersion } from './settings'
+import type { DeviceProfile, ImageCatalogResult, WizardCapabilities } from '@shared/types'
 
 /** 应用自有 SDK 根（PRD E：userData/AndroidSDK；设置自定义路径属 stage 05） */
 export const defaultSdkRoot = (): string => join(app.getPath('userData'), 'AndroidSDK')
@@ -107,6 +108,46 @@ export function registerSdkIpc(): void {
       const result = await listImagesWithState(root)
       imagesCache = { at: now, root, result }
       return result
+    }
+  )
+
+  // 向导设置能力：按画像×镜像×emulator 版本返回 defaults/枚举/边界/禁用原因。
+  // 画像与镜像都从 main 可信数据重查——renderer 只传 id，不信任缓存的画像元数据。
+  ipcMain.handle(
+    IPC_CHANNELS.sdkWizardCapabilities,
+    async (_event, raw: unknown): Promise<WizardCapabilities> => {
+      if (typeof raw !== 'object' || raw === null) {
+        throw new Error(`${IPC_CHANNELS.sdkWizardCapabilities}: 非法的入参`)
+      }
+      const input = raw as Record<string, unknown>
+      if (
+        typeof input.profileId !== 'string' ||
+        typeof input.imagePackageName !== 'string' ||
+        input.profileId.length === 0 ||
+        splitPackageName(input.imagePackageName) === null
+      ) {
+        throw new Error(`${IPC_CHANNELS.sdkWizardCapabilities}: 非法的画像/镜像标识`)
+      }
+      const root = resolveRoot(undefined)
+      await requireSdkReady(root)
+      const profiles = await listDeviceProfiles({
+        avdmanagerPath: avdmanagerPathFor(root),
+        jarPath: sdklibJarPathFor(root)
+      })
+      const profile = profiles.find((entry) => entry.id === input.profileId)
+      if (profile === undefined) {
+        throw new Error(`${IPC_CHANNELS.sdkWizardCapabilities}: 画像不存在或不可创建`)
+      }
+      const local = await scanLocalImages(root)
+      const imageRecord = local.get(input.imagePackageName)
+      if (imageRecord === undefined) {
+        throw new Error(`${IPC_CHANNELS.sdkWizardCapabilities}: 镜像未安装，能力不可用`)
+      }
+      return buildCapabilities({
+        profile,
+        imagePackageName: input.imagePackageName,
+        emulatorVersion: await readEmulatorVersion(root)
+      })
     }
   )
 

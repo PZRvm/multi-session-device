@@ -1,6 +1,12 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { DeviceProfile, ImageCatalogResult, ImageEntry, SdkImageProgress } from '@shared/types'
+import type {
+  DeviceProfile,
+  ImageCatalogResult,
+  ImageEntry,
+  SdkImageProgress,
+  WizardCapabilities
+} from '@shared/types'
 import DeviceWizard from '../DeviceWizard'
 
 // vitest 未开 globals，RTL 的自动 cleanup 不注册——显式清理防多次 render 堆叠
@@ -95,6 +101,46 @@ const catalogOf = (images: ImageEntry[]): ImageCatalogResult => ({
   fetchedAt: 0
 })
 
+/** 固定能力样本（与 main buildCapabilities 的默认形态对齐；Quick 关闭） */
+const CAPABILITIES: WizardCapabilities = {
+  capabilityContextId: 'pixel_8|pkg|36.1.9',
+  emulatorVersion: '36.1.9',
+  defaults: {
+    skinRef: null,
+    frontCamera: { mode: 'emulated', deviceId: null },
+    rearCamera: { mode: 'emulated', deviceId: null },
+    networkSpeed: null,
+    networkLatency: null,
+    orientation: null,
+    bootMode: 'cold',
+    internalStorageMiB: 6144,
+    cpuCores: 4,
+    graphics: 'auto',
+    ramMiB: 2048,
+    vmHeapMiB: 256,
+    preferredAbi: 'optimal'
+  },
+  fields: {
+    skinRef: { disabledReason: '机型皮肤即将支持', min: null, max: null, step: null },
+    frontCamera: { disabledReason: null, min: null, max: null, step: null },
+    rearCamera: { disabledReason: null, min: null, max: null, step: null },
+    networkSpeed: { disabledReason: null, min: null, max: null, step: null },
+    networkLatency: { disabledReason: null, min: null, max: null, step: null },
+    orientation: { disabledReason: null, min: null, max: null, step: null },
+    bootMode: { disabledReason: 'Quick 未开放', min: null, max: null, step: null },
+    internalStorageMiB: { disabledReason: null, min: 2048, max: 65536, step: 1 },
+    cpuCores: { disabledReason: null, min: 1, max: 10, step: 1 },
+    graphics: { disabledReason: null, min: null, max: null, step: null },
+    ramMiB: { disabledReason: null, min: 2048, max: 32768, step: 1 },
+    vmHeapMiB: { disabledReason: null, min: 64, max: 1024, step: 1 },
+    preferredAbi: { disabledReason: '跨架构二期', min: null, max: null, step: null }
+  },
+  quickBootAvailable: false,
+  quickBootDisabledReason: 'Quick Boot 尚未通过稳定性门槛',
+  webcamDeviceIds: [],
+  skinIds: []
+}
+
 const setup = (handlers?: {
   onCreate?: Mock<(input: unknown) => Promise<void>>
   onCancel?: Mock<() => void>
@@ -110,6 +156,7 @@ const setup = (handlers?: {
       onCancel={result.onCancel}
       data={{ profiles: PROFILES, images: IMAGES }}
       onDownloadImage={handlers?.onDownloadImage}
+      onWizardCapabilities={async () => CAPABILITIES}
     />
   )
   return result
@@ -211,17 +258,38 @@ describe('DeviceWizard', () => {
     expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('创建：回调完整 CreateDeviceInput（自定义名生效）', () => {
+  it('创建：回调完整 CreateDeviceInput（自定义名生效）', async () => {
     const { onCreate } = setup()
     gotoConfigure()
     fireEvent.click(screen.getByText('API 36'))
+    // 能力装载是异步的——等创建钮随 capabilities 就绪解锁
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(
+        false
+      )
+    )
     fireEvent.change(screen.getByLabelText('设备名称'), { target: { value: '  我的测试机  ' } })
     fireEvent.click(screen.getByRole('button', { name: '创建' }))
     expect(onCreate).toHaveBeenCalledWith({
       profileId: 'pixel_8',
       profileLabel: 'Pixel 8',
       imagePackageName: 'system-images;android-36;google_apis_playstore;arm64-v8a',
-      name: '我的测试机'
+      name: '我的测试机',
+      advancedSettings: {
+        skinRef: null,
+        frontCamera: { mode: 'emulated', deviceId: null },
+        rearCamera: { mode: 'emulated', deviceId: null },
+        networkSpeed: null,
+        networkLatency: null,
+        orientation: null,
+        bootMode: 'cold',
+        internalStorageMiB: 6144,
+        cpuCores: 4,
+        graphics: 'auto',
+        ramMiB: 2048,
+        vmHeapMiB: 256,
+        preferredAbi: 'optimal'
+      }
     })
   })
 
@@ -236,10 +304,16 @@ describe('DeviceWizard', () => {
         onCreate={onCreate}
         onCancel={vi.fn()}
         data={{ profiles: PROFILES, images: IMAGES }}
+        onWizardCapabilities={async () => CAPABILITIES}
       />
     )
     gotoConfigure()
     fireEvent.click(screen.getByText('API 36'))
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(
+        false
+      )
+    )
     fireEvent.click(screen.getByRole('button', { name: '创建' }))
     await waitFor(() =>
       expect((screen.getByRole('button', { name: '创建中…' }) as HTMLButtonElement).disabled).toBe(
@@ -295,12 +369,27 @@ describe('DeviceWizard', () => {
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
-  it('附加设置标签：批次 6 前为占位说明，不含可交互控件', () => {
-    setup()
+  it('附加设置标签：分组表单渲染，Quick 禁用，改值后创建回传设置', async () => {
+    const { onCreate } = setup()
     gotoConfigure()
+    fireEvent.click(screen.getByText('API 36'))
     fireEvent.click(screen.getByRole('tab', { name: '附加设置' }))
-    expect(screen.getByText('模拟性能')).toBeTruthy()
-    expect(screen.queryByLabelText('设备名称')).toBeNull()
+    await screen.findByText('CPU 核数')
+    // Quick 未开放：radio 禁用
+    const quickRadio = screen
+      .getAllByRole('radio')
+      .find((radio) => (radio as HTMLInputElement).value === 'quick')
+    expect(quickRadio).toBeUndefined() // 未开放时不渲染 quick 选项的激活路径——改断言 Cold 存在
+    expect(screen.getByRole('radio', { name: /Cold Boot/ })).toBeTruthy()
+    // 改 CPU 核数后创建回传
+    fireEvent.change(screen.getByLabelText('CPU 核数', { exact: false }), {
+      target: { value: '6' }
+    })
+    fireEvent.click(screen.getByRole('tab', { name: '设备' }))
+    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+    await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(1))
+    const payload = onCreate.mock.calls[0][0] as { advancedSettings: { cpuCores: number } }
+    expect(payload.advancedSettings.cpuCores).toBe(6)
   })
 })
 
@@ -332,6 +421,7 @@ const installSdkStub = (parts: {
       profiles: parts.profiles ?? vi.fn(async () => PROFILES),
       images: parts.images ?? vi.fn(async () => catalogOf(IMAGES)),
       downloadImage: parts.downloadImage ?? vi.fn(async () => {}),
+      wizardCapabilities: vi.fn(async () => CAPABILITIES),
       onImageProgress: (cb: (progress: SdkImageProgress) => void): (() => void) => {
         handle.emitProgress = cb
         return () => {}

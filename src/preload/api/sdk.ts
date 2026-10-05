@@ -5,7 +5,8 @@ import type {
   ImageCatalogResult,
   SdkImageProgress,
   SdkProgress,
-  SdkSnapshot
+  SdkSnapshot,
+  WizardCapabilities
 } from '@shared/types'
 
 /** SDK 域白名单：状态探测 + bootstrap（进度经 onProgress 推送） */
@@ -30,6 +31,9 @@ export const sdkApi = {
   /** 未装镜像下载（单下载互斥；进度经 onImageProgress 推送） */
   downloadImage: (packageName: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.sdkDownloadImage, { packageName }),
+  /** 向导设置能力（画像×镜像×emulator 版本；defaults/枚举/边界/禁用原因） */
+  wizardCapabilities: (profileId: string, imagePackageName: string): Promise<WizardCapabilities> =>
+    ipcRenderer.invoke(IPC_CHANNELS.sdkWizardCapabilities, { profileId, imagePackageName }),
   onImageProgress: (callback: (progress: SdkImageProgress) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, progress: SdkImageProgress): void => {
       callback(progress)

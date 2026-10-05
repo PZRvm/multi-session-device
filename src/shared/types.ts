@@ -152,6 +152,39 @@ export interface CreateDeviceInput {
   /** 完整包名（system-images;<平台>;<tag>;<abi>），创建前由 main 从可信目录核验 */
   imagePackageName: string
   name: string
+  /** 归一化附加设置；null = 未配置（沿用 legacy 默认路径） */
+  advancedSettings: DeviceAdvancedSettings | null
+}
+
+/** 单个设置字段的能力描述（枚举/范围/禁用原因） */
+export interface SettingFieldCapability {
+  /** 字段禁用时的中文原因；null = 可用 */
+  disabledReason: string | null
+  /** 数值字段边界（MiB / 核数）；null = 非数值字段 */
+  min: number | null
+  max: number | null
+  step: number | null
+}
+
+/**
+ * 向导能力（sdk:wizard-capabilities 返回）：按 SDK/工具版本、宿主、
+ * profileId/imagePackageName 生成 defaults 与字段能力。上下文标识用于
+ * 陈旧判定——切换画像/镜像/工具升级后 capabilityContextId 变化即失效。
+ */
+export interface WizardCapabilities {
+  /** 能力上下文标识（画像 id + 包名 + emulator 版本指纹） */
+  capabilityContextId: string
+  /** 所装 emulator 版本（package.xml 读取）；null = 未安装/未知 */
+  emulatorVersion: string | null
+  defaults: DeviceAdvancedSettings
+  fields: Record<string, SettingFieldCapability>
+  /** Quick Boot 开放状态：门槛未过（批次 9）前禁用并说明 */
+  quickBootAvailable: boolean
+  quickBootDisabledReason: string | null
+  /** 本地摄像头枚举（批次 8 真实取景链路；本批次仅 emulated/none 可选） */
+  webcamDeviceIds: string[]
+  /** 可选皮肤 id（批次 7 接入；空 = 暂无） */
+  skinIds: string[]
 }
 
 // ---- 投屏与操控域（stage 04 步骤 5；scrcpy 3.3.3 + H.264 + adb forward 裸 TCP）----
