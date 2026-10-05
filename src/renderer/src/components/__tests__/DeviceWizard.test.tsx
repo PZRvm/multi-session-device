@@ -10,9 +10,33 @@ afterEach(() => {
   delete (window as { api?: unknown }).api
 })
 
+const profile = (
+  overrides: Partial<DeviceProfile> & { id: string; name: string }
+): DeviceProfile => ({
+  manufacturer: 'Google',
+  tagIds: [],
+  formFactor: 'phone',
+  screen: { widthPx: 1080, heightPx: 2400, diagonalInches: 6.3, logicalDpi: 420, round: null },
+  foldable: false,
+  apiMin: null,
+  apiMax: null,
+  playSupported: null,
+  deprecated: false,
+  hasFrontCamera: null,
+  hasBackCamera: null,
+  ramMiB: null,
+  creatable: true,
+  ...overrides
+})
+
 const PROFILES: DeviceProfile[] = [
-  { id: 'pixel_8', name: 'Pixel 8' },
-  { id: 'pixel_tablet', name: 'Pixel Tablet' }
+  profile({ id: 'pixel_8', name: 'Pixel 8' }),
+  profile({
+    id: 'pixel_tablet',
+    name: 'Pixel Tablet',
+    formFactor: 'tablet',
+    screen: { widthPx: 2560, heightPx: 1600, diagonalInches: 10.95, logicalDpi: 320, round: null }
+  })
 ]
 
 const image = (overrides: Partial<ImageEntry>): ImageEntry => ({

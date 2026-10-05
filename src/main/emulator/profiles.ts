@@ -1,18 +1,28 @@
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import type { DeviceProfile } from '@shared/types'
+import {
+  type AvdDeviceEntry,
+  type RawProfileMeta,
+  mergeProfiles,
+  readJarProfileMetas,
+  sdklibJarPathFor
+} from './profileMetadata'
 
 /**
- * 设备画像：`avdmanager list device` 真数据。
- * 输出里带 `Tag :` 行的定义是非手机类（automotive/wear/tv/desktop/xr/ai-glasses），
- * 手机/平板条目没有 Tag 行——以此过滤；id/Name 之外的字段一期不展示。
- * （内置目录方案随 2026-10-05 avdmanager 修复退役，见 plan 2026-10-04-avd-create-delete 变更记录。）
+ * 设备画像：`avdmanager list device`（可创建性真值：id/Name/OEM/Tag）+ sdklib
+ * JAR 内官方 XML（屏幕/密度/折叠/API 范围/Play/摄像头等元数据），按 id 关联成
+ * 富画像。Tag 不再过滤——分类规则见 profileMetadata.ts（plan 2026-10-05-emulator-wizard）。
  */
 
 export interface ProfileListDeps {
   /** 执行器接缝：默认 spawn avdmanager list device；单测注入固定输出 */
   runner?: (avdmanagerPath: string) => Promise<string>
   avdmanagerPath: string
+  /** sdklib.core.jar 路径；缺省按 sdklibJarPathFor(avdmanagerPath 所在 SDK) 推导 */
+  jarPath?: string
+  /** 元数据读取接缝：默认 adm-zip 解包 JAR；单测注入已解析的 XML 文本 */
+  metaSource?: (jarPath: string) => RawProfileMeta[]
 }
 
 const defaultRunner = (avdmanagerPath: string): Promise<string> =>
@@ -38,17 +48,24 @@ const defaultRunner = (avdmanagerPath: string): Promise<string> =>
     })
   })
 
-/** 解析 list device 输出：无 `Tag :` 行的定义（手机/平板），按名称排序 */
-export const parseDeviceProfiles = (output: string): DeviceProfile[] => {
-  const profiles: DeviceProfile[] = []
+/**
+ * 解析 list device 输出为条目列表（不过滤 Tag——带 Tag 的 wear/tv/desktop/
+ * automotive/xr/ai-glasses 是合法画像，分类交给 classifyFormFactor）。
+ */
+export const parseAvdDeviceEntries = (output: string): AvdDeviceEntry[] => {
+  const entries: AvdDeviceEntry[] = []
   for (const block of output.split(/-{5,}/)) {
     const id = block.match(/id:\s*\d+\s+or\s+"([^"]+)"/)?.[1]
     const name = block.match(/Name:\s*(.+)/)?.[1]?.trim()
     if (!id || !name) continue
-    if (/^\s*Tag\s*:/m.test(block)) continue
-    profiles.push({ id, name })
+    entries.push({
+      id,
+      name,
+      oem: block.match(/OEM\s*:\s*(.+)/)?.[1]?.trim() || null,
+      tagId: block.match(/Tag\s*:\s*(\S+)/)?.[1] ?? null
+    })
   }
-  return profiles.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
+  return entries
 }
 
 export const avdmanagerPathFor = (sdkRoot: string): string =>
@@ -56,5 +73,9 @@ export const avdmanagerPathFor = (sdkRoot: string): string =>
 
 export async function listDeviceProfiles(deps: ProfileListDeps): Promise<DeviceProfile[]> {
   const output = await (deps.runner ?? defaultRunner)(deps.avdmanagerPath)
-  return parseDeviceProfiles(output)
+  const avdEntries = parseAvdDeviceEntries(output)
+  const jarPath =
+    deps.jarPath ?? sdklibJarPathFor(join(deps.avdmanagerPath, '..', '..', '..', '..'))
+  const metas = deps.metaSource ? deps.metaSource(jarPath) : readJarProfileMetas(jarPath)
+  return mergeProfiles(avdEntries, metas)
 }

@@ -5,6 +5,7 @@ import type { SdkImageProgress, SdkProgress, SdkSnapshot } from '@shared/types'
 import { appIcon } from '../app-icon'
 import { bootstrapSdk, detectSdk, runSdkManagerPackages } from './sdk'
 import { avdmanagerPathFor, listDeviceProfiles } from './profiles'
+import { jarFingerprint, sdklibJarPathFor } from './profileMetadata'
 import { listImagesWithState } from './catalog'
 import type { DeviceProfile, ImageEntry } from '@shared/types'
 
@@ -47,8 +48,9 @@ const confirmLicenses = async (): Promise<void> => {
   if (result.response !== 0) throw new Error('用户拒绝 Android SDK 许可，bootstrap 中止')
 }
 
-// 画像缓存（5min）：avdmanager list device 是 Java 子进程（秒级），不必每次向导都跑
-let profilesCache: { at: number; profiles: DeviceProfile[] } | null = null
+// 画像缓存（5min）：avdmanager list device 是 Java 子进程（秒级），不必每次向导都跑。
+// 键含 SDK 根 + sdklib JAR 指纹——切 SDK 或升级 cmdline-tools 后失效。
+let profilesCache: { at: number; key: string; profiles: DeviceProfile[] } | null = null
 const PROFILES_CACHE_MS = 300_000
 
 // 镜像清单缓存（60s）：向导内反复进出不打 manifest
@@ -77,16 +79,20 @@ export function registerSdkIpc(): void {
     return bootstrapSdk(root, {}, pushProgress)
   })
 
-  // 画像来自 avdmanager list device（手机/平板过滤；5min 缓存）
+  // 画像 = avdmanager 可创建性 + sdklib JAR 官方元数据（分类/屏幕/Play 等）
   ipcMain.handle(IPC_CHANNELS.sdkProfiles, async (): Promise<DeviceProfile[]> => {
     const root = resolveRoot(undefined)
     await requireSdkReady(root)
+    const key = `${root}|${await jarFingerprint(sdklibJarPathFor(root))}`
     const now = Date.now()
-    if (profilesCache && now - profilesCache.at < PROFILES_CACHE_MS) {
+    if (profilesCache && profilesCache.key === key && now - profilesCache.at < PROFILES_CACHE_MS) {
       return profilesCache.profiles
     }
-    const profiles = await listDeviceProfiles({ avdmanagerPath: avdmanagerPathFor(root) })
-    profilesCache = { at: now, profiles }
+    const profiles = await listDeviceProfiles({
+      avdmanagerPath: avdmanagerPathFor(root),
+      jarPath: sdklibJarPathFor(root)
+    })
+    profilesCache = { at: now, key, profiles }
     return profiles
   })
 

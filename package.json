@@ -31,6 +31,8 @@
     "@yume-chan/scrcpy": "^2.3.0",
     "@yume-chan/scrcpy-decoder-webcodecs": "^2.5.3",
     "@yume-chan/stream-extra": "^2.6.1",
+    "adm-zip": "^0.6.1",
+    "fast-xml-parser": "^5.11.2",
     "lucide-react": "^1.49.0",
     "styled-components": "^6.5.3",
     "zustand": "^5.0.15"
@@ -40,6 +42,7 @@
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@testing-library/react": "^16.3.3",
+    "@types/adm-zip": "^0.5.8",
     "@types/node": "^22.19.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",

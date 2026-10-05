@@ -214,8 +214,44 @@ export interface ImageEntry {
   sizeBytes: number
 }
 
-/** 设备画像（avdmanager list device 的手机/平板条目） */
+/** 画像形态（官方分类规则：特殊 tag 优先，无 tag 按屏幕尺寸判定；unknown = 数据不足不硬猜） */
+export type DeviceFormFactor =
+  'phone' | 'tablet' | 'wear' | 'desktop' | 'tv' | 'automotive' | 'unknown'
+
+/** 画像屏幕元数据（官方 XML；缺失字段 null，不伪造） */
+export interface DeviceScreenInfo {
+  widthPx: number | null
+  heightPx: number | null
+  diagonalInches: number | null
+  /** 逻辑 dpi：pixel-density 符号或数值，不以 xdpi/ydpi 替代 */
+  logicalDpi: number | null
+  /**
+   * 圆屏与否。官方 XML 无显式标记，仅以 id 命名约定（*_round / *_square）区分，
+   * 因此只在能从 id 判定时给 true/false，其余 null。
+   */
+  round: boolean | null
+}
+
+/** 设备画像：官方画像 XML 元数据 + avdmanager 可创建关联（plan 2026-10-05-emulator-wizard） */
 export interface DeviceProfile {
   id: string
   name: string
+  manufacturer: string | null
+  /** 原始 tag id（android-wear / android-tv / android-automotive-playstore 等；空 = 无 tag） */
+  tagIds: string[]
+  formFactor: DeviceFormFactor
+  screen: DeviceScreenInfo
+  foldable: boolean
+  /** 软件支持范围（XML api-level「14-」语义：min=14、max=null；-1 → null/null） */
+  apiMin: number | null
+  apiMax: number | null
+  playSupported: boolean | null
+  /** 官方 XML 与 avdmanager 输出均无弃用信号，当前恒 false；有信号源后接入 */
+  deprecated: boolean
+  hasFrontCamera: boolean | null
+  hasBackCamera: boolean | null
+  /** 官方 XML 硬件默认 RAM（按 unit 归一化到 MiB） */
+  ramMiB: number | null
+  /** avdmanager 当前可按此画像创建（id 出现在其输出中） */
+  creatable: boolean
 }
