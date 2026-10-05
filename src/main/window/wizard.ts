@@ -47,9 +47,10 @@ export function openWizardWindow(parent: BrowserWindow): void {
     show: false,
     title: '新建设备',
     icon: appIcon,
-    // darwin 去原生标题条、三灯嵌入；y=14 落在 40px 板头中线（≈20px），与标题共中线
+    // darwin 去原生标题条、三灯嵌入。y=12 实测居中：灯 12px 高且 Electron 有 +2 内禀偏移
+    // （code y → 实际顶 y+2，中心 y+8）→ y=12 时中心 19.5 = 40px 板头中心 = 标题组中心，三者共线
     ...(process.platform === 'darwin'
-      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 14 } }
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 12 } }
       : {}),
     resizable: true,
     minimizable: false,

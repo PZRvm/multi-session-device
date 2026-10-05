@@ -27,6 +27,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 | `guidelines/` | 规则书：人和 agent 永远怎么工作，长期稳定 |
 | `notes/` | 过程笔记：开发中发生了什么，只增不改 |
 | `notes/issue/2026-10/` | 归档于 notes/issue/，按月份分组 |
+| `notes/learn/` | 经验与教训，写码前后按 tags 检索，按月份归档 |
 | `notes/learn/2026-09/` | 归档于 notes/learn/，按月份分组 |
 | `notes/learn/2026-10/` | 归档于 notes/learn/，按月份分组 |
 | `plans/` | 施工图：一个功能一篇，Phase 2 设计确认后落盘，agent 照着施工 |
@@ -99,6 +100,10 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-05-lint-baseline-unclean.md](notes/issue/2026-10/2026-10-05-lint-baseline-unclean.md) — npm run lint 存量 17 项未清（10 errors / 7 warnings）——react-hooks/set-state-in-effect 为主，集中在 DeviceCanvas 等既有效应
 - [2026-10-05-wizard-download-no-tick-guard.md](notes/issue/2026-10/2026-10-05-wizard-download-no-tick-guard.md) — DeviceWizard download() 跨 tick 无互斥守卫——下载按钮是 disabled 行内的 span，jsdom 与极端竞速可穿透，两次并发 download 互相覆盖进度状态
 - [2026-10-06-wizard-plan-remaining-acceptance.md](notes/issue/2026-10/2026-10-06-wizard-plan-remaining-acceptance.md) — 模拟器向导 plan（2026-10-05-emulator-wizard）批次 1-9 交付后的遗留清单——皮肤独立下载源核实无果、投屏显示挂通用外框几何、Quick 门槛与六类真机验收未跑
+
+### notes/learn/
+
+- [2026-10-06-红绿灯垂直居中实测.md](notes/learn/2026-10-06-红绿灯垂直居中实测.md) — darwin 红绿灯垂直居中的像素实测法——12px 灯、trafficLightPosition 的 +2 内禀偏移与 40px 板头的 y=12 公式；多实例/多显示器下的可靠测量路径
 
 ### notes/learn/2026-09/
 
@@ -174,4 +179,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261005221831-模拟器向导分类与附加设置.md](think-report/20261005221831-模拟器向导分类与附加设置.md) — 已确认的向导范围：画像分类、API镜像与附加设置，含机型皮肤和真实摄像头；SD卡暂缓，跨架构二期
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 100 documents -->
+<!-- 101 documents -->
