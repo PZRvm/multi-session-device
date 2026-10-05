@@ -29,7 +29,7 @@ type DeviceRowProps = {
   onRename: (name: string) => void
 }
 
-/** 设备行：ListRow 视觉（选中整行反白）+ 状态点 + 行内启停/取消/复制/删除 + 双击行内重命名。
+/** 设备行：ListRow 视觉（选中整行反白）+ 状态点 + 行内启停/取消/复制/删除 + 双击/F2/选中态 Enter 行内重命名。
  * 行内含按钮，根元素不能用 button（按钮不套按钮），键盘语义手动补。 */
 const DeviceRow = ({
   device,
@@ -73,13 +73,22 @@ const DeviceRow = ({
   return (
     <Wrapper
       aria-current={selected || undefined}
+      aria-keyshortcuts="F2"
       title={device.lastError?.message}
       tabIndex={0}
       onClick={onSelect}
       onDoubleClick={startRename}
       onKeyDown={(event) => {
         if (event.target instanceof HTMLInputElement) return
-        if (event.key === 'Enter' || event.key === ' ') {
+        if (event.key === 'F2') {
+          event.preventDefault()
+          startRename()
+        } else if (event.key === 'Enter') {
+          event.preventDefault()
+          // 选中态再按 Enter 进重命名（macOS Finder 惯例）；未选中维持选中语义
+          if (selected) startRename()
+          else onSelect()
+        } else if (event.key === ' ') {
           event.preventDefault()
           onSelect()
         }
