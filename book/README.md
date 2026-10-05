@@ -125,6 +125,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-05-emulator-console-token-host-home.md](notes/learn/2026-10/2026-10-05-emulator-console-token-host-home.md) — console token 路径不随 ANDROID_EMULATOR_HOME 重定向——恒为 $HOME/.emulator_console_auth_token，缺失时 emulator 会写宿主 home；共享 adb 靠 smart-socket 只读探测保不重启
 - [2026-10-05-offscreen-electron-pixel-acceptance.md](notes/learn/2026-10/2026-10-05-offscreen-electron-pixel-acceptance.md) — jsdom 证不了像素对齐——离屏 Electron + 页内 getBoundingClientRect 几何断言 + capturePage 序列帧，一套临时 harness 覆盖状态矩阵、动画漂移与主题可见性
 - [2026-10-05-tsx-generic-arrow-comma.md](notes/learn/2026-10/2026-10-05-tsx-generic-arrow-comma.md) — tsx 里泛型箭头函数必须写 <T,>——裸 <T>( 被解析成 JSX 起始标签，连环假错报到几百行外的 styled 段
+- [2026-10-05-vitest-clearallmocks-impl-bleed.md](notes/learn/2026-10/2026-10-05-vitest-clearallmocks-impl-bleed.md) — vi.clearAllMocks 只清调用记录不重置实现——上一组 describe 末用例设置的持久 mockRejectedValue 会渗进下一组，报错栈指向别的用例的 setup 行
 
 ### plans/
 
@@ -169,4 +170,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261005221831-模拟器向导分类与附加设置.md](think-report/20261005221831-模拟器向导分类与附加设置.md) — 已确认的向导范围：画像分类、API镜像与附加设置，含机型皮肤和真实摄像头；SD卡暂缓，跨架构二期
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 95 documents -->
+<!-- 96 documents -->

@@ -1,6 +1,6 @@
 ---
 description: 四个设备域 issue 的收口批次——三个已在 7099076 修掉待验证回写，键盘重命名本轮实现
-status: draft
+status: completed
 ---
 
 # 设备域 issue 批次收口 — plan
