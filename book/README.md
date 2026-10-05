@@ -138,6 +138,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-05-fast-xml-parser-v5-attrs-and-vitest-no-typecheck.md](notes/learn/2026-10/2026-10-05-fast-xml-parser-v5-attrs-and-vitest-no-typecheck.md) — fast-xml-parser v5 默认忽略 XML 属性——@_path/@_unit 静默丢失，manifest 解析出 0 条且不报错；vitest 只转译不做类型检查，运行时 undefined 缺陷会漏网
 - [2026-10-05-offscreen-electron-pixel-acceptance.md](notes/learn/2026-10/2026-10-05-offscreen-electron-pixel-acceptance.md) — jsdom 证不了像素对齐——离屏 Electron + 页内 getBoundingClientRect 几何断言 + capturePage 序列帧，一套临时 harness 覆盖状态矩阵、动画漂移与主题可见性
 - [2026-10-05-tsx-generic-arrow-comma.md](notes/learn/2026-10/2026-10-05-tsx-generic-arrow-comma.md) — tsx 里泛型箭头函数必须写 <T,>——裸 <T>( 被解析成 JSX 起始标签，连环假错报到几百行外的 styled 段
+- [2026-10-06-abort-dual-error-shapes.md](notes/learn/2026-10/2026-10-06-abort-dual-error-shapes.md) — AbortController 取消会以两种错误形态到达——自检点的 CancelledError 与 fetch/execFile 的原生 AbortError；分流只认一种会让取消穿成失败
 - [2026-10-06-sysimg-zip-2gb-limit-and-package-xml.md](notes/learn/2026-10/2026-10-06-sysimg-zip-2gb-limit-and-package-xml.md) — 系统镜像 zip 两个实测坑——adm-zip 单条目 Buffer 撞 2^31 上限（userdata.img 恰 2147483648 字节）必须走系统 unzip；zip 不带 package.xml 且首层是 <abi>/，直连安装要自生成身份文件
 
 ### plans/
@@ -187,4 +188,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261005221831-模拟器向导分类与附加设置.md](think-report/20261005221831-模拟器向导分类与附加设置.md) — 已确认的向导范围：画像分类、API镜像与附加设置，含机型皮肤和真实摄像头；SD卡暂缓，跨架构二期
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 105 documents -->
+<!-- 106 documents -->

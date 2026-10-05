@@ -1,10 +1,12 @@
 ---
 description: 镜像下载的显式取消——向导行内取消入口、AbortController 中断直连下载、临时文件与半解压目录清理、取消广播与互斥释放；依赖 manifest 直连线路先行
-status: draft
+status: completed
 created: 2026-10-06
 ---
 
 # 镜像下载取消 — plan
+
+> 实现记录（2026-10-06，feature/wizard-download-cancel，基 86114a7）：进度修复（依赖项）已在该基线实施完毕，本 plan 落取消全链路。`downloader.ts` 三阶段检查点（每 chunk / sha1 前 / 解压前后）+ `CancelledError` 分流；真机实证 fetch 层 signal 中断抛原生 `AbortError` 直达组合层——补双形态分流（`signal.aborted && error.name === 'AbortError'` 也按取消），单测 5 例覆盖五中断点。`extractZip` 默认实现由 `execFileSync`（阻塞 main 且不可中断）改异步 `execFile + signal`（取消即 kill unzip），解压被 kill 的错误按取消分流。main 侧任务对象挂 `abort/done`：`sdk:cancel-download-image`（向导窗守卫、幂等）abort 后 await 收尾才 resolve；下载 handler 按返回值广播 `canceled: true`（非 error，UI 无错误横幅）。UI：下载中行百分比旁「取消」钮，invoke resolve 即本地清状态，广播服务重开窗（activeDownload 恢复后的取消已测）。真机：android-35 镜像真实下载 6 秒中断——`canceled` 正常返回、进度 1→11% 连续、`.downloading.zip` 零残留。全套 296 测试过、typecheck/lint 0 错。遗留：断点续传（本期明确不做）；「关窗不取消」语义未动（回归在案）。
 
 > 用户需求：正在下载中的 API 镜像要有「取消下载」状态；点击取消后，该次下载对应的文件需要被清理。本 plan 先分析后设计；**依赖 [下载进度修复 plan](2026-10-06-download-progress-zero.md) 的 manifest 直连下载线路**（分析见下——干净的可取消下载在该线路上才成立），建议两 plan 同批或先后紧接施工。关联 [emulator-wizard 主计划](2026-10-05-emulator-wizard.md) 设计 3/9 的既有语义：关闭向导**不取消**后台下载、重开可恢复——本 plan 新增的是用户**显式取消**，两者并存不冲突。
 
