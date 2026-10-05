@@ -35,9 +35,13 @@ export function useDeviceScreen(device: Device | null): {
   paintsRef: React.MutableRefObject<number>
 } {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const [status, setStatus] = useState<ScreenViewStatus>('idle')
-  const [format, setFormat] = useState<ScreenFormat | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  // 连接状态单源：target 标记归属（运行中的 id:runId），非当前目标的存量一律不外显
+  const [conn, setConn] = useState<{
+    target: string
+    status: ScreenViewStatus
+    format: ScreenFormat | null
+    error: string | null
+  }>({ target: '', status: 'idle', format: null, error: null })
 
   const viewTokenRef = useRef(crypto.randomUUID())
   const paintsRef = useRef(0)
@@ -49,7 +53,10 @@ export function useDeviceScreen(device: Device | null): {
   const generationListenersRef = useRef(new Set<() => void>())
   const screenRef = useRef<ScreenViewRef>({ envelope: null, width: 0, height: 0 })
   const deviceRef = useRef(device)
-  deviceRef.current = device
+  // ref 更新移入 effect：渲染期写 ref 会触发级联纪律告警
+  useEffect(() => {
+    deviceRef.current = device
+  }, [device])
 
   const onGenerationChange = useCallback((listener: () => void): (() => void) => {
     generationListenersRef.current.add(listener)
@@ -75,6 +82,8 @@ export function useDeviceScreen(device: Device | null): {
   }, [])
 
   useEffect(() => {
+    // viewToken 创建后不再变化：effect 内捕获局部，cleanup 免读「可能已变」的 ref
+    const viewToken = viewTokenRef.current
     const decoder = new StreamDecoder({ onFrame: drawFrame, onError: () => undefined })
     decoderRef.current = decoder
 
@@ -93,7 +102,7 @@ export function useDeviceScreen(device: Device | null): {
     }
 
     const onPacket = (message: ScreenPacketMessage): void => {
-      if (message.viewToken !== viewTokenRef.current) return
+      if (message.viewToken !== viewToken) return
       const decoderInstance = decoderRef.current
       if (!decoderInstance) return
 
@@ -147,20 +156,25 @@ export function useDeviceScreen(device: Device | null): {
 
     const onState = (message: ScreenStateMessage): void => {
       if (message.deviceId !== deviceRef.current?.id) return
-      if (message.viewToken !== '' && message.viewToken !== viewTokenRef.current) return
+      if (message.viewToken !== '' && message.viewToken !== viewToken) return
       // 本视图的活动归属（streamId/generation 随重建与旋转更新，输入守卫依赖它）
-      if (message.viewToken === viewTokenRef.current && screenRef.current.envelope) {
+      if (message.viewToken === viewToken && screenRef.current.envelope) {
         screenRef.current.envelope.streamId = message.streamId
         screenRef.current.envelope.generation = message.generation
         screenRef.current.envelope.runId = message.runId
       }
       if (message.status === 'ready' && message.format) {
-        setFormat(message.format)
         screenRef.current.width = message.format.width
         screenRef.current.height = message.format.height
       }
-      if (message.error) setError(message.error)
-      setStatus(message.status === 'ready' ? 'ready' : message.status)
+      const key = `${message.deviceId}:${message.runId}`
+      // 状态/格式/错误各字段独立合并：消息缺省的字段沿用同目标的存量
+      setConn((prev) => ({
+        target: key,
+        status: message.status === 'ready' ? 'ready' : message.status,
+        format: message.format ?? (prev.target === key ? prev.format : null),
+        error: message.error ?? (prev.target === key ? prev.error : null)
+      }))
     }
 
     const unsubscribeState = window.api.screen.onState(onState)
@@ -170,59 +184,76 @@ export function useDeviceScreen(device: Device | null): {
       unsubscribePacket()
       decoder.close()
       decoderRef.current = null
-      void window.api.screen.activate(null, viewTokenRef.current).catch(() => undefined)
+      void window.api.screen.activate(null, viewToken).catch(() => undefined)
     }
   }, [drawFrame])
 
-  // 设备运行态 → 激活/退订（设备未运行时显式退订，停止投屏解码）
+  // 设备运行态 → 激活/退订（设备未运行时显式退订，停止投屏解码）。
+  // 状态变迁由下方 target 派生承担，本效果只做副作用：信封维护与 IPC 往返
   useEffect(() => {
+    const viewToken = viewTokenRef.current
     if (device?.status === 'running') {
-      setStatus('connecting')
-      setError(null)
+      const key = `${device.id}:${device.runId ?? ''}`
       screenRef.current.envelope = {
         deviceId: device.id,
         runId: device.runId ?? '',
         streamId: '',
         generation: 0,
-        viewToken: viewTokenRef.current
+        viewToken
       }
       void window.api.screen
-        .activate(device.id, viewTokenRef.current)
+        .activate(device.id, viewToken)
         .then((state) => {
-          if (state) {
-            screenRef.current.envelope = {
-              deviceId: state.deviceId,
-              runId: state.runId,
-              streamId: state.streamId,
-              generation: state.generation,
-              viewToken: viewTokenRef.current
-            }
-            if (state.format) {
-              setFormat(state.format)
-              screenRef.current.width = state.format.width
-              screenRef.current.height = state.format.height
-            }
-            setStatus(state.status === 'ready' ? 'ready' : state.status)
+          if (!state) return
+          screenRef.current.envelope = {
+            deviceId: state.deviceId,
+            runId: state.runId,
+            streamId: state.streamId,
+            generation: state.generation,
+            viewToken
           }
+          if (state.format) {
+            screenRef.current.width = state.format.width
+            screenRef.current.height = state.format.height
+          }
+          setConn((prev) => ({
+            target: key,
+            status: state.status === 'ready' ? 'ready' : state.status,
+            format: state.format ?? (prev.target === key ? prev.format : null),
+            error: null
+          }))
         })
-        .catch(() => setStatus('error'))
+        .catch(() =>
+          setConn((prev) => ({
+            target: key,
+            status: 'error',
+            format: prev.target === key ? prev.format : null,
+            error: null
+          }))
+        )
     } else {
-      setStatus('idle')
-      setFormat(null)
-      setError(null)
       screenRef.current.envelope = null
-      void window.api.screen.activate(null, viewTokenRef.current).catch(() => undefined)
+      void window.api.screen.activate(null, viewToken).catch(() => undefined)
     }
   }, [device?.id, device?.status, device?.runId])
+
+  // 派生：非运行 → idle；目标不一致（启动/切换/异步未返）→ connecting；仅同目标存量外显
+  const target = device?.status === 'running' ? `${device.id}:${device.runId ?? ''}` : null
+  const live = target !== null && conn.target === target
+  const status: ScreenViewStatus = target === null ? 'idle' : live ? conn.status : 'connecting'
+  const format = live ? conn.format : null
+  const error = live ? conn.error : null
 
   const retry = useCallback((): void => {
     const current = deviceRef.current
     if (!current || current.status !== 'running') return
-    setStatus('connecting')
-    setError(null)
+    setConn((prev) => ({ ...prev, status: 'connecting', error: null }))
     void window.api.screen.retry(current.id, current.runId ?? '').catch((err) => {
-      setStatus('error')
-      setError(err instanceof Error ? err.message : String(err))
+      setConn((prev) => ({
+        ...prev,
+        status: 'error',
+        error: err instanceof Error ? err.message : String(err)
+      }))
     })
   }, [])
 

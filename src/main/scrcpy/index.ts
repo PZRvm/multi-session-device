@@ -583,7 +583,11 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
 
 // ---- 进程工具（真实实现；单测整体替换 manager deps 或 transport deps）----
 
-const runAdb = (path: string, args: string[], timeoutMs: number) =>
+const runAdb = (
+  path: string,
+  args: string[],
+  timeoutMs: number
+): Promise<{ code: number; stdout: string; stderr: string }> =>
   new Promise<{ code: number; stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn(path, args, { env: scrubAdbEnv(process.env) })
     const out: Buffer[] = []

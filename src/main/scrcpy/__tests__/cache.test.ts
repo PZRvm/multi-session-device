@@ -1,6 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { buildReplay, CACHE_MAX_PACKETS, CONFIG_MAX_BYTES, GopCache } from '../cache'
+import {
+  buildReplay,
+  CACHE_MAX_PACKETS,
+  CONFIG_MAX_BYTES,
+  GopCache,
+  type CachedPacket
+} from '../cache'
 
 const configPacket = {
   seq: 0,
@@ -8,7 +14,7 @@ const configPacket = {
   data: new Uint8Array([1, 2, 3])
 }
 
-const dataPacket = (seq: number, keyframe = false, pts = seq * 33, size = 10) => ({
+const dataPacket = (seq: number, keyframe = false, pts = seq * 33, size = 10): CachedPacket => ({
   seq,
   type: 'data' as const,
   pts,

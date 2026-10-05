@@ -51,7 +51,6 @@ interface Harness {
 
 const importManager = async (): Promise<Harness> => {
   const { createScrcpyManager } = await import('../index')
-  const { establishTransport } = await import('../transport')
 
   const transportsBySerial = new Map<string, PushableTransport>()
   const fakeEstablish = vi.fn(async (deps: TransportDeps): Promise<Transport> => {
@@ -97,7 +96,7 @@ const importManager = async (): Promise<Harness> => {
     toolEnv: () => ({}),
     getMainWindow: () => mocks.windowRef.current,
     isMainSender: () => true,
-    establish: fakeEstablish as unknown as typeof establishTransport
+    establish: fakeEstablish as unknown as (typeof import('../transport'))['establishTransport']
   })
   manager.registerIpc()
   return {

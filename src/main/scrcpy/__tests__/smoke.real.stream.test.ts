@@ -13,7 +13,8 @@ import type { ScreenPacketMessage, ScreenStateMessage } from '@shared/types'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { EmulatorRunner, defaultBootProbe } from '../../emulator/runner'
 import { PortAllocator, tcpProbe } from '../../emulator/ports'
-import { listAdbSerials, runAdb as runAdbRaw } from '../../emulator/adb'
+import { listAdbSerials, runAdb as runAdbRaw, type AdbRunResult } from '../../emulator/adb'
+import type { ScrcpyManager } from '../index'
 
 const SmokeGate = process.env['MSD_SMOKE_STREAM'] === '1'
 
@@ -28,7 +29,8 @@ const AVD_B = '1c3745a3-e16a-4708-89c9-c83219cc6018'
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
-const runAdb = (args: string[], timeoutMs = 10_000) => runAdbRaw(adbPath(), args, { timeoutMs })
+const runAdb = (args: string[], timeoutMs = 10_000): Promise<AdbRunResult> =>
+  runAdbRaw(adbPath(), args, { timeoutMs })
 
 const mocks = vi.hoisted(() => ({
   handle: vi.fn(),
@@ -89,7 +91,7 @@ vi.mock('electron', () => ({
     return { serial: started.serial, runId: started.runId }
   }
 
-  const importSut = async () => {
+  const importSut = async (): Promise<ScrcpyManager> => {
     const { createScrcpyManager } = await import('../index')
     const manager = createScrcpyManager({
       adbPath,

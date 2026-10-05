@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { ScreenInput, ScreenKeycodeName } from '@shared/types'
 import type { ScreenViewRef } from './useDeviceScreen'
 
@@ -54,65 +54,77 @@ export function useDeviceInput(params: DeviceInputParams): void {
   const composingRef = useRef(false)
   const errorNotifiedRef = useRef(false)
   const enabledRef = useRef(enabled)
-  enabledRef.current = enabled
+  // ref 更新放 effect：渲染期写 ref 会触发级联纪律告警（事件都在 commit 后，时序等价）
+  useEffect(() => {
+    enabledRef.current = enabled
+  }, [enabled])
 
-  const send = (input: ScreenInput): void => {
-    const view = screenRef.current
-    if (!enabledRef.current || !view.envelope || view.width <= 0 || view.height <= 0) return
-    window.api.screen
-      .input({
-        ...view.envelope,
-        width: view.width,
-        height: view.height,
-        input
-      })
-      .catch((error: unknown) => {
-        if (!errorNotifiedRef.current) {
-          errorNotifiedRef.current = true
-          onInputError(error instanceof Error ? error.message : String(error))
-        }
-      })
-  }
+  const send = useCallback(
+    (input: ScreenInput): void => {
+      const view = screenRef.current
+      if (!enabledRef.current || !view.envelope || view.width <= 0 || view.height <= 0) return
+      window.api.screen
+        .input({
+          ...view.envelope,
+          width: view.width,
+          height: view.height,
+          input
+        })
+        .catch((error: unknown) => {
+          if (!errorNotifiedRef.current) {
+            errorNotifiedRef.current = true
+            onInputError(error instanceof Error ? error.message : String(error))
+          }
+        })
+    },
+    [screenRef, onInputError]
+  )
 
-  const releaseAll = (): void => {
+  const releaseAll = useCallback((): void => {
     if (pointersRef.current.size > 0 || pressedKeysRef.current.size > 0) {
       send({ kind: 'release-all' })
     }
     pointersRef.current.clear()
     pressedKeysRef.current.clear()
     modeRef.current = 'none'
-  }
+  }, [send])
 
-  const normalizedAt = (clientX: number, clientY: number): { x: number; y: number } | null => {
-    const container = canvasContainerRef.current
-    const layout = layoutRef.current
-    if (!container || !layout) return null
-    const rect = container.getBoundingClientRect()
-    const localX = clientX - rect.left - layout.offsetX
-    const localY = clientY - rect.top - layout.offsetY
-    // 黑边不接收 down；手势内（capture）出界由调用方夹取
-    if (localX < 0 || localY < 0 || localX > layout.width || localY > layout.height) return null
-    return { x: localX / layout.width, y: localY / layout.height }
-  }
+  const normalizedAt = useCallback(
+    (clientX: number, clientY: number): { x: number; y: number } | null => {
+      const container = canvasContainerRef.current
+      const layout = layoutRef.current
+      if (!container || !layout) return null
+      const rect = container.getBoundingClientRect()
+      const localX = clientX - rect.left - layout.offsetX
+      const localY = clientY - rect.top - layout.offsetY
+      // 黑边不接收 down；手势内（capture）出界由调用方夹取
+      if (localX < 0 || localY < 0 || localX > layout.width || localY > layout.height) return null
+      return { x: localX / layout.width, y: localY / layout.height }
+    },
+    [canvasContainerRef, layoutRef]
+  )
 
-  const normalizedClamped = (clientX: number, clientY: number): { x: number; y: number } => {
-    const container = canvasContainerRef.current
-    const layout = layoutRef.current!
-    const rect = container!.getBoundingClientRect()
-    const localX = Math.min(layout.width, Math.max(0, clientX - rect.left - layout.offsetX))
-    const localY = Math.min(layout.height, Math.max(0, clientY - rect.top - layout.offsetY))
-    return { x: localX / layout.width, y: localY / layout.height }
-  }
+  const normalizedClamped = useCallback(
+    (clientX: number, clientY: number): { x: number; y: number } => {
+      const container = canvasContainerRef.current
+      const layout = layoutRef.current!
+      const rect = container!.getBoundingClientRect()
+      const localX = Math.min(layout.width, Math.max(0, clientX - rect.left - layout.offsetX))
+      const localY = Math.min(layout.height, Math.max(0, clientY - rect.top - layout.offsetY))
+      return { x: localX / layout.width, y: localY / layout.height }
+    },
+    [canvasContainerRef, layoutRef]
+  )
 
-  const acquireSlot = (): number | null => {
+  const acquireSlot = useCallback((): number | null => {
     const used = new Set([...pointersRef.current.values()].map((entry) => entry.slot))
     for (let slot = 0; slot < MAX_POINTERS; slot += 1) {
       if (!used.has(slot)) return slot
     }
     return null
-  }
+  }, [])
 
-  const flushMoves = (): void => {
+  const flushMoves = useCallback((): void => {
     moveRafRef.current = 0
     for (const [pointerId, move] of pendingMovesRef.current) {
       send({
@@ -137,13 +149,13 @@ export function useDeviceInput(params: DeviceInputParams): void {
       }
     }
     pendingMovesRef.current.clear()
-  }
+  }, [send])
 
-  const scheduleMoves = (): void => {
+  const scheduleMoves = useCallback((): void => {
     if (moveRafRef.current === 0) {
       moveRafRef.current = requestAnimationFrame(flushMoves)
     }
-  }
+  }, [flushMoves])
 
   // 指针事件挂在容器上（canvas 与黑边都算容器；down 只认内容矩形）
   useEffect(() => {
@@ -257,7 +269,7 @@ export function useDeviceInput(params: DeviceInputParams): void {
       container.removeEventListener('pointerup', onPointerUp)
       container.removeEventListener('pointercancel', onPointerCancel)
     }
-  }, [canvasContainerRef])
+  }, [canvasContainerRef, normalizedAt, normalizedClamped, acquireSlot, scheduleMoves, send])
 
   // 键盘/文本经代理 input：焦点在画布时获得，宿主快捷键不受劫持
   useEffect(() => {
@@ -315,12 +327,12 @@ export function useDeviceInput(params: DeviceInputParams): void {
       proxy.removeEventListener('compositionstart', onCompositionStart)
       proxy.removeEventListener('compositionend', onCompositionEnd)
     }
-  }, [inputProxyRef])
+  }, [inputProxyRef, send])
 
   // 失焦/隐藏/禁用/卸载：释放所有手指与按键（main 兜底再清一次）
   useEffect(() => {
     if (!enabled) releaseAll()
-  }, [enabled])
+  }, [enabled, releaseAll])
 
   useEffect(() => {
     const onBlur = (): void => releaseAll()
@@ -335,5 +347,5 @@ export function useDeviceInput(params: DeviceInputParams): void {
       releaseAll()
       if (moveRafRef.current !== 0) cancelAnimationFrame(moveRafRef.current)
     }
-  }, [])
+  }, [releaseAll])
 }

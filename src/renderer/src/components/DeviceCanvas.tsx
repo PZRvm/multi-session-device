@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, RotateCcw } from 'lucide-react'
 import styled from 'styled-components'
 import type { Device, ScreenFormat, ScreenInput } from '@shared/types'
@@ -24,12 +24,19 @@ const DeviceCanvas = ({ device }: DeviceCanvasProps): React.JSX.Element => {
     useDeviceScreen(device)
   const proxyRef = useRef<HTMLInputElement | null>(null)
   const stageRef = useRef<HTMLDivElement | null>(null)
-  const [layout, setLayout] = useState<ScreenLayout | null>(null)
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
   const [inputError, setInputError] = useState<string | null>(null)
   const inputErrorTimerRef = useRef(0)
+  // 布局是容器尺寸 × 视频格式的纯派生，不再用 state + effect 级联
+  const layout = useMemo<ScreenLayout | null>(() => {
+    if (!format || containerSize.width <= 0 || containerSize.height <= 0) return null
+    return computeLayout(containerSize.width, containerSize.height, format.width, format.height)
+  }, [format, containerSize])
   const layoutRef = useRef<ScreenLayout | null>(null)
-  layoutRef.current = layout
+  // 事件回调读最新布局：ref 更新放 effect，渲染期不写 ref
+  useEffect(() => {
+    layoutRef.current = layout
+  }, [layout])
 
   // 容器尺寸观测：换行/拖窄/旋转都重算布局
   useEffect(() => {
@@ -43,25 +50,20 @@ const DeviceCanvas = ({ device }: DeviceCanvasProps): React.JSX.Element => {
     return () => observer.disconnect()
   }, [])
 
-  useEffect(() => {
-    if (!format || containerSize.width <= 0 || containerSize.height <= 0) {
-      setLayout(null)
-      return
-    }
-    setLayout(computeLayout(containerSize.width, containerSize.height, format.width, format.height))
-  }, [format, containerSize])
-
   const focusProxy = useCallback((): void => {
     proxyRef.current?.focus()
   }, [])
 
-  const sendInput = useCallback((input: ScreenInput): void => {
-    const view = screenRef.current
-    if (!view.envelope) return
-    void window.api.screen
-      .input({ ...view.envelope, width: view.width, height: view.height, input })
-      .catch(() => undefined)
-  }, [])
+  const sendInput = useCallback(
+    (input: ScreenInput): void => {
+      const view = screenRef.current
+      if (!view.envelope) return
+      void window.api.screen
+        .input({ ...view.envelope, width: view.width, height: view.height, input })
+        .catch(() => undefined)
+    },
+    [screenRef]
+  )
 
   const showInputError = useCallback((message: string): void => {
     setInputError(message)
@@ -104,7 +106,7 @@ const DeviceCanvas = ({ device }: DeviceCanvasProps): React.JSX.Element => {
     return () => {
       delete (window as unknown as Record<string, unknown>)['__msdCanvas']
     }
-  }, [status, format])
+  }, [status, format, paintsRef])
 
   const ready = status === 'ready' && format !== null
 
