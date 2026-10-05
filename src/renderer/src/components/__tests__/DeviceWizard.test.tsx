@@ -421,6 +421,7 @@ const installSdkStub = (parts: {
   profiles?: Mock<() => Promise<DeviceProfile[]>>
   images?: Mock<() => Promise<ImageCatalogResult>>
   downloadImage?: Mock<(packageName: string) => Promise<void>>
+  cancelDownloadImage?: Mock<(packageName: string) => Promise<void>>
 }): { emitProgress: (progress: SdkImageProgress) => void } => {
   const handle: { emitProgress: (progress: SdkImageProgress) => void } = { emitProgress: () => {} }
   ;(window as { api?: unknown }).api = {
@@ -428,6 +429,7 @@ const installSdkStub = (parts: {
       profiles: parts.profiles ?? vi.fn(async () => PROFILES),
       images: parts.images ?? vi.fn(async () => catalogOf(IMAGES)),
       downloadImage: parts.downloadImage ?? vi.fn(async () => {}),
+      cancelDownloadImage: parts.cancelDownloadImage ?? vi.fn(async () => {}),
       wizardCapabilities: vi.fn(async () => CAPABILITIES),
       onImageProgress: (cb: (progress: SdkImageProgress) => void): (() => void) => {
         handle.emitProgress = cb
@@ -653,6 +655,57 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     expect(await screen.findByText('网络中断')).toBeTruthy()
     expect(screen.getByRole('button', { name: '重试下载' })).toBeTruthy()
     expect(screen.queryByText('60%')).toBeNull()
+  })
+
+  it('取消下载：下载中显示取消钮，点击后状态清空、行回下载态、无错误横幅', async () => {
+    const handle: { emitProgress: (progress: SdkImageProgress) => void } = {
+      emitProgress: () => {}
+    }
+    const cancel = vi.fn(async () => {})
+    ;(window as { api?: unknown }).api = {
+      sdk: {
+        profiles: vi.fn(async () => PROFILES),
+        images: vi.fn(async () => catalogOf(IMAGES)),
+        downloadImage: vi.fn(async () => {}),
+        cancelDownloadImage: cancel,
+        onImageProgress: (cb: (progress: SdkImageProgress) => void): (() => void) => {
+          handle.emitProgress = cb
+          return () => {}
+        }
+      }
+    }
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    fireEvent.click(screen.getByRole('button', { name: /下载 API 35/ }))
+    act(() => handle.emitProgress({ packageName: PKG_MISSING, percent: 40, message: '下载中' }))
+    fireEvent.click(screen.getByRole('button', { name: /取消下载 API 35/ }))
+    await waitFor(() => expect(cancel).toHaveBeenCalledWith(PKG_MISSING))
+    await waitFor(() => expect(screen.queryByText('40%')).toBeNull())
+    expect(screen.getByRole('button', { name: /下载 API 35/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '重试下载' })).toBeNull()
+  })
+
+  it('取消广播（重开窗场景）：清下载态且不显示错误横幅', async () => {
+    const handle = installSdkStub({
+      images: vi.fn(async () => catalogOf(IMAGES, { packageName: PKG_MISSING, percent: 55 }))
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    await waitFor(() => expect(screen.getByText('55%')).toBeTruthy())
+    // main 广播取消（发起端可能是已关闭的旧窗）
+    act(() =>
+      handle.emitProgress({
+        packageName: PKG_MISSING,
+        percent: 0,
+        message: '已取消',
+        canceled: true
+      })
+    )
+    await waitFor(() => expect(screen.queryByText('55%')).toBeNull())
+    expect(screen.queryByRole('button', { name: '重试下载' })).toBeNull()
+    expect(screen.getByRole('button', { name: /下载 API 35/ })).toBeTruthy()
   })
 
   it('下载同 tick 原生连点只触发一次下载（ref 守卫）', async () => {

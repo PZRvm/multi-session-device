@@ -75,8 +75,14 @@ let imagesCache: { at: number; root: string; result: ImageCatalogResult } | null
 const IMAGES_CACHE_MS = 60_000
 
 // 镜像下载互斥 + 实时任务快照：同一时刻只允许一个下载（需求只约束「下载
-// 完成前不能创建」）；进度随推送更新，向导重开经 sdk:images 的 activeDownload 恢复
-let downloading: { packageName: string; percent: number } | null = null
+// 完成前不能创建」）；进度随推送更新，向导重开经 sdk:images 的 activeDownload 恢复。
+// abort/done 服务显式取消（plan 2026-10-06-download-cancel）：收尾完成才释放互斥
+let downloading: {
+  packageName: string
+  percent: number
+  abort: AbortController
+  done: Promise<unknown>
+} | null = null
 
 // 皮肤清单缓存（导入/下载后失效）与皮肤下载互斥
 let skinsCache: SkinRecord[] | null = null
@@ -309,13 +315,15 @@ export function registerSdkIpc(): void {
         `已有镜像在下载（${downloading.packageName}，${downloading.percent}%），请等待完成`
       )
     }
-    downloading = { packageName, percent: 0 }
+    const abort = new AbortController()
+    downloading = { packageName, percent: 0, abort, done: Promise.resolve() }
     try {
       // 下载会改变已装状态——失效清单缓存
       imagesCache = null
       // 直连下载（plan 2026-10-06-download-progress-zero）：官方 CLI 无进度流，
-      // sdkmanager 执行体退役为 bootstrap 等场景；此处用 manifest zip 流式下载
-      await downloadImagePackage(
+      // sdkmanager 执行体退役为 bootstrap 等场景；此处用 manifest zip 流式下载。
+      // done 供取消 handler 等收尾（resolve 时 = 临时物已清理、互斥即将释放）
+      const outcome = await (downloading.done = downloadImagePackage(
         root,
         {
           packageName,
@@ -342,8 +350,20 @@ export function registerSdkIpc(): void {
             message: `下载 ${packageName}`
           }
           pushToAllWindows(IPC_CHANNELS.sdkImageProgress, progress)
-        }
-      )
+        },
+        {},
+        abort.signal
+      ))
+      if (outcome === 'canceled') {
+        // 取消不是失败：广播给在听窗口（重开的向导清恢复态），无错误横幅
+        pushToAllWindows(IPC_CHANNELS.sdkImageProgress, {
+          packageName,
+          percent: 0,
+          message: `已取消 ${packageName}`,
+          canceled: true
+        } satisfies SdkImageProgress)
+        return
+      }
     } catch (error) {
       // 发起下载的向导窗可能已关闭（invoke 拒绝对它无意义）——失败广播给
       // 在听的窗口，重开的向导据此显示错误与重试入口（plan 设计 9）
@@ -359,4 +379,26 @@ export function registerSdkIpc(): void {
       downloading = null
     }
   })
+
+  // 显式取消进行中的下载（plan 2026-10-06-download-cancel）：幂等——无任务或
+  // 包名不匹配直接成功（迟到/重复点击不报错）；resolve 时点 = 收尾完成（临时
+  // 物已清理、互斥已释放），renderer 以此为准本地清状态，广播服务重开窗
+  ipcMain.handle(
+    IPC_CHANNELS.sdkCancelDownloadImage,
+    async (event, raw: unknown): Promise<void> => {
+      requireWizardSender(IPC_CHANNELS.sdkCancelDownloadImage, event)
+      if (typeof raw !== 'object' || raw === null) {
+        throw new Error(`${IPC_CHANNELS.sdkCancelDownloadImage}: 非法的入参`)
+      }
+      const packageName = (raw as Record<string, unknown>).packageName
+      if (typeof packageName !== 'string') {
+        throw new Error(`${IPC_CHANNELS.sdkCancelDownloadImage}: 非法的包名`)
+      }
+      const task = downloading
+      if (task === null || task.packageName !== packageName) return
+      task.abort.abort()
+      // 收尾竞态兜底：下载若恰好以失败告终（与取消同时），等待不吞它的错误路径
+      await task.done.catch(() => undefined)
+    }
+  )
 }

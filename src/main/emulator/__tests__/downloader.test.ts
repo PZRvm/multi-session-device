@@ -5,7 +5,8 @@ import {
   downloadImagePackage,
   downloadImageZip,
   installImageZip,
-  verifyPackageInstall
+  verifyPackageInstall,
+  CancelledError
 } from '../downloader'
 
 const IDENTITY_XML =
@@ -310,5 +311,86 @@ describe('downloadImagePackage（组合链路）', () => {
 describe('verifyPackageInstall', () => {
   it('非法包名 false', async () => {
     expect(await verifyPackageInstall('/sdk', 'platform-tools', {})).toBe(false)
+  })
+})
+
+describe('downloadImagePackage 取消（plan 2026-10-06-download-cancel）', () => {
+  it('下载中取消：返回 canceled 不抛错、临时 zip 已清理、无 100', async () => {
+    const { deps, state } = makeEnv({ chunks: new Array(50).fill(10) })
+    const controller = new AbortController()
+    const percents: number[] = []
+    const outcome = await downloadImagePackage(
+      '/sdk',
+      TARGET,
+      (p) => {
+        percents.push(p)
+        if (percents.length === 1) controller.abort() // 首个进度后取消——下一 chunk 检查点触发
+      },
+      deps,
+      controller.signal
+    )
+    expect(outcome).toBe('canceled')
+    expect(percents.includes(100)).toBe(false)
+    expect(state.removed.some((path) => path.includes('.downloading.zip'))).toBe(true)
+  })
+
+  it('下载前取消：openUrl 不发起，返回 canceled', async () => {
+    const { deps } = makeEnv()
+    const controller = new AbortController()
+    controller.abort()
+    const outcome = await downloadImagePackage('/sdk', TARGET, () => {}, deps, controller.signal)
+    expect(outcome).toBe('canceled')
+  })
+
+  it('校验阶段取消（sha1 前检查点）：不进入落位，zip 清理', async () => {
+    const { deps, state } = makeEnv()
+    const controller = new AbortController()
+    const deps2 = {
+      ...deps,
+      sha1Of: async (path: string): Promise<string> => {
+        controller.abort() // sha1 检查点在哈希计算前
+        void path
+        return TARGET.zipSha1 ?? 'a'.repeat(40)
+      }
+    }
+    const outcome = await downloadImagePackage('/sdk', TARGET, () => {}, deps2, controller.signal)
+    expect(outcome).toBe('canceled')
+    expect(state.removed.some((path) => path.includes('.downloading.zip'))).toBe(true)
+  })
+
+  it('解压中取消（signal kill 解压进程）：清理解压目录，返回 canceled', async () => {
+    const { deps, state } = makeEnv()
+    const controller = new AbortController()
+    const deps2 = {
+      ...deps,
+      extractZip: async (_zip: string, dir: string, signal?: AbortSignal): Promise<void> => {
+        state.dirs.add(dir)
+        controller.abort()
+        // 模拟 execFile 被 signal kill 的行为（default 实现同口径）
+        if (signal?.aborted) throw new CancelledError()
+        throw new Error('unzip killed')
+      }
+    }
+    const outcome = await downloadImagePackage('/sdk', TARGET, () => {}, deps2, controller.signal)
+    expect(outcome).toBe('canceled')
+    // 解压临时目录与 zip 均清理（installImageZip finally）
+    expect(state.removed.some((path) => path.includes('.unzipping'))).toBe(true)
+    expect(state.removed.some((path) => path.includes('.downloading.zip'))).toBe(true)
+  })
+
+  it('解压完成后、落位前取消：不进入备份-落位事务，返回 canceled', async () => {
+    const { deps, state } = makeEnv()
+    const controller = new AbortController()
+    const deps2 = {
+      ...deps,
+      extractZip: async (zip: string, dir: string): Promise<void> => {
+        state.dirs.add(dir)
+        void zip
+        controller.abort() // 解压自然完成后取消——locateContentRoot 前检查点触发
+      }
+    }
+    const outcome = await downloadImagePackage('/sdk', TARGET, () => {}, deps2, controller.signal)
+    expect(outcome).toBe('canceled')
+    expect(state.moved).toHaveLength(0) // 未进入落位
   })
 })

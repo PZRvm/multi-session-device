@@ -330,6 +330,8 @@ export interface SdkImageProgress {
   message: string
   /** 任务失败广播（发起窗口可能已关，广播给在听的窗口）；进度消息里为空 */
   error?: string
+  /** 用户显式取消广播——取消不是失败，与 error 互斥 */
+  canceled?: true
 }
 
 /**

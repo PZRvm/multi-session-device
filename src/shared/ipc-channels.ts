@@ -37,6 +37,8 @@ export const IPC_CHANNELS = {
   sdkProfiles: 'sdk:profiles',
   sdkImages: 'sdk:images',
   sdkDownloadImage: 'sdk:download-image',
+  /** 取消进行中的镜像下载（仅向导窗；幂等——无任务/包名不匹配直接成功） */
+  sdkCancelDownloadImage: 'sdk:cancel-download-image',
   /** 镜像下载进度推送（main → renderer） */
   sdkImageProgress: 'sdk:image-progress',
   /** 向导设置能力：defaults/枚举/边界/禁用原因（按画像×镜像×emulator 版本） */

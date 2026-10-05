@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { mkdir, readdir, rename, rm, stat, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { XMLParser } from 'fast-xml-parser'
 import { splitPackageName } from './catalog'
 
@@ -18,16 +18,25 @@ import { splitPackageName } from './catalog'
 const PROGRESS_MIN_DELTA_PERCENT = 1
 const PROGRESS_MIN_INTERVAL_MS = 500
 
+/** 用户显式取消——与错误分流（取消不是失败，plan 2026-10-06-download-cancel 设计 2） */
+export class CancelledError extends Error {
+  constructor() {
+    super('已取消')
+    this.name = 'CancelledError'
+  }
+}
+
 export interface DownloaderDeps {
-  /** 拉起下载流；默认 fetch。totalBytes 优先 Content-Length，缺省回退 manifest size */
+  /** 拉起下载流；默认 fetch（挂 signal，中断即时）。totalBytes 优先 Content-Length，缺省回退 manifest size */
   openUrl?: (
-    url: string
+    url: string,
+    signal?: AbortSignal
   ) => Promise<{ stream: AsyncIterable<Uint8Array>; totalBytes: number | null }>
   now?: () => number
   /** sha1（默认流式读文件；接缝供单测注入固定值） */
   sha1Of?: (path: string) => Promise<string>
-  /** 解压 zip 到目录（默认 adm-zip） */
-  extractZip?: (zipPath: string, targetDir: string) => Promise<void>
+  /** 解压 zip 到目录（默认系统 unzip，异步 + signal 可中断——execFileSync 阻塞 main 已退役） */
+  extractZip?: (zipPath: string, targetDir: string, signal?: AbortSignal) => Promise<void>
   pathExists?: (path: string) => Promise<boolean>
   makeDir?: (dir: string) => Promise<void>
   moveDir?: (from: string, to: string) => Promise<void>
@@ -54,8 +63,8 @@ export interface ChunkSink {
 }
 
 const defaultDeps: Required<DownloaderDeps> = {
-  openUrl: async (url) => {
-    const response = await fetch(url)
+  openUrl: async (url, signal) => {
+    const response = await fetch(url, { signal })
     if (!response.ok || response.body === null) {
       throw new Error(`下载源响应 HTTP ${response.status}`)
     }
@@ -76,12 +85,19 @@ const defaultDeps: Required<DownloaderDeps> = {
         .on('error', reject)
         .on('end', () => resolve(hash.digest('hex')))
     }),
-  extractZip: async (zipPath, targetDir) => {
-    // 镜像 zip 的 system.img 解压后常 ≥2GB——adm-zip 会整条目分配 Buffer 撞
-    // 2^31 上限（真机实测 android-21 即 2147483648 字节）；系统 unzip 原生
-    // 支持 zip64 与大条目（macOS/Linux 自带；与皮肤下载的系统 tar 同策略）
-    execFileSync('unzip', ['-q', zipPath, '-d', targetDir], { stdio: ['ignore', 'ignore', 'pipe'] })
-  },
+  extractZip: (zipPath, targetDir, signal) =>
+    new Promise<void>((resolve, reject) => {
+      // 镜像 zip 的 system.img 解压后常 ≥2GB——adm-zip 会整条目分配 Buffer 撞
+      // 2^31 上限（真机实测 android-21 即 2147483648 字节）；系统 unzip 原生
+      // 支持 zip64 与大条目（macOS/Linux 自带；与皮肤下载的系统 tar 同策略）。
+      // 异步 execFile + signal：取消时 kill 子进程立即返回（execFileSync 阻塞
+      // main 且不可中断——取消 plan 顺带退役）
+      execFile('unzip', ['-q', zipPath, '-d', targetDir], { signal }, (error) => {
+        if (signal?.aborted) reject(new CancelledError())
+        else if (error === null) resolve()
+        else reject(new Error(`解压失败（unzip exit/error）：${error.message}`))
+      })
+    }),
   pathExists: async (path) => {
     try {
       await stat(path)
@@ -171,15 +187,20 @@ export const downloadImageZip = async (
   sdkRoot: string,
   target: DownloadTarget,
   onPercent: (percent: number) => void,
-  deps: DownloaderDeps = {}
+  deps: DownloaderDeps = {},
+  signal?: AbortSignal
 ): Promise<string> => {
   if (target.zipUrl === null) {
     throw new Error('该包在 manifest 中没有可下载的 zip 地址，不支持应用内下载')
   }
   const d = { ...defaultDeps, ...deps }
+  const throwIfCancelled = (): void => {
+    if (signal?.aborted) throw new CancelledError()
+  }
+  throwIfCancelled()
   const zipPath = tempZipPath(sdkRoot, target.packageName)
   await d.makeDir(join(sdkRoot, 'system-images'))
-  const { stream, totalBytes } = await d.openUrl(target.zipUrl)
+  const { stream, totalBytes } = await d.openUrl(target.zipUrl, signal)
   const expectedTotal = totalBytes ?? target.sizeBytes
 
   let received = 0
@@ -188,6 +209,7 @@ export const downloadImageZip = async (
   const sink = d.createSink(zipPath)
   try {
     for await (const chunk of stream) {
+      throwIfCancelled()
       // 写流背压：缓冲满时等 drain（与写错误竞争——出错 reject 而非挂死，
       // 2GB 级包也不会全攒内存）；写已出错时 write 直接抛（review P1 修复）
       if (!sink.write(chunk)) await sink.waitDrain()
@@ -212,6 +234,7 @@ export const downloadImageZip = async (
     throw error
   }
 
+  throwIfCancelled()
   if (target.zipSha1 !== null) {
     const actual = await d.sha1Of(zipPath)
     if (actual !== target.zipSha1) {
@@ -341,9 +364,13 @@ export const installImageZip = async (
   sdkRoot: string,
   target: DownloadTarget,
   zipPath: string,
-  deps: DownloaderDeps = {}
+  deps: DownloaderDeps = {},
+  signal?: AbortSignal
 ): Promise<void> => {
   const d = { ...defaultDeps, ...deps }
+  const throwIfCancelled = (): void => {
+    if (signal?.aborted) throw new CancelledError()
+  }
   const parts = splitPackageName(target.packageName)
   if (parts === null) throw new Error(`非法包名：${target.packageName}`)
   const unzipDir = tempUnzipPath(sdkRoot, target.packageName)
@@ -353,7 +380,11 @@ export const installImageZip = async (
   await d.removePath(unzipDir).catch(() => undefined)
   await d.makeDir(unzipDir)
   try {
-    await d.extractZip(zipPath, unzipDir)
+    throwIfCancelled()
+    await d.extractZip(zipPath, unzipDir, signal)
+    // 解压（可能被 signal kill 中断）后、动目标目录前的最后检查点——
+    // 取消只清临时物，不进入「备份-落位-核验」事务段
+    throwIfCancelled()
     const sourceDir = await locateContentRoot(unzipDir, d)
     if (sourceDir === null) {
       throw new Error('压缩包布局与预期不符（未找到 system.img 所在目录），拒绝落位')
@@ -392,14 +423,30 @@ export const installImageZip = async (
 /**
  * 组合入口（sdk:download-image 执行体）：下载 → sha1 校验 → 落位 → 核验。
  * 100% 只在全链路成功后推送——renderer 收到即重拉清单，此时三件套已就绪。
+ * 取消（signal 中断）不是失败：清理完成后返回 'canceled'，不抛错——调用方
+ * 据此走取消广播而非错误路径（plan download-cancel 设计 2）。
  */
 export const downloadImagePackage = async (
   sdkRoot: string,
   target: DownloadTarget,
   onPercent: (percent: number) => void,
-  deps: DownloaderDeps = {}
-): Promise<void> => {
-  const zipPath = await downloadImageZip(sdkRoot, target, onPercent, deps)
-  await installImageZip(sdkRoot, target, zipPath, deps)
+  deps: DownloaderDeps = {},
+  signal?: AbortSignal
+): Promise<'installed' | 'canceled'> => {
+  let zipPath: string
+  try {
+    zipPath = await downloadImageZip(sdkRoot, target, onPercent, deps, signal)
+    await installImageZip(sdkRoot, target, zipPath, deps, signal)
+  } catch (error) {
+    // 取消的两种错误形态：自检点抛 CancelledError；fetch/execFile 的 signal
+    // 中断抛原生 AbortError（真机实证 fetch 层直达此处）——signal 已中止
+    // 时的 AbortError 一律按取消分流，不进失败路径
+    if (error instanceof CancelledError) return 'canceled'
+    if (signal?.aborted === true && error instanceof Error && error.name === 'AbortError') {
+      return 'canceled'
+    }
+    throw error
+  }
   onPercent(100)
+  return 'installed'
 }

@@ -27,6 +27,8 @@ export interface ImageTableProps {
   onSelect: (image: ImageEntry) => void
   downloading: { packageName: string; percent: number } | null
   onDownload: (image: ImageEntry) => void
+  /** 取消进行中的下载（与 onDownload 同一行内，仅下载中可见） */
+  onCancelDownload: (packageName: string) => void
   downloadBusy: boolean
 }
 
@@ -39,6 +41,7 @@ const ImageTable = ({
   onSelect,
   downloading,
   onDownload,
+  onCancelDownload,
   downloadBusy
 }: ImageTableProps): React.JSX.Element => {
   const window = recommendedWindow(images)
@@ -189,6 +192,18 @@ const ImageTable = ({
                     {isDownloading ? `${downloading.percent}%` : <Download size={13} />}
                   </DownloadButton>
                 )}
+                {isDownloading ? (
+                  <CancelDownloadButton
+                    type="button"
+                    aria-label={`取消下载 API ${apiDisplay(image)} ${serviceLabel(image)}`}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onCancelDownload(image.packageName)
+                    }}
+                  >
+                    取消
+                  </CancelDownloadButton>
+                ) : null}
               </StatusCell>
             </Row>
           )
@@ -400,3 +415,24 @@ const Legend = styled.p`
 `
 
 export default ImageTable
+
+const CancelDownloadButton = styled.button`
+  margin-left: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--board-hairline);
+  border-radius: 4px;
+  background: var(--board-bg-raised);
+  color: var(--board-ink-dim);
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--board-hover-veil);
+    color: var(--board-ink);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+`
