@@ -326,7 +326,7 @@ const installSdkStub = (parts: {
   images?: Mock<() => Promise<ImageCatalogResult>>
   downloadImage?: Mock<(packageName: string) => Promise<void>>
 }): { emitProgress: (progress: SdkImageProgress) => void } => {
-  const handle = { emitProgress: () => {} }
+  const handle: { emitProgress: (progress: SdkImageProgress) => void } = { emitProgress: () => {} }
   ;(window as { api?: unknown }).api = {
     sdk: {
       profiles: parts.profiles ?? vi.fn(async () => PROFILES),
