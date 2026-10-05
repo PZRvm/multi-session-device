@@ -63,8 +63,17 @@ vi.mock('../../emulator/avd', () => ({
 }))
 vi.mock('../../emulator/catalog', () => ({
   isPackageNameInstalled: mocks.isPackageNameInstalled,
-  packageNameFor: (apiLevel: number, variant: string): string =>
-    `system-images;android-${apiLevel};${variant === 'aosp' ? 'default' : variant === 'google_play' ? 'google_apis_playstore' : 'google_apis'};arm64-v8a`
+  splitPackageName: (
+    packageName: string
+  ): {
+    platformSegment: string
+    tagSegment: string
+    abi: string
+  } | null => {
+    const parts = packageName.split(';')
+    if (parts.length !== 4 || parts[0] !== 'system-images') return null
+    return { platformSegment: parts[1], tagSegment: parts[2], abi: parts[3] }
+  }
 }))
 vi.mock('../../emulator/adb', () => ({
   candidateAdbPaths: () => [{ path: '/adb', source: 'app-sdk' }],
@@ -122,8 +131,7 @@ const wizardEvent = (): unknown => ({ sender: { id: 9 } })
 const validCreateInput = {
   profileId: 'pixel_8',
   profileLabel: 'Pixel 8',
-  apiLevel: 36,
-  variant: 'google_play',
+  imagePackageName: 'system-images;android-36;google_apis_playstore;arm64-v8a',
   name: '测试机'
 }
 

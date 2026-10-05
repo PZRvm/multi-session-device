@@ -77,12 +77,12 @@ export interface RuntimeErrorMessage {
   message: string
 }
 
-/** 新建向导第三步的产物——主进程补 id/createdAt/status */
+/** 新建向导配置页的产物——主进程补 id/createdAt/status；镜像身份以精确包名为准 */
 export interface CreateDeviceInput {
   profileId: string
   profileLabel: string
-  apiLevel: number
-  variant: ImageVariant
+  /** 完整包名（system-images;<平台>;<tag>;<abi>），创建前由 main 从可信目录核验 */
+  imagePackageName: string
   name: string
 }
 
@@ -202,16 +202,61 @@ export interface SdkImageProgress {
   message: string
 }
 
-/** 系统镜像清单条目（步骤 3 向导数据；manifest 解析 + SDK 根已装探测） */
+/**
+ * 结构化 API 版本——逐段比较，绝不转浮点（"36.1"、"35x" 都是真实平台段；
+ * 35x 表示 android-35-ext15 的扩展平台）。平台目录段、API 显示值与 SDK extension
+ * 分别存储（plan 2026-10-05-emulator-wizard 设计 2）。
+ */
+export interface ImageApiVersion {
+  /** 包名平台段原文：android-36.1 / android-35-ext15 / android-canary-20260909 */
+  platformSegment: string
+  major: number | null
+  minor: number | null
+  /** Preview / canary 代号（CANARY、Baklava）；正式版 null */
+  codename: string | null
+  /** SDK extension level（manifest extension-level / 本地 ExtensionLevel） */
+  extensionLevel: number | null
+  /** base-extension 标记（minor SDK release） */
+  baseExtension: boolean | null
+}
+
+/** 镜像服务类别（type-details tags 推导；多标签并存如 automotive + google_apis） */
+export type ImageService = 'aosp' | 'google_apis' | 'google_play' | 'wear' | 'tv' | 'automotive'
+
+export interface ImageRevision {
+  major: number
+  minor: number | null
+  micro: number | null
+}
+
+/**
+ * 系统镜像条目：packageName 是唯一选择/下载/创建键。同 API/服务的 16KB、
+ * 扩展或不同 revision 不合并；远端与本地按包身份合并并保留版本差异。
+ */
 export interface ImageEntry {
-  /** manifest 包路径，如 system-images;android-36;google_apis;arm64-v8a */
   packageName: string
-  apiLevel: number
-  variant: ImageVariant
-  abi: 'arm64-v8a'
+  displayName: string
+  api: ImageApiVersion
+  services: ImageService[]
+  /** 特征标签原文（page_size_16kb / ai_glasses_compatible 等），不参与服务判定 */
+  featureTags: string[]
+  abi: string
+  channel: number | null
+  revision: ImageRevision | null
+  /** 下载体积（字节，manifest archives.complete.size；本地-only 为 null） */
+  sizeBytes: number | null
+  /** 完整安装：package.xml + source.properties + system.img 核验通过 */
   installed: boolean
-  /** 下载体积（字节，manifest archives.complete.size） */
-  sizeBytes: number
+  /** remote+local = 远端清单与本地合并；local-only = 仅本地存在（离线/已下架） */
+  source: 'remote+local' | 'local-only'
+}
+
+/** sdk:images 的返回：部分源失败保留其余来源并给警告；远端全挂时声明离线 */
+export interface ImageCatalogResult {
+  images: ImageEntry[]
+  sourceWarnings: string[]
+  offline: boolean
+  fetchedAt: number
 }
 
 /** 画像形态（官方分类规则：特殊 tag 优先，无 tag 按屏幕尺寸判定；unknown = 数据不足不硬猜） */

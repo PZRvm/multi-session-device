@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Download, Loader2, X } from 'lucide-react'
 import styled from 'styled-components'
-import type { CreateDeviceInput, DeviceProfile, ImageEntry, ImageVariant } from '@shared/types'
+import type { CreateDeviceInput, DeviceProfile, ImageEntry } from '@shared/types'
 import Button from './Button'
 import Input from './Input'
-
-const VARIANT_LABELS: Record<ImageVariant, string> = {
-  aosp: 'AOSP',
-  google_apis: 'Google APIs',
-  google_play: 'Google Play'
-}
 
 const STEP_TITLES: Record<1 | 2 | 3, string> = {
   1: '选择设备画像',
@@ -17,7 +11,8 @@ const STEP_TITLES: Record<1 | 2 | 3, string> = {
   3: '命名设备'
 }
 
-const formatSize = (bytes: number): string => `${(bytes / 1024 ** 3).toFixed(1)} GB`
+const formatSize = (bytes: number | null): string =>
+  bytes === null ? '大小未知' : `${(bytes / 1024 ** 3).toFixed(1)} GB`
 
 const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
@@ -93,7 +88,35 @@ const fetchImages = async (): Promise<ImageEntry[]> => {
   if (typeof window === 'undefined' || !window.api?.sdk) {
     throw new Error('sdk api 不可用')
   }
-  return window.api.sdk.images()
+  const catalog = await window.api.sdk.images()
+  // 桥接期过滤：旧三步 UI 只消费旧三变体闭集（新两页向导解锁全部形态）
+  return catalog.images.filter(
+    (entry) =>
+      entry.abi === 'arm64-v8a' &&
+      entry.api.codename === null &&
+      entry.services.every((service) => ['aosp', 'google_apis', 'google_play'].includes(service)) &&
+      entry.services.length > 0
+  )
+}
+
+/** API 显示值：结构化版本回显（36 / 36.1），解析不了用平台段原文 */
+const apiDisplay = (entry: ImageEntry): string => {
+  const { major, minor, platformSegment } = entry.api
+  if (major === null) return platformSegment
+  return minor !== null ? `${major}.${minor}` : `${major}`
+}
+
+/** 服务 → 展示名（多服务取第一个主服务） */
+const serviceLabel = (entry: ImageEntry): string => {
+  const map: Record<string, string> = {
+    google_play: 'Google Play',
+    google_apis: 'Google APIs',
+    aosp: 'AOSP',
+    wear: 'Wear OS',
+    tv: 'Android TV',
+    automotive: 'Automotive'
+  }
+  return map[entry.services[0]] ?? entry.services[0] ?? '—'
 }
 
 type DeviceWizardProps = {
@@ -212,7 +235,9 @@ const DeviceWizard = ({
   }, [variant, onCancel])
 
   const defaultName =
-    selectedProfile && selectedImage ? `${selectedProfile.name} API ${selectedImage.apiLevel}` : ''
+    selectedProfile && selectedImage
+      ? `${selectedProfile.name} API ${apiDisplay(selectedImage)}`
+      : ''
   const effectiveName = nameTouched ? name : defaultName
   // 镜像清单刷新未确认前不放行创建——等新清单核验选择后再允许
   const canCreate =
@@ -234,8 +259,7 @@ const DeviceWizard = ({
       await onCreate({
         profileId: selectedProfile.id,
         profileLabel: selectedProfile.name,
-        apiLevel: selectedImage.apiLevel,
-        variant: selectedImage.variant,
+        imagePackageName: selectedImage.packageName,
         name: effectiveName.trim()
       })
     } finally {
@@ -323,7 +347,7 @@ const DeviceWizard = ({
             '清单为空',
             <OptionGroup role="group" aria-label={STEP_TITLES[2]}>
               {images.data.map((entry) => {
-                const key = `${entry.apiLevel}-${entry.variant}`
+                const key = entry.packageName
                 const isDownloading = downloading?.packageName === entry.packageName
                 const busy = downloading !== null
                 return (
@@ -338,7 +362,7 @@ const DeviceWizard = ({
                   >
                     <ImageInfo>
                       <OptionTitle>
-                        API {entry.apiLevel} · {VARIANT_LABELS[entry.variant]}
+                        API {apiDisplay(entry)} · {serviceLabel(entry)}
                       </OptionTitle>
                       <OptionSub>
                         arm64-v8a ·{' '}
@@ -349,7 +373,7 @@ const DeviceWizard = ({
                       <DownloadButton
                         role="button"
                         aria-disabled={busy}
-                        aria-label={`下载 API ${entry.apiLevel} ${VARIANT_LABELS[entry.variant]}`}
+                        aria-label={`下载 API ${apiDisplay(entry)} ${serviceLabel(entry)}`}
                         onClick={(event) => {
                           event.stopPropagation()
                           void download(entry)

@@ -71,8 +71,7 @@ describe('deviceStore（快照 + revision 守卫）', () => {
     const result = await useDeviceStore.getState().create({
       profileId: 'pixel_8',
       profileLabel: 'Pixel 8',
-      apiLevel: 34,
-      variant: 'google_apis',
+      imagePackageName: 'system-images;android-34;google_apis;arm64-v8a',
       name: '新设备'
     })
     expect(result.ok).toBe(true)

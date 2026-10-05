@@ -7,7 +7,7 @@ import { bootstrapSdk, detectSdk, runSdkManagerPackages } from './sdk'
 import { avdmanagerPathFor, listDeviceProfiles } from './profiles'
 import { jarFingerprint, sdklibJarPathFor } from './profileMetadata'
 import { listImagesWithState } from './catalog'
-import type { DeviceProfile, ImageEntry } from '@shared/types'
+import type { DeviceProfile, ImageCatalogResult } from '@shared/types'
 
 /** 应用自有 SDK 根（PRD E：userData/AndroidSDK；设置自定义路径属 stage 05） */
 export const defaultSdkRoot = (): string => join(app.getPath('userData'), 'AndroidSDK')
@@ -54,7 +54,7 @@ let profilesCache: { at: number; key: string; profiles: DeviceProfile[] } | null
 const PROFILES_CACHE_MS = 300_000
 
 // 镜像清单缓存（60s）：向导内反复进出不打 manifest
-let imagesCache: { at: number; root: string; images: ImageEntry[] } | null = null
+let imagesCache: { at: number; root: string; result: ImageCatalogResult } | null = null
 const IMAGES_CACHE_MS = 60_000
 
 // 镜像下载互斥：同一时刻只允许一个下载（需求只约束「下载完成前不能创建」）
@@ -96,16 +96,19 @@ export function registerSdkIpc(): void {
     return profiles
   })
 
-  ipcMain.handle(IPC_CHANNELS.sdkImages, async (_event, raw: unknown): Promise<ImageEntry[]> => {
-    const root = resolveRoot(raw)
-    const now = Date.now()
-    if (imagesCache && imagesCache.root === root && now - imagesCache.at < IMAGES_CACHE_MS) {
-      return imagesCache.images
+  ipcMain.handle(
+    IPC_CHANNELS.sdkImages,
+    async (_event, raw: unknown): Promise<ImageCatalogResult> => {
+      const root = resolveRoot(raw)
+      const now = Date.now()
+      if (imagesCache && imagesCache.root === root && now - imagesCache.at < IMAGES_CACHE_MS) {
+        return imagesCache.result
+      }
+      const result = await listImagesWithState(root)
+      imagesCache = { at: now, root, result }
+      return result
     }
-    const images = await listImagesWithState(root)
-    imagesCache = { at: now, root, images }
-    return images
-  })
+  )
 
   ipcMain.handle(IPC_CHANNELS.sdkDownloadImage, async (_event, raw: unknown): Promise<void> => {
     if (
@@ -116,16 +119,21 @@ export function registerSdkIpc(): void {
       throw new Error(`${IPC_CHANNELS.sdkDownloadImage}: 非法的入参`)
     }
     const packageName = (raw as Record<string, unknown>).packageName as string
-    if (
-      !/^system-images;android-\d+;(default|google_apis|google_apis_playstore);arm64-v8a$/.test(
-        packageName
-      )
-    ) {
-      throw new Error(`${IPC_CHANNELS.sdkDownloadImage}: 未知镜像包 ${packageName}`)
-    }
-    if (downloading) throw new Error(`已有镜像在下载（${downloading}），请等待完成`)
+    // 守卫从固定正则升级为可信目录核验：包必须出现在当前 manifest/本地扫描结果里
     const root = resolveRoot(undefined)
     await requireSdkReady(root)
+    const catalog =
+      imagesCache && imagesCache.root === root
+        ? imagesCache.result
+        : await listImagesWithState(root)
+    const entry = catalog.images.find((image) => image.packageName === packageName)
+    if (entry === undefined) {
+      throw new Error(`${IPC_CHANNELS.sdkDownloadImage}: 包 ${packageName} 不在可信镜像目录中`)
+    }
+    if (entry.abi !== 'arm64-v8a') {
+      throw new Error(`${IPC_CHANNELS.sdkDownloadImage}: 跨架构镜像（${entry.abi}）本期不支持下载`)
+    }
+    if (downloading) throw new Error(`已有镜像在下载（${downloading}），请等待完成`)
     downloading = packageName
     try {
       // 下载会改变已装状态——失效清单缓存

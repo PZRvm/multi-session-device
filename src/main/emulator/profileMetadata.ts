@@ -70,7 +70,8 @@ export interface RawProfileMeta {
 const parser = new XMLParser({
   ignoreDeclaration: true,
   removeNSPrefix: true,
-  // 注释（如被注释掉的传感器）不生成节点
+  // v5 起默认忽略属性——ram 的 unit 等属性必须显式开启
+  ignoreAttributes: false,
   parseTagValue: false,
   trimValues: true
 })

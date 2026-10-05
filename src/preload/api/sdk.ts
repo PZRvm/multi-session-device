@@ -2,7 +2,7 @@ import { ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type {
   DeviceProfile,
-  ImageEntry,
+  ImageCatalogResult,
   SdkImageProgress,
   SdkProgress,
   SdkSnapshot
@@ -24,8 +24,8 @@ export const sdkApi = {
   },
   /** 内置设备画像目录 */
   profiles: (): Promise<DeviceProfile[]> => ipcRenderer.invoke(IPC_CHANNELS.sdkProfiles),
-  /** 镜像清单（manifest + 已装标记，60s 缓存） */
-  images: (root?: string): Promise<ImageEntry[]> =>
+  /** 镜像清单（六源 manifest + 本地核验合并；60s 缓存；部分源失败带警告） */
+  images: (root?: string): Promise<ImageCatalogResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.sdkImages, root),
   /** 未装镜像下载（单下载互斥；进度经 onImageProgress 推送） */
   downloadImage: (packageName: string): Promise<void> =>

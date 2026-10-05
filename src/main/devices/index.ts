@@ -8,11 +8,12 @@ import type {
   Device,
   DeviceMeta,
   DeviceSnapshot,
+  ImageVariant,
   RuntimeErrorMessage
 } from '@shared/types'
-import { isImageVariant, readDeviceMetas, writeDeviceMetas } from '../store'
+import { readDeviceMetas, writeDeviceMetas } from '../store'
 import { avdExists, createAvd, deleteAvd } from '../emulator/avd'
-import { isPackageNameInstalled, packageNameFor } from '../emulator/catalog'
+import { isPackageNameInstalled, splitPackageName } from '../emulator/catalog'
 import {
   ensureSharedServer,
   candidateAdbPaths,
@@ -43,6 +44,29 @@ const normalizeName = (value: unknown): string | null => {
   return name
 }
 
+/**
+ * 旧三变体闭集内的包名才派生 legacy 字段（store v1 过渡写入；v2 落地后由
+ * 精确身份替代）。wear/tv/automotive 等新形态包在 v2 之前不可创建。
+ */
+const legacyFieldsFromPackageName = (
+  packageName: string
+): { apiLevel: number; variant: ImageVariant } | null => {
+  const parts = splitPackageName(packageName)
+  if (parts === null) return null
+  const major = parts.platformSegment.match(/^android-(\d+)(?:\.|$)/)?.[1]
+  if (major === undefined) return null
+  const { tagSegment } = parts
+  const variant: ImageVariant | null = tagSegment.startsWith('google_apis_playstore')
+    ? 'google_play'
+    : tagSegment.startsWith('google_apis')
+      ? 'google_apis'
+      : tagSegment === 'default'
+        ? 'aosp'
+        : null
+  if (variant === null) return null
+  return { apiLevel: Number(major), variant }
+}
+
 /** renderer payload 不可信，进业务前先过守卫（coding-style IPC 纪律） */
 const isCreateDeviceInput = (value: unknown): value is CreateDeviceInput => {
   if (typeof value !== 'object' || value === null) return false
@@ -52,11 +76,8 @@ const isCreateDeviceInput = (value: unknown): value is CreateDeviceInput => {
     input.profileId.length > 0 &&
     typeof input.profileLabel === 'string' &&
     input.profileLabel.length > 0 &&
-    typeof input.apiLevel === 'number' &&
-    Number.isInteger(input.apiLevel) &&
-    input.apiLevel >= 1 &&
-    input.apiLevel <= 100 &&
-    isImageVariant(input.variant) &&
+    typeof input.imagePackageName === 'string' &&
+    splitPackageName(input.imagePackageName) !== null &&
     normalizeName(input.name) !== null
   )
 }
@@ -406,17 +427,22 @@ const deleteDevice = (id: string): Promise<DeviceSnapshot> => {
 
 const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult> => {
   await ensureLoaded()
-  const packageName = packageNameFor(raw.apiLevel, raw.variant)
+  const packageName = raw.imagePackageName
   if (!(await isPackageNameInstalled(sdkRoot(), packageName))) {
-    throw new Error('系统镜像未安装，请先在向导中下载')
+    throw new Error('系统镜像未安装或安装不完整，请先在向导中下载')
+  }
+  // store v1 过渡：仅在旧三变体闭集内派生；v2 落地后由精确身份替代
+  const legacy = legacyFieldsFromPackageName(packageName)
+  if (legacy === null) {
+    throw new Error('该镜像类型的元数据存储（v2）尚未启用，暂时不可创建')
   }
   const device: Device = {
     id: randomUUID(),
     name: raw.name.trim(),
     profileId: raw.profileId,
     profileLabel: raw.profileLabel,
-    apiLevel: raw.apiLevel,
-    variant: raw.variant,
+    apiLevel: legacy.apiLevel,
+    variant: legacy.variant,
     createdAt: Date.now(),
     status: 'creating'
   }
