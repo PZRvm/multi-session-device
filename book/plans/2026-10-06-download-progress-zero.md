@@ -6,7 +6,7 @@ created: 2026-10-06
 
 # 镜像下载进度修复（manifest 直连） — plan
 
-> 实现记录（2026-10-06，fix/download-progress-zero）：按 Build order 全部完成。`catalog.ts` 透出 `zipUrl/zipSha1`（`archives.complete` 的 url/checksum，绝对地址在 fetchImageCatalog 按源拼接）；新增 `downloader.ts`（流式下载真实百分比、字节封顶 99%、100% 留给全链路成功；sha1 必校验；系统 unzip 解压；**package.xml 由 manifest 元数据生成**——zip 不带；落位 rename + .bak 回滚）。真机验收（android-21，202MB）：50MB Range 流进度采样 50 个样本 1%→99% 连续；完整链路解压含 2147483648 字节 userdata.img、生成 package.xml、三件套+身份核验通过、自装包被 `scanLocalImages` 识别为 verified；sha1 不符拒绝+清理路径真机实证。真机验收另抓到两个实现级坑（adm-zip 单条目 Buffer 撞 2^31 上限→系统 unzip；zip 首层是 `<abi>/` 非 `<platform>/<tag>/<abi>/`→布局探测泛化），记入 learn。单测 10 新增、全套 285 过；typecheck/lint 0 错。互斥/失败广播/重开恢复（activeDownload）回归保持。
+> 实现记录（2026-10-06，fix/download-progress-zero）：按 Build order 全部完成。`catalog.ts` 透出 `zipUrl/zipSha1`（`archives.complete` 的 url/checksum，绝对地址在 fetchImageCatalog 按源拼接）；新增 `downloader.ts`（流式下载真实百分比、字节封顶 99%、100% 留给全链路成功；sha1 必校验；系统 unzip 解压；**package.xml 由 manifest 元数据生成**——zip 不带；落位 rename + .bak 回滚）。真机验收（android-21，202MB）：50MB Range 流进度采样 50 个样本 1%→99% 连续；完整链路解压含 2147483648 字节 userdata.img、生成 package.xml、三件套+身份核验通过、自装包被 `scanLocalImages` 识别为 verified；sha1 不符拒绝+清理路径真机实证。真机验收另抓到两个实现级坑（adm-zip 单条目 Buffer 撞 2^31 上限→系统 unzip；zip 首层是 `<abi>/` 非 `<platform>/<tag>/<abi>/`→布局探测泛化），记入 learn。单测 10 新增、全套 285 过；typecheck/lint 0 错。互斥/失败广播/重开恢复（activeDownload）回归保持。Phase 5 review 为事后补做（流程遗漏在案）：发现 P1 写流错误未监听可致 main 崩溃、P2 .install-bak 可被扫描误读、P2 package.xml 元素顺序与 XSD sequence 不一致——见 issue 2026-10-06-download-direct-review-findings，按纪律只记录未修。
 
 > 用户报告：下载镜像时进度永远 0%，下载完成后直接跳「已完成」。要求先排查、单独成计划。本 plan 基于本机实测（2026-10-06，cmdline-tools `latest`（sdkmanager 已被标记 deprecate，替代为 `android` CLI）、emulator 36.1.9、macOS arm64）。
 
