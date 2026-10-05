@@ -34,6 +34,13 @@ export interface DeviceMeta {
 }
 
 /**
+ * 设备外观类别：投屏外框的展示提示（手机/平板/未知中性）。由 main 从 SDK 画像
+ * 元数据按 profileId 派生进内存快照，不入盘、不进 AVD 硬件配置；缺省按 generic
+ * 兜底，旧快照无此字段亦兼容。
+ */
+export type DeviceFrameKind = 'phone' | 'tablet' | 'generic'
+
+/**
  * 运行态不入盘：重启一律回到「停止」，主进程内存持有。
  * creating/deleting 是创建/删除事务的临时态；starting 可取消；stopping 是停止/取消/
  * 异常回收共用的过渡态，停止失败时保留在 stopping 并附 lastError 等待重试。
@@ -47,6 +54,8 @@ export interface DeviceError {
 }
 
 export interface Device extends DeviceMeta {
+  /** 外观提示（派生、可缺席）：缺省 generic，renderer 侧不落盘不迁移 */
+  frameKind?: DeviceFrameKind
   status: DeviceStatus
   /** 最近一次运行/命令失败；下次命令成功接纳时清除 */
   lastError?: DeviceError

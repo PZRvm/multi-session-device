@@ -24,6 +24,9 @@
   --accent-veil: rgba(34, 26, 0, 0.12);
   --loading: #9a5f00;
   --settings-confirm-card-bg: #ffffff;
+  --device-shell: #d8d2c5;
+  --device-shell-edge: #bcb4a6;
+  --device-bezel-ink: #616974;
   --idle: #6b7280;
 }
 
