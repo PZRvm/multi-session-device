@@ -53,7 +53,7 @@ created: 2026-10-05
 | 新增 `src/main/emulator/skins.ts`、`cameras.ts`                                                                                   | 皮肤目录/导入/下载/布局解析；摄像头能力与枚举                     |
 | `src/main/emulator/index.ts`、`avd.ts`、`runner.ts`                                                                               | SDK 能力 IPC、下载守卫、创建后 patch、实际启动参数                |
 | `src/main/devices/index.ts`、`src/main/store.ts`                                                                                  | 创建事务、精确身份/设置落盘、旧版本兼容与回滚错误                 |
-| `src/main/window/wizard.ts`                                                                                                       | 可缩放模态窗、原生皮肤选择、向导 sender 守卫                      |
+| `src/main/window/wizard.ts`                                                                                                       | 可缩放独立非模态窗口（2026-10-06 修订）、原生皮肤选择、向导 sender 守卫 |
 | `src/preload/api/sdk.ts`、`src/preload/api/wizard.ts`、`src/preload/index.d.ts`                                                   | 严格类型 API、进度订阅、资源句柄                                  |
 | `src/renderer/src/components/DeviceWizard.tsx`                                                                                    | 两页流程与完整创建状态，按职责拆出向导子组件                      |
 | 新增 `src/renderer/src/components/wizard/`                                                                                        | 画像表格、镜像选择、设置表单、固定摘要                            |
@@ -94,7 +94,7 @@ main 返回 `supported | unsupported | unknown` 与中文原因：画像 API 范
 
 ### 3. 两页向导
 
-原生窗口初始约 900×680、可缩放；最小尺寸随实际屏幕工作区验证。搜索/表头/页脚固定，列表和设置表单独立滚动。采用产品中文、亮暗主题、橙色选中与现有 tokens；实施使用 impeccable 技能，保留现有原生模态单例。
+原生窗口初始约 900×680、可缩放；最小尺寸随实际屏幕工作区验证。搜索/表头/页脚固定，列表和设置表单独立滚动。采用产品中文、亮暗主题、橙色选中与现有 tokens；实施使用 impeccable 技能，保留现有原生窗口单例（2026-10-06 修订：模态改独立非模态窗口，见 [向导独立窗口 plan](2026-10-06-wizard-independent-window.md)）。
 
 - 画像页：左侧约 180px 类别导航与「显示弃用画像」；右侧搜索与名称、Play、API、宽、高、密度列。搜索不自动创建选中项；更改类别清除不属于该类别的选择。支持键盘选行、可见焦点和空/加载/错误/重试状态。
 - 配置页：左侧「设备 / 附加设置」标签，右侧约 210px 固定摘要；设备标签包含名称、API/服务筛选、镜像表格、完整/Preview/SDK 扩展/不支持项开关。摘要显示设备轮廓、尺寸、厂商、API 范围、选中镜像服务/ABI/API 和实际下载大小。

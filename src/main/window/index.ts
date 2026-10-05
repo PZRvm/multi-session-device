@@ -2,6 +2,7 @@ import { BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { appIcon } from '../app-icon'
+import { closeWizardWindow } from './wizard'
 
 // 主窗登记（devices 域 sender 白名单的判定源）：引用随窗口销毁清空
 let mainWindow: BrowserWindow | null = null
@@ -33,6 +34,8 @@ export function createMainWindow(): BrowserWindow {
 
   window.on('closed', () => {
     mainWindow = null
+    // 向导窗是非模态子窗（不随父窗自动销毁）——主窗关闭时显式带走，不留孤儿窗口
+    closeWizardWindow()
   })
 
   window.on('ready-to-show', () => {
