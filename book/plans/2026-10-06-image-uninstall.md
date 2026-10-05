@@ -38,9 +38,9 @@ created: 2026-10-06
 2. **main 守卫链**（顺序固定，逐条中文拒绝）：
    a. 入参为合法 packageName 且在当前可信目录中、`installed === true`（半安装同样拒绝——先修复才有删除资格，避免删一半之谜）；
    b. 下载互斥：`downloading !== null` 拒绝；
-   c. 设备引用：devices 域查询 `listDeviceNamesReferencing(packageName)`——含 `creating` 态设备；非空时拒绝并附设备名清单（renderer 直接展示 main 返回的错误文案，不做二次拼装）。**竞态收口**：守卫查询与卸载执行之间不允许插入新的创建事务——卸载执行放进 devices 域的设备事务互斥（与 createDevice 的元数据写队列同域串行），创建接纳时反之也查一次「该包是否在卸载中」，两侧互斥后窗口关闭；
+   c. 设备引用：devices 域查询 `listDeviceNamesReferencing(packageName)`——含 `creating` 态设备；非空时拒绝并附设备名清单（renderer 直接展示 main 返回的错误文案，不做二次拼装）。**竞态收口（对齐 review 修复轮形态）**：download / uninstall / createDevice 三条路共用一个「SDK 包操作互斥」（单一互斥变量，而非本 plan 初稿的 devices 写队列方案）——任何一条持锁期间其余拒绝，TOCTOU 窗口与「卸载中并发下载」一并关闭；互斥对象预留 abort 句柄位，供[进度修复/取消 plan](2026-10-06-download-cancel.md)的直连下载线路直接挂接；
    d. 运行态设备引用属 c 的子集（运行设备的 imagePackageName 即引用），无需单独检查。
-3. **卸载执行**：spawn `sdkmanager --uninstall <package>`（env 同安装路径）。成功判据 exit 0；随后 `scanLocalImages` 复核该包已消失——目录仍在（sdkmanager 卸载残目录的兜底：核验不过则报「卸载后仍检测到残留目录」并列路径，不静默 rm）。`imagesCache = null` 让下次拉取反映状态。
+3. **卸载执行**：spawn `sdkmanager --uninstall <package>`（env 同安装路径）。成功判据 exit 0；残留复核按 review 修正——**直接探测 `system-images/<平台>/<tag>/<abi>` 三层目录存在性**（`splitPackageName` 拼路径），不用 `scanLocalImages`（其语义是「合法完整安装」，对无 package.xml 的残目录不敏感，本 plan 初稿的设计盲点）；目录仍在则报「卸载后仍检测到残留目录」并列路径，不静默 rm。`imagesCache = null` 让下次拉取反映状态。
 4. **renderer 联动**：卸载成功后 `reloadImages()`（复用下载完成路径）；当前选中镜像若正是被删包，选择核验派生自动清空（已有机制，验证即可）。
 5. **不做**：不删 AVD userdata（属设备删除域）；不动 `local-only` 条目以外的 SDK 组件；不加设置窗全局管理页（后续有需求再立项）。
 
