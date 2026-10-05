@@ -186,7 +186,7 @@ components:
 
 ### 设备外框（2026-10-05 投屏工作台引入）——唯一的"大圆角"豁免区
 
-投屏工作台（右侧 Stage）承载模拟 Android 设备外框，是全应用唯一允许大外圆角的元素（手机 24px / 平板 16px / 未知 10px）：它模拟实体手机/平板的壳，属于"列车本身"而非信息板控件——普通控件不得效仿此圆角。外壳只包在屏幕之外（手机边距 T18/B12/L8/R8；平板四边 12；未知四边 8），屏幕自身无圆角无开孔（不裁切视频像素），上边框内的听筒/摄像头装饰 `aria-hidden` 且不接输入。颜色三 token 入配置单源：`--device-shell`（壳面，亮 ≡ hairline / 暗 ≡ tileLine）、`--device-shell-edge`（外缘线 ≡ controlLine）、`--device-bezel-ink`（装饰 ≡ inkDim）。工作台底即 `--board-bg`，不引入第二色域；强调色仍不进画布。
+投屏工作台（右侧 Stage）承载模拟 Android 设备外框，是全应用唯一允许大外圆角的元素（手机 20px / 平板 16px / 未知 10px）：它模拟实体手机/平板的壳，属于"列车本身"而非信息板控件——普通控件不得效仿此圆角。外壳只包在屏幕之外（手机边距 T18/B12/L12/R12，侧边与圆角匹配避免四角收窄发撇；平板四边 12；未知四边 8），屏幕自身无圆角无开孔（不裁切视频像素），上边框内的听筒/摄像头装饰 `aria-hidden` 且不接输入。颜色三 token 入配置单源：`--device-shell`（壳面，亮 ≡ hairline / 暗 ≡ tileLine）、`--device-shell-edge`（外缘线 ≡ controlLine）、`--device-bezel-ink`（装饰 ≡ inkDim）。工作台底即 `--board-bg`，不引入第二色域；强调色仍不进画布。
 
 ## Components
 

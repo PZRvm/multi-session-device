@@ -17,9 +17,10 @@ export interface FrameMetrics {
   outerRadius: number
 }
 
-/** 各类别的外框度量（plan 2026-10-05-device-frame-and-canvas 初始设计，真机窗口调校） */
+/** 各类别的外框度量（plan 2026-10-05-device-frame-and-canvas 初始设计，真机窗口调校；
+ * 手机侧边 2026-10-06 由 8 加宽到 12——8px 侧边配 24px 外圆角在四角收窄发撇） */
 export const FRAME_METRICS: Record<DeviceFrameKind, FrameMetrics> = {
-  phone: { left: 8, right: 8, top: 18, bottom: 12, outerRadius: 24 },
+  phone: { left: 12, right: 12, top: 18, bottom: 12, outerRadius: 20 },
   tablet: { left: 12, right: 12, top: 12, bottom: 12, outerRadius: 16 },
   generic: { left: 8, right: 8, top: 8, bottom: 8, outerRadius: 10 }
 }
