@@ -26,6 +26,8 @@
 //   暗 ≡ tileLine；deviceShellEdge ≡ controlLine；deviceBezelInk ≡ inkDim——
 //   均为既有值的新语义位（同值异义 token 先例：scrollbarHover ≡ controlLine）。
 
+import type { ThemeMode } from './types'
+
 export type ThemeSystemId = 'amber' | 'mist' | 'moss'
 
 // 主题色闭集单一事实源：守卫与将来的色板 UI 均由此派生，防增删系统时漏改
@@ -33,6 +35,23 @@ export const THEME_SYSTEM_IDS: ThemeSystemId[] = ['amber', 'mist', 'moss']
 
 export function isThemeSystemId(value: unknown): value is ThemeSystemId {
   return (THEME_SYSTEM_IDS as string[]).includes(value as ThemeSystemId)
+}
+
+// 亮暗三态闭集守卫与 isThemeSystemId 同居：theme.json 落盘校验与 IPC 入参校验共用
+const THEME_MODES: ThemeMode[] = ['system', 'light', 'dark']
+
+export function isThemeMode(value: unknown): value is ThemeMode {
+  return (THEME_MODES as string[]).includes(value as ThemeMode)
+}
+
+/** 解析后的亮暗最终态（显式选择或系统解析的结果） */
+export type ResolvedMode = 'light' | 'dark'
+
+/** 亮暗解析单源纯函数：显式亮暗直读；system 由调用方的「系统当前是否深色」判定决定——
+ * main 传 nativeTheme.shouldUseDarkColors（themeSource 需先行设置），renderer 传 matchMedia */
+export function resolveThemeMode(mode: ThemeMode, prefersDark: boolean): ResolvedMode {
+  if (mode === 'light' || mode === 'dark') return mode
+  return prefersDark ? 'dark' : 'light'
 }
 
 /** 单套系统单态的全部主题化 token（值即 CSS 变量字面量，经 themeCssVariables 映射） */

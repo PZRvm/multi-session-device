@@ -2,6 +2,11 @@
 export const IPC_CHANNELS = {
   dialogShow: 'dialog:show',
   themeSetMode: 'theme:set-mode',
+  /** 主题初值同步下发（preload sendSync 首帧取值；sync 通道走 on + returnValue） */
+  themeGetSync: 'theme:get-sync',
+  themeSetSystemId: 'theme:set-system-id',
+  /** 主题变更推送（main → 各窗）：set 落盘前广播，各窗 store 直写跟随（跨窗同步） */
+  themeChanged: 'theme:changed',
   devicesList: 'devices:list',
   devicesCreate: 'devices:create',
   devicesRename: 'devices:rename',

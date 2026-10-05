@@ -3,6 +3,7 @@ import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import { appIcon } from '../app-icon'
+import { themeWindowBackground } from '../theme'
 
 // 新建设备模态窗单例：主窗重复点「新建设备」= 聚焦既有窗而非再开一扇
 let wizardWindow: BrowserWindow | null = null
@@ -32,6 +33,8 @@ export function openWizardWindow(parent: BrowserWindow): void {
     parent,
     modal: true,
     show: false,
+    // 与主窗同源：向导窗首帧也是主题板面底
+    backgroundColor: themeWindowBackground(),
     title: '新建设备',
     icon: appIcon,
     resizable: false,

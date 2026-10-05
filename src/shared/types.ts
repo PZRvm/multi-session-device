@@ -1,5 +1,18 @@
+import type { ThemeSystemId } from './themeSystems'
+
 /** 应用与原生窗口共用的亮暗选择 */
 export type ThemeMode = 'system' | 'light' | 'dark'
+
+/** 主题选择快照——theme.json 落盘与 IPC 传输的载荷（色系 + 亮暗三态） */
+export interface ThemeSelection {
+  systemId: ThemeSystemId
+  mode: ThemeMode
+}
+
+/** boot 同步下发的主题初值：快照 + fresh（本次启动 theme.json 是否不存在，legacy 收编判定） */
+export interface ThemeInitialState extends ThemeSelection {
+  fresh: boolean
+}
 
 /** 原生对话框入参——Electron MessageBoxOptions 的白名单子集 */
 export interface DialogOptions {

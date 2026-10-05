@@ -3,6 +3,7 @@ import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createMainWindow } from './window'
 import { registerIpcHandlers, shutdownStreams } from './ipc'
 import { prepareAppShutdown, resumeAfterShutdown } from './devices'
+import { restoreTheme } from './theme'
 import { appIcon } from './app-icon'
 
 app.whenReady().then(() => {
@@ -15,13 +16,15 @@ app.whenReady().then(() => {
 
   registerIpcHandlers()
 
-  createMainWindow()
-
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow()
     }
   })
+
+  // 主题恢复先于建窗：nativeTheme.themeSource 与建窗 backgroundColor 都依赖读盘结果
+  // （loadThemeState 不抛错，读盘失败按缺省起步——详见 theme/store）
+  void restoreTheme().then(() => createMainWindow())
 })
 
 app.on('window-all-closed', () => {
