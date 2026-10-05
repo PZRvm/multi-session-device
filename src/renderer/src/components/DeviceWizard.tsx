@@ -266,7 +266,7 @@ const DeviceWizard = ({
       const result = await window.api.dialog.show({
         title: '删除已安装镜像',
         message: `确定删除 API ${apiDisplay(entry)}（${serviceLabel(entry)}）的已安装镜像吗？`,
-        detail: `包：${entry.packageName}\n占用约 ${formatSize(entry.sizeBytes)}。删除后新建使用该镜像的设备需要重新下载。`,
+        detail: `包：${entry.packageName}\n下载体积约 ${formatSize(entry.sizeBytes)}（解压后磁盘占用更大）。删除后新建使用该镜像的设备需要重新下载。`,
         buttons: ['删除', '取消'],
         cancelId: 1
       })
@@ -542,6 +542,20 @@ const DeviceWizard = ({
             </Tab>
           </TabBar>
 
+          {/* 卸载/下载错误跨标签可见（review P3：切标签不丢错误视野） */}
+          {downloadError !== null ? (
+            <ErrorBlock role="alert">
+              <ErrorText>{downloadError.message}</ErrorText>
+              <Button onClick={retryDownload}>重试下载</Button>
+            </ErrorBlock>
+          ) : null}
+          {uninstallError !== null ? (
+            <ErrorBlock role="alert">
+              <ErrorText>{uninstallError}</ErrorText>
+              <Button onClick={() => setUninstallError(null)}>知道了</Button>
+            </ErrorBlock>
+          ) : null}
+
           {tab === 'device' ? (
             <DevicePane>
               <NameBlock>
@@ -571,18 +585,6 @@ const DeviceWizard = ({
                 onUninstall={(entry) => void uninstall(entry)}
                 uninstallingPackage={uninstallingPackage}
               />
-              {downloadError !== null ? (
-                <ErrorBlock role="alert">
-                  <ErrorText>{downloadError.message}</ErrorText>
-                  <Button onClick={retryDownload}>重试下载</Button>
-                </ErrorBlock>
-              ) : null}
-              {uninstallError !== null ? (
-                <ErrorBlock role="alert">
-                  <ErrorText>{uninstallError}</ErrorText>
-                  <Button onClick={() => setUninstallError(null)}>知道了</Button>
-                </ErrorBlock>
-              ) : null}
             </DevicePane>
           ) : (
             <SettingsPane>

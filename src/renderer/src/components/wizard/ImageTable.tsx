@@ -190,6 +190,7 @@ const ImageTable = ({
                     {onUninstall !== null ? (
                       <UninstallButton
                         role="button"
+                        tabIndex={0}
                         aria-disabled={uninstallingPackage !== null || downloadBusy}
                         aria-busy={uninstallingPackage === image.packageName}
                         aria-label={`删除已安装镜像 API ${apiDisplay(image)} ${serviceLabel(image)}`}
@@ -197,6 +198,13 @@ const ImageTable = ({
                         onClick={(event) => {
                           event.stopPropagation()
                           onUninstall(image)
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            onUninstall(image)
+                          }
                         }}
                       >
                         {uninstallingPackage === image.packageName ? (
@@ -210,11 +218,19 @@ const ImageTable = ({
                 ) : (
                   <DownloadButton
                     role="button"
+                    tabIndex={0}
                     aria-disabled={downloadBusy}
                     aria-label={`下载 API ${apiDisplay(image)} ${serviceLabel(image)}`}
                     onClick={(event) => {
                       event.stopPropagation()
                       onDownload(image)
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        onDownload(image)
+                      }
                     }}
                   >
                     {isDownloading ? `${downloading.percent}%` : <Download size={13} />}
@@ -418,6 +434,11 @@ const DownloadButton = styled.span`
   &[aria-disabled='true'] {
     cursor: default;
     opacity: 0.7;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
 `
 

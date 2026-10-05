@@ -34,3 +34,13 @@ tags: [wizard, uninstall, review, race-condition, mutex]
 6. emulator 域 import devices 域（引用查询）——域依赖方向反向，无环但可经回调注入解耦。
 7. 卸载 spawn 无超时——sdkmanager 挂死则删除钮永久禁用直到重启。
 8. `uninstall.test.ts` 可补 env（ANDROID_SDK_ROOT）断言。
+
+## 跟进（2026-10-06，同日修复轮）
+
+P1/P2 与全部 P3 已修（并发安全结论先行：下载+卸载并发不崩溃——两个独立 sdkmanager 子进程、各自 try/catch，最坏是文件锁竞争报英文 stderr，故按用户决定修复）：
+
+- **P1/P2-TOCTOU**：新增 `emulator/packageOps.ts` 统一互斥（`beginPackageOp/endPackageOp/activePackageOp`），下载与卸载双向拒绝；创建事务按包名检查进行中操作（同包下载/卸载中拒绝创建），TOCTOU 窗口关闭。单测：守卫双向互斥 2 例、packageOps 状态机 1 例、devices 创建拦截 2 例。
+- **P2-残留复核**：改为直接探测 `system-images/<平台>/<tag>/<abi>` 目录存在性；真机冒烟验证标准卸载判干净、人工构造的无 package.xml 空壳残留被捕获（旧实现漏）。
+- **P3**：确认框措辞改「下载体积约…（解压后磁盘占用更大）」；`assertUninstallable` 改 void；卸载 executor 收集 stdout+stderr 并加 180s 有界超时（超时 SIGTERM + 中文错误）；删除/下载 icon 补 tabIndex + Enter/Space（Enter 触发卸载有单测）、DownloadButton 补 focus-visible；卸载/下载错误区挪到 TabBar 下方跨标签可见；`registerSdkIpc` 改依赖注入引用查询（emulator 域不再 import devices）；补 env 断言。
+
+遗留：icon 键盘可达的 Tab 焦点顺序未做 roving tabindex 精修（可达性已通，顺序优化归 test-infra-and-roving-focus 计划口径）；卸载超时仅默认 runner 生效（注入 runner 由用例自理）。

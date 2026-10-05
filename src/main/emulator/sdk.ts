@@ -221,6 +221,9 @@ export async function runSdkManagerPackages(
   return defaultRunner(root, packages, onPercent)
 }
 
+/** 卸载有界超时：本地卸载通常秒级，3 分钟足够覆盖首次 JVM 慢启动 */
+const UNINSTALL_TIMEOUT_MS = 180_000
+
 export interface UninstallDeps {
   /** 执行器接缝：默认 spawn sdkmanager --uninstall；单测注入固定结果或错误 */
   runner?: (sdkmanagerBin: string, args: string[], env: NodeJS.ProcessEnv) => Promise<void>
@@ -240,15 +243,30 @@ export async function uninstallSdkManagerPackage(
     deps.runner ??
     ((bin: string, args: string[], env: NodeJS.ProcessEnv): Promise<void> =>
       new Promise((resolve, reject) => {
-        const child = spawn(bin, args, { env, stdio: ['ignore', 'ignore', 'pipe'] })
-        const stderr: Buffer[] = []
-        child.stderr?.on('data', (chunk: Buffer) => stderr.push(chunk))
-        child.on('error', reject)
+        const child = spawn(bin, args, { env, stdio: ['ignore', 'pipe', 'pipe'] })
+        // stdout 也收：sdkmanager 偶尔把错误写 stdout（review P3）
+        const output: Buffer[] = []
+        child.stdout?.on('data', (chunk: Buffer) => output.push(chunk))
+        child.stderr?.on('data', (chunk: Buffer) => output.push(chunk))
+        // 有界超时：sdkmanager 挂死不再永久占住删除互斥（review P3）
+        const timer = setTimeout(() => {
+          child.kill('SIGTERM')
+          reject(
+            new Error(
+              `sdkmanager --uninstall ${packageName} 超时（${UNINSTALL_TIMEOUT_MS / 1000} 秒），进程已终止`
+            )
+          )
+        }, UNINSTALL_TIMEOUT_MS)
+        child.on('error', (error) => {
+          clearTimeout(timer)
+          reject(error)
+        })
         child.on('close', (code) => {
+          clearTimeout(timer)
           if (code === 0) return resolve()
           reject(
             new Error(
-              `sdkmanager --uninstall ${packageName} 失败（exit ${code}）：${Buffer.concat(stderr).toString('utf8').slice(-500)}`
+              `sdkmanager --uninstall ${packageName} 失败（exit ${code}）：${Buffer.concat(output).toString('utf8').slice(-500)}`
             )
           )
         })

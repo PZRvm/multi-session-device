@@ -681,6 +681,16 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     )
   })
 
+  it('删除 icon 键盘可达：Enter 触发卸载（review P3）', async () => {
+    installSdkStub({})
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} onUninstallImage={async () => {}} />)
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    const button = screen.getByRole('button', { name: /删除已安装镜像 API 36/ })
+    fireEvent.keyDown(button, { key: 'Enter' })
+    await waitFor(() => expect(button.getAttribute('aria-busy')).toBe('true'))
+  })
+
   it('卸载被拒（设备引用）：main 守卫文案直接展示，「知道了」可关闭', async () => {
     installSdkStub({})
     render(

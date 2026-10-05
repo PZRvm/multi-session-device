@@ -3,6 +3,7 @@ import {
   attachDeviceStreamBridge,
   adbBinaryPath,
   androidToolEnv,
+  listDeviceNamesReferencing,
   registerDevicesIpc
 } from '../devices'
 import { registerSdkIpc } from '../emulator'
@@ -21,7 +22,8 @@ export async function shutdownStreams(): Promise<void> {
 export function registerIpcHandlers(): void {
   registerDialogIpc()
   registerDevicesIpc()
-  registerSdkIpc()
+  // 引用查询经注入进入 sdk 域（镜像删除守卫）——emulator 域不反向依赖 devices
+  registerSdkIpc({ referencingDeviceNames: listDeviceNamesReferencing })
   registerWizardIpc()
   registerThemeIpc()
 

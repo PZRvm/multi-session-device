@@ -43,6 +43,7 @@ import { getMainWindow } from '../window'
 import { wizardOwns } from '../window/wizard'
 import { importedSkinsRoot } from '../emulator/skins'
 import { listWebcams } from '../emulator/cameras'
+import { activePackageOp } from '../emulator/packageOps'
 
 /** skinRef → 皮肤目录（sdk:* 解析 SDK skins；其余查应用库）；未知返回 null */
 const skinDirectoryFor = (skinRef: string): string | null => {
@@ -524,6 +525,16 @@ const deleteDevice = (id: string): Promise<DeviceSnapshot> => {
 const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult> => {
   await ensureLoaded()
   const packageName = raw.imagePackageName
+  // 同包的进行中卸载/下载拒绝创建（review 2026-10-06 P2 TOCTOU：引用守卫
+  // 通过后、卸载执行完的窗口内不再建出引用即将消失镜像的设备）
+  const op = activePackageOp()
+  if (op !== null && op.packageName === packageName) {
+    throw new Error(
+      op.kind === 'uninstall'
+        ? `镜像正在卸载（${packageName}），请等待完成后再创建设备`
+        : `镜像正在下载（${packageName}），下载完成后再创建设备`
+    )
+  }
   // 创建时重新核验（plan 设计 2：拒绝陈旧选择）——镜像完整安装 + 画像仍可创建 + 兼容性
   const local = await scanLocalImages(sdkRoot())
   const imageRecord = local.get(packageName)

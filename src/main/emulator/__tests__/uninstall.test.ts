@@ -28,23 +28,17 @@ const image = (overrides: Partial<ImageEntry> = {}): ImageEntry => ({
 const PKG = 'system-images;android-36;google_apis_playstore;arm64-v8a'
 
 describe('assertUninstallable（守卫链，顺序与文案）', () => {
-  it('已装、无下载、无引用 → 放行并带 manifest 大小', () => {
-    expect(
-      assertUninstallable(PKG, {
-        catalog: { images: [image()] },
-        downloading: null,
-        referencing: []
-      })
-    ).toEqual({
-      sizeBytes: 1_900_000_000
-    })
+  it('已装、无包操作、无引用 → 放行', () => {
+    expect(() =>
+      assertUninstallable(PKG, { catalog: { images: [image()] }, activeOp: null, referencing: [] })
+    ).not.toThrow()
   })
 
   it('不在可信目录 → 拒绝', () => {
     expect(() =>
       assertUninstallable('system-images;android-99;default;arm64-v8a', {
         catalog: { images: [image()] },
-        downloading: null,
+        activeOp: null,
         referencing: []
       })
     ).toThrow('不在可信镜像目录中')
@@ -54,7 +48,7 @@ describe('assertUninstallable（守卫链，顺序与文案）', () => {
     expect(() =>
       assertUninstallable(PKG, {
         catalog: { images: [image({ installed: false })] },
-        downloading: null,
+        activeOp: null,
         referencing: []
       })
     ).toThrow('未完整安装')
@@ -64,17 +58,33 @@ describe('assertUninstallable（守卫链，顺序与文案）', () => {
     expect(() =>
       assertUninstallable(PKG, {
         catalog: { images: [image()] },
-        downloading: { packageName: 'system-images;android-37.2;google_apis_ps16k;arm64-v8a' },
+        activeOp: {
+          kind: 'download',
+          packageName: 'system-images;android-37.2;google_apis_ps16k;arm64-v8a'
+        },
         referencing: []
       })
     ).toThrow('android-37.2')
+  })
+
+  it('另一卸载进行中 → 拒绝（双向互斥，review P1）', () => {
+    expect(() =>
+      assertUninstallable(PKG, {
+        catalog: { images: [image()] },
+        activeOp: {
+          kind: 'uninstall',
+          packageName: 'system-images;android-35;google_apis;arm64-v8a'
+        },
+        referencing: []
+      })
+    ).toThrow('正在卸载镜像')
   })
 
   it('被设备引用 → 拒绝并列设备名', () => {
     expect(() =>
       assertUninstallable(PKG, {
         catalog: { images: [image()] },
-        downloading: null,
+        activeOp: null,
         referencing: ['测试机 A', '测试机 B']
       })
     ).toThrow('测试机 A、测试机 B')
@@ -82,15 +92,16 @@ describe('assertUninstallable（守卫链，顺序与文案）', () => {
 })
 
 describe('uninstallSdkManagerPackage（注入接缝）', () => {
-  it('参数与 env 走官方路径；失败带 exit 与 stderr 尾部', async () => {
+  it('参数与 env 走官方路径；失败带 exit 与错误输出', async () => {
     const { uninstallSdkManagerPackage } = await import('../sdk')
     const runner = vi.fn<(bin: string, args: string[], env: NodeJS.ProcessEnv) => Promise<void>>(
       async () => {}
     )
     await uninstallSdkManagerPackage('/sdk', PKG, { runner })
-    const [bin, args] = runner.mock.calls[0]
+    const [bin, args, env] = runner.mock.calls[0]
     expect(bin).toContain('sdkmanager')
     expect(args).toEqual(['--sdk_root', '/sdk', '--uninstall', PKG])
+    expect(env.ANDROID_SDK_ROOT).toBe('/sdk')
 
     const failing = vi.fn<(bin: string, args: string[], env: NodeJS.ProcessEnv) => Promise<void>>(
       async () => {
@@ -100,5 +111,24 @@ describe('uninstallSdkManagerPackage（注入接缝）', () => {
     await expect(uninstallSdkManagerPackage('/sdk', PKG, { runner: failing })).rejects.toThrow(
       'exit 1'
     )
+  })
+})
+
+describe('packageOps（统一互斥）', () => {
+  it('空闲放行；占用中拒绝且带在操作的包名；end 后复位', async () => {
+    const { activePackageOp, beginPackageOp, endPackageOp } = await import('../packageOps')
+    expect(activePackageOp()).toBeNull()
+    beginPackageOp({ kind: 'download', packageName: 'pkg-a' })
+    expect(activePackageOp()).toEqual({ kind: 'download', packageName: 'pkg-a' })
+    expect(() => beginPackageOp({ kind: 'uninstall', packageName: 'pkg-b' })).toThrow(
+      '已有镜像在下载（pkg-a）'
+    )
+    endPackageOp()
+    beginPackageOp({ kind: 'uninstall', packageName: 'pkg-b' })
+    expect(() => beginPackageOp({ kind: 'download', packageName: 'pkg-c' })).toThrow(
+      '正在卸载镜像（pkg-b）'
+    )
+    endPackageOp()
+    expect(activePackageOp()).toBeNull()
   })
 })

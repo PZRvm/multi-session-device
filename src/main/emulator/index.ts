@@ -1,5 +1,6 @@
 import { BrowserWindow, app, dialog, ipcMain } from 'electron'
 import { join } from 'node:path'
+import { stat } from 'node:fs/promises'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { SdkImageProgress, SdkProgress, SdkSnapshot } from '@shared/types'
 import { appIcon } from '../app-icon'
@@ -16,8 +17,8 @@ import {
   type SkinRecord
 } from './skins'
 import { wizardOwns } from '../window/wizard'
-import { listDeviceNamesReferencing } from '../devices'
 import { assertUninstallable } from './uninstall'
+import { activePackageOp, beginPackageOp, endPackageOp } from './packageOps'
 import { listWebcams } from './cameras'
 import type {
   DeviceProfile,
@@ -116,7 +117,12 @@ const requireSdkReady = async (root: string): Promise<void> => {
   }
 }
 
-export function registerSdkIpc(): void {
+/** registerSdkIpc 可选依赖（默认空实现）：镜像删除守卫的设备引用查询 */
+export interface SdkIpcDeps {
+  referencingDeviceNames?: (packageName: string) => string[]
+}
+
+export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
   ipcMain.handle(IPC_CHANNELS.sdkStatus, (_event, raw: unknown): Promise<SdkSnapshot> =>
     detectSdk(resolveRoot(raw))
   )
@@ -301,16 +307,29 @@ export function registerSdkIpc(): void {
         : await listImagesWithState(root)
     assertUninstallable(packageName, {
       catalog,
-      downloading,
-      referencing: listDeviceNamesReferencing(packageName)
+      activeOp: activePackageOp(),
+      referencing: deps.referencingDeviceNames?.(packageName) ?? []
     })
-    await uninstallSdkManagerPackage(root, packageName)
-    // 落盘复核：sdkmanager 卸载残目录的兜底——核验不过显式报残留路径，不静默 rm
-    const local = await scanLocalImages(root)
-    if (local.has(packageName)) {
-      throw new Error(`卸载后仍检测到残留目录（${packageName}），可手动清理后刷新清单`)
+    beginPackageOp({ kind: 'uninstall', packageName })
+    try {
+      await uninstallSdkManagerPackage(root, packageName)
+      // 落盘复核：直接探测包目录存在性（scanLocalImages 只认带 package.xml 的
+      // 目录——非标准残留会被它漏掉，review 2026-10-06 P2）
+      const parts = splitPackageName(packageName)
+      if (parts !== null) {
+        const dir = join(root, 'system-images', parts.platformSegment, parts.tagSegment, parts.abi)
+        const dirExists = await stat(dir).then(
+          () => true,
+          () => false
+        )
+        if (dirExists) {
+          throw new Error(`卸载后仍检测到残留目录（${dir}），可手动清理后刷新清单`)
+        }
+      }
+      imagesCache = null
+    } finally {
+      endPackageOp()
     }
-    imagesCache = null
   })
 
   ipcMain.handle(IPC_CHANNELS.sdkDownloadImage, async (_event, raw: unknown): Promise<void> => {
@@ -336,11 +355,7 @@ export function registerSdkIpc(): void {
     if (entry.abi !== 'arm64-v8a') {
       throw new Error(`${IPC_CHANNELS.sdkDownloadImage}: 跨架构镜像（${entry.abi}）本期不支持下载`)
     }
-    if (downloading) {
-      throw new Error(
-        `已有镜像在下载（${downloading.packageName}，${downloading.percent}%），请等待完成`
-      )
-    }
+    beginPackageOp({ kind: 'download', packageName })
     downloading = { packageName, percent: 0 }
     try {
       // 下载会改变已装状态——失效清单缓存
@@ -363,6 +378,7 @@ export function registerSdkIpc(): void {
       throw error
     } finally {
       downloading = null
+      endPackageOp()
     }
   })
 }

@@ -104,7 +104,10 @@ const mocks = vi.hoisted(() => {
       disposeAll: vi.fn(async () => [] as string[]),
       resumeAccepting: vi.fn()
     },
-    createRunner: vi.fn()
+    createRunner: vi.fn(),
+    activePackageOp: vi.fn(
+      (): { kind: 'download' | 'uninstall'; packageName: string } | null => null
+    )
   }
 })
 
@@ -173,6 +176,11 @@ vi.mock('../../emulator/profiles', () => ({
 }))
 vi.mock('../../emulator/profileMetadata', () => ({
   sdklibJarPathFor: () => '/sdklib.jar'
+}))
+vi.mock('../../emulator/packageOps', () => ({
+  activePackageOp: mocks.activePackageOp,
+  beginPackageOp: vi.fn(),
+  endPackageOp: vi.fn()
 }))
 vi.mock('../../emulator/adb', () => ({
   candidateAdbPaths: () => [{ path: '/adb', source: 'app-sdk' }],
@@ -483,6 +491,41 @@ describe('Quick Boot 运行路径（plan 设计 8；门槛未过保持禁用）'
     const { handlerFor } = await freshDomain()
     await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)
     expect(extraArgsFromConfig()('quick-1')).toContain('-no-snapshot')
+  })
+})
+
+describe('createDevice 与包操作互斥（review P2 TOCTOU 收口）', () => {
+  it('同包卸载进行中 → 拒绝创建；不同包不拦', async () => {
+    mocks.readDeviceMetas.mockResolvedValue([])
+    const pkg = 'system-images;android-36;google_apis_playstore;arm64-v8a'
+    const { handlerFor } = await freshDomain()
+    mocks.activePackageOp.mockReturnValue({ kind: 'uninstall', packageName: pkg })
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), validCreateInput)
+    ).rejects.toThrow('镜像正在卸载')
+    expect(mocks.createAvd).not.toHaveBeenCalled()
+    // 不同包的卸载不拦创建
+    mocks.activePackageOp.mockReturnValue({
+      kind: 'uninstall',
+      packageName: 'system-images;android-35;google_apis;arm64-v8a'
+    })
+    await handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), validCreateInput)
+    expect(mocks.createAvd).toHaveBeenCalledTimes(1)
+    mocks.activePackageOp.mockReturnValue(null)
+  })
+
+  it('同包下载进行中 → 拒绝创建', async () => {
+    mocks.readDeviceMetas.mockResolvedValue([])
+    const { handlerFor } = await freshDomain()
+    mocks.activePackageOp.mockReturnValue({
+      kind: 'download',
+      packageName: 'system-images;android-36;google_apis_playstore;arm64-v8a'
+    })
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), validCreateInput)
+    ).rejects.toThrow('镜像正在下载')
+    expect(mocks.createAvd).not.toHaveBeenCalled()
+    mocks.activePackageOp.mockReturnValue(null)
   })
 })
 
