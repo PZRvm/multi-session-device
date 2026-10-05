@@ -1,8 +1,20 @@
 ---
 description: 新建设备向导从模态子窗改为可移动的独立窗口——非模态不阻塞主窗、创建成功后主窗列表刷新、向导生命周期与父窗解耦收口
-status: draft
+status: completed
 created: 2026-10-06
 ---
+
+> **实现记录（2026-10-06，feature/wizard-independent-window）**：按 Build order 完成。`window/wizard.ts` 的 `modal` 改 `false`（parent 保留层级跟随），新增导出 `closeWizardWindow()`；主窗 `closed` 事件显式带走向导窗（非模态子窗不随父窗自动销毁的 Electron 行为差异点）。open 单例互斥、创建成功关窗+主窗刷新、Esc/取消路径全部未动。主 plan 设计 3 两处「模态」表述已修订（PRD 经查无模态字样）。真机 CDP 冒烟（dev 6176 + 调试口 9334）全过：向导窗创建、两窗并存、向导渲染正常、单例聚焦不新增窗、主窗 `window.close()` 后向导 target 消失且 app 干净退出（macOS 上若联动失效向导会残留孤儿 target——区分度成立）；向导窗截图留证 /tmp（本地证据）。证据局限如实记录：`bringToFront` 后主窗 `hasFocus=false` 系 CDP 不转移 macOS key window 所致，OS 级「主窗可点击」由 `modal: false` 的框架语义保证，未做系统级点击模拟。274 测试、typecheck/lint 0 错。无 review 发现（改动面两文件+文档）。
+
+> **追加轮（2026-10-06 用户反馈）**：窗口顶部的系统标题条与 Header 右侧 X 去除，改为对齐主窗的原生三灯——`wizard.ts` darwin 加 `titleBarStyle: 'hiddenInset'` + `trafficLightPosition {14,12}`（其他平台保留系统标题栏的关闭钮）；`DeviceWizard.tsx` Header 整行 `-webkit-app-region: drag`（成为窗口拖拽带）、darwin 侧 60px no-drag Spacer 给三灯让位（BoardHead 同模式）、删 X（关闭路径收敛为红绿灯/Esc/底部取消）。视觉冒烟（CDP DOM 断言 + macOS 系统级截图核验）：三灯存在、无标题条、无 X、标题 left=82 不遮挡、Header app-region=drag。
+
+> **追加轮二（2026-10-06 用户反馈）**：红绿灯与标题改居中对齐——Header 由 baseline+padding 改 40px 定高 + `align-items: center`（BoardHead 同构），Heading/StepIndicator 包进组内基线对齐的 TitleGroup；三灯 y 12→14 落板头中线（实测标题中心 19.5 vs 三灯 20，差 0.5px）。CDP 对齐断言 + 系统级截图核验通过。
+
+> **追加轮三（2026-10-06 用户反馈）**：头部元素改为水平居中——TitleGroup 改绝对定位（`left/top 50% + translate(-50%,-50%)`），整组居中于窗口中线而非跟三灯左排；StepIndicator 去掉 flex:1 撑满。实测组中心 450.0 = 900px 窗口中线（差 0.0px）、与三灯零重叠、垂直共线保持（19.5 vs 20）；系统级截图核验构图协调。三灯保持原生左上（用户所指「所有元素居中」作用于头部内容组）。
+
+> **追加轮四（2026-10-06 用户反馈）**：三灯自身在板头内垂直居中修正——像素实测发现灯 12px 高且 `trafficLightPosition` y 有 +2 内禀偏移（灯中心 = y+8），上轮 y=14 使灯中心 21.5、低于 40px 板头中心 19.5 达 2px；y 回 12 后灯中心 19.5 = 板头中心 = 标题组中心（差 0.0px，视觉核验 14/14 对称）。主窗（y=12）实测本就居中，未改。测量方法（Quartz 单窗截图 + 灰圆检测，规避多实例遮挡与多显示器坐标错位）沉淀 [learn/2026-10-06-红绿灯垂直居中实测](../notes/learn/2026-10-06-红绿灯垂直居中实测.md)。
+
+> **追加轮五（2026-10-06 用户反馈）**：去掉 `parent`——用户发现拖主窗时向导跟着走、且向导始终压主窗上层。根因是 macOS child window 原生契约（设 parent 即 `addChildWindow`：跟随父窗移动 + 层级锁在父窗之上），`modal:false` 只解除输入阻塞，解除不了这俩。设计 1 的「parent 保留层级跟随」据此修订。代价：向导可沉到主窗后（单例聚焦兜底——再点「新建设备」会 focus 既有窗）；主窗关闭带走向导本就是显式 `closeWizardWindow`，不受影响。冒烟升级：Quartz + CGEventPost 合成拖拽真实拽主窗两次，向导纹丝不动（830,324 前后一致），主窗关闭联动回归通过。
 
 # 向导独立窗口（非模态） — plan
 

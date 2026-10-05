@@ -4,7 +4,11 @@ import { is } from '@electron-toolkit/utils'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import { appIcon } from '../app-icon'
 
-// 新建设备模态窗单例：主窗重复点「新建设备」= 聚焦既有窗而非再开一扇
+// 新建设备独立窗口单例（2026-10-06 用户确认由模态改非模态，plan
+// 2026-10-06-wizard-independent-window）：可移动、不阻塞主窗输入。
+// 无 parent（追加轮五）：macOS child window 会跟随父窗移动且层级锁在父窗之上，
+// 用户要真独立；主窗关闭带走向导靠 index.ts closed 里的显式 closeWizardWindow。
+// 主窗重复点「新建设备」= 聚焦既有窗而非再开一扇。
 let wizardWindow: BrowserWindow | null = null
 // open 互斥（issue 2026-10-04-wizard-window-singleton-race）：new 与 ready-to-show
 // 之间的窗口期里并发 open 都会看到引用为空而各建一扇——opening 标记收口同轮只建一扇
@@ -18,7 +22,14 @@ export function wizardOwns(sender: Electron.WebContents): boolean {
   return isWizardSender(BrowserWindow.fromWebContents(sender))
 }
 
-export function openWizardWindow(parent: BrowserWindow): void {
+/** 主窗关闭时带走向导窗（非模态子窗不随父窗自动销毁——与模态的行为差异点） */
+export function closeWizardWindow(): void {
+  if (wizardWindow !== null && !wizardWindow.isDestroyed()) {
+    wizardWindow.close()
+  }
+}
+
+export function openWizardWindow(): void {
   if (wizardWindow && !wizardWindow.isDestroyed()) {
     wizardWindow.focus()
     return
@@ -26,17 +37,22 @@ export function openWizardWindow(parent: BrowserWindow): void {
   // 已在开（本轮 ready-to-show 未到）：静默返回，窗随本轮一起 show + focus
   if (opening) return
   opening = true
-  // 两页向导（plan 设计 3）：900×680 可缩放；最小尺寸按布局两栏 + 摘要不换行验证
+  // 两页向导（plan 设计 3）：900×680 可缩放；最小尺寸按布局两栏 + 摘要不换行验证。
+  // 独立可移动窗口，主窗保持可交互（plan 设计 1）——不设 parent：设了即成为 macOS
+  // child window，会跟随父窗移动且层级锁在父窗之上（追加轮五用户裁决要真独立）
   const window = new BrowserWindow({
     width: 900,
     height: 680,
     minWidth: 860,
     minHeight: 620,
-    parent,
-    modal: true,
     show: false,
     title: '新建设备',
     icon: appIcon,
+    // darwin 去原生标题条、三灯嵌入。y=12 实测居中：灯 12px 高且 Electron 有 +2 内禀偏移
+    // （code y → 实际顶 y+2，中心 y+8）→ y=12 时中心 19.5 = 40px 板头中心 = 标题组中心，三者共线
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 12 } }
+      : {}),
     resizable: true,
     minimizable: false,
     fullscreenable: false,
@@ -47,8 +63,8 @@ export function openWizardWindow(parent: BrowserWindow): void {
     }
   })
 
-  // 父窗销毁时 Electron 会带走模态子窗；这里只清引用防悬挂（含 opening 复位——
-  // 加载失败没有 ready-to-show 时靠关闭兜底解除互斥）
+  // 父窗主动关闭时由主窗侧调 closeWizardWindow 带走；这里只清引用防悬挂
+  // （含 opening 复位——加载失败没有 ready-to-show 时靠关闭兜底解除互斥）
   window.on('closed', () => {
     wizardWindow = null
     opening = false
@@ -69,10 +85,11 @@ export function openWizardWindow(parent: BrowserWindow): void {
 
 export function registerWizardIpc(): void {
   ipcMain.handle(IPC_CHANNELS.wizardOpen, (event): void => {
-    // 模态归属发起调用的窗（当前只有主窗会调）；sender 不可信，宁可解析失败也不盲开
-    const parent = BrowserWindow.fromWebContents(event.sender)
-    if (!parent) throw new Error(`${IPC_CHANNELS.wizardOpen}: 无法定位父窗`)
-    openWizardWindow(parent)
+    // sender 守卫保留（不可信，宁可解析失败也不盲开）；parent 已移除——向导窗完全独立
+    if (!BrowserWindow.fromWebContents(event.sender)) {
+      throw new Error(`${IPC_CHANNELS.wizardOpen}: 无法定位调用方窗口`)
+    }
+    openWizardWindow()
   })
 
   ipcMain.handle(IPC_CHANNELS.wizardClose, (event): void => {

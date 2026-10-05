@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, X } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import styled from 'styled-components'
 import type {
   CreateDeviceInput,
@@ -352,7 +352,7 @@ const DeviceWizard = ({
   const selectedVerdict =
     selectedImage === null ? null : (verdicts.get(selectedImage.packageName) ?? null)
 
-  // 独立窗体：焦点不在任何元素上时 Esc 也应能取消
+  // 独立窗体（无 X 按钮）：Esc 是键盘关闭路径，原生红绿灯/底部取消是另两条
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onCancel()
@@ -569,13 +569,13 @@ const DeviceWizard = ({
   return (
     <Wrapper>
       <Header>
-        <Heading>新建设备</Heading>
-        <StepIndicator>
-          第 {page} / 2 页 · {PAGE_TITLES[page]}
-        </StepIndicator>
-        <CloseButton type="button" aria-label="取消新建" onClick={onCancel}>
-          <X size={16} />
-        </CloseButton>
+        {window.api?.platform === 'darwin' ? <TrafficSpacer aria-hidden="true" /> : null}
+        <TitleGroup>
+          <Heading>新建设备</Heading>
+          <StepIndicator>
+            第 {page} / 2 页 · {PAGE_TITLES[page]}
+          </StepIndicator>
+        </TitleGroup>
       </Header>
 
       <Body>{renderPage()}</Body>
@@ -610,12 +610,35 @@ const Wrapper = styled.div`
 `
 
 const Header = styled.header`
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: 40px;
+  padding-left: 14px;
+  border-bottom: 1px solid var(--board-hairline);
+  /* 板头整行是窗口拖拽带（darwin 原生标题条已去，对齐主窗 BoardHead 模式）；
+     标题组绝对定位水平居中于窗口中线（用户裁决），垂直落板头中线（与三灯 y=12 共线） */
+  -webkit-app-region: drag;
+`
+
+/** darwin 原生三灯让位（60px no-drag 占位；标题组改绝对居中后，占位只负责三灯区禁拖） */
+const TrafficSpacer = styled.span`
+  flex: none;
+  width: 60px;
+  -webkit-app-region: no-drag;
+`
+
+/** 标题组：两段字号不同（14/11px）在组内基线对齐；整组绝对定位——水平居中于窗口、垂直居中于板头。
+ *  div 而非 span：内含 h3（flow content），span 只许 phrasing content（review 2026-10-06） */
+const TitleGroup = styled.div`
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   align-items: baseline;
   gap: 8px;
-  flex: none;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--board-hairline);
 `
 
 const Heading = styled.h3`
@@ -625,34 +648,8 @@ const Heading = styled.h3`
 `
 
 const StepIndicator = styled.span`
-  flex: 1;
   font-size: 11px;
   color: var(--board-ink-dim);
-`
-
-const CloseButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--board-ink-dim);
-  cursor: pointer;
-  transition: background-color 0.12s;
-
-  &:hover {
-    background: var(--board-hover-veil);
-    color: var(--board-ink);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
 `
 
 const Body = styled.div`
