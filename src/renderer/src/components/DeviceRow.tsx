@@ -134,7 +134,9 @@ const DeviceRow = ({
         ) : null}
         {device.status === 'starting' ? (
           <>
-            <BusyIcon role="img" aria-label={`启动中 ${device.name}`} />
+            <BusySlot role="img" aria-label={`启动中 ${device.name}`}>
+              <BusyIcon aria-hidden="true" />
+            </BusySlot>
             <IconButton
               type="button"
               aria-label={`取消启动 ${device.name}`}
@@ -167,7 +169,9 @@ const DeviceRow = ({
         ) : null}
         {device.status === 'stopping' ? (
           <>
-            <BusyIcon role="img" aria-label={`停止中 ${device.name}`} />
+            <BusySlot role="img" aria-label={`停止中 ${device.name}`}>
+              <BusyIcon aria-hidden="true" />
+            </BusySlot>
             {/* 停止失败保留重试入口；未失败时点击无害（合并到在途清理） */}
             <IconButton
               type="button"
@@ -235,14 +239,28 @@ const StatusDot = styled.span<{ $status: DeviceStatus }>`
         : 'var(--idle)'};
 `
 
-const BusyIcon = styled(Loader2).attrs({ size: 14 })`
+/** 忙态槽位：与 IconButton 同尺寸的非交互容器，加载图标与按钮图标共用同一水平中心 */
+const BusySlot = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: none;
+  width: 24px;
+  height: 24px;
+`
+
+const BusyIcon = styled(Loader2).attrs({ size: 14 })`
+  display: block;
   animation: spin 1.2s linear infinite;
 
   @keyframes spin {
     to {
       transform: rotate(360deg);
     }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
   }
 `
 
@@ -302,6 +320,7 @@ const RenameInput = styled(Input)`
 
 const Actions = styled.span`
   display: inline-flex;
+  align-items: center;
   gap: 2px;
   flex: none;
 `
@@ -310,6 +329,7 @@ const IconButton = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: none;
   width: 24px;
   height: 24px;
   padding: 0;

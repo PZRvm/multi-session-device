@@ -90,7 +90,10 @@ describe('DeviceRow', () => {
     const { onCancelStart } = setup({
       device: { ...baseDevice, status: 'starting', serial: 'emulator-5554' }
     })
-    expect(screen.getByRole('img', { name: '启动中 Pixel 8 API 34' })).toBeTruthy()
+    // 语义落在与按钮同尺寸的非交互槽位上，旋转 SVG 自身退为装饰
+    const busy = screen.getByRole('img', { name: '启动中 Pixel 8 API 34' })
+    expect(busy.tagName).toBe('SPAN')
+    expect(busy.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: '取消启动 Pixel 8 API 34' }))
     expect(onCancelStart).toHaveBeenCalledTimes(1)
     expect(
