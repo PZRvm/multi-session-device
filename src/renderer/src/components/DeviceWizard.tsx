@@ -615,10 +615,10 @@ const Header = styled.header`
   align-items: center;
   flex: none;
   height: 40px;
-  padding: 0 14px;
+  padding-left: 14px;
   border-bottom: 1px solid var(--board-hairline);
   /* 板头整行是窗口拖拽带（darwin 原生标题条已去，对齐主窗 BoardHead 模式）；
-     标题组绝对定位水平居中于窗口中线（用户裁决），垂直仍落板头中线（与三灯 y=14 共线） */
+     标题组绝对定位水平居中于窗口中线（用户裁决），垂直落板头中线（与三灯 y=12 共线） */
   -webkit-app-region: drag;
 `
 
@@ -629,8 +629,9 @@ const TrafficSpacer = styled.span`
   -webkit-app-region: no-drag;
 `
 
-/** 标题组：两段字号不同（14/11px）在组内基线对齐；整组绝对定位——水平居中于窗口、垂直居中于板头 */
-const TitleGroup = styled.span`
+/** 标题组：两段字号不同（14/11px）在组内基线对齐；整组绝对定位——水平居中于窗口、垂直居中于板头。
+ *  div 而非 span：内含 h3（flow content），span 只许 phrasing content（review 2026-10-06） */
+const TitleGroup = styled.div`
   position: absolute;
   left: 50%;
   top: 50%;

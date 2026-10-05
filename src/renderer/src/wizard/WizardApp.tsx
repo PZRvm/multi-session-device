@@ -3,7 +3,7 @@ import { toApiResult } from '../api'
 import DeviceWizard from '../components/DeviceWizard'
 
 /**
- * 新建设备模态窗的页面根：独立 BrowserWindow（main/window/wizard.ts），
+ * 新建设备独立窗（非模态）的页面根：独立 BrowserWindow（main/window/wizard.ts），
  * 复用 DeviceWizard（填满视口）。创建走既有 devices IPC——
  * 主窗列表经 devices:changed 广播刷新，本窗不订阅、创建/取消后即请求关窗。
  */
