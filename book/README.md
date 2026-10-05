@@ -92,11 +92,14 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-04-messageport-bridge-no-delivery.md](notes/issue/2026-10/2026-10-04-messageport-bridge-no-delivery.md) — MessagePortMain 经 contextBridge 回传后 port 对象可达但不投递消息——视频包通道退回 webContents.send（每帧拷贝），产品化时可再评估
 - [2026-10-04-wizard-create-no-double-click-guard.md](notes/issue/2026-10/2026-10-04-wizard-create-no-double-click-guard.md) — 向导窗创建按钮无创建中禁用/防连击——双击可建出两台同名设备，stage 04 真实创建变慢后会被放大
 - [2026-10-04-wizard-window-singleton-race.md](notes/issue/2026-10/2026-10-04-wizard-window-singleton-race.md) — openWizardWindow 单例判断无互斥——极窄窗口内两次 wizard:open 可开两扇模态窗且第一扇引用被覆盖
+- [2026-10-05-baseline-lint-debt.md](notes/issue/2026-10/2026-10-05-baseline-lint-debt.md) — 基线 4e01b09 自带 10 个 eslint error（scrcpy 测试与 index 的显式返回类型、renderer 的 react-hooks refs/setState 纪律）与 7 个 warning——已被基上 3f0a977 全部清空，见姊妹 issue
 - [2026-10-05-baseline-lint-errors-stage04-files.md](notes/issue/2026-10/2026-10-05-baseline-lint-errors-stage04-files.md) — stage04 基线上 npm run lint 有存量 10 errors / 7 warnings（react-hooks 渲染纪律 + 显式返回类型），全部位于已提交的 scrcpy 与投屏 renderer 文件
+- [2026-10-05-canvas-ready-before-layout.md](notes/issue/2026-10/2026-10-05-canvas-ready-before-layout.md) — 投屏 status 可先于 layout 就绪（format 与 ResizeObserver 的 containerSize 双异步入参有竞态窗口），期间画布槽 0×0 画面不可见且输入被几何拒收；屏幕休眠节流下窗口可拉长到秒级以上
 - [2026-10-05-console-token-escapes-avd-isolation.md](notes/issue/2026-10/2026-10-05-console-token-escapes-avd-isolation.md) — emulator 37.2.12 的 console token 恒读写宿主 ~/.emulator_console_auth_token，ANDROID_EMULATOR_HOME 重定向不覆盖——全新机器上首次启动会向宿主 home 写入新 token
 - [2026-10-05-device-store-read-error-as-empty.md](notes/issue/2026-10/2026-10-05-device-store-read-error-as-empty.md) — readDeviceMetas 将读取错误与坏 JSON 当作空库，后续元数据写入可能覆盖原设备记录；对账草案设计了读取诊断和写保护
 - [2026-10-05-forward-tunnel-control-read-silent.md](notes/issue/2026-10/2026-10-05-forward-tunnel-control-read-silent.md) — adb forward 隧道下 scrcpy 控制连接的 server→client 读方向在真机上静默——设备消息（剪贴板 ACK/同步推送）收不到，控制写方向正常
 - [2026-10-05-lint-baseline-unclean.md](notes/issue/2026-10/2026-10-05-lint-baseline-unclean.md) — npm run lint 存量 17 项未清（10 errors / 7 warnings）——react-hooks/set-state-in-effect 为主，集中在 DeviceCanvas 等既有效应
+- [2026-10-05-phone-avd-rotation-refused.md](notes/issue/2026-10/2026-10-05-phone-avd-rotation-refused.md) — 手办画像（pixel_8）的 AVD 在系统层拒绝一切旋转：settings user_rotation、emu rotate、虚拟加速度计、相机应用均不改画面方向；手机横屏的真机视觉验证待强制横屏应用或日常人工使用覆盖
 - [2026-10-05-wizard-download-no-tick-guard.md](notes/issue/2026-10/2026-10-05-wizard-download-no-tick-guard.md) — DeviceWizard download() 跨 tick 无互斥守卫——下载按钮是 disabled 行内的 span，jsdom 与极端竞速可穿透，两次并发 download 互相覆盖进度状态
 
 ### notes/learn/2026-09/
@@ -122,10 +125,13 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-04-scrcpy-transport-forward-tcp.md](notes/learn/2026-10/2026-10-04-scrcpy-transport-forward-tcp.md) — scrcpy 取流传输要走 adb forward + 裸 TCP（官方客户端同款路径）——Tango 的 adb server 直连 localabstract 会卡死服务端取帧
 - [2026-10-04-titlebar-hidden-blur-traffic-lights.md](notes/learn/2026-10/2026-10-04-titlebar-hidden-blur-traffic-lights.md) — macOS titleBarStyle hidden 的失焦三灯整组消失怪癖——setWindowButtonVisibility 在 blur 抢不过系统，hiddenInset 是正解
 - [2026-10-05-cdp-evaluate-page-destroy-hang.md](notes/learn/2026-10/2026-10-05-cdp-evaluate-page-destroy-hang.md) — CDP 驱动 Electron 页面时窗口在 evaluate 应答前关闭——WebSocket 无响应也不报错，pending promise 永不 settle，脚本静默悬挂
+- [2026-10-05-electron-cdp-acceptance-observables.md](notes/learn/2026-10/2026-10-05-electron-cdp-acceptance-observables.md) — Electron 真机 UI 验收的可观测经验：scrcpy 注入不进内核 getevent 要用 paints 跃迁做正反证；macOS displaysleep 节流会让 ResizeObserver/layout 长时间不就绪；主题切换经 useEffect 生效需轮询；BoardHead 外观控件有分段/下拉两种形态
 - [2026-10-05-emulator-console-token-host-home.md](notes/learn/2026-10/2026-10-05-emulator-console-token-host-home.md) — console token 路径不随 ANDROID_EMULATOR_HOME 重定向——恒为 $HOME/.emulator_console_auth_token，缺失时 emulator 会写宿主 home；共享 adb 靠 smart-socket 只读探测保不重启
 - [2026-10-05-offscreen-electron-pixel-acceptance.md](notes/learn/2026-10/2026-10-05-offscreen-electron-pixel-acceptance.md) — jsdom 证不了像素对齐——离屏 Electron + 页内 getBoundingClientRect 几何断言 + capturePage 序列帧，一套临时 harness 覆盖状态矩阵、动画漂移与主题可见性
 - [2026-10-05-tsx-generic-arrow-comma.md](notes/learn/2026-10/2026-10-05-tsx-generic-arrow-comma.md) — tsx 里泛型箭头函数必须写 <T,>——裸 <T>( 被解析成 JSX 起始标签，连环假错报到几百行外的 styled 段
 - [2026-10-05-vitest-clearallmocks-impl-bleed.md](notes/learn/2026-10/2026-10-05-vitest-clearallmocks-impl-bleed.md) — vi.clearAllMocks 只清调用记录不重置实现——上一组 describe 末用例设置的持久 mockRejectedValue 会渗进下一组，报错栈指向别的用例的 setup 行
+- [2026-10-05-worktree-git-common-dir-relative.md](notes/learn/2026-10/2026-10-05-worktree-git-common-dir-relative.md) — create-worktree 技能的仓库父目录公式在仓库根执行会得到相对路径 "."，worktree 被建进主仓库内部；用 rev-parse --show-toplevel 或绝对路径展开
+- [2026-10-05-xml-namespace-backreference-colon.md](notes/learn/2026-10/2026-10-05-xml-namespace-backreference-colon.md) — 正则解析带命名空间前缀的 XML 块时，前缀捕获组必须把冒号包进组内，否则闭合标签回引永假、惰性块体吞掉全部后续同祖节点；esbuild 不校验正则字面量，坏正则要到运行时才以"静默错配"现形
 
 ### plans/
 
@@ -152,6 +158,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-05-device-store-issue-batch.md](plans/2026-10-05-device-store-issue-batch.md) — 四个设备域 issue 的收口批次——三个已在 7099076 修掉待验证回写，键盘重命名本轮实现
 - [2026-10-05-device-stream-control.md](plans/2026-10-05-device-stream-control.md) — stage04 步骤 5 的需求与设计：多设备 scrcpy 会话、后台停解码与关键帧恢复、等比画布和触控键盘输入
 - [2026-10-05-emulator-runner.md](plans/2026-10-05-emulator-runner.md) — stage04 步骤 4 的需求与设计：真启停、端口避让、可取消状态机、崩溃回写及退出清理
+- [2026-10-05-emulator-wizard.md](plans/2026-10-05-emulator-wizard.md) — 按方案 A 重建两页模拟器向导：六类画像、完整镜像选择、附加设置、机型皮肤、真实摄像头与 Quick Boot；SD 卡暂缓、跨架构二期
 - [2026-10-05-wizard-catalog-loading.md](plans/2026-10-05-wizard-catalog-loading.md) — 为新建设备向导增加画像与镜像清单的加载动画、独立错误重试及关闭后结果保护
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
@@ -170,4 +177,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261005221831-模拟器向导分类与附加设置.md](think-report/20261005221831-模拟器向导分类与附加设置.md) — 已确认的向导范围：画像分类、API镜像与附加设置，含机型皮肤和真实摄像头；SD卡暂缓，跨架构二期
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 96 documents -->
+<!-- 103 documents -->

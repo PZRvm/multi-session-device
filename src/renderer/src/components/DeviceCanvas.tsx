@@ -31,7 +31,13 @@ const DeviceCanvas = ({ device }: DeviceCanvasProps): React.JSX.Element => {
   const frameKind: DeviceFrameKind = device.frameKind ?? 'generic'
   const layout = useMemo<ScreenLayout | null>(() => {
     if (!format || containerSize.width <= 0 || containerSize.height <= 0) return null
-    return computeLayout(containerSize.width, containerSize.height, format.width, format.height, frameKind)
+    return computeLayout(
+      containerSize.width,
+      containerSize.height,
+      format.width,
+      format.height,
+      frameKind
+    )
   }, [format, containerSize, frameKind])
   const layoutRef = useRef<ScreenLayout | null>(null)
   // 事件回调读最新布局：ref 更新放 effect，渲染期不写 ref
