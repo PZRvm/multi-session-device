@@ -135,7 +135,7 @@ const ImageTable = ({
           <HeadCell>服务</HeadCell>
           <HeadCell>ABI</HeadCell>
           <HeadCell className="num">大小</HeadCell>
-          <HeadCell className="num">状态</HeadCell>
+          <HeadCell className="center">状态</HeadCell>
         </HeadRow>
         {rows.map((image) => {
           const verdict = verdicts.get(image.packageName)
@@ -314,6 +314,10 @@ const HeadCell = styled.div`
 
   &.num {
     text-align: right;
+  }
+
+  &.center {
+    text-align: center;
   }
 `
 
