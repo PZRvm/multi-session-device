@@ -1,23 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Download, Loader2, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Loader2, X } from 'lucide-react'
 import styled from 'styled-components'
-import type { CreateDeviceInput, DeviceProfile, ImageEntry } from '@shared/types'
+import type { CreateDeviceInput, DeviceFormFactor, DeviceProfile, ImageEntry } from '@shared/types'
+import { assessImageCompatibility } from '@shared/compatibility'
 import Button from './Button'
 import Input from './Input'
+import ProfilePage from './wizard/ProfilePage'
+import ImageTable, { type ImageFilters } from './wizard/ImageTable'
+import SummaryPanel from './wizard/SummaryPanel'
+import { apiDisplay, messageOf } from './wizard/shared'
 
-const STEP_TITLES: Record<1 | 2 | 3, string> = {
-  1: '选择设备画像',
-  2: '选择系统镜像',
-  3: '命名设备'
-}
-
-const formatSize = (bytes: number | null): string =>
-  bytes === null ? '大小未知' : `${(bytes / 1024 ** 3).toFixed(1)} GB`
-
-const messageOf = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
-
-type WizardVariant = 'panel' | 'window'
+/**
+ * 两页向导（plan 2026-10-05-emulator-wizard 设计 3）：
+ * 第 1 页选画像（六类导航 + 搜索 + 表格），第 2 页配置设备（设备/附加设置
+ * 标签 + 镜像筛选表格 + 右侧固定摘要）。清单装载/下载/创建守卫沿用
+ * 清单加载反馈（plan 2026-10-05-wizard-catalog-loading）的代次与防连击设计。
+ */
 
 export interface DeviceWizardData {
   profiles: DeviceProfile[]
@@ -89,39 +87,12 @@ const fetchImages = async (): Promise<ImageEntry[]> => {
     throw new Error('sdk api 不可用')
   }
   const catalog = await window.api.sdk.images()
-  // 桥接期过滤：旧三步 UI 只消费旧三变体闭集（新两页向导解锁全部形态）
-  return catalog.images.filter(
-    (entry) =>
-      entry.abi === 'arm64-v8a' &&
-      entry.api.codename === null &&
-      entry.services.every((service) => ['aosp', 'google_apis', 'google_play'].includes(service)) &&
-      entry.services.length > 0
-  )
+  return catalog.images
 }
 
-/** API 显示值：结构化版本回显（36 / 36.1），解析不了用平台段原文 */
-const apiDisplay = (entry: ImageEntry): string => {
-  const { major, minor, platformSegment } = entry.api
-  if (major === null) return platformSegment
-  return minor !== null ? `${major}.${minor}` : `${major}`
-}
-
-/** 服务 → 展示名（多服务取第一个主服务） */
-const serviceLabel = (entry: ImageEntry): string => {
-  const map: Record<string, string> = {
-    google_play: 'Google Play',
-    google_apis: 'Google APIs',
-    aosp: 'AOSP',
-    wear: 'Wear OS',
-    tv: 'Android TV',
-    automotive: 'Automotive'
-  }
-  return map[entry.services[0]] ?? entry.services[0] ?? '—'
-}
+type WizardTab = 'device' | 'settings'
 
 type DeviceWizardProps = {
-  /** panel = 主窗右栏内嵌卡片；window = 原生模态子窗整页（Esc 关闭） */
-  variant?: WizardVariant
   /** 返回 promise 时按钮进入创建中禁用态（防连击，issue 2026-10-04-wizard-create-no-double-click-guard） */
   onCreate: (input: CreateDeviceInput) => void | Promise<void>
   onCancel: () => void
@@ -131,15 +102,31 @@ type DeviceWizardProps = {
   onDownloadImage?: (packageName: string) => Promise<void>
 }
 
-/** 三步向导（画像 → 镜像 → 命名）：panel 占主窗画布区；window 填满模态子窗视口 */
+const PAGE_TITLES: Record<1 | 2, string> = {
+  1: '选择画像',
+  2: '配置设备'
+}
+
 const DeviceWizard = ({
-  variant = 'panel',
   onCreate,
   onCancel,
   data,
   onDownloadImage
 }: DeviceWizardProps): React.JSX.Element => {
-  const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [page, setPage] = useState<1 | 2>(1)
+  // 画像页筛选
+  const [category, setCategory] = useState<DeviceFormFactor>('phone')
+  const [search, setSearch] = useState('')
+  const [showDeprecated, setShowDeprecated] = useState(false)
+  // 配置页
+  const [tab, setTab] = useState<WizardTab>('device')
+  const [imageFilters, setImageFilters] = useState<ImageFilters>({
+    service: 'all',
+    showFullList: false,
+    showPreview: false,
+    showUnsupported: false
+  })
+
   const [profile, setProfile] = useState<DeviceProfile | null>(null)
   const [image, setImage] = useState<ImageEntry | null>(null)
   const [name, setName] = useState('')
@@ -222,9 +209,20 @@ const DeviceWizard = ({
       ? null
       : (images.data.find((entry) => entry.packageName === image.packageName) ?? null)
 
-  // window 变体是独立窗体：焦点不在任何元素上时 Esc 也应能取消（panel 无此语义）
+  // 逐镜像兼容性（画像未选时不判——verdict 显示为空）。创建守卫在 main，此处仅展示
+  const verdicts = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof assessImageCompatibility>>()
+    if (selectedProfile === null) return map
+    for (const entry of images.data) {
+      map.set(entry.packageName, assessImageCompatibility(selectedProfile, entry))
+    }
+    return map
+  }, [selectedProfile, images.data])
+  const selectedVerdict =
+    selectedImage === null ? null : (verdicts.get(selectedImage.packageName) ?? null)
+
+  // 独立窗体：焦点不在任何元素上时 Esc 也应能取消
   useEffect(() => {
-    if (variant !== 'window') return
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onCancel()
     }
@@ -232,23 +230,21 @@ const DeviceWizard = ({
     return () => {
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [variant, onCancel])
+  }, [onCancel])
 
   const defaultName =
     selectedProfile && selectedImage
       ? `${selectedProfile.name} API ${apiDisplay(selectedImage)}`
       : ''
   const effectiveName = nameTouched ? name : defaultName
-  // 镜像清单刷新未确认前不放行创建——等新清单核验选择后再允许
+  // 完成门槛（plan 设计 3）：兼容 supported + 镜像完整安装 + 名称合法 + 清单就绪
+  // + 无下载/创建事务。下载进度 100% 只是进度信号——重拉核验通过才算数
   const canCreate =
     effectiveName.trim().length > 0 &&
-    (selectedImage?.installed ?? false) &&
-    images.phase === 'ready'
-
-  const goNext = (): void => {
-    if (step === 1 && selectedProfile && profiles.phase === 'ready') setStep(2)
-    else if (step === 2 && selectedImage?.installed && images.phase === 'ready') setStep(3)
-  }
+    selectedImage?.installed === true &&
+    selectedVerdict?.status === 'supported' &&
+    images.phase === 'ready' &&
+    downloading === null
 
   // 防连击三层：ref 守卫（同 tick 连点）+ 按钮 disabled + state（跨 tick 视觉/语义）
   const create = async (): Promise<void> => {
@@ -269,6 +265,17 @@ const DeviceWizard = ({
     }
   }
 
+  const changeCategory = (next: DeviceFormFactor): void => {
+    setCategory(next)
+    // 更改类别清除不属于该类的选择
+    if (selectedProfile !== null && selectedProfile.formFactor !== next) setProfile(null)
+  }
+
+  const selectProfile = (next: DeviceProfile): void => {
+    setProfile(next)
+    // 改画像：镜像兼容性随之变化，原选择若不再 supported 由核验派生自动失效
+  }
+
   // 清单区反馈：首载无数据时居中等待；有数据刷新时列表保留、顶部紧凑提示
   const renderCatalogShell = (
     resource: ResourceState<DeviceProfile> | ResourceState<ImageEntry>,
@@ -276,7 +283,7 @@ const DeviceWizard = ({
     loadingText: string,
     refreshingText: string,
     emptyText: string,
-    list: React.JSX.Element
+    content: React.JSX.Element
   ): React.JSX.Element => {
     const waiting = resource.phase === 'loading' || resource.phase === 'idle'
     if (waiting && resource.data.length === 0) {
@@ -302,7 +309,7 @@ const DeviceWizard = ({
           </RefreshRow>
         ) : null}
         {resource.data.length > 0 ? (
-          list
+          content
         ) : resource.phase === 'ready' ? (
           <EmptyHint>{emptyText}</EmptyHint>
         ) : null}
@@ -310,150 +317,136 @@ const DeviceWizard = ({
     )
   }
 
-  const renderBody = (): React.JSX.Element => {
-    if (step === 1) {
-      return (
-        <CatalogRegion aria-busy={profiles.phase === 'loading'}>
-          {renderCatalogShell(
-            profiles,
-            () => void reloadProfiles(),
-            '正在加载设备画像…',
-            '正在刷新设备画像…',
-            '画像清单为空',
-            <OptionGroup role="group" aria-label={STEP_TITLES[1]}>
-              {profiles.data.map((entry) => (
-                <OptionButton
-                  key={entry.id}
-                  type="button"
-                  aria-pressed={selectedProfile?.id === entry.id}
-                  onClick={() => setProfile(entry)}
-                >
-                  <OptionTitle>{entry.name}</OptionTitle>
-                </OptionButton>
-              ))}
-            </OptionGroup>
-          )}
-        </CatalogRegion>
-      )
-    }
-    if (step === 2) {
-      return (
-        <CatalogRegion aria-busy={images.phase === 'loading'}>
-          {renderCatalogShell(
-            images,
-            () => void reloadImages(),
-            '正在加载系统镜像…',
-            '正在刷新系统镜像…',
-            '清单为空',
-            <OptionGroup role="group" aria-label={STEP_TITLES[2]}>
-              {images.data.map((entry) => {
-                const key = entry.packageName
-                const isDownloading = downloading?.packageName === entry.packageName
-                const busy = downloading !== null
-                return (
-                  <ImageRow
-                    key={key}
-                    type="button"
-                    aria-pressed={selectedImage?.packageName === entry.packageName}
-                    disabled={busy}
-                    onClick={() => {
-                      if (entry.installed) setImage(entry)
-                    }}
-                  >
-                    <ImageInfo>
-                      <OptionTitle>
-                        API {apiDisplay(entry)} · {serviceLabel(entry)}
-                      </OptionTitle>
-                      <OptionSub>
-                        arm64-v8a ·{' '}
-                        {entry.installed ? '已安装' : `下载 ${formatSize(entry.sizeBytes)}`}
-                      </OptionSub>
-                    </ImageInfo>
-                    {!entry.installed ? (
-                      <DownloadButton
-                        role="button"
-                        aria-disabled={busy}
-                        aria-label={`下载 API ${apiDisplay(entry)} ${serviceLabel(entry)}`}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void download(entry)
-                        }}
-                      >
-                        {isDownloading ? `${downloading.percent}%` : <Download size={14} />}
-                      </DownloadButton>
-                    ) : null}
-                  </ImageRow>
-                )
-              })}
-            </OptionGroup>
-          )}
-          {downloadError !== null ? (
-            <ErrorBlock role="alert">
-              <ErrorText>{downloadError.message}</ErrorText>
-              <Button onClick={retryDownload}>重试下载</Button>
-            </ErrorBlock>
-          ) : null}
-        </CatalogRegion>
-      )
-    }
-    return (
-      <NameBlock>
-        <NameLabel htmlFor="wizard-device-name">设备名称</NameLabel>
-        <Input
-          id="wizard-device-name"
-          value={effectiveName}
-          maxLength={50}
-          placeholder="设备画像名 + API 版本"
-          onChange={(event) => {
-            setName(event.target.value)
-            setNameTouched(true)
-          }}
+  const renderPage = (): React.JSX.Element => {
+    if (page === 1) {
+      return renderCatalogShell(
+        profiles,
+        () => void reloadProfiles(),
+        '正在加载设备画像…',
+        '正在刷新设备画像…',
+        '画像清单为空',
+        <ProfilePage
+          profiles={profiles.data}
+          category={category}
+          onCategoryChange={changeCategory}
+          search={search}
+          onSearchChange={setSearch}
+          showDeprecated={showDeprecated}
+          onShowDeprecatedChange={setShowDeprecated}
+          selectedId={selectedProfile?.id ?? null}
+          onSelect={selectProfile}
         />
-        <NameHint>默认「设备画像名 + API 版本」，可改。</NameHint>
-      </NameBlock>
+      )
+    }
+    return renderCatalogShell(
+      images,
+      () => void reloadImages(),
+      '正在加载系统镜像…',
+      '正在刷新系统镜像…',
+      '镜像清单为空',
+      <ConfigureLayout>
+        <Main>
+          <TabBar role="tablist" aria-label="配置分区">
+            <Tab
+              type="button"
+              role="tab"
+              aria-selected={tab === 'device'}
+              onClick={() => setTab('device')}
+            >
+              设备
+            </Tab>
+            <Tab
+              type="button"
+              role="tab"
+              aria-selected={tab === 'settings'}
+              onClick={() => setTab('settings')}
+            >
+              附加设置
+            </Tab>
+          </TabBar>
+
+          {tab === 'device' ? (
+            <DevicePane>
+              <NameBlock>
+                <NameLabel htmlFor="wizard-device-name">设备名称</NameLabel>
+                <Input
+                  id="wizard-device-name"
+                  value={effectiveName}
+                  maxLength={50}
+                  placeholder="设备画像名 + API 版本"
+                  onChange={(event) => {
+                    setName(event.target.value)
+                    setNameTouched(true)
+                  }}
+                />
+                <NameHint>默认「设备画像名 + API 版本」；改过后切换镜像不覆盖你的输入。</NameHint>
+              </NameBlock>
+              <ImageTable
+                images={images.data}
+                filters={imageFilters}
+                onFiltersChange={setImageFilters}
+                verdicts={verdicts}
+                selectedPackageName={selectedImage?.packageName ?? null}
+                onSelect={setImage}
+                downloading={downloading}
+                onDownload={(entry) => void download(entry)}
+                downloadBusy={downloading !== null}
+              />
+              {downloadError !== null ? (
+                <ErrorBlock role="alert">
+                  <ErrorText>{downloadError.message}</ErrorText>
+                  <Button onClick={retryDownload}>重试下载</Button>
+                </ErrorBlock>
+              ) : null}
+            </DevicePane>
+          ) : (
+            <SettingsPane>
+              <SettingsHint>
+                附加设置（皮肤、摄像头、网络、启动模式、内部存储、模拟性能）将在设置
+                能力就绪后开放。本次创建按镜像与画像默认值执行：Cold Boot、host GPU、 内部存储
+                6GB、RAM 跟随画像。
+              </SettingsHint>
+              <SettingsGroups aria-disabled="true">
+                {['皮肤', '摄像头', '网络', '启动', '内部存储', '模拟性能'].map((group) => (
+                  <DisabledGroup key={group}>{group}</DisabledGroup>
+                ))}
+              </SettingsGroups>
+            </SettingsPane>
+          )}
+        </Main>
+        <SummaryPanel profile={selectedProfile} image={selectedImage} verdict={selectedVerdict} />
+      </ConfigureLayout>
     )
   }
 
   return (
-    <Wrapper $variant={variant}>
+    <Wrapper>
       <Header>
         <Heading>新建设备</Heading>
         <StepIndicator>
-          第 {step} / 3 步 · {STEP_TITLES[step]}
+          第 {page} / 2 页 · {PAGE_TITLES[page]}
         </StepIndicator>
         <CloseButton type="button" aria-label="取消新建" onClick={onCancel}>
           <X size={16} />
         </CloseButton>
       </Header>
 
-      <Body>{renderBody()}</Body>
+      <Body>{renderPage()}</Body>
 
       <Footer>
-        {step > 1 ? (
-          <Button
-            onClick={() => {
-              if (step === 2) setImage(null)
-              else setNameTouched(false)
-              setStep(step === 2 ? 1 : 2)
-            }}
-          >
-            上一步
-          </Button>
-        ) : null}
-        {step < 3 ? (
+        <Button onClick={onCancel}>取消</Button>
+        {page === 2 ? <Button onClick={() => setPage(1)}>上一步</Button> : null}
+        {page === 1 ? (
           <Button
             variant="primary"
-            disabled={
-              (step === 1 && (!selectedProfile || profiles.phase !== 'ready')) ||
-              (step === 2 && (!selectedImage?.installed || images.phase !== 'ready'))
-            }
-            onClick={goNext}
+            disabled={selectedProfile === null || profiles.phase !== 'ready'}
+            onClick={() => setPage(2)}
           >
             下一步
           </Button>
         ) : (
           <Button variant="primary" disabled={!canCreate || creating} onClick={create}>
-            创建
+            {creating ? '创建中…' : '创建'}
           </Button>
         )}
       </Footer>
@@ -461,23 +454,12 @@ const DeviceWizard = ({
   )
 }
 
-const Wrapper = styled.div<{ $variant: WizardVariant }>`
+const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
-
-  ${({ $variant }) =>
-    $variant === 'panel'
-      ? `
-        width: min(480px, 100%);
-        max-height: 100%;
-        background: var(--board-bg-raised);
-        border: 1px solid var(--board-hairline);
-      `
-      : `
-        width: 100%;
-        height: 100vh;
-        background: var(--board-bg);
-      `}
+  width: 100%;
+  height: 100vh;
+  background: var(--board-bg);
 `
 
 const Header = styled.header`
@@ -527,14 +509,11 @@ const CloseButton = styled.button`
 `
 
 const Body = styled.div`
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 16px 16px;
-`
-
-const CatalogRegion = styled.div`
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  padding: 0 0 8px;
 `
 
 const LoadingBlock = styled.div`
@@ -570,106 +549,14 @@ const RefreshRow = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 0;
+  padding: 6px 16px;
   font-size: 11px;
   color: var(--board-ink-dim);
-`
-
-const OptionGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: 8px;
-`
-
-const OptionButton = styled.button`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 12px;
-  text-align: left;
-  background: var(--board-bg);
-  color: var(--board-ink);
-  border: 1px solid var(--board-hairline);
-  border-radius: 4px;
-  cursor: pointer;
-  transition:
-    background-color 0.12s,
-    border-color 0.12s;
-
-  &:hover {
-    background: var(--board-hover-veil);
-  }
-
-  &[aria-pressed='true'] {
-    border-color: var(--board-ink);
-    background: var(--board-segment-selected-bg);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-`
-
-const OptionTitle = styled.span`
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.5;
-`
-
-const OptionSub = styled.span`
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--board-ink-dim);
-`
-
-const ImageRow = styled(OptionButton)`
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: default;
-  }
-`
-
-const ImageInfo = styled.span`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-`
-
-const DownloadButton = styled.span`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 44px;
-  height: 26px;
-  padding: 0 8px;
-  border: 1px solid var(--board-hairline);
-  border-radius: 4px;
-  background: var(--board-bg-raised);
-  color: var(--board-ink);
-  font-size: 11px;
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    background: var(--board-hover-veil);
-  }
-
-  &[aria-disabled='true'] {
-    cursor: default;
-    opacity: 0.7;
-  }
 `
 
 const EmptyHint = styled.p`
   margin: 0;
-  padding: 16px 0;
+  padding: 16px;
   font-size: 12px;
   color: var(--board-ink-dim);
 `
@@ -678,7 +565,7 @@ const ErrorBlock = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 8px;
+  margin: 8px 16px;
   padding: 8px 10px;
   border: 1px solid var(--board-hairline);
   border-radius: 4px;
@@ -691,11 +578,67 @@ const ErrorText = styled.span`
   color: var(--board-ink);
 `
 
+const ConfigureLayout = styled.div`
+  display: flex;
+  min-height: 0;
+  flex: 1;
+`
+
+const Main = styled.div`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+`
+
+const TabBar = styled.div`
+  display: flex;
+  gap: 4px;
+  flex: none;
+  padding: 10px 16px 0;
+  border-bottom: 1px solid var(--board-hairline);
+`
+
+const Tab = styled.button`
+  padding: 7px 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--board-ink-dim);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.12s;
+
+  &:hover {
+    color: var(--board-ink);
+  }
+
+  &[aria-selected='true'] {
+    color: var(--board-ink);
+    font-weight: 600;
+    border-bottom-color: var(--accent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+`
+
+const DevicePane = styled.div`
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  gap: 10px;
+  padding: 12px 16px;
+`
+
 const NameBlock = styled.div`
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-top: 8px;
+  flex: none;
 `
 
 const NameLabel = styled.label`
@@ -706,6 +649,35 @@ const NameLabel = styled.label`
 const NameHint = styled.p`
   margin: 0;
   font-size: 11px;
+  color: var(--board-ink-dim);
+`
+
+const SettingsPane = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+`
+
+const SettingsHint = styled.p`
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--board-ink-dim);
+`
+
+const SettingsGroups = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  opacity: 0.6;
+`
+
+const DisabledGroup = styled.span`
+  padding: 6px 12px;
+  border: 1px solid var(--board-hairline);
+  border-radius: 4px;
+  font-size: 12px;
   color: var(--board-ink-dim);
 `
 

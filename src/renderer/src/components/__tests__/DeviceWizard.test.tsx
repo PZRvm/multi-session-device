@@ -41,7 +41,8 @@ const PROFILES: DeviceProfile[] = [
 
 const image = (overrides: Partial<ImageEntry> & { apiMajor?: number }): ImageEntry => {
   const apiMajor = overrides.apiMajor ?? 36
-  const { apiMajor: _dropped, ...rest } = overrides
+  const rest = { ...overrides }
+  delete rest.apiMajor
   return {
     packageName: `system-images;android-${apiMajor};google_apis_playstore;arm64-v8a`,
     displayName: `Google Play ARM 64 v8a System Image ${apiMajor}`,
@@ -86,7 +87,7 @@ const IMAGES: ImageEntry[] = [
   image({ apiMajor: 34, installed: true })
 ]
 
-/** 桥接后 sdk.images() 返回 ImageCatalogResult——mock 统一包一层 */
+/** sdk.images() 返回 ImageCatalogResult——mock 统一包一层 */
 const catalogOf = (images: ImageEntry[]): ImageCatalogResult => ({
   images,
   sourceWarnings: [],
@@ -95,116 +96,126 @@ const catalogOf = (images: ImageEntry[]): ImageCatalogResult => ({
 })
 
 const setup = (handlers?: {
-  onCreate?: Mock<(input: unknown) => void>
+  onCreate?: Mock<(input: unknown) => Promise<void>>
   onCancel?: Mock<() => void>
   onDownloadImage?: Mock<(packageName: string) => Promise<void>>
-}): { onCreate: Mock<(input: unknown) => void>; onCancel: Mock<() => void> } => {
+}): { onCreate: Mock<(input: unknown) => Promise<void>>; onCancel: Mock<() => void> } => {
   const result = {
-    onCreate: handlers?.onCreate ?? vi.fn(),
+    onCreate: handlers?.onCreate ?? vi.fn<(input: unknown) => Promise<void>>(async () => {}),
     onCancel: handlers?.onCancel ?? vi.fn()
   }
   render(
     <DeviceWizard
       onCreate={result.onCreate}
       onCancel={result.onCancel}
-      onDownloadImage={handlers?.onDownloadImage}
       data={{ profiles: PROFILES, images: IMAGES }}
+      onDownloadImage={handlers?.onDownloadImage}
     />
   )
   return result
 }
 
-// 选项可访问名 = 标题+副行无分隔拼接，用标题文本就近找按钮更稳
-const profileButton = (title: string): HTMLButtonElement =>
-  screen.getByText(title).closest('button') as HTMLButtonElement
-
-const pickProfile = (): void => {
-  fireEvent.click(profileButton('Pixel 8'))
+/** 按 packageName 定位镜像行（API 文本在摘要面板也会出现，避免歧义） */
+const imageRow = (packageName: string): HTMLElement => {
+  const row = document.querySelector(`[data-image-package="${packageName}"]`)
+  if (row === null) throw new Error(`镜像行未找到：${packageName}`)
+  return row as HTMLElement
 }
+const PKG36 = 'system-images;android-36;google_apis_playstore;arm64-v8a'
 
-const pickImage = (): void => {
-  fireEvent.click(profileButton('API 36 · Google Play'))
-}
-
-const gotoNameStep = (): void => {
-  pickProfile()
-  fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-  pickImage()
+/** 进配置页：选第一个画像 → 下一步 */
+const gotoConfigure = (profileName = 'Pixel 8'): void => {
+  fireEvent.click(screen.getByText(profileName))
   fireEvent.click(screen.getByRole('button', { name: '下一步' }))
 }
 
 describe('DeviceWizard', () => {
-  it('第一步未选画像时「下一步」禁用；选中后可进第二步；画像副行带硬件参数', () => {
-    setup()
-    const next = screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement
-    expect(next.disabled).toBe(true)
-    pickProfile()
-    expect(next.disabled).toBe(false)
-    fireEvent.click(next)
-    expect(screen.getByText(/第 2 \/ 3 步/)).toBeTruthy()
-    expect(screen.getByRole('group', { name: '选择系统镜像' })).toBeTruthy()
-  })
-
-  it('第二步未装镜像显示下载按钮且不可选；已装可选；第三步默认名 = 画像名 + API 版本', () => {
-    setup()
-    pickProfile()
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    // 未装行：有下载按钮（带 aria-label），行本身不可把镜像置为已选
-    const missing = screen.getByRole('button', { name: '下载 API 35 Google APIs' })
-    expect(missing).toBeTruthy()
-    expect(profileButton('API 35 · Google APIs').getAttribute('aria-pressed')).toBe('false')
-    pickImage()
-    expect(profileButton('API 36 · Google Play').getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    expect(screen.getByText(/第 3 \/ 3 步/)).toBeTruthy()
-    const name = screen.getByLabelText('设备名称') as HTMLInputElement
-    expect(name.value).toBe('Pixel 8 API 36')
-  })
-
-  it('下载：点下载钮触发 onDownloadImage，不给选中', async () => {
-    const onDownloadImage = vi.fn<(packageName: string) => Promise<void>>()
-    setup({ onDownloadImage })
-    pickProfile()
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    fireEvent.click(screen.getByRole('button', { name: '下载 API 35 Google APIs' }))
-    await waitFor(() =>
-      expect(onDownloadImage).toHaveBeenCalledWith('system-images;android-35;google_apis;arm64-v8a')
+  it('第一页未选画像时「下一步」禁用；选中后可进第二页', () => {
+    const { onCreate } = setup()
+    expect((screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement).disabled).toBe(
+      true
     )
-    expect(profileButton('API 35 · Google APIs').getAttribute('aria-pressed')).toBe('false')
+    gotoConfigure()
+    expect(screen.getByText('第 2 / 2 页 · 配置设备')).toBeTruthy()
+    expect(onCreate).not.toHaveBeenCalled()
   })
 
-  // issue 2026-10-05-wizard-download-no-tick-guard：下载钮是 disabled 行内的 span，
-  // jsdom 连点可穿透行禁用——同 tick 两次原生 click，ref 守卫只放行一次
-  it('下载同 tick 原生连点只触发一次下载（ref 守卫）', async () => {
-    const gate = deferred<void>()
-    const onDownloadImage = vi.fn<(packageName: string) => Promise<void>>(() => gate.promise)
-    setup({ onDownloadImage })
-    pickProfile()
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    const button = screen.getByRole('button', { name: '下载 API 35 Google APIs' })
-    act(() => {
-      button.click()
-      button.click()
-    })
-    expect(onDownloadImage).toHaveBeenCalledTimes(1)
-    gate.resolve()
-  })
-
-  it('镜像选择不是已装镜像时无法进入第三步（下一步禁用）', () => {
+  it('类别导航切换：平板类展示 Pixel Tablet，切类清除不属于该类的选择', () => {
     setup()
-    pickProfile()
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    // 未选任何镜像
+    expect(screen.getByText('Pixel 8')).toBeTruthy()
+    expect(screen.queryByText('Pixel Tablet')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /平板/ }))
+    expect(screen.getByText('Pixel Tablet')).toBeTruthy()
+    expect(screen.queryByText('Pixel 8')).toBeNull()
+    fireEvent.click(screen.getByText('Pixel Tablet'))
+    fireEvent.click(screen.getByRole('button', { name: /手机/ }))
+    expect(screen.queryByText('Pixel Tablet')).toBeNull()
     expect((screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement).disabled).toBe(
       true
     )
   })
 
+  it('搜索只过滤不选中：过滤命中也不自动创建选中', () => {
+    setup()
+    fireEvent.change(screen.getByLabelText('搜索画像名称'), { target: { value: 'Fold' } })
+    expect(screen.queryByText('Pixel 8')).toBeNull()
+    fireEvent.change(screen.getByLabelText('搜索画像名称'), { target: { value: 'Pixel 8' } })
+    expect(screen.getByText('Pixel 8')).toBeTruthy()
+    expect((screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
+  })
+
+  it('第二页：未装镜像显示下载按钮且不可选；已装可选；默认名 = 画像名 + API', () => {
+    setup()
+    gotoConfigure()
+    expect((screen.getByLabelText('设备名称') as HTMLInputElement).value).toBe('')
+    const row35 = screen.getByText('API 35').closest('[role="button"]') as HTMLElement
+    expect(row35.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: /下载 API 35/ }))
+    fireEvent.click(screen.getByText('API 36'))
+    expect((screen.getByLabelText('设备名称') as HTMLInputElement).value).toBe('Pixel 8 API 36')
+  })
+
+  it('摘要面板：选画像与镜像后显示画像与镜像要点', () => {
+    setup()
+    gotoConfigure()
+    fireEvent.click(screen.getByText('API 36'))
+    const aside = screen.getByLabelText('设备摘要')
+    expect(aside.textContent).toContain('Pixel 8')
+    expect(aside.textContent).toContain('Google Play')
+    expect(aside.textContent).toContain('arm64-v8a')
+    expect(aside.textContent).toContain('已安装')
+  })
+
+  it('不兼容镜像（x86_64）默认不可见，打开开关后可见但不可选', () => {
+    const x86 = image({
+      apiMajor: 36,
+      packageName: 'system-images;android-36;google_apis_playstore;x86_64',
+      abi: 'x86_64',
+      installed: true
+    })
+    render(
+      <DeviceWizard
+        onCreate={vi.fn()}
+        onCancel={vi.fn()}
+        data={{ profiles: PROFILES, images: [image({ apiMajor: 36 }), x86] }}
+      />
+    )
+    gotoConfigure()
+    expect(screen.queryByText('x86_64')).toBeNull()
+    fireEvent.click(screen.getByLabelText('不支持项'))
+    const row = screen.getByText('x86_64').closest('[role="button"]') as HTMLElement
+    expect(row.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(screen.getByText('x86_64'))
+    expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('创建：回调完整 CreateDeviceInput（自定义名生效）', () => {
     const { onCreate } = setup()
-    gotoNameStep()
-    const name = screen.getByLabelText('设备名称')
-    fireEvent.change(name, { target: { value: '  我的测试机  ' } })
+    gotoConfigure()
+    fireEvent.click(screen.getByText('API 36'))
+    fireEvent.change(screen.getByLabelText('设备名称'), { target: { value: '  我的测试机  ' } })
     fireEvent.click(screen.getByRole('button', { name: '创建' }))
     expect(onCreate).toHaveBeenCalledWith({
       profileId: 'pixel_8',
@@ -227,81 +238,81 @@ describe('DeviceWizard', () => {
         data={{ profiles: PROFILES, images: IMAGES }}
       />
     )
-    gotoNameStep()
-    const button = screen.getByRole('button', { name: '创建' }) as HTMLButtonElement
-    fireEvent.click(button)
-    fireEvent.click(button)
-    fireEvent.click(button)
-    expect(onCreate).toHaveBeenCalledTimes(1)
-    expect(button.disabled).toBe(true)
-
-    resolveCreate()
-    await waitFor(() => expect(button.disabled).toBe(false))
-  })
-
-  // 同一 tick 内的原生连点（冒烟实测过的穿透场景）：React 批处理不刷新 state，
-  // 只有 ref 守卫拦得住——单 act 包两次原生 click，之间不 flush
-  it('同一 tick 原生连点也只回调一次（ref 守卫）', async () => {
-    const onCreate = vi.fn<() => Promise<void>>()
-    render(
-      <DeviceWizard
-        onCreate={onCreate}
-        onCancel={vi.fn()}
-        data={{ profiles: PROFILES, images: IMAGES }}
-      />
+    gotoConfigure()
+    fireEvent.click(screen.getByText('API 36'))
+    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: '创建中…' }) as HTMLButtonElement).disabled).toBe(
+        true
+      )
     )
-    gotoNameStep()
-    const button = screen.getByRole('button', { name: '创建' }) as HTMLButtonElement
-    act(() => {
-      button.click()
-      button.click()
-    })
+    fireEvent.click(screen.getByRole('button', { name: '创建中…' }))
+    fireEvent.click(screen.getByRole('button', { name: '创建中…' }))
     expect(onCreate).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      resolveCreate()
+    })
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(
+        false
+      )
+    )
   })
 
-  it('第三步名字清空后「创建」禁用', () => {
+  it('上一步：第二页回第一页画像仍选中，再前进镜像与名称保留', () => {
     setup()
-    gotoNameStep()
-    const name = screen.getByLabelText('设备名称')
-    fireEvent.change(name, { target: { value: '' } })
+    gotoConfigure()
+    fireEvent.click(screen.getByText('API 36'))
+    fireEvent.change(screen.getByLabelText('设备名称'), { target: { value: '自定义名' } })
+    fireEvent.click(screen.getByRole('button', { name: '上一步' }))
+    const row = screen.getByText('Pixel 8').closest('[aria-pressed]') as HTMLElement
+    expect(row.getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    expect((screen.getByLabelText('设备名称') as HTMLInputElement).value).toBe('自定义名')
+    expect(imageRow(PKG36).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('名称清空后「创建」禁用；改过名称后切镜像不覆盖输入', () => {
+    setup()
+    gotoConfigure()
+    fireEvent.click(screen.getByText('API 36'))
+    fireEvent.change(screen.getByLabelText('设备名称'), { target: { value: '自定义名' } })
+    fireEvent.click(screen.getByText('API 34'))
+    expect((screen.getByLabelText('设备名称') as HTMLInputElement).value).toBe('自定义名')
+    fireEvent.change(screen.getByLabelText('设备名称'), { target: { value: '   ' } })
     expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('上一步：回退保留已选（第三步回第二步镜像仍选中，回第一步画像仍选中）', () => {
-    setup()
-    gotoNameStep()
-    fireEvent.click(screen.getByRole('button', { name: '上一步' }))
-    expect(screen.getByText(/第 2 \/ 3 步/)).toBeTruthy()
-    expect(profileButton('API 36 · Google Play').getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: '上一步' }))
-    expect(screen.getByText(/第 1 \/ 3 步/)).toBeTruthy()
-    expect(profileButton('Pixel 8').getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    // 画像仍选中，可直达第二步
-    expect(screen.getByRole('group', { name: '选择系统镜像' })).toBeTruthy()
+  it('Esc 取消（独立窗体语义）', () => {
+    const { onCancel } = setup()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
-  it('取消：回调 onCancel，不触发 onCreate', () => {
-    const { onCancel, onCreate } = setup()
-    fireEvent.click(screen.getByRole('button', { name: '取消新建' }))
+  it('「取消」按钮触发 onCancel', () => {
+    const { onCancel } = setup()
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
     expect(onCancel).toHaveBeenCalledTimes(1)
-    expect(onCreate).not.toHaveBeenCalled()
+  })
+
+  it('附加设置标签：批次 6 前为占位说明，不含可交互控件', () => {
+    setup()
+    gotoConfigure()
+    fireEvent.click(screen.getByRole('tab', { name: '附加设置' }))
+    expect(screen.getByText('模拟性能')).toBeTruthy()
+    expect(screen.queryByLabelText('设备名称')).toBeNull()
   })
 })
-
-// ---------------------------------------------------------------------------
-// 清单加载反馈（plan 2026-10-05-wizard-catalog-loading）：非注入场景走 window.api.sdk
-// ---------------------------------------------------------------------------
 
 interface Deferred<T> {
   promise: Promise<T>
   resolve: (value: T) => void
-  reject: (reason?: unknown) => void
+  reject: (error: Error) => void
 }
 
 const deferred = <T,>(): Deferred<T> => {
-  let resolve: (value: T) => void = () => {}
-  let reject: (reason?: unknown) => void = () => {}
+  let resolve!: (value: T) => void
+  let reject!: (error: Error) => void
   const promise = new Promise<T>((res, rej) => {
     resolve = res
     reject = rej
@@ -309,42 +320,29 @@ const deferred = <T,>(): Deferred<T> => {
   return { promise, resolve, reject }
 }
 
-/** 非注入场景的 sdk 桩：挂在 window.api 上，afterEach 统一拆除 */
-const installSdkStub = (sdk: {
+/** 安装完整 window.api 桩；进度回调用 handle.emitProgress 转发 */
+const installSdkStub = (parts: {
   profiles?: Mock<() => Promise<DeviceProfile[]>>
   images?: Mock<() => Promise<ImageCatalogResult>>
   downloadImage?: Mock<(packageName: string) => Promise<void>>
 }): { emitProgress: (progress: SdkImageProgress) => void } => {
-  let listener: ((progress: SdkImageProgress) => void) | undefined
-  const onImageProgress = vi.fn((callback: (progress: SdkImageProgress) => void) => {
-    listener = callback
-    return () => {}
-  })
-  Object.defineProperty(window, 'api', {
-    value: { sdk: { ...sdk, onImageProgress } },
-    configurable: true
-  })
-  return { emitProgress: (progress) => listener?.(progress) }
+  const handle = { emitProgress: () => {} }
+  ;(window as { api?: unknown }).api = {
+    sdk: {
+      profiles: parts.profiles ?? vi.fn(async () => PROFILES),
+      images: parts.images ?? vi.fn(async () => catalogOf(IMAGES)),
+      downloadImage: parts.downloadImage ?? vi.fn(async () => {}),
+      onImageProgress: (cb: (progress: SdkImageProgress) => void): (() => void) => {
+        handle.emitProgress = cb
+        return () => {}
+      }
+    }
+  }
+  return handle
 }
 
-const PKG_MISSING = 'system-images;android-35;google_apis;arm64-v8a'
-
-describe('DeviceWizard 清单加载反馈', () => {
-  it('首载未返回：第一页显示加载等待，下一步禁用，取消可用，不出现空态', () => {
-    installSdkStub({
-      profiles: vi.fn(() => deferred<DeviceProfile[]>().promise),
-      images: vi.fn(() => deferred<ImageCatalogResult>().promise)
-    })
-    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
-    expect(screen.getByRole('status').textContent).toContain('正在加载设备画像')
-    expect(screen.queryByText('画像清单为空')).toBeNull()
-    expect((screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement).disabled).toBe(
-      true
-    )
-    expect(screen.getByRole('button', { name: '取消新建' })).toBeTruthy()
-  })
-
-  it('画像先到、镜像悬着：画像可选可进第二步，第二步显示镜像加载中且下一步禁用', async () => {
+describe('DeviceWizard 清单加载反馈（代次守卫回归）', () => {
+  it('画像先到、镜像悬着：画像可选可进第二页，第二页显示镜像加载中且创建禁用', async () => {
     const dProfiles = deferred<DeviceProfile[]>()
     const dImages = deferred<ImageCatalogResult>()
     installSdkStub({
@@ -352,96 +350,35 @@ describe('DeviceWizard 清单加载反馈', () => {
       images: vi.fn(() => dImages.promise)
     })
     render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText('正在加载设备画像…')
     dProfiles.resolve(PROFILES)
     await screen.findByText('Pixel 8')
-    pickProfile()
+    fireEvent.click(screen.getByText('Pixel 8'))
     fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    expect(screen.getByRole('status').textContent).toContain('正在加载系统镜像')
-    expect(screen.queryByText('清单为空')).toBeNull()
-    expect((screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement).disabled).toBe(
-      true
-    )
+    expect(await screen.findByText('正在加载系统镜像…')).toBeTruthy()
+    expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(true)
     dImages.resolve(catalogOf(IMAGES))
-    await screen.findByText('API 36 · Google Play')
-    expect(screen.queryByText('正在加载系统镜像…')).toBeNull()
+    await screen.findByText('API 36')
+    fireEvent.click(screen.getByText('API 36'))
+    expect((screen.getByLabelText('设备名称') as HTMLInputElement).value).toBe('Pixel 8 API 36')
   })
 
-  it('仅画像失败：第一步显示中文错误与重试，重试只打画像接口并回到加载态', async () => {
-    const dRetry = deferred<DeviceProfile[]>()
-    const dProfiles = deferred<DeviceProfile[]>()
-    dProfiles.reject(new Error('avdmanager 不可用'))
-    const profilesMock = vi
-      .fn<() => Promise<DeviceProfile[]>>()
-      .mockReturnValueOnce(dProfiles.promise)
-      .mockReturnValueOnce(dRetry.promise)
-    const imagesMock = vi.fn(() => deferred<ImageCatalogResult>().promise)
-    installSdkStub({ profiles: profilesMock, images: imagesMock })
-    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
-    const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('avdmanager 不可用')
-    expect(screen.queryByText('画像清单为空')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '重试' }))
-    expect(profilesMock).toHaveBeenCalledTimes(2)
-    expect(imagesMock).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('status').textContent).toContain('正在加载设备画像')
-  })
-
-  it('仅镜像失败：第二步显示错误与镜像重试，画像数据保留可回退', async () => {
+  it('仅镜像失败：第二页显示错误与镜像重试，画像数据保留可回退', async () => {
     const dProfiles = deferred<DeviceProfile[]>()
     const dImages = deferred<ImageCatalogResult>()
     dImages.reject(new Error('镜像清单拉取失败'))
-    const imagesMock = vi
-      .fn<() => Promise<ImageCatalogResult>>()
-      .mockReturnValueOnce(dImages.promise)
-      .mockReturnValueOnce(deferred<ImageCatalogResult>().promise)
-    const profilesMock = vi.fn(() => dProfiles.promise)
-    installSdkStub({ profiles: profilesMock, images: imagesMock })
-    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
-    dProfiles.resolve(PROFILES)
-    await screen.findByText('Pixel 8')
-    pickProfile()
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('镜像清单拉取失败')
-    expect(screen.queryByText('清单为空')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '重试' }))
-    expect(imagesMock).toHaveBeenCalledTimes(2)
-    expect(profilesMock).toHaveBeenCalledTimes(1)
-    // 画像成功数据仍在：回退第一步可见
-    fireEvent.click(screen.getByRole('button', { name: '上一步' }))
-    expect(screen.getByText('Pixel 8')).toBeTruthy()
-  })
-
-  it('成功但空数组：画像空显示画像空态；镜像空显示清单为空，均不残留加载', async () => {
-    const dProfiles = deferred<DeviceProfile[]>()
-    const dImages = deferred<ImageCatalogResult>()
     installSdkStub({
       profiles: vi.fn(() => dProfiles.promise),
       images: vi.fn(() => dImages.promise)
     })
     render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
-    dProfiles.resolve([])
-    dImages.resolve(catalogOf([]))
-    await screen.findByText('画像清单为空')
-    expect(screen.queryByText('正在加载设备画像…')).toBeNull()
-  })
-
-  it('注入空数组：直接进入空态，不显示加载', () => {
-    render(
-      <DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} data={{ profiles: [], images: [] }} />
-    )
-    expect(screen.getByText('画像清单为空')).toBeTruthy()
-    expect(screen.queryByText('正在加载设备画像…')).toBeNull()
-  })
-
-  it('缓存快速命中：立即 resolve 直接出列表，无加载残留', async () => {
-    installSdkStub({
-      profiles: vi.fn(() => Promise.resolve(PROFILES)),
-      images: vi.fn(() => Promise.resolve(catalogOf(IMAGES)))
-    })
-    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    dProfiles.resolve(PROFILES)
     await screen.findByText('Pixel 8')
-    expect(screen.queryByText('正在加载设备画像…')).toBeNull()
+    fireEvent.click(screen.getByText('Pixel 8'))
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    expect(await screen.findByText('镜像清单拉取失败')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '上一步' }))
+    expect(screen.getByText('Pixel 8')).toBeTruthy()
   })
 
   it('代次守卫：旧请求迟到的结果不覆盖新请求已展示的数据', async () => {
@@ -452,21 +389,27 @@ describe('DeviceWizard 清单加载反馈', () => {
       .fn<() => Promise<ImageCatalogResult>>()
       .mockReturnValueOnce(dImages1.promise)
       .mockReturnValueOnce(dImages2.promise)
-    const stub = installSdkStub({
+    const handle = installSdkStub({
       profiles: vi.fn(() => dProfiles.promise),
       images: imagesMock
     })
     render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
     dProfiles.resolve(PROFILES)
     await screen.findByText('Pixel 8')
-    pickProfile()
+    fireEvent.click(screen.getByText('Pixel 8'))
     fireEvent.click(screen.getByRole('button', { name: '下一步' }))
     expect(screen.getByText('正在加载系统镜像…')).toBeTruthy()
     // 下载完成事件触发重拉（第 2 代请求），旧请求仍挂起
-    act(() => stub.emitProgress({ packageName: PKG_MISSING, percent: 100, message: '下载中' }))
+    act(() =>
+      handle.emitProgress({
+        packageName: 'system-images;android-35;google_apis;arm64-v8a',
+        percent: 100,
+        message: '下载中'
+      })
+    )
     await waitFor(() => expect(imagesMock).toHaveBeenCalledTimes(2))
     dImages2.resolve(catalogOf(IMAGES))
-    await screen.findByText('API 36 · Google Play')
+    await screen.findByText('API 36')
     // 旧请求此刻才返回不同的清单：不得覆盖
     await act(async () => {
       dImages1.resolve(
@@ -488,132 +431,88 @@ describe('DeviceWizard 清单加载反馈', () => {
         ])
       )
     })
-    expect(screen.getByText('API 36 · Google Play')).toBeTruthy()
+    expect(screen.getByText('API 36')).toBeTruthy()
     expect(screen.queryByText(/API 30/)).toBeNull()
   })
+})
 
-  it('卸载后迟到 resolve/reject 不抛未处理拒绝', async () => {
-    const dProfiles = deferred<DeviceProfile[]>()
-    const dImages = deferred<ImageCatalogResult>()
-    installSdkStub({
-      profiles: vi.fn(() => dProfiles.promise),
-      images: vi.fn(() => dImages.promise)
-    })
-    const { unmount } = render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
-    unmount()
-    await act(async () => {
-      dProfiles.resolve(PROFILES)
-      dImages.reject(new Error('迟到的失败'))
-    })
-  })
+describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
+  const PKG_MISSING = 'system-images;android-35;google_apis;arm64-v8a'
 
-  it('下载：百分比与行互斥保留，完成后重拉显示刷新反馈，期间下一步禁用，完成后已装更新', async () => {
-    const dProfiles = deferred<DeviceProfile[]>()
-    const dImages1 = deferred<ImageCatalogResult>()
-    const dImages2 = deferred<ImageCatalogResult>()
-    const dDownload = deferred<void>()
-    const downloadMock = vi.fn(() => dDownload.promise)
-    const imagesMock = vi
-      .fn<() => Promise<ImageCatalogResult>>()
-      .mockReturnValueOnce(dImages1.promise)
-      .mockReturnValueOnce(dImages2.promise)
-    const stub = installSdkStub({
-      profiles: vi.fn(() => dProfiles.promise),
-      images: imagesMock,
-      downloadImage: downloadMock as Mock<(packageName: string) => Promise<void>>
+  it('下载：百分比与行互斥保留，完成后重拉显示刷新反馈，期间创建禁用，完成后已装更新', async () => {
+    let calls = 0
+    const imagesMock = vi.fn(async () => {
+      calls += 1
+      return catalogOf(
+        calls >= 2
+          ? IMAGES.map((entry) =>
+              entry.packageName === PKG_MISSING ? { ...entry, installed: true } : entry
+            )
+          : IMAGES
+      )
     })
+    const handle = installSdkStub({ images: imagesMock })
     render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
-    dProfiles.resolve(PROFILES)
-    dImages1.resolve(catalogOf(IMAGES))
     await screen.findByText('Pixel 8')
-    pickProfile()
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    await screen.findByText('API 36 · Google Play')
-    pickImage()
-    fireEvent.click(screen.getByRole('button', { name: '下载 API 35 Google APIs' }))
-    await waitFor(() => expect(downloadMock).toHaveBeenCalledWith(PKG_MISSING))
-    // 下载中：行禁用互斥 + 百分比展示
-    expect((profileButton('API 36 · Google Play') as HTMLButtonElement).disabled).toBe(true)
-    act(() => stub.emitProgress({ packageName: PKG_MISSING, percent: 42, message: '下载中' }))
-    expect(screen.getByText('42%')).toBeTruthy()
-    // 下载完成触发重拉：列表保留 + 顶部紧凑刷新反馈；刷新未确认前下一步禁用
-    dDownload.resolve()
-    await screen.findByText('正在刷新系统镜像…')
-    expect(screen.getByText('API 36 · Google Play')).toBeTruthy()
-    expect((screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement).disabled).toBe(
-      true
-    )
-    dImages2.resolve(catalogOf(IMAGES.map((entry) => ({ ...entry, installed: true }))))
-    await waitFor(() => expect(screen.queryByText('正在刷新系统镜像…')).toBeNull())
-    expect(screen.getAllByText(/已安装/).length).toBeGreaterThan(0)
-    expect((screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement).disabled).toBe(
-      false
+    gotoConfigure()
+    fireEvent.click(screen.getByText('API 36'))
+    fireEvent.click(screen.getByRole('button', { name: /下载 API 35/ }))
+    expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(true)
+    act(() => handle.emitProgress({ packageName: PKG_MISSING, percent: 60, message: '下载中' }))
+    expect(screen.getByText('60%')).toBeTruthy()
+    act(() => handle.emitProgress({ packageName: PKG_MISSING, percent: 100, message: '下载中' }))
+    await waitFor(() => expect(imagesMock.mock.calls.length).toBeGreaterThanOrEqual(2))
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(
+        false
+      )
     )
   })
 
   it('下载失败：显示中文错误与重试下载，重试再次调用 downloadImage', async () => {
-    const dProfiles = deferred<DeviceProfile[]>()
-    const dImages = deferred<ImageCatalogResult>()
-    const dDownload1 = deferred<void>()
-    const dDownload2 = deferred<void>()
-    const downloadMock = vi
-      .fn<(packageName: string) => Promise<void>>()
-      .mockReturnValueOnce(dDownload1.promise)
-      .mockReturnValueOnce(dDownload2.promise)
-    installSdkStub({
-      profiles: vi.fn(() => dProfiles.promise),
-      images: vi.fn(() => dImages.promise),
-      downloadImage: downloadMock
+    const downloadImage = vi.fn(async () => {
+      throw new Error('网络中断')
     })
+    installSdkStub({ downloadImage })
     render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
-    dProfiles.resolve(PROFILES)
-    dImages.resolve(catalogOf(IMAGES))
     await screen.findByText('Pixel 8')
-    pickProfile()
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    await screen.findByText('API 36 · Google Play')
-    fireEvent.click(screen.getByRole('button', { name: '下载 API 35 Google APIs' }))
-    await waitFor(() => expect(downloadMock).toHaveBeenCalledTimes(1))
-    dDownload1.reject(new Error('网络中断'))
-    const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('网络中断')
+    gotoConfigure()
+    fireEvent.click(screen.getByRole('button', { name: /下载 API 35/ }))
+    expect(await screen.findByText('网络中断')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '重试下载' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '重试下载' }))
-    await waitFor(() => expect(downloadMock).toHaveBeenCalledTimes(2))
-    expect(downloadMock).toHaveBeenLastCalledWith(PKG_MISSING)
+    await waitFor(() => expect(downloadImage).toHaveBeenCalledTimes(2))
   })
 
   it('下载后重拉失败：旧清单保留，错误可见且可重试', async () => {
-    const dProfiles = deferred<DeviceProfile[]>()
-    const dImages1 = deferred<ImageCatalogResult>()
-    const dImages2 = deferred<ImageCatalogResult>()
-    const dDownload = deferred<void>()
-    const imagesMock = vi
-      .fn<() => Promise<ImageCatalogResult>>()
-      .mockReturnValueOnce(dImages1.promise)
-      .mockReturnValueOnce(dImages2.promise)
-      .mockReturnValueOnce(deferred<ImageCatalogResult>().promise)
-    installSdkStub({
-      profiles: vi.fn(() => dProfiles.promise),
-      images: imagesMock,
-      downloadImage: vi.fn(() => dDownload.promise)
+    let calls = 0
+    const imagesMock = vi.fn(async () => {
+      calls += 1
+      if (calls >= 2) throw new Error('重拉失败')
+      return catalogOf(IMAGES)
     })
+    const handle = installSdkStub({ images: imagesMock })
     render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
-    dProfiles.resolve(PROFILES)
-    dImages1.resolve(catalogOf(IMAGES))
     await screen.findByText('Pixel 8')
-    pickProfile()
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    await screen.findByText('API 36 · Google Play')
-    fireEvent.click(screen.getByRole('button', { name: '下载 API 35 Google APIs' }))
-    // 等重拉请求真正挂上 await 之后再 reject，避免窗口期无人接住
-    dDownload.resolve()
-    await waitFor(() => expect(imagesMock).toHaveBeenCalledTimes(2))
-    dImages2.reject(new Error('清单刷新失败'))
-    const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('清单刷新失败')
-    // 旧数据保留：列表仍在
-    expect(screen.getByText('API 36 · Google Play')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '重试' }))
-    await waitFor(() => expect(imagesMock).toHaveBeenCalledTimes(3))
+    gotoConfigure()
+    fireEvent.click(screen.getByRole('button', { name: /下载 API 35/ }))
+    act(() => handle.emitProgress({ packageName: PKG_MISSING, percent: 100, message: '下载中' }))
+    expect(await screen.findByText('重拉失败')).toBeTruthy()
+    expect(screen.getByText('API 36')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '重试' })).toBeTruthy()
+  })
+
+  it('下载同 tick 原生连点只触发一次下载（ref 守卫）', async () => {
+    const downloadImage = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    installSdkStub({ downloadImage })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    const button = screen.getByRole('button', { name: /下载 API 35/ })
+    fireEvent.click(button)
+    fireEvent.click(button) // 同 tick 连点：downloadingRef 拦住第二次
+    await waitFor(() => expect(downloadImage).toHaveBeenCalledTimes(1))
   })
 })

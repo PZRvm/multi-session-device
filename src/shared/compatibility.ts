@@ -1,4 +1,4 @@
-import type { DeviceFormFactor, DeviceProfile, ImageEntry } from '@shared/types'
+import type { DeviceFormFactor, DeviceProfile, ImageEntry } from './types'
 
 /**
  * 镜像兼容性判定（plan 设计 2）：supported | unsupported | unknown + 中文原因。

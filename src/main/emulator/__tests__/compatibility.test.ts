@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { assessImageCompatibility } from '../compatibility'
+import { assessImageCompatibility } from '@shared/compatibility'
 
 /** 画像/镜像的最小可判定形状（assessImageCompatibility 的 Pick 签名） */
 type ProfileArg = Parameters<typeof assessImageCompatibility>[0]

@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import type { ImageApiVersion, ImageEntry } from '@shared/types'
 import {
   classifyTags,
   compareApiVersions,
@@ -116,7 +117,7 @@ describe('parseApiVersion / splitPackageName / compareApiVersions', () => {
       major: number | null,
       minor: number | null,
       ext: number | null = null
-    ) => ({
+    ): ImageApiVersion => ({
       platformSegment,
       major,
       minor,
@@ -177,7 +178,7 @@ describe('scanLocalImages（注入接缝）与 mergeCatalog', () => {
   })
 
   it('合并：远端条目取本地核验标记；本地独有条目补进目录（local-only）', () => {
-    const remoteEntry = (pkg: (typeof playstoreEntries)[number]) => ({
+    const remoteEntry = (pkg: (typeof playstoreEntries)[number]): ImageEntry => ({
       packageName: pkg.packageName,
       displayName: pkg.displayName ?? pkg.packageName,
       api: {

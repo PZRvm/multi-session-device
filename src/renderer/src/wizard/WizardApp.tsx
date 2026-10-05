@@ -4,7 +4,7 @@ import DeviceWizard from '../components/DeviceWizard'
 
 /**
  * 新建设备模态窗的页面根：独立 BrowserWindow（main/window/wizard.ts），
- * 复用 DeviceWizard（window 变体填满视口）。创建走既有 devices IPC——
+ * 复用 DeviceWizard（填满视口）。创建走既有 devices IPC——
  * 主窗列表经 devices:changed 广播刷新，本窗不订阅、创建/取消后即请求关窗。
  */
 const WizardApp = (): React.JSX.Element => {
@@ -23,7 +23,7 @@ const WizardApp = (): React.JSX.Element => {
     void toApiResult(window.api.wizard.close())
   }
 
-  return <DeviceWizard variant="window" onCreate={handleCreate} onCancel={handleCancel} />
+  return <DeviceWizard onCreate={handleCreate} onCancel={handleCancel} />
 }
 
 export default WizardApp

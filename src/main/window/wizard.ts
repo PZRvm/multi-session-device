@@ -26,15 +26,18 @@ export function openWizardWindow(parent: BrowserWindow): void {
   // 已在开（本轮 ready-to-show 未到）：静默返回，窗随本轮一起 show + focus
   if (opening) return
   opening = true
+  // 两页向导（plan 设计 3）：900×680 可缩放；最小尺寸按布局两栏 + 摘要不换行验证
   const window = new BrowserWindow({
-    width: 440,
-    height: 560,
+    width: 900,
+    height: 680,
+    minWidth: 860,
+    minHeight: 620,
     parent,
     modal: true,
     show: false,
     title: '新建设备',
     icon: appIcon,
-    resizable: false,
+    resizable: true,
     minimizable: false,
     fullscreenable: false,
     autoHideMenuBar: true,

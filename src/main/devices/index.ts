@@ -18,7 +18,7 @@ import {
   scanLocalImages,
   splitPackageName
 } from '../emulator/catalog'
-import { assessImageCompatibility } from '../emulator/compatibility'
+import { assessImageCompatibility } from '@shared/compatibility'
 import { avdmanagerPathFor, listDeviceProfiles } from '../emulator/profiles'
 import { sdklibJarPathFor } from '../emulator/profileMetadata'
 import {
