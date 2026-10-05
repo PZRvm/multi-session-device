@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { mkdir, readdir, rename, rm, stat, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { once } from 'node:events'
 import { execFileSync } from 'node:child_process'
 import { XMLParser } from 'fast-xml-parser'
 import { splitPackageName } from './catalog'
@@ -37,6 +36,21 @@ export interface DownloaderDeps {
   readFile?: (path: string) => Promise<string>
   readDir?: (dir: string) => Promise<string[]>
   writeFile?: (path: string, data: string) => Promise<void>
+  /** 下载字节落盘 sink；接缝供单测注入可控写错误（review P1） */
+  createSink?: (path: string) => ChunkSink
+}
+
+/**
+ * 下载字节落盘抽象：错误从创建起就被监听（未监听的流错误 = uncaught
+ * exception 会崩 main），drain 等待与错误竞争——出错时 reject 而非挂死。
+ */
+export interface ChunkSink {
+  write: (chunk: Uint8Array) => boolean
+  /** 结束写入并等待落盘完成；出错 reject */
+  finish: () => Promise<void>
+  destroy: () => void
+  /** 等待缓冲排空（背压）；出错 reject */
+  waitDrain: () => Promise<void>
 }
 
 const defaultDeps: Required<DownloaderDeps> = {
@@ -85,6 +99,43 @@ const defaultDeps: Required<DownloaderDeps> = {
   },
   readFile: (path) => readFile(path, 'utf8'),
   readDir: (dir) => readdir(dir),
+  createSink: (path: string): ChunkSink => {
+    const output = createWriteStream(path)
+    // 常驻 error 监听：任何时点的写错误都被记录（无监听的流错误会以
+    // uncaught exception 崩掉 main——review P1），后续 write 短路抛出
+    let firstError: Error | null = null
+    output.on('error', (error: Error) => {
+      if (firstError === null) firstError = error
+    })
+    return {
+      write: (chunk) => {
+        if (firstError !== null) throw firstError
+        return output.write(chunk)
+      },
+      finish: () =>
+        new Promise<void>((resolve, reject) => {
+          output.once('error', reject)
+          output.end(() => {
+            output.off('error', reject)
+            if (firstError !== null) reject(firstError)
+            else resolve()
+          })
+        }),
+      destroy: () => output.destroy(),
+      waitDrain: () =>
+        new Promise<void>((resolve, reject) => {
+          if (firstError !== null) {
+            reject(firstError)
+            return
+          }
+          output.once('error', reject)
+          output.once('drain', () => {
+            output.off('error', reject)
+            resolve()
+          })
+        })
+    }
+  },
   writeFile: async (path: string, data: string): Promise<void> => {
     const { writeFile: write } = await import('node:fs/promises')
     await write(path, data, 'utf8')
@@ -134,11 +185,12 @@ export const downloadImageZip = async (
   let received = 0
   let lastPercent = 0
   let lastPushAt = 0
-  const output = createWriteStream(zipPath)
+  const sink = d.createSink(zipPath)
   try {
     for await (const chunk of stream) {
-      // 写流背压：缓冲满时等 drain，避免 2GB 级包全攒在内存
-      if (!output.write(chunk)) await once(output, 'drain')
+      // 写流背压：缓冲满时等 drain（与写错误竞争——出错 reject 而非挂死，
+      // 2GB 级包也不会全攒内存）；写已出错时 write 直接抛（review P1 修复）
+      if (!sink.write(chunk)) await sink.waitDrain()
       received += chunk.byteLength
       if (expectedTotal !== null && expectedTotal > 0) {
         const percent = Math.min(99, Math.floor((received / expectedTotal) * 100))
@@ -153,12 +205,9 @@ export const downloadImageZip = async (
         }
       }
     }
-    await new Promise<void>((resolve, reject) => {
-      output.end(() => resolve())
-      output.on('error', reject)
-    })
+    await sink.finish()
   } catch (error) {
-    output.destroy()
+    sink.destroy()
     await d.removePath(zipPath).catch(() => undefined)
     throw error
   }
@@ -245,22 +294,26 @@ const xmlEscape = (value: string): string =>
 export const buildPackageXml = (target: DownloadTarget): string => {
   const revisionLines = target.revision
     ? [
-        '  <revision>',
-        `    <major>${target.revision.major}</major>`,
-        ...(target.revision.minor !== null ? [`    <minor>${target.revision.minor}</minor>`] : []),
-        ...(target.revision.micro !== null ? [`    <micro>${target.revision.micro}</micro>`] : []),
-        '  </revision>'
+        '    <revision>',
+        `      <major>${target.revision.major}</major>`,
+        ...(target.revision.minor !== null
+          ? [`      <minor>${target.revision.minor}</minor>`]
+          : []),
+        ...(target.revision.micro !== null
+          ? [`      <micro>${target.revision.micro}</micro>`]
+          : []),
+        '    </revision>'
       ]
-    : ['  <revision>', '    <major>1</major>', '  </revision>']
+    : ['    <revision>', '      <major>1</major>', '    </revision>']
   const tagBlocks = target.tagIds.map((tagId) =>
     ['    <tag>', `      <id>${xmlEscape(tagId)}</id>`, '    </tag>'].join('\n')
   )
+  // 元素顺序对齐官方 repo XSD 的 xs:sequence（type-details → revision →
+  // display-name；本仓解析不敏感，但 avdmanager/Studio 等严格工具按序读——review P2）
   const lines = [
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
     '<ns2:repository xmlns:ns2="http://schemas.android.com/repository/android/common/02">',
     `  <localPackage path="${xmlEscape(target.packageName)}" obsolete="false">`,
-    '    <display-name>' + xmlEscape(target.displayName) + '</display-name>',
-    ...revisionLines,
     '    <type-details>',
     `      <api-level>${xmlEscape(target.apiLevelText)}</api-level>`,
     ...(target.extensionLevel !== null
@@ -269,6 +322,8 @@ export const buildPackageXml = (target: DownloadTarget): string => {
     ...tagBlocks,
     `      <abi>${xmlEscape(target.abi)}</abi>`,
     '    </type-details>',
+    ...revisionLines,
+    '    <display-name>' + xmlEscape(target.displayName) + '</display-name>',
     '  </localPackage>',
     '</ns2:repository>',
     ''

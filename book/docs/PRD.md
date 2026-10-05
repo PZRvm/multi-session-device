@@ -113,7 +113,7 @@ description: 一期 Android 需求唯一依据——应用内新建隔离模拟�
 - 仿真层（AS Extended Controls 对应物）：GPS 定位、蜂窝精细整形（网络类型/信号/漫游）、电池、指纹、传感器、短信、相机虚拟场景——二期；一期用「断网开关」覆盖最常用边界场景
 - 分组/工作区/过滤/批量操作、tab 条、独立窗口 tear-off
 - 真机（USB 物理设备）支持
-- Windows / Linux（一期 macOS only）
+- Windows / Linux（一期 macOS only）。已知平台依赖在案：镜像 zip 解压用系统 `unzip`（≥2GB 条目，zip64）、皮肤下载解包用系统 `tar`——跨平台时需换 Node 流式解压库或按平台分支（review P3，issue 2026-10-06-download-direct-review-findings）
 - 日志导出、按 app 精确过滤日志、启动自动排队
 - AVD 数据擦除（erase，区别于删除）——二期候选
 

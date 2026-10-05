@@ -317,20 +317,20 @@ export const scanLocalImages = async (
   } catch {
     return result
   }
-  for (const platform of platforms) {
-    let tagDirs: string[] = []
+  // 点前缀目录/文件是下载器的临时物与备份（.install-bak/.unzipping 等），
+  // 不属于清单语义——含 package.xml 也不读（review P2 修复）
+  const visible = (names: string[]): string[] => names.filter((name) => !name.startsWith('.'))
+  const listDir = async (dir: string): Promise<string[]> => {
     try {
-      tagDirs = await d.readdir(join(root, platform))
+      return visible(await d.readdir(dir))
     } catch {
-      continue
+      return []
     }
+  }
+  for (const platform of visible(platforms)) {
+    const tagDirs = await listDir(join(root, platform))
     for (const tagDir of tagDirs) {
-      let abis: string[] = []
-      try {
-        abis = await d.readdir(join(root, platform, tagDir))
-      } catch {
-        continue
-      }
+      const abis = await listDir(join(root, platform, tagDir))
       for (const abi of abis) {
         const dir = join(root, platform, tagDir, abi)
         try {

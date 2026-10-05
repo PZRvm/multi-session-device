@@ -30,3 +30,5 @@ tags: [review, downloader, stream-error, scan-local-images, package-xml]
 镜像解压与皮肤解 tar 都依赖系统命令，Windows 无解（本期边界为 macOS Apple Silicon，边界在案）。跨平台时需要换 node 流式解压库或带平台分支。
 
 - **建议方向**: P1 单独修复轮处理（崩溃级）；P2 两条可在下一轮镜像相关改动时合并处理；P3 待跨平台立项。
+
+> **修复跟进（2026-10-06）**：P1、P2（两条）已在同分支修复轮处理并补回归测试（写流错误经 ChunkSink 抽象注入验证、扫描点前缀过滤、package.xml 顺序断言）；P3 已记入 PRD 2.4 Non-Goals 的平台边界说明，待跨平台立项处理。

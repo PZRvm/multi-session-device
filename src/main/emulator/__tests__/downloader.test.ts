@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import {
+  buildPackageXml,
   downloadImagePackage,
   downloadImageZip,
   installImageZip,
@@ -226,6 +227,64 @@ describe('installImageZip（落位/核验/回滚）', () => {
     ).rejects.toThrow('安装核验失败')
     // 本次落位被回滚
     expect(state.removed.includes(dest)).toBe(true)
+  })
+})
+
+describe('review 修复回归（P1 写错误 / P2b 顺序）', () => {
+  it('P1：写流中途出错——抛错并清理临时 zip，不崩不挂死', async () => {
+    const { deps, state } = makeEnv()
+    const failOnChunk = 5
+    const withBadSink = {
+      ...deps,
+      createSink: () => {
+        let written = 0
+        let failed = false
+        return {
+          write: (): boolean => {
+            written += 1
+            if (written >= failOnChunk) {
+              failed = true
+              throw new Error('ENOSPC: 磁盘已满')
+            }
+            return true
+          },
+          finish: async () => {
+            if (failed) throw new Error('ENOSPC: 磁盘已满')
+          },
+          destroy: () => undefined,
+          waitDrain: async () => {
+            if (failed) throw new Error('ENOSPC: 磁盘已满')
+          }
+        }
+      }
+    }
+    await expect(downloadImageZip('/sdk', TARGET, () => {}, withBadSink)).rejects.toThrow(
+      '磁盘已满'
+    )
+    expect(state.removed.some((path) => path.includes('.downloading.zip'))).toBe(true)
+  })
+
+  it('P1：背压等待中出错——waitDrain reject 传播', async () => {
+    const { deps } = makeEnv()
+    const withSlowSink = {
+      ...deps,
+      createSink: () => ({
+        write: (): boolean => false, // 永远触发背压
+        finish: async () => undefined,
+        destroy: () => undefined,
+        waitDrain: async () => {
+          throw new Error('EIO: 写入失败')
+        }
+      })
+    }
+    await expect(downloadImageZip('/sdk', TARGET, () => {}, withSlowSink)).rejects.toThrow('EIO')
+  })
+
+  it('P2b：package.xml 的 localPackage 子元素顺序对齐官方 XSD sequence', () => {
+    const xml = buildPackageXml(TARGET)
+    const order = [...xml.matchAll(/^\s+<(type-details|revision|display-name)>/gm)].map((m) => m[1])
+    expect(order).toEqual(['type-details', 'revision', 'display-name'])
+    expect(xml).toContain(`path="${TARGET.packageName}"`)
   })
 })
 

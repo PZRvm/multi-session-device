@@ -150,6 +150,29 @@ describe('parseApiVersion / splitPackageName / compareApiVersions', () => {
   })
 })
 
+describe('scanLocalImages（点前缀免疫，review P2a）', () => {
+  const localDeps = {
+    readdir: async (dir: string): Promise<string[]> => {
+      if (dir.endsWith('system-images')) {
+        return ['android-36.1', '.download-foo.zip']
+      }
+      if (dir.endsWith('android-36.1')) {
+        return ['google_apis_playstore', 'google_apis_playstore.install-bak']
+      }
+      return ['arm64-v8a', '.unzipping']
+    },
+    readFile: async (): Promise<string> => {
+      throw new Error('不应读取任何点前缀条目')
+    },
+    exists: async () => true
+  }
+
+  it('点前缀的备份/临时目录不被扫描（即使含 package.xml 也不读）', async () => {
+    const local = await scanLocalImages('/sdk', localDeps)
+    expect(local.size).toBe(0)
+  })
+})
+
 describe('scanLocalImages（注入接缝）与 mergeCatalog', () => {
   const PACKAGE_XML = readFileSync(
     join(fixtureDir, 'system-images', 'android-36.1-playstore-package.xml'),
