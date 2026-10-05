@@ -1,5 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import type { ScreenInput, ScreenKeycodeName } from '@shared/types'
+import { toNormalized, toNormalizedClamped, type ScreenLayout } from '../screen/geometry'
 import type { ScreenViewRef } from './useDeviceScreen'
 
 /** 最多两个活动触点（双指捏合） */
@@ -31,7 +32,8 @@ export interface DeviceInputParams {
   /** 文本/键盘代理（隐藏 input，画布聚焦时获得焦点） */
   inputProxyRef: RefObject<HTMLInputElement | null>
   screenRef: RefObject<ScreenViewRef>
-  layoutRef: RefObject<{ offsetX: number; offsetY: number; width: number; height: number } | null>
+  /** 最终屏幕矩形（geometry 单源；offsetX/Y 即屏幕左上角，外框/留白不在命中范围） */
+  layoutRef: RefObject<ScreenLayout | null>
   enabled: boolean
   /** 同一手势失败只提示一次（由调用方节流展示） */
   onInputError: (message: string) => void
@@ -83,25 +85,22 @@ export function useDeviceInput(params: DeviceInputParams): void {
     modeRef.current = 'none'
   }
 
+  // 坐标换算统一走 geometry（与布局同源）：屏幕矩形之外（外框/留白）不发 down，
+  // 手势内出界由调用方夹取
   const normalizedAt = (clientX: number, clientY: number): { x: number; y: number } | null => {
     const container = canvasContainerRef.current
     const layout = layoutRef.current
     if (!container || !layout) return null
     const rect = container.getBoundingClientRect()
-    const localX = clientX - rect.left - layout.offsetX
-    const localY = clientY - rect.top - layout.offsetY
-    // 黑边不接收 down；手势内（capture）出界由调用方夹取
-    if (localX < 0 || localY < 0 || localX > layout.width || localY > layout.height) return null
-    return { x: localX / layout.width, y: localY / layout.height }
+    return toNormalized(clientX, clientY, layout, rect.left, rect.top)
   }
 
   const normalizedClamped = (clientX: number, clientY: number): { x: number; y: number } => {
     const container = canvasContainerRef.current
-    const layout = layoutRef.current!
-    const rect = container!.getBoundingClientRect()
-    const localX = Math.min(layout.width, Math.max(0, clientX - rect.left - layout.offsetX))
-    const localY = Math.min(layout.height, Math.max(0, clientY - rect.top - layout.offsetY))
-    return { x: localX / layout.width, y: localY / layout.height }
+    const layout = layoutRef.current
+    if (!container || !layout) return { x: 0, y: 0 }
+    const rect = container.getBoundingClientRect()
+    return toNormalizedClamped(clientX, clientY, layout, rect.left, rect.top)
   }
 
   const acquireSlot = (): number | null => {

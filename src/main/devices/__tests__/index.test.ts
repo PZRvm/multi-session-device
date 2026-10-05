@@ -30,6 +30,16 @@ const mocks = vi.hoisted(() => {
       source: 'app-sdk',
       protocolVersion: 41
     })),
+    loadFrameKindIndex: vi.fn(
+      async (): Promise<{
+        lookup: (profileId: string) => 'phone' | 'tablet' | 'generic'
+        entries: number
+      }> => ({
+        lookup: (profileId) =>
+          profileId === 'pixel_tablet' ? 'tablet' : profileId === 'pixel_8' ? 'phone' : 'generic',
+        entries: 2
+      })
+    ),
     // fake runner：devices 层以 createRunner() 工厂接入，测试持有实例与构造回调
     runnerInstance: {
       start: vi.fn(async () => ({ runId: 'run-1', serial: 'emulator-5554' })),
@@ -74,6 +84,9 @@ vi.mock('../../emulator/adb', () => ({
 }))
 vi.mock('../../emulator/runner', () => ({
   createRunner: mocks.createRunner
+}))
+vi.mock('../../emulator/profileMetadata', () => ({
+  loadFrameKindIndex: mocks.loadFrameKindIndex
 }))
 vi.mock('../../window', () => ({ getMainWindow: mocks.getMainWindow }))
 vi.mock('../../window/wizard', () => ({ wizardOwns: mocks.wizardOwns }))
@@ -157,6 +170,48 @@ describe('devices 域（创建/删除事务）', () => {
     const persisted = mocks.writeDeviceMetas.mock.calls.at(-1)![0] as DeviceMeta[]
     expect(persisted).toHaveLength(1)
     expect((persisted[0] as unknown as Record<string, unknown>).status).toBeUndefined()
+  })
+
+  it('外观提示：创建的设备快照携带派生 frameKind，落盘元数据不含', async () => {
+    const { handlerFor } = await freshDomain()
+    const result = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { snapshot: { devices: Array<{ profileId: string; frameKind?: string }> } }
+    expect(mocks.loadFrameKindIndex).toHaveBeenCalled()
+    expect(result.snapshot.devices.at(-1)!.frameKind).toBe('phone')
+    const persisted = mocks.writeDeviceMetas.mock.calls.at(-1)![0] as DeviceMeta[]
+    expect((persisted[0] as unknown as Record<string, unknown>).frameKind).toBeUndefined()
+  })
+
+  it('外观提示：加载既有设备同样派生，未知画像 generic 兜底', async () => {
+    mocks.readDeviceMetas.mockResolvedValue([
+      {
+        id: 'd1',
+        name: '旧机',
+        profileId: 'mystery',
+        profileLabel: 'Mystery',
+        apiLevel: 35,
+        variant: 'google_apis',
+        createdAt: 1
+      }
+    ])
+    const { handlerFor } = await freshDomain()
+    const list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: Array<{ profileId: string; frameKind?: string }>
+    }
+    expect(list.devices[0].frameKind).toBe('generic')
+  })
+
+  it('外观提示：SDK 缺失收敛空索引——快照 generic、创建不受阻', async () => {
+    // ensureLoaded 与 createDevice 各触发一次索引刷新，用持久 mock 而非 Once
+    mocks.loadFrameKindIndex.mockResolvedValue({ lookup: () => 'generic', entries: 0 })
+    const { handlerFor } = await freshDomain()
+    const result = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { snapshot: { devices: Array<{ frameKind?: string }> } }
+    expect(result.snapshot.devices.at(-1)!.frameKind).toBe('generic')
   })
 
   it('create：AVD 建失败 → 撤回临时行 + 回滚本次 AVD + 抛错', async () => {

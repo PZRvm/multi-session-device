@@ -92,9 +92,12 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-04-messageport-bridge-no-delivery.md](notes/issue/2026-10/2026-10-04-messageport-bridge-no-delivery.md) — MessagePortMain 经 contextBridge 回传后 port 对象可达但不投递消息——视频包通道退回 webContents.send（每帧拷贝），产品化时可再评估
 - [2026-10-04-wizard-create-no-double-click-guard.md](notes/issue/2026-10/2026-10-04-wizard-create-no-double-click-guard.md) — 向导窗创建按钮无创建中禁用/防连击——双击可建出两台同名设备，stage 04 真实创建变慢后会被放大
 - [2026-10-04-wizard-window-singleton-race.md](notes/issue/2026-10/2026-10-04-wizard-window-singleton-race.md) — openWizardWindow 单例判断无互斥——极窄窗口内两次 wizard:open 可开两扇模态窗且第一扇引用被覆盖
+- [2026-10-05-baseline-lint-debt.md](notes/issue/2026-10/2026-10-05-baseline-lint-debt.md) — 基线 4e01b09 自带 10 个 eslint error（scrcpy 测试与 index 的显式返回类型、renderer 的 react-hooks refs/setState 纪律）与 7 个 warning；icon-alignment 分支已在修 renderer 部分，合流时注意别互相覆盖
+- [2026-10-05-canvas-ready-before-layout.md](notes/issue/2026-10/2026-10-05-canvas-ready-before-layout.md) — 投屏 status 可先于 layout 就绪（format 与 ResizeObserver 的 containerSize 双异步入参有竞态窗口），期间画布槽 0×0 画面不可见且输入被几何拒收；屏幕休眠节流下窗口可拉长到秒级以上
 - [2026-10-05-console-token-escapes-avd-isolation.md](notes/issue/2026-10/2026-10-05-console-token-escapes-avd-isolation.md) — emulator 37.2.12 的 console token 恒读写宿主 ~/.emulator_console_auth_token，ANDROID_EMULATOR_HOME 重定向不覆盖——全新机器上首次启动会向宿主 home 写入新 token
 - [2026-10-05-device-store-read-error-as-empty.md](notes/issue/2026-10/2026-10-05-device-store-read-error-as-empty.md) — readDeviceMetas 将读取错误与坏 JSON 当作空库，后续元数据写入可能覆盖原设备记录；对账草案设计了读取诊断和写保护
 - [2026-10-05-forward-tunnel-control-read-silent.md](notes/issue/2026-10/2026-10-05-forward-tunnel-control-read-silent.md) — adb forward 隧道下 scrcpy 控制连接的 server→client 读方向在真机上静默——设备消息（剪贴板 ACK/同步推送）收不到，控制写方向正常
+- [2026-10-05-phone-avd-rotation-refused.md](notes/issue/2026-10/2026-10-05-phone-avd-rotation-refused.md) — 手办画像（pixel_8）的 AVD 在系统层拒绝一切旋转：settings user_rotation、emu rotate、虚拟加速度计、相机应用均不改画面方向；手机横屏的真机视觉验证待强制横屏应用或日常人工使用覆盖
 
 ### notes/learn/2026-09/
 
@@ -118,7 +121,10 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-04-generated-icon-alpha.md](notes/learn/2026-10/2026-10-04-generated-icon-alpha.md) — 生成式图标的透明外沿会残留杂点；同系列图标导出时复用参考 alpha 通道可固定圆角和留白
 - [2026-10-04-scrcpy-transport-forward-tcp.md](notes/learn/2026-10/2026-10-04-scrcpy-transport-forward-tcp.md) — scrcpy 取流传输要走 adb forward + 裸 TCP（官方客户端同款路径）——Tango 的 adb server 直连 localabstract 会卡死服务端取帧
 - [2026-10-04-titlebar-hidden-blur-traffic-lights.md](notes/learn/2026-10/2026-10-04-titlebar-hidden-blur-traffic-lights.md) — macOS titleBarStyle hidden 的失焦三灯整组消失怪癖——setWindowButtonVisibility 在 blur 抢不过系统，hiddenInset 是正解
+- [2026-10-05-electron-cdp-acceptance-observables.md](notes/learn/2026-10/2026-10-05-electron-cdp-acceptance-observables.md) — Electron 真机 UI 验收的可观测经验：scrcpy 注入不进内核 getevent 要用 paints 跃迁做正反证；macOS displaysleep 节流会让 ResizeObserver/layout 长时间不就绪；主题切换经 useEffect 生效需轮询；BoardHead 外观控件有分段/下拉两种形态
 - [2026-10-05-emulator-console-token-host-home.md](notes/learn/2026-10/2026-10-05-emulator-console-token-host-home.md) — console token 路径不随 ANDROID_EMULATOR_HOME 重定向——恒为 $HOME/.emulator_console_auth_token，缺失时 emulator 会写宿主 home；共享 adb 靠 smart-socket 只读探测保不重启
+- [2026-10-05-worktree-git-common-dir-relative.md](notes/learn/2026-10/2026-10-05-worktree-git-common-dir-relative.md) — create-worktree 技能的仓库父目录公式在仓库根执行会得到相对路径 "."，worktree 被建进主仓库内部；用 rev-parse --show-toplevel 或绝对路径展开
+- [2026-10-05-xml-namespace-backreference-colon.md](notes/learn/2026-10/2026-10-05-xml-namespace-backreference-colon.md) — 正则解析带命名空间前缀的 XML 块时，前缀捕获组必须把冒号包进组内，否则闭合标签回引永假、惰性块体吞掉全部后续同祖节点；esbuild 不校验正则字面量，坏正则要到运行时才以"静默错配"现形
 
 ### plans/
 
@@ -140,8 +146,12 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-04-shell-fix-三灯与外观两态.md](plans/2026-10-04-shell-fix-三灯与外观两态.md) — 壳体验修复轮施工图——计数文案改「设备」、失焦三灯消失治理（setWindowButtonVisibility）、外观入口两态化（窄=弹出菜单/宽≥390=三段分段）
 - [2026-10-04-shell-polish-原生向导与板头.md](plans/2026-10-04-shell-polish-原生向导与板头.md) — stage 03 优化轮施工图——新建向导改 Electron 原生模态子窗 + 主窗对齐姊妹仓库板头形态（hidden 标题条/板头三件套/底部橙底新建钮/选中行删除钮常显）
 - [2026-10-05-avd-reconciliation.md](plans/2026-10-05-avd-reconciliation.md) — stage04 对账建议步骤的需求与设计草案：元数据与 AVD 核验、失效可见、孤立目录保留及读取错误保护
+- [2026-10-05-device-action-icon-alignment.md](plans/2026-10-05-device-action-icon-alignment.md) — 统一设备行加载图标与动作按钮的尺寸和中心，修复启动中、停止中图标错位
+- [2026-10-05-device-frame-and-canvas.md](plans/2026-10-05-device-frame-and-canvas.md) — 用主题工作台替换投屏黑色背景，为手机和平板增加不同外框并保持完整画面与触控坐标一致
 - [2026-10-05-device-stream-control.md](plans/2026-10-05-device-stream-control.md) — stage04 步骤 5 的需求与设计：多设备 scrcpy 会话、后台停解码与关键帧恢复、等比画布和触控键盘输入
 - [2026-10-05-emulator-runner.md](plans/2026-10-05-emulator-runner.md) — stage04 步骤 4 的需求与设计：真启停、端口避让、可取消状态机、崩溃回写及退出清理
+- [2026-10-05-emulator-wizard.md](plans/2026-10-05-emulator-wizard.md) — 按方案 A 重建两页模拟器向导：六类画像、完整镜像选择、附加设置、机型皮肤、真实摄像头与 Quick Boot；SD 卡暂缓、跨架构二期
+- [2026-10-05-wizard-catalog-loading.md](plans/2026-10-05-wizard-catalog-loading.md) — 为新建设备向导增加画像与镜像清单的加载动画、独立错误重试及关闭后结果保护
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### stage/
@@ -156,6 +166,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 ### think-report/
 
 - [20260929011713-安卓与iOS多实例模拟器工具.md](think-report/20260929011713-安卓与iOS多实例模拟器工具.md) — 多模拟器桌面工具可行性结论：安卓走 AVD+scrcpy 嵌入画面，iOS 走 Simulator+idb，官方并发上限与许可证均已核实可行
+- [20261005221831-模拟器向导分类与附加设置.md](think-report/20261005221831-模拟器向导分类与附加设置.md) — 已确认的向导范围：画像分类、API镜像与附加设置，含机型皮肤和真实摄像头；SD卡暂缓，跨架构二期
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 84 documents -->
+<!-- 95 documents -->

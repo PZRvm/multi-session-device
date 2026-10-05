@@ -6,6 +6,7 @@ import type {
   CreateDeviceInput,
   CreateDeviceResult,
   Device,
+  DeviceFrameKind,
   DeviceMeta,
   DeviceSnapshot,
   RuntimeErrorMessage
@@ -13,6 +14,7 @@ import type {
 import { isImageVariant, readDeviceMetas, writeDeviceMetas } from '../store'
 import { avdExists, createAvd, deleteAvd } from '../emulator/avd'
 import { isPackageNameInstalled, packageNameFor } from '../emulator/catalog'
+import { loadFrameKindIndex, type FrameKindIndex } from '../emulator/profileMetadata'
 import {
   ensureSharedServer,
   candidateAdbPaths,
@@ -130,6 +132,17 @@ const streamBridge: {
   beforeKill?: (id: string, runId: string) => Promise<void>
 } = {}
 
+// ---- 画像外观索引（派生展示提示，不入盘）：SDK 缺失/解析失败收敛为空索引 ----
+let frameIndex: FrameKindIndex | null = null
+
+/** 每次调用重验 JAR stat（SDK 更新后自动失效重建）；loadFrameKindIndex 内部全兜底不抛 */
+const ensureFrameIndex = async (): Promise<void> => {
+  frameIndex = await loadFrameKindIndex(sdkRoot())
+}
+
+const frameKindOf = (profileId: string): DeviceFrameKind | undefined =>
+  frameIndex?.lookup(profileId)
+
 export function attachDeviceStreamBridge(bridge: typeof streamBridge): void {
   Object.assign(streamBridge, bridge)
 }
@@ -138,8 +151,13 @@ export function attachDeviceStreamBridge(bridge: typeof streamBridge): void {
 const ensureLoaded = (): Promise<void> => {
   if (!loadPromise) {
     loadPromise = readDeviceMetas()
-      .then((metas) => {
-        devices = metas.map((meta) => ({ ...meta, status: 'stopped' as const }))
+      .then(async (metas) => {
+        await ensureFrameIndex()
+        devices = metas.map((meta) => ({
+          ...meta,
+          status: 'stopped' as const,
+          frameKind: frameKindOf(meta.profileId)
+        }))
       })
       .catch((error) => {
         loadPromise = null
@@ -173,12 +191,17 @@ const commitMetas = (mutate: (metas: DeviceMeta[]) => DeviceMeta[]): Promise<voi
       return runtime
         ? {
             ...meta,
+            frameKind: runtime.frameKind ?? frameKindOf(meta.profileId),
             status: runtime.status,
             lastError: runtime.lastError,
             serial: runtime.serial,
             runId: runtime.runId
           }
-        : { ...meta, status: 'stopped' as const }
+        : {
+            ...meta,
+            frameKind: frameKindOf(meta.profileId),
+            status: 'stopped' as const
+          }
     })
   })
   writeQueue = run.catch(() => undefined) // 单次失败不断队列
@@ -406,6 +429,7 @@ const deleteDevice = (id: string): Promise<DeviceSnapshot> => {
 
 const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult> => {
   await ensureLoaded()
+  await ensureFrameIndex()
   const packageName = packageNameFor(raw.apiLevel, raw.variant)
   if (!(await isPackageNameInstalled(sdkRoot(), packageName))) {
     throw new Error('系统镜像未安装，请先在向导中下载')
@@ -418,6 +442,7 @@ const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult>
     apiLevel: raw.apiLevel,
     variant: raw.variant,
     createdAt: Date.now(),
+    frameKind: frameKindOf(raw.profileId),
     status: 'creating'
   }
   devices = [...devices, device]
