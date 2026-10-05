@@ -1,5 +1,5 @@
 import styled from 'styled-components'
-import { Download } from 'lucide-react'
+import { Download, Loader2 } from 'lucide-react'
 import type { CompatibilityVerdict } from '@shared/compatibility'
 import type { ImageEntry, ImageService } from '@shared/types'
 import { apiDisplay, formatSize, recommendedWindow, serviceLabel, serviceLabels } from './shared'
@@ -30,7 +30,8 @@ export interface ImageTableProps {
   downloadBusy: boolean
   /** 卸载已装镜像（确认框在 DeviceWizard 层统一处理）；null = 未提供该能力 */
   onUninstall: ((image: ImageEntry) => void) | null
-  uninstallBusy: boolean
+  /** 正在卸载的包名（该行显示 spinner，其余行禁用）；null = 无卸载任务 */
+  uninstallingPackage: string | null
 }
 
 const ImageTable = ({
@@ -44,7 +45,7 @@ const ImageTable = ({
   onDownload,
   downloadBusy,
   onUninstall,
-  uninstallBusy
+  uninstallingPackage
 }: ImageTableProps): React.JSX.Element => {
   const window = recommendedWindow(images)
   const rows = images.filter((image) => {
@@ -185,7 +186,7 @@ const ImageTable = ({
                     {onUninstall !== null ? (
                       <UninstallButton
                         role="button"
-                        aria-disabled={uninstallBusy || downloadBusy}
+                        aria-disabled={uninstallingPackage !== null || downloadBusy}
                         aria-label={`删除已安装镜像 API ${apiDisplay(image)} ${serviceLabel(image)}`}
                         title="删除已安装的镜像"
                         onClick={(event) => {
@@ -193,7 +194,14 @@ const ImageTable = ({
                           onUninstall(image)
                         }}
                       >
-                        {uninstallBusy ? '删除中…' : '删除'}
+                        {uninstallingPackage === image.packageName ? (
+                          <>
+                            <UninstallSpinner size={12} aria-hidden="true" />
+                            删除中…
+                          </>
+                        ) : (
+                          '删除'
+                        )}
                       </UninstallButton>
                     ) : null}
                   </>
@@ -358,7 +366,10 @@ const Cell = styled.div`
 
 const StatusCell = styled.div`
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 8px;
+  min-height: 34px;
   padding: 5px 10px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
@@ -426,8 +437,9 @@ const UninstallButton = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-left: 8px;
-  min-width: 44px;
+  gap: 4px;
+  /* 两态同宽（删除 / spinner+删除中），行高不抖、文字不换行破版 */
+  min-width: 72px;
   height: 24px;
   padding: 0 8px;
   border: 1px solid var(--board-hairline);
@@ -435,6 +447,7 @@ const UninstallButton = styled.span`
   background: var(--board-bg-raised);
   color: var(--board-ink-dim);
   font-size: 11px;
+  white-space: nowrap;
   cursor: pointer;
 
   &:hover {
@@ -445,5 +458,20 @@ const UninstallButton = styled.span`
   &[aria-disabled='true'] {
     cursor: default;
     opacity: 0.6;
+  }
+`
+
+const UninstallSpinner = styled(Loader2)`
+  color: var(--loading);
+  animation: uninstall-spin 1.2s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+
+  @keyframes uninstall-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 `
