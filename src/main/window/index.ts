@@ -34,7 +34,7 @@ export function createMainWindow(): BrowserWindow {
 
   window.on('closed', () => {
     mainWindow = null
-    // 向导窗是非模态子窗（不随父窗自动销毁）——主窗关闭时显式带走，不留孤儿窗口
+    // 向导窗与主窗无父子关系（2026-10-06 去 parent）——主窗关闭时显式带走，不留孤儿窗口
     closeWizardWindow()
   })
 

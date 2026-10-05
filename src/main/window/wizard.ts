@@ -5,8 +5,10 @@ import { IPC_CHANNELS } from '@shared/ipc-channels'
 import { appIcon } from '../app-icon'
 
 // 新建设备独立窗口单例（2026-10-06 用户确认由模态改非模态，plan
-// 2026-10-06-wizard-independent-window）：可移动、不阻塞主窗输入；
-// parent 保留层级跟随。主窗重复点「新建设备」= 聚焦既有窗而非再开一扇。
+// 2026-10-06-wizard-independent-window）：可移动、不阻塞主窗输入。
+// 无 parent（追加轮五）：macOS child window 会跟随父窗移动且层级锁在父窗之上，
+// 用户要真独立；主窗关闭带走向导靠 index.ts closed 里的显式 closeWizardWindow。
+// 主窗重复点「新建设备」= 聚焦既有窗而非再开一扇。
 let wizardWindow: BrowserWindow | null = null
 // open 互斥（issue 2026-10-04-wizard-window-singleton-race）：new 与 ready-to-show
 // 之间的窗口期里并发 open 都会看到引用为空而各建一扇——opening 标记收口同轮只建一扇
@@ -27,7 +29,7 @@ export function closeWizardWindow(): void {
   }
 }
 
-export function openWizardWindow(parent: BrowserWindow): void {
+export function openWizardWindow(): void {
   if (wizardWindow && !wizardWindow.isDestroyed()) {
     wizardWindow.focus()
     return
@@ -36,14 +38,13 @@ export function openWizardWindow(parent: BrowserWindow): void {
   if (opening) return
   opening = true
   // 两页向导（plan 设计 3）：900×680 可缩放；最小尺寸按布局两栏 + 摘要不换行验证。
-  // modal: false —— 独立可移动窗口，主窗保持可交互（plan 设计 1）
+  // 独立可移动窗口，主窗保持可交互（plan 设计 1）——不设 parent：设了即成为 macOS
+  // child window，会跟随父窗移动且层级锁在父窗之上（追加轮五用户裁决要真独立）
   const window = new BrowserWindow({
     width: 900,
     height: 680,
     minWidth: 860,
     minHeight: 620,
-    parent,
-    modal: false,
     show: false,
     title: '新建设备',
     icon: appIcon,
@@ -84,10 +85,11 @@ export function openWizardWindow(parent: BrowserWindow): void {
 
 export function registerWizardIpc(): void {
   ipcMain.handle(IPC_CHANNELS.wizardOpen, (event): void => {
-    // 窗口归属发起调用的窗（当前只有主窗会调）；sender 不可信，宁可解析失败也不盲开
-    const parent = BrowserWindow.fromWebContents(event.sender)
-    if (!parent) throw new Error(`${IPC_CHANNELS.wizardOpen}: 无法定位父窗`)
-    openWizardWindow(parent)
+    // sender 守卫保留（不可信，宁可解析失败也不盲开）；parent 已移除——向导窗完全独立
+    if (!BrowserWindow.fromWebContents(event.sender)) {
+      throw new Error(`${IPC_CHANNELS.wizardOpen}: 无法定位调用方窗口`)
+    }
+    openWizardWindow()
   })
 
   ipcMain.handle(IPC_CHANNELS.wizardClose, (event): void => {
