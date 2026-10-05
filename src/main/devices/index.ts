@@ -161,6 +161,13 @@ export function attachDeviceStreamBridge(bridge: typeof streamBridge): void {
   Object.assign(streamBridge, bridge)
 }
 
+/**
+ * 引用查询（镜像删除守卫用）：按 imagePackageName 列设备名。devices 内存数组
+ * 含 creating 事务行——创建中的引用同样拦住删除（plan 2026-10-06-image-uninstall）。
+ */
+export const listDeviceNamesReferencing = (packageName: string): string[] =>
+  devices.filter((device) => device.imagePackageName === packageName).map((device) => device.name)
+
 /** 单次加载（issue 2026-10-03 双读的收口）：并发调用共享同一 Promise，失败可重试 */
 const ensureLoaded = (): Promise<void> => {
   if (!loadPromise) {

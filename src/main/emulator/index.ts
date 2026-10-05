@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { SdkImageProgress, SdkProgress, SdkSnapshot } from '@shared/types'
 import { appIcon } from '../app-icon'
-import { bootstrapSdk, detectSdk, runSdkManagerPackages } from './sdk'
+import { bootstrapSdk, detectSdk, runSdkManagerPackages, uninstallSdkManagerPackage } from './sdk'
 import { avdmanagerPathFor, listDeviceProfiles } from './profiles'
 import { jarFingerprint, sdklibJarPathFor } from './profileMetadata'
 import { listImagesWithState, scanLocalImages, splitPackageName } from './catalog'
@@ -16,6 +16,8 @@ import {
   type SkinRecord
 } from './skins'
 import { wizardOwns } from '../window/wizard'
+import { listDeviceNamesReferencing } from '../devices'
+import { assertUninstallable } from './uninstall'
 import { listWebcams } from './cameras'
 import type {
   DeviceProfile,
@@ -279,6 +281,37 @@ export function registerSdkIpc(): void {
       }
     }
   )
+
+  // 卸载已装镜像（plan 2026-10-06-image-uninstall）：守卫链（uninstall.ts 纯函数，
+  // 顺序固定）→ 官方 --uninstall → 落盘复核 → 缓存失效
+  ipcMain.handle(IPC_CHANNELS.sdkUninstallImage, async (_event, raw: unknown): Promise<void> => {
+    if (
+      typeof raw !== 'object' ||
+      raw === null ||
+      typeof (raw as Record<string, unknown>).packageName !== 'string'
+    ) {
+      throw new Error(`${IPC_CHANNELS.sdkUninstallImage}: 非法的入参`)
+    }
+    const packageName = (raw as Record<string, unknown>).packageName as string
+    const root = resolveRoot(undefined)
+    await requireSdkReady(root)
+    const catalog =
+      imagesCache && imagesCache.root === root
+        ? imagesCache.result
+        : await listImagesWithState(root)
+    assertUninstallable(packageName, {
+      catalog,
+      downloading,
+      referencing: listDeviceNamesReferencing(packageName)
+    })
+    await uninstallSdkManagerPackage(root, packageName)
+    // 落盘复核：sdkmanager 卸载残目录的兜底——核验不过显式报残留路径，不静默 rm
+    const local = await scanLocalImages(root)
+    if (local.has(packageName)) {
+      throw new Error(`卸载后仍检测到残留目录（${packageName}），可手动清理后刷新清单`)
+    }
+    imagesCache = null
+  })
 
   ipcMain.handle(IPC_CHANNELS.sdkDownloadImage, async (_event, raw: unknown): Promise<void> => {
     if (

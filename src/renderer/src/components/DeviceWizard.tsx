@@ -17,7 +17,7 @@ import ProfilePage from './wizard/ProfilePage'
 import ImageTable, { type ImageFilters } from './wizard/ImageTable'
 import SummaryPanel from './wizard/SummaryPanel'
 import SettingsForm from './wizard/SettingsForm'
-import { apiDisplay, messageOf } from './wizard/shared'
+import { apiDisplay, formatSize, messageOf, serviceLabel } from './wizard/shared'
 
 /**
  * 两页向导（plan 2026-10-05-emulator-wizard 设计 3）：
@@ -118,6 +118,8 @@ type DeviceWizardProps = {
     profileId: string,
     imagePackageName: string
   ) => Promise<WizardCapabilities>
+  /** 卸载触发注入（测试用）；缺省走 sdk.uninstallImage（原生确认框在组件内弹） */
+  onUninstallImage?: (packageName: string) => Promise<void>
 }
 
 const PAGE_TITLES: Record<1 | 2, string> = {
@@ -130,7 +132,8 @@ const DeviceWizard = ({
   onCancel,
   data,
   onDownloadImage,
-  onWizardCapabilities
+  onWizardCapabilities,
+  onUninstallImage
 }: DeviceWizardProps): React.JSX.Element => {
   const [page, setPage] = useState<1 | 2>(1)
   // 画像页筛选
@@ -197,6 +200,10 @@ const DeviceWizard = ({
   }>({ phase: 'idle', data: null, error: null })
   const [advancedSettings, setAdvancedSettings] = useState<DeviceAdvancedSettings | null>(null)
   const capabilityGenerationRef = useRef(0)
+  // 镜像卸载（plan 2026-10-06-image-uninstall）：互斥中标志 + 中文错误（main 守卫文案）
+  const [uninstallBusy, setUninstallBusy] = useState(false)
+  const [uninstallError, setUninstallError] = useState<string | null>(null)
+
   // 皮肤域：清单（导入/下载后刷新）、下载互斥与进度
   const [skins, setSkins] = useState<Array<{ skinRef: string; name: string; source: string }>>([])
   const [skinDownloading, setSkinDownloading] = useState<string | null>(null)
@@ -249,6 +256,34 @@ const DeviceWizard = ({
       })()
     }
   }, [data, page])
+
+  // 卸载已装镜像：原生确认框列后果 → main 守卫链（引用/互斥拒绝文案直接展示）
+  // → 成功后重拉清单（选中镜像若被删，选择核验派生自动清空）
+  const uninstall = async (entry: ImageEntry): Promise<void> => {
+    if (uninstallBusy) return
+    if (typeof window.api?.dialog?.show === 'function') {
+      const result = await window.api.dialog.show({
+        title: '删除已安装镜像',
+        message: `确定删除 API ${apiDisplay(entry)}（${serviceLabel(entry)}）的已安装镜像吗？`,
+        detail: `包：${entry.packageName}\n占用约 ${formatSize(entry.sizeBytes)}。删除后新建使用该镜像的设备需要重新下载。`,
+        buttons: ['删除', '取消'],
+        cancelId: 1
+      })
+      if (result.response !== 0) return
+    }
+    setUninstallBusy(true)
+    setUninstallError(null)
+    try {
+      if (onUninstallImage) await onUninstallImage(entry.packageName)
+      else await window.api.sdk.uninstallImage(entry.packageName)
+      // 注入场景（测试）与 download() 同口径：不做真实重拉
+      if (!data) await reloadImages()
+    } catch (error) {
+      setUninstallError(messageOf(error))
+    } finally {
+      setUninstallBusy(false)
+    }
+  }
 
   const importSkin = async (): Promise<void> => {
     try {
@@ -532,11 +567,19 @@ const DeviceWizard = ({
                 downloading={downloading}
                 onDownload={(entry) => void download(entry)}
                 downloadBusy={downloading !== null}
+                onUninstall={(entry) => void uninstall(entry)}
+                uninstallBusy={uninstallBusy}
               />
               {downloadError !== null ? (
                 <ErrorBlock role="alert">
                   <ErrorText>{downloadError.message}</ErrorText>
                   <Button onClick={retryDownload}>重试下载</Button>
+                </ErrorBlock>
+              ) : null}
+              {uninstallError !== null ? (
+                <ErrorBlock role="alert">
+                  <ErrorText>{uninstallError}</ErrorText>
+                  <Button onClick={() => setUninstallError(null)}>知道了</Button>
                 </ErrorBlock>
               ) : null}
             </DevicePane>

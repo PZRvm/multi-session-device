@@ -652,6 +652,82 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     expect(screen.queryByText('60%')).toBeNull()
   })
 
+  it('已装行删除镜像：确认（注入场景直通）→ 调用卸载 → 成功后重拉清单', async () => {
+    let calls = 0
+    const imagesMock = vi.fn(async () => {
+      calls += 1
+      // 卸载后重拉：36 变未装（显示下载钮）
+      return catalogOf(
+        calls === 1
+          ? IMAGES
+          : IMAGES.map((entry) =>
+              entry.packageName === PKG36 ? { ...entry, installed: false } : entry
+            )
+      )
+    })
+    installSdkStub({ images: imagesMock })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} onUninstallImage={async () => {}} />)
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    fireEvent.click(screen.getByRole('button', { name: /删除已安装镜像 API 36/ }))
+    await waitFor(() => expect(imagesMock.mock.calls.length).toBeGreaterThanOrEqual(2))
+    // 重拉后 36 行回到下载态
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('button', { name: /下载 API 36/ }) as HTMLElement).getAttribute(
+          'aria-disabled'
+        )
+      ).toBe('false')
+    )
+  })
+
+  it('卸载被拒（设备引用）：main 守卫文案直接展示，「知道了」可关闭', async () => {
+    installSdkStub({})
+    render(
+      <DeviceWizard
+        onCreate={vi.fn()}
+        onCancel={vi.fn()}
+        onUninstallImage={async () => {
+          throw new Error('镜像正被设备引用（测试机 A），删除这些设备后才可卸载')
+        }}
+      />
+    )
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    fireEvent.click(screen.getByRole('button', { name: /删除已安装镜像 API 36/ }))
+    expect(await screen.findByText(/正被设备引用/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '知道了' }))
+    expect(screen.queryByText(/正被设备引用/)).toBeNull()
+  })
+
+  it('卸载进行中：删除钮显示「删除中…」且互斥', async () => {
+    let resolveUninstall: () => void = () => {}
+    installSdkStub({})
+    render(
+      <DeviceWizard
+        onCreate={vi.fn()}
+        onCancel={vi.fn()}
+        onUninstallImage={() =>
+          new Promise<void>((resolve) => {
+            resolveUninstall = resolve
+          })
+        }
+      />
+    )
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    fireEvent.click(screen.getByRole('button', { name: /删除已安装镜像 API 36/ }))
+    expect((await screen.findAllByText('删除中…')).length).toBeGreaterThan(0)
+    expect(
+      (screen.getByRole('button', { name: /删除已安装镜像 API 36/ }) as HTMLElement).getAttribute(
+        'aria-disabled'
+      )
+    ).toBe('true')
+    await act(async () => {
+      resolveUninstall()
+    })
+  })
+
   it('下载同 tick 原生连点只触发一次下载（ref 守卫）', async () => {
     const downloadImage = vi.fn(async () => {
       await new Promise((resolve) => setTimeout(resolve, 20))

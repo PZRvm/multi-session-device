@@ -1,10 +1,12 @@
 ---
 description: 已装系统镜像的应用内删除——向导镜像行入口、设备引用守卫、官方卸载路径与清单缓存联动
-status: draft
+status: completed
 created: 2026-10-06
 ---
 
 # 系统镜像删除 — plan
+
+> 实现记录（2026-10-06，feature/image-uninstall）：按 Build order 完成。守卫链抽为 `uninstall.ts` 纯函数（不在目录/半安装/下载互斥/设备引用四分支中文拒绝，单测 5 例）；`uninstallSdkManagerPackage` 走官方 `--uninstall`（env 同安装，注入接缝）；devices 域 `listDeviceNamesReferencing` 含 creating 事务（单测 2 例）；ImageTable 已装行删除钮 + 原生确认框（列包名/体积/后果）+ 卸载后重拉与错误区；preload `uninstallImage`。真机冒烟（临时 SDK 根 × android-36 google_apis）：卸载前三件套核验 true → 官方卸载后包条目消失且同平台兄弟变体（playstore/ps16k）完好 → 重装核验 true。全套 285 测试过、typecheck/lint 0 错。GUI 端到端（确认框视觉/按钮流）jsdom 已覆盖，dev 冒烟留待用户环境确认。
 
 > 用户需求：下载下来的 API 镜像允许被删除。关联 [emulator-wizard 主计划](2026-10-05-emulator-wizard.md)（镜像以 packageName 为唯一身份、三件套核验的目录体系已就位）；删除属其后续扩展，不改已勾选步骤。
 

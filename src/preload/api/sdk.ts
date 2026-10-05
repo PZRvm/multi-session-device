@@ -33,6 +33,9 @@ export const sdkApi = {
   /** 未装镜像下载（单下载互斥；进度经 onImageProgress 推送） */
   downloadImage: (packageName: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.sdkDownloadImage, { packageName }),
+  /** 卸载已装镜像（设备引用/下载互斥守卫在 main；错误文案含原因） */
+  uninstallImage: (packageName: string): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.sdkUninstallImage, { packageName }),
   /** 向导设置能力（画像×镜像×emulator 版本；defaults/枚举/边界/禁用原因） */
   wizardCapabilities: (profileId: string, imagePackageName: string): Promise<WizardCapabilities> =>
     ipcRenderer.invoke(IPC_CHANNELS.sdkWizardCapabilities, { profileId, imagePackageName }),

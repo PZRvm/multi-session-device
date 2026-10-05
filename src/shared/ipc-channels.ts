@@ -37,6 +37,8 @@ export const IPC_CHANNELS = {
   sdkProfiles: 'sdk:profiles',
   sdkImages: 'sdk:images',
   sdkDownloadImage: 'sdk:download-image',
+  /** 卸载已装系统镜像（设备引用守卫 + 官方 --uninstall 路径） */
+  sdkUninstallImage: 'sdk:uninstall-image',
   /** 镜像下载进度推送（main → renderer） */
   sdkImageProgress: 'sdk:image-progress',
   /** 向导设置能力：defaults/枚举/边界/禁用原因（按画像×镜像×emulator 版本） */

@@ -221,6 +221,45 @@ export async function runSdkManagerPackages(
   return defaultRunner(root, packages, onPercent)
 }
 
+export interface UninstallDeps {
+  /** 执行器接缝：默认 spawn sdkmanager --uninstall；单测注入固定结果或错误 */
+  runner?: (sdkmanagerBin: string, args: string[], env: NodeJS.ProcessEnv) => Promise<void>
+}
+
+/**
+ * 卸载单个已装包（plan 2026-10-06-image-uninstall）：官方 `--uninstall` 路径，
+ * env 与安装一致。卸载后的落盘复核由调用方（IPC 守卫链）负责——此处只管进程。
+ */
+export async function uninstallSdkManagerPackage(
+  root: string,
+  packageName: string,
+  deps: UninstallDeps = {}
+): Promise<void> {
+  const paths = sdkPaths(root)
+  const run =
+    deps.runner ??
+    ((bin: string, args: string[], env: NodeJS.ProcessEnv): Promise<void> =>
+      new Promise((resolve, reject) => {
+        const child = spawn(bin, args, { env, stdio: ['ignore', 'ignore', 'pipe'] })
+        const stderr: Buffer[] = []
+        child.stderr?.on('data', (chunk: Buffer) => stderr.push(chunk))
+        child.on('error', reject)
+        child.on('close', (code) => {
+          if (code === 0) return resolve()
+          reject(
+            new Error(
+              `sdkmanager --uninstall ${packageName} 失败（exit ${code}）：${Buffer.concat(stderr).toString('utf8').slice(-500)}`
+            )
+          )
+        })
+      }))
+  await run(
+    paths.sdkmanagerBin,
+    ['--sdk_root', root, '--uninstall', packageName],
+    sdkManagerEnv(root)
+  )
+}
+
 /** 默认 sdkmanager：stdout 逐行喂给 onPercent（进度行重复出现，取最后一次即可） */
 const defaultRunner = async (
   root: string,

@@ -28,6 +28,9 @@ export interface ImageTableProps {
   downloading: { packageName: string; percent: number } | null
   onDownload: (image: ImageEntry) => void
   downloadBusy: boolean
+  /** 卸载已装镜像（确认框在 DeviceWizard 层统一处理）；null = 未提供该能力 */
+  onUninstall: ((image: ImageEntry) => void) | null
+  uninstallBusy: boolean
 }
 
 const ImageTable = ({
@@ -39,7 +42,9 @@ const ImageTable = ({
   onSelect,
   downloading,
   onDownload,
-  downloadBusy
+  downloadBusy,
+  onUninstall,
+  uninstallBusy
 }: ImageTableProps): React.JSX.Element => {
   const window = recommendedWindow(images)
   const rows = images.filter((image) => {
@@ -169,13 +174,29 @@ const ImageTable = ({
               <Cell className="num">{image.installed ? '—' : formatSize(image.sizeBytes)}</Cell>
               <StatusCell className="num">
                 {image.installed ? (
-                  verdict?.status === 'supported' ? (
-                    '已安装'
-                  ) : (
-                    <Reason title={verdict?.reasons.join('；') ?? ''}>
-                      已安装 · {verdict?.status === 'unknown' ? '兼容性未知' : '不兼容'}
-                    </Reason>
-                  )
+                  <>
+                    {verdict?.status === 'supported' ? (
+                      '已安装'
+                    ) : (
+                      <Reason title={verdict?.reasons.join('；') ?? ''}>
+                        已安装 · {verdict?.status === 'unknown' ? '兼容性未知' : '不兼容'}
+                      </Reason>
+                    )}
+                    {onUninstall !== null ? (
+                      <UninstallButton
+                        role="button"
+                        aria-disabled={uninstallBusy || downloadBusy}
+                        aria-label={`删除已安装镜像 API ${apiDisplay(image)} ${serviceLabel(image)}`}
+                        title="删除已安装的镜像"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onUninstall(image)
+                        }}
+                      >
+                        {uninstallBusy ? '删除中…' : '删除'}
+                      </UninstallButton>
+                    ) : null}
+                  </>
                 ) : (
                   <DownloadButton
                     role="button"
@@ -400,3 +421,29 @@ const Legend = styled.p`
 `
 
 export default ImageTable
+
+const UninstallButton = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+  min-width: 44px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--board-hairline);
+  border-radius: 4px;
+  background: var(--board-bg-raised);
+  color: var(--board-ink-dim);
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--board-hover-veil);
+    color: var(--board-ink);
+  }
+
+  &[aria-disabled='true'] {
+    cursor: default;
+    opacity: 0.6;
+  }
+`
