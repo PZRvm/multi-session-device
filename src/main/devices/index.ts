@@ -1,4 +1,5 @@
 import { BrowserWindow, app, clipboard, ipcMain } from 'electron'
+import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
@@ -185,6 +186,7 @@ const toMeta = (device: Device): DeviceMeta => ({
   formFactor: device.formFactor,
   screenSummary: device.screenSummary,
   advancedSettings: device.advancedSettings,
+  snapshotReadyAt: device.snapshotReadyAt ?? null,
   createdAt: device.createdAt
 })
 
@@ -286,12 +288,21 @@ const runner = createRunner({
     }
   },
   beforeKill: (id, runId) => streamBridge.beforeKill?.(id, runId) ?? Promise.resolve(),
-  // 运行字段按设备自己的已验证设置构造 argv；legacy（无设置）沿用固定 Cold/host
+  // 运行字段按设备自己的已验证设置构造 argv；legacy（无设置）沿用固定 Cold/host。
+  // Quick 的首启/失效路径：从未有效快照 → -no-snapshot-load（不加载旧快照，
+  // 正常停止仍保存新快照；plan 设计 8 的冷启动恢复）
   extraArgsFor: (id) => {
     const device = devices.find((entry) => entry.id === id)
-    return device?.advancedSettings
-      ? settingsToRunnerArgs(device.advancedSettings)
-      : ['-no-snapshot', '-gpu', 'host']
+    if (device?.advancedSettings === undefined || device.advancedSettings === null) {
+      return ['-no-snapshot', '-gpu', 'host']
+    }
+    const args = settingsToRunnerArgs(device.advancedSettings)
+    if (device.advancedSettings.bootMode === 'quick' && (device.snapshotReadyAt ?? null) === null) {
+      const coldLoad = args.indexOf('-no-snapshot')
+      if (coldLoad !== -1) args.splice(coldLoad, 1)
+      args.push('-no-snapshot-load')
+    }
+    return args
   },
   onRunning: handleRunning,
   onUnexpectedExit: handleUnexpectedExit
@@ -347,6 +358,7 @@ const startDevice = async (id: string): Promise<DeviceSnapshot> => {
   }
   device.status = 'starting'
   device.lastError = undefined
+  device.startedAt = Date.now()
   broadcastChanged()
   try {
     const { runId, serial } = await runner.start(id)
@@ -390,11 +402,40 @@ const stopDevice = async (id: string): Promise<DeviceSnapshot> => {
   if (target.status === 'stopping') {
     target.status = 'stopped'
     target.serial = undefined
+    const startedAt = target.startedAt
+    target.startedAt = undefined
     target.runId = undefined
     broadcastChanged()
     streamBridge.stopped?.(target.id)
+    // 正常停止的快照核验（plan 设计 8）：Quick 设备确认快照文件新于本次启动
+    // 才置 snapshotReadyAt；核验不过保持 null——下次启动走冷启动恢复，不静默丢数据
+    if (target.advancedSettings?.bootMode === 'quick' && startedAt !== undefined) {
+      const verified = await verifySnapshotSaved(target.id, startedAt)
+      if (verified !== null) {
+        await commitMetas((metas) =>
+          metas.map((meta) =>
+            meta.id === target.id ? { ...meta, snapshotReadyAt: verified } : meta
+          )
+        ).catch(() => undefined)
+      }
+    }
   }
   return snapshotNow()
+}
+
+/** 快照核验：<avd>/snapshots/default_boot/ 快照条目存在且 mtime 晚于本次启动 */
+const verifySnapshotSaved = async (id: string, startedAt: number): Promise<number | null> => {
+  const snapshotsDir = join(avdHome(), `${id}.avd`, 'snapshots', 'default_boot')
+  try {
+    const entries = await readdir(snapshotsDir)
+    for (const entry of entries) {
+      const info = await stat(join(snapshotsDir, entry))
+      if (info.mtimeMs > startedAt) return info.mtimeMs
+    }
+    return null
+  } catch {
+    return null
+  }
 }
 
 const cancelStartDevice = async (id: string): Promise<DeviceSnapshot> => {
@@ -567,6 +608,7 @@ const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult>
           }
         : null,
     advancedSettings,
+    snapshotReadyAt: null,
     createdAt: Date.now(),
     status: 'creating'
   }

@@ -87,6 +87,11 @@ export interface DeviceMeta {
   screenSummary: DeviceScreenSummary | null
   /** 归一化附加设置；null = 未配置，运行走 legacy 默认（Cold/host） */
   advancedSettings: DeviceAdvancedSettings | null
+  /**
+   * 上次正常停止且快照核验通过的时间（epoch ms）；null = 从未有效快照。
+   * Quick Boot 恢复的前置条件（plan 设计 8）——设置变化后由 main 重置。
+   */
+  snapshotReadyAt: number | null
   createdAt: number
 }
 
@@ -122,6 +127,8 @@ export interface Device extends DeviceMeta {
   serial?: string
   /** 本次启动代次——取消与迟到 boot/退出回调用它防串台 */
   runId?: string
+  /** 本次启动时间（快照核验基准）；运行态不入盘 */
+  startedAt?: number
 }
 
 /** 带代次的全量快照：list、命令响应与 changed 推送共用；renderer 忽略较旧 revision */

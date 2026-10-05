@@ -35,7 +35,10 @@ const mocks = vi.hoisted(() => {
       errors: {}
     })),
     settingsToConfigPatch: vi.fn(() => ({})),
-    settingsToRunnerArgs: vi.fn(() => ['-no-snapshot', '-gpu', 'host']),
+    settingsToRunnerArgs: vi.fn((settings: { bootMode?: string } | null): string[] =>
+      // 与真实契约一致：cold 带 -no-snapshot；quick 不带快照禁止参数
+      settings !== null && settings.bootMode === 'quick' ? [] : ['-no-snapshot', '-gpu', 'host']
+    ),
     deleteAvd: vi.fn<(dirs: unknown) => Promise<void>>(async () => {}),
     avdExists: vi.fn(async () => true),
     isPackageNameInstalled: vi.fn<(root: string, packageName: string) => Promise<boolean>>(
@@ -403,6 +406,83 @@ describe('devices 域（创建/删除事务）', () => {
     expect(list.devices).toHaveLength(1)
     expect(list.devices[0].status).toBe('stopped')
     expect(list.devices[0].lastError?.code).toBe('delete-failed')
+  })
+})
+
+describe('Quick Boot 运行路径（plan 设计 8；门槛未过保持禁用）', () => {
+  const quickDevice = (
+    overrides: Partial<Record<string, unknown>> = {}
+  ): Record<string, unknown> => ({
+    id: 'quick-1',
+    name: 'Quick 机',
+    profileId: 'pixel_8',
+    profileLabel: 'Pixel 8',
+    imagePackageName: 'system-images;android-36;google_apis_playstore;arm64-v8a',
+    apiDisplay: '36',
+    formFactor: 'phone',
+    screenSummary: null,
+    advancedSettings: {
+      skinRef: null,
+      frontCamera: { mode: 'emulated', deviceId: null },
+      rearCamera: { mode: 'emulated', deviceId: null },
+      networkSpeed: null,
+      networkLatency: null,
+      orientation: null,
+      bootMode: 'quick',
+      internalStorageMiB: 6144,
+      cpuCores: 4,
+      graphics: 'auto',
+      ramMiB: 2048,
+      vmHeapMiB: 256,
+      preferredAbi: 'optimal'
+    },
+    snapshotReadyAt: null,
+    createdAt: 0,
+    status: 'stopped',
+    ...overrides
+  })
+
+  const extraArgsFromConfig = (): ((id: string) => string[]) => {
+    const config = mocks.createRunner.mock.calls.at(-1)![0] as {
+      extraArgsFor: (id: string) => string[]
+    }
+    return config.extraArgsFor
+  }
+
+  it('quick 且从未有效快照 → -no-snapshot-load（首启冷路径，仍可保存）', async () => {
+    mocks.readDeviceMetas.mockResolvedValue([quickDevice() as never])
+    const { handlerFor } = await freshDomain()
+    await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)
+    const extra = extraArgsFromConfig()
+    expect(extra('quick-1')).toContain('-no-snapshot-load')
+    expect(extra('quick-1')).not.toContain('-no-snapshot')
+  })
+
+  it('quick 且已有有效快照 → 不加载禁止参数（正常恢复路径）', async () => {
+    mocks.readDeviceMetas.mockResolvedValue([quickDevice({ snapshotReadyAt: 123 }) as never])
+    const { handlerFor } = await freshDomain()
+    await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)
+    const extra = extraArgsFromConfig()
+    expect(extra('quick-1')).not.toContain('-no-snapshot-load')
+    expect(extra('quick-1')).not.toContain('-no-snapshot')
+  })
+
+  it('legacy（无设置）→ 固定 Cold/host，不因新默认改变已有设备行为', async () => {
+    mocks.readDeviceMetas.mockResolvedValue([
+      quickDevice({ id: 'legacy-1', advancedSettings: null }) as never
+    ])
+    const { handlerFor } = await freshDomain()
+    await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)
+    expect(extraArgsFromConfig()('legacy-1')).toEqual(['-no-snapshot', '-gpu', 'host'])
+  })
+
+  it('cold 设置 → -no-snapshot（与现有行为一致）', async () => {
+    const cold = quickDevice()
+    ;(cold.advancedSettings as Record<string, unknown>).bootMode = 'cold'
+    mocks.readDeviceMetas.mockResolvedValue([cold as never])
+    const { handlerFor } = await freshDomain()
+    await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)
+    expect(extraArgsFromConfig()('quick-1')).toContain('-no-snapshot')
   })
 })
 

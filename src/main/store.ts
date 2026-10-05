@@ -88,6 +88,7 @@ const legacyToV2 = (legacy: DeviceMetaLegacy): DeviceMeta => ({
   formFactor: 'unknown',
   screenSummary: null,
   advancedSettings: null,
+  snapshotReadyAt: null,
   createdAt: legacy.createdAt
 })
 

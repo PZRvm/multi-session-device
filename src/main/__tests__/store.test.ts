@@ -28,6 +28,7 @@ const v2Meta = (overrides: Partial<DeviceMeta> = {}): DeviceMeta => ({
   formFactor: 'phone',
   screenSummary: { widthPx: 1080, heightPx: 2400, diagonalInches: 6.31 },
   advancedSettings: null,
+  snapshotReadyAt: null,
   createdAt: 0,
   ...overrides
 })

@@ -12,6 +12,7 @@ const device = (overrides: Partial<Device> = {}): Device => ({
   formFactor: 'phone',
   screenSummary: { widthPx: 1080, heightPx: 2400, diagonalInches: 6.2 },
   advancedSettings: null,
+  snapshotReadyAt: null,
   createdAt: 0,
   status: 'stopped',
   ...overrides
