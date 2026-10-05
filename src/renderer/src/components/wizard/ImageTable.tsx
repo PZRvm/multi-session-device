@@ -1,5 +1,5 @@
 import styled from 'styled-components'
-import { Download, Loader2 } from 'lucide-react'
+import { Download, Loader2, Trash2 } from 'lucide-react'
 import type { CompatibilityVerdict } from '@shared/compatibility'
 import type { ImageEntry, ImageService } from '@shared/types'
 import { apiDisplay, formatSize, recommendedWindow, serviceLabel, serviceLabels } from './shared'
@@ -176,17 +176,22 @@ const ImageTable = ({
               <StatusCell className="num">
                 {image.installed ? (
                   <>
-                    {verdict?.status === 'supported' ? (
-                      '已安装'
-                    ) : (
-                      <Reason title={verdict?.reasons.join('；') ?? ''}>
-                        已安装 · {verdict?.status === 'unknown' ? '兼容性未知' : '不兼容'}
-                      </Reason>
-                    )}
+                    <StatusText
+                      title={
+                        verdict?.status === 'supported'
+                          ? undefined
+                          : (verdict?.reasons.join('；') ?? '')
+                      }
+                    >
+                      {verdict?.status === 'supported'
+                        ? '已安装'
+                        : `已安装 · ${verdict?.status === 'unknown' ? '兼容性未知' : '不兼容'}`}
+                    </StatusText>
                     {onUninstall !== null ? (
                       <UninstallButton
                         role="button"
                         aria-disabled={uninstallingPackage !== null || downloadBusy}
+                        aria-busy={uninstallingPackage === image.packageName}
                         aria-label={`删除已安装镜像 API ${apiDisplay(image)} ${serviceLabel(image)}`}
                         title="删除已安装的镜像"
                         onClick={(event) => {
@@ -195,12 +200,9 @@ const ImageTable = ({
                         }}
                       >
                         {uninstallingPackage === image.packageName ? (
-                          <>
-                            <UninstallSpinner size={12} aria-hidden="true" />
-                            删除中…
-                          </>
+                          <UninstallSpinner size={14} aria-hidden="true" />
                         ) : (
-                          '删除'
+                          <Trash2 size={14} aria-hidden="true" />
                         )}
                       </UninstallButton>
                     ) : null}
@@ -288,7 +290,7 @@ const Switch = styled.div`
 const Scroller = styled.div`
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: auto;
   border: 1px solid var(--board-hairline);
   border-radius: 4px;
   background: var(--board-bg);
@@ -299,7 +301,7 @@ const HeadRow = styled.div`
   top: 0;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) minmax(120px, 1fr) 90px 80px 110px;
+  grid-template-columns: minmax(170px, 1.6fr) minmax(100px, 1fr) 84px 64px 92px;
   background: var(--board-bg-raised);
   border-bottom: 1px solid var(--board-hairline);
 `
@@ -317,7 +319,7 @@ const HeadCell = styled.div`
 
 const Row = styled.div`
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) minmax(120px, 1fr) 90px 80px 110px;
+  grid-template-columns: minmax(170px, 1.6fr) minmax(100px, 1fr) 84px 64px 92px;
   align-items: center;
   cursor: pointer;
   transition: background-color 0.12s;
@@ -368,17 +370,15 @@ const StatusCell = styled.div`
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
   min-height: 34px;
   padding: 5px 10px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 `
 
-const Reason = styled.span`
-  color: var(--board-ink-dim);
-  cursor: help;
-  text-decoration: underline dotted;
+const StatusText = styled.span`
+  white-space: nowrap;
 `
 
 const RowTag = styled.span`
@@ -437,27 +437,33 @@ const UninstallButton = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  /* 两态同宽（删除 / spinner+删除中），行高不抖、文字不换行破版 */
-  min-width: 72px;
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid var(--board-hairline);
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
   border-radius: 4px;
-  background: var(--board-bg-raised);
-  color: var(--board-ink-dim);
-  font-size: 11px;
-  white-space: nowrap;
+  background: transparent;
+  color: var(--danger, #b3261e);
   cursor: pointer;
+  transition: background-color 0.12s;
 
   &:hover {
     background: var(--board-hover-veil);
-    color: var(--board-ink);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
 
   &[aria-disabled='true'] {
     cursor: default;
-    opacity: 0.6;
+    opacity: 0.45;
+
+    &:hover {
+      background: transparent;
+    }
   }
 `
 

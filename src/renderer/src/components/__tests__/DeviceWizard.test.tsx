@@ -717,17 +717,14 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     await screen.findByText('Pixel 8')
     gotoConfigure()
     fireEvent.click(screen.getByRole('button', { name: /删除已安装镜像 API 36/ }))
-    // 只有正在删的行显示 spinner+删除中…
-    expect(await screen.findByText('删除中…')).toBeTruthy()
-    expect(
-      (screen.getByRole('button', { name: /删除已安装镜像 API 36/ }) as HTMLElement).getAttribute(
-        'aria-disabled'
-      )
-    ).toBe('true')
-    // 其余已装行保持「删除」文案但互斥禁用
+    // 正在删的行：icon 变加载态（aria-busy）且禁用
+    const busy = screen.getByRole('button', { name: /删除已安装镜像 API 36/ }) as HTMLElement
+    await waitFor(() => expect(busy.getAttribute('aria-busy')).toBe('true'))
+    expect(busy.getAttribute('aria-disabled')).toBe('true')
+    // 其余已装行的删除 icon 同步互斥禁用
     const other = screen.getByRole('button', { name: /删除已安装镜像 API 34/ }) as HTMLElement
-    expect(other.textContent).toBe('删除')
     expect(other.getAttribute('aria-disabled')).toBe('true')
+    expect(other.getAttribute('aria-busy')).toBe('false')
     await act(async () => {
       resolveUninstall()
     })
