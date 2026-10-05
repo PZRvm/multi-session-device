@@ -8,12 +8,19 @@ import type {
   Device,
   DeviceMeta,
   DeviceSnapshot,
-  ImageVariant,
   RuntimeErrorMessage
 } from '@shared/types'
 import { readDeviceMetas, writeDeviceMetas } from '../store'
 import { avdExists, createAvd, deleteAvd } from '../emulator/avd'
-import { isPackageNameInstalled, splitPackageName } from '../emulator/catalog'
+import {
+  classifyTags,
+  parseApiVersion,
+  scanLocalImages,
+  splitPackageName
+} from '../emulator/catalog'
+import { assessImageCompatibility } from '../emulator/compatibility'
+import { avdmanagerPathFor, listDeviceProfiles } from '../emulator/profiles'
+import { sdklibJarPathFor } from '../emulator/profileMetadata'
 import {
   ensureSharedServer,
   candidateAdbPaths,
@@ -42,29 +49,6 @@ const normalizeName = (value: unknown): string | null => {
   const name = value.trim()
   if (name.length === 0 || name.length > MAX_NAME_LENGTH) return null
   return name
-}
-
-/**
- * 旧三变体闭集内的包名才派生 legacy 字段（store v1 过渡写入；v2 落地后由
- * 精确身份替代）。wear/tv/automotive 等新形态包在 v2 之前不可创建。
- */
-const legacyFieldsFromPackageName = (
-  packageName: string
-): { apiLevel: number; variant: ImageVariant } | null => {
-  const parts = splitPackageName(packageName)
-  if (parts === null) return null
-  const major = parts.platformSegment.match(/^android-(\d+)(?:\.|$)/)?.[1]
-  if (major === undefined) return null
-  const { tagSegment } = parts
-  const variant: ImageVariant | null = tagSegment.startsWith('google_apis_playstore')
-    ? 'google_play'
-    : tagSegment.startsWith('google_apis')
-      ? 'google_apis'
-      : tagSegment === 'default'
-        ? 'aosp'
-        : null
-  if (variant === null) return null
-  return { apiLevel: Number(major), variant }
 }
 
 /** renderer payload 不可信，进业务前先过守卫（coding-style IPC 纪律） */
@@ -175,8 +159,11 @@ const toMeta = (device: Device): DeviceMeta => ({
   name: device.name,
   profileId: device.profileId,
   profileLabel: device.profileLabel,
-  apiLevel: device.apiLevel,
-  variant: device.variant,
+  imagePackageName: device.imagePackageName,
+  apiDisplay: device.apiDisplay,
+  formFactor: device.formFactor,
+  screenSummary: device.screenSummary,
+  advancedSettings: device.advancedSettings,
   createdAt: device.createdAt
 })
 
@@ -428,21 +415,59 @@ const deleteDevice = (id: string): Promise<DeviceSnapshot> => {
 const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult> => {
   await ensureLoaded()
   const packageName = raw.imagePackageName
-  if (!(await isPackageNameInstalled(sdkRoot(), packageName))) {
+  // 创建时重新核验（plan 设计 2：拒绝陈旧选择）——镜像完整安装 + 画像仍可创建 + 兼容性
+  const local = await scanLocalImages(sdkRoot())
+  const imageRecord = local.get(packageName)
+  if (imageRecord?.verified !== true) {
     throw new Error('系统镜像未安装或安装不完整，请先在向导中下载')
   }
-  // store v1 过渡：仅在旧三变体闭集内派生；v2 落地后由精确身份替代
-  const legacy = legacyFieldsFromPackageName(packageName)
-  if (legacy === null) {
-    throw new Error('该镜像类型的元数据存储（v2）尚未启用，暂时不可创建')
+  const profiles = await listDeviceProfiles({
+    avdmanagerPath: avdmanagerPathFor(sdkRoot()),
+    jarPath: sdklibJarPathFor(sdkRoot())
+  })
+  const profile = profiles.find((entry) => entry.id === raw.profileId)
+  if (profile === undefined || !profile.creatable) {
+    throw new Error('设备画像已不可创建，请返回向导重新选择')
   }
+  const { major, minor } = parseApiVersion(imageRecord.apiLevelText)
+  const verdict = assessImageCompatibility(profile, {
+    abi: imageRecord.abi,
+    services: classifyTags(imageRecord.tagIds).services,
+    api: {
+      platformSegment: splitPackageName(packageName)?.platformSegment ?? '',
+      major,
+      minor,
+      codename: null,
+      extensionLevel: imageRecord.extensionLevel,
+      baseExtension: null
+    }
+  })
+  if (verdict.status !== 'supported') {
+    throw new Error(`镜像与画像不兼容：${verdict.reasons.join('；')}`)
+  }
+  const apiDisplay =
+    major === null
+      ? (splitPackageName(packageName)?.platformSegment ?? null)
+      : minor !== null
+        ? `${major}.${minor}`
+        : `${major}`
   const device: Device = {
     id: randomUUID(),
     name: raw.name.trim(),
-    profileId: raw.profileId,
-    profileLabel: raw.profileLabel,
-    apiLevel: legacy.apiLevel,
-    variant: legacy.variant,
+    profileId: profile.id,
+    profileLabel: profile.name,
+    imagePackageName: packageName,
+    apiDisplay,
+    formFactor: profile.formFactor,
+    screenSummary:
+      profile.screen.widthPx !== null || profile.screen.heightPx !== null
+        ? {
+            widthPx: profile.screen.widthPx,
+            heightPx: profile.screen.heightPx,
+            diagonalInches: profile.screen.diagonalInches
+          }
+        : null,
+    advancedSettings: null,
     createdAt: Date.now(),
     status: 'creating'
   }
@@ -459,7 +484,19 @@ const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult>
   } catch (error) {
     devices = devices.filter((entry) => entry.id !== device.id)
     broadcastChanged()
-    await deleteAvd(device.id, avdDirs()).catch(() => undefined)
+    // 回滚失败不再吞掉：返回主错误与残留路径，供诊断与手动清理（plan 设计 5）
+    let rollbackError: string | null = null
+    try {
+      await deleteAvd(device.id, avdDirs())
+    } catch (rollback) {
+      rollbackError = rollback instanceof Error ? rollback.message : String(rollback)
+    }
+    if (rollbackError !== null) {
+      const main = error instanceof Error ? error.message : String(error)
+      throw new Error(
+        `创建失败：${main}；且回滚 AVD 失败（${rollbackError}），残留目录待清理：${join(avdHome(), `${device.id}.avd`)}`
+      )
+    }
     throw error
   }
 }

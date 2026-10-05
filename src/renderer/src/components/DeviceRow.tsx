@@ -65,8 +65,8 @@ const DeviceRow = ({
 
   const subtitle =
     device.status === 'running' && device.serial
-      ? `${device.profileLabel} · API ${device.apiLevel} · ${device.serial}`
-      : `${device.profileLabel} · API ${device.apiLevel} · ${STATUS_LABELS[device.status]}`
+      ? `${device.profileLabel} · API ${device.apiDisplay ?? '?'} · ${device.serial}`
+      : `${device.profileLabel} · API ${device.apiDisplay ?? '?'} · ${STATUS_LABELS[device.status]}`
 
   const deleteDisabled = device.status !== 'stopped' && device.status !== 'running'
 

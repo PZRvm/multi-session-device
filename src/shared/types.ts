@@ -19,11 +19,79 @@ export interface DialogResult {
   checkboxChecked: boolean
 }
 
-/** 系统镜像变体（avdmanager tag 的白名单子集，闭集守卫用） */
+/** 系统镜像变体（avdmanager tag 的白名单子集，闭集守卫用；v1 store 兼容读取） */
 export type ImageVariant = 'aosp' | 'google_apis' | 'google_play'
 
-/** 设备元数据——devices.json 持久化的全部字段（stage 03 mock，stage 04 接真数据） */
+/**
+ * 附加设置封闭类型（plan 设计 4）：不开放任意 config 键、命令字符串或宿主路径。
+ * 枚举与边界由批次 6 的能力接口（WizardCapabilities）按所装 emulator 锁定，
+ * 此处只定型字段与已验证枚举。
+ */
+export interface DeviceAdvancedSettings {
+  /** 机型皮肤（SDK 自带 id 或导入皮肤 id）；null = 通用外框 */
+  skinRef: string | null
+  /** 前/后摄像头：none / emulated / virtualScene / webcam（资源 id 由能力接口枚举） */
+  frontCamera: CameraConfig
+  rearCamera: CameraConfig
+  networkSpeed: NetworkPreset | null
+  networkLatency: NetworkPreset | null
+  /** 初始朝向；null = 跟随画像默认 */
+  orientation: 'portrait' | 'landscape' | null
+  /** Cold = 首启不加载快照；Quick 通过稳定性门槛前不可选（批次 9） */
+  bootMode: 'cold' | 'quick'
+  internalStorageMiB: number
+  cpuCores: number
+  graphics: GpuMode
+  ramMiB: number
+  vmHeapMiB: number
+  /** Optimal 解析为选中包 ABI；显式仅 arm64（本期） */
+  preferredAbi: 'optimal' | 'arm64-v8a'
+}
+
+export interface CameraConfig {
+  mode: 'none' | 'emulated' | 'virtualScene' | 'webcam'
+  /** webcam 模式下的宿主摄像头 id（webcam0…，能力接口枚举） */
+  deviceId: string | null
+}
+
+/** -netspeed / -netdelay 的预设枚举（emulator 36.1.9 -help 实测，fixtures README） */
+export type NetworkPreset =
+  'gsm' | 'hscsd' | 'gprs' | 'umts' | 'edge' | 'hsdpa' | 'lte' | 'evdo' | '5g' | 'full' | 'none'
+
+/** -gpu 模式（emulator 36.1.9 -help 实测；无 host_indirect） */
+export type GpuMode =
+  'auto' | 'auto-no-window' | 'host' | 'swiftshader_indirect' | 'angle_indirect' | 'guest'
+
+/** 屏幕摘要（列表展示用，完整数据在画像元数据里） */
+export interface DeviceScreenSummary {
+  widthPx: number | null
+  heightPx: number | null
+  diagonalInches: number | null
+}
+
+/**
+ * 设备元数据 v2——devices.json 持久化的全部字段（plan 设计 5）。
+ * 精确镜像身份贯穿创建与读取；advancedSettings/skinRef 由批次 6/7 填充。
+ */
 export interface DeviceMeta {
+  id: string
+  name: string
+  profileId: string
+  profileLabel: string
+  /** 完整包名（system-images;<平台>;<tag>;<abi>）——唯一镜像身份 */
+  imagePackageName: string
+  /** API 显示值（"36" / "36.1"），从镜像身份派生后冗余存储 */
+  apiDisplay: string | null
+  /** 画像形态；v1 兼容读出为 'unknown'（旧记录只有手机/平板画像，不硬猜） */
+  formFactor: DeviceFormFactor
+  screenSummary: DeviceScreenSummary | null
+  /** 归一化附加设置；null = 未配置，运行走 legacy 默认（Cold/host） */
+  advancedSettings: DeviceAdvancedSettings | null
+  createdAt: number
+}
+
+/** v1 store 记录形状（只用于合法旧文件的兼容读取与派生） */
+export interface DeviceMetaLegacy {
   id: string
   name: string
   profileId: string

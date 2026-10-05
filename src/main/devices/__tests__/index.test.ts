@@ -23,6 +23,49 @@ const mocks = vi.hoisted(() => {
     isPackageNameInstalled: vi.fn<(root: string, packageName: string) => Promise<boolean>>(
       async () => true
     ),
+    scanLocalImages: vi.fn<(root: string) => Promise<Map<string, unknown>>>(
+      async () =>
+        new Map([
+          [
+            'system-images;android-36;google_apis_playstore;arm64-v8a',
+            {
+              packageName: 'system-images;android-36;google_apis_playstore;arm64-v8a',
+              displayName: null,
+              apiLevelText: '36',
+              extensionLevel: null,
+              tagIds: ['google_apis_playstore'],
+              abi: 'arm64-v8a',
+              revision: null,
+              verified: true
+            }
+          ]
+        ])
+    ),
+    listDeviceProfiles: vi.fn(async () => [
+      {
+        id: 'pixel_8',
+        name: 'Pixel 8',
+        manufacturer: 'Google',
+        tagIds: [],
+        formFactor: 'phone',
+        screen: {
+          widthPx: 1080,
+          heightPx: 2400,
+          diagonalInches: 6.2,
+          logicalDpi: 420,
+          round: null
+        },
+        foldable: false,
+        apiMin: null,
+        apiMax: null,
+        playSupported: null,
+        deprecated: false,
+        hasFrontCamera: null,
+        hasBackCamera: null,
+        ramMiB: null,
+        creatable: true
+      }
+    ]),
     listAdbSerials: vi.fn(async () => new Set<string>()),
     ensureSharedServer: vi.fn(async () => ({ reused: false, protocolVersion: 41 })),
     resolveAdbExecutable: vi.fn(async () => ({
@@ -63,6 +106,7 @@ vi.mock('../../emulator/avd', () => ({
 }))
 vi.mock('../../emulator/catalog', () => ({
   isPackageNameInstalled: mocks.isPackageNameInstalled,
+  scanLocalImages: mocks.scanLocalImages,
   splitPackageName: (
     packageName: string
   ): {
@@ -73,7 +117,33 @@ vi.mock('../../emulator/catalog', () => ({
     const parts = packageName.split(';')
     if (parts.length !== 4 || parts[0] !== 'system-images') return null
     return { platformSegment: parts[1], tagSegment: parts[2], abi: parts[3] }
-  }
+  },
+  classifyTags: (tagIds: string[]) => ({
+    services: tagIds.includes('google_apis_playstore')
+      ? ['google_play']
+      : tagIds.includes('google_apis')
+        ? ['google_apis']
+        : tagIds.includes('default')
+          ? ['aosp']
+          : [],
+    featureTags: []
+  }),
+  parseApiVersion: (text: string | null) =>
+    text === '36.1'
+      ? { major: 36, minor: 1 }
+      : text === null
+        ? { major: null, minor: null }
+        : { major: Number(text), minor: null }
+}))
+vi.mock('../../emulator/compatibility', () => ({
+  assessImageCompatibility: () => ({ status: 'supported', reasons: [] })
+}))
+vi.mock('../../emulator/profiles', () => ({
+  listDeviceProfiles: mocks.listDeviceProfiles,
+  avdmanagerPathFor: () => '/avdmanager'
+}))
+vi.mock('../../emulator/profileMetadata', () => ({
+  sdklibJarPathFor: () => '/sdklib.jar'
 }))
 vi.mock('../../emulator/adb', () => ({
   candidateAdbPaths: () => [{ path: '/adb', source: 'app-sdk' }],
@@ -165,6 +235,41 @@ describe('devices 域（创建/删除事务）', () => {
     const persisted = mocks.writeDeviceMetas.mock.calls.at(-1)![0] as DeviceMeta[]
     expect(persisted).toHaveLength(1)
     expect((persisted[0] as unknown as Record<string, unknown>).status).toBeUndefined()
+  })
+
+  it('create：v2 字段落盘——精确包身份/API 显示/形态/屏幕摘要；返回前核验画像与安装', async () => {
+    const { handlerFor } = await freshDomain()
+    await handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), validCreateInput)
+    const persisted = mocks.writeDeviceMetas.mock.calls.at(-1)![0] as DeviceMeta[]
+    expect(persisted[0]).toMatchObject({
+      imagePackageName: 'system-images;android-36;google_apis_playstore;arm64-v8a',
+      apiDisplay: '36',
+      formFactor: 'phone',
+      advancedSettings: null
+    })
+    expect(persisted[0]?.screenSummary).toMatchObject({ widthPx: 1080, heightPx: 2400 })
+    // 核验链走了本地扫描与画像重查（拒绝陈旧选择的数据源）
+    expect(mocks.scanLocalImages).toHaveBeenCalled()
+    expect(mocks.listDeviceProfiles).toHaveBeenCalled()
+  })
+
+  it('create：画像已不可创建 → 拒绝，不建 AVD 不落盘（拒绝陈旧选择）', async () => {
+    mocks.listDeviceProfiles.mockResolvedValueOnce([])
+    const { handlerFor } = await freshDomain()
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), validCreateInput)
+    ).rejects.toThrow('画像已不可创建')
+    expect(mocks.createAvd).not.toHaveBeenCalled()
+    expect(mocks.writeDeviceMetas).not.toHaveBeenCalled()
+  })
+
+  it('create：镜像半安装（核验不过）→ 拒绝', async () => {
+    mocks.scanLocalImages.mockResolvedValueOnce(new Map())
+    const { handlerFor } = await freshDomain()
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), validCreateInput)
+    ).rejects.toThrow('未安装或安装不完整')
+    expect(mocks.createAvd).not.toHaveBeenCalled()
   })
 
   it('create：AVD 建失败 → 撤回临时行 + 回滚本次 AVD + 抛错', async () => {

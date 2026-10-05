@@ -11,8 +11,11 @@ const baseDevice: Device = {
   name: 'Pixel 8 API 34',
   profileId: 'pixel_8',
   profileLabel: 'Pixel 8',
-  apiLevel: 34,
-  variant: 'google_apis',
+  imagePackageName: 'system-images;android-34;google_apis;arm64-v8a',
+  apiDisplay: '34',
+  formFactor: 'phone',
+  screenSummary: { widthPx: 1080, heightPx: 2400, diagonalInches: 6.2 },
+  advancedSettings: null,
   createdAt: 0,
   status: 'stopped'
 }
