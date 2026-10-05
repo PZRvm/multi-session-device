@@ -135,6 +135,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-05-worktree-git-common-dir-relative.md](notes/learn/2026-10/2026-10-05-worktree-git-common-dir-relative.md) — create-worktree 技能的仓库父目录公式在仓库根执行会得到相对路径 "."，worktree 被建进主仓库内部；用 rev-parse --show-toplevel 或绝对路径展开
 - [2026-10-05-xml-namespace-backreference-colon.md](notes/learn/2026-10/2026-10-05-xml-namespace-backreference-colon.md) — 正则解析带命名空间前缀的 XML 块时，前缀捕获组必须把冒号包进组内，否则闭合标签回引永假、惰性块体吞掉全部后续同祖节点；esbuild 不校验正则字面量，坏正则要到运行时才以"静默错配"现形
 - [2026-10-06-async-ipc-handler-test-rejects.md](notes/learn/2026-10/2026-10-06-async-ipc-handler-test-rejects.md) — ipcMain.handle 的 handler 改 async 后，非法入参不再同步抛错而是 reject——测试断言要从 toThrow 换 rejects.toThrow
+- [2026-10-06-book-index-is-generated-no-prettier.md](notes/learn/2026-10/2026-10-06-book-index-is-generated-no-prettier.md) — book/README.md 是索引生成物——对它跑 prettier 会让 release-check 判「索引过期」，收口只跑 book:index 直接提交
 
 ### plans/
 
@@ -181,4 +182,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261005221831-模拟器向导分类与附加设置.md](think-report/20261005221831-模拟器向导分类与附加设置.md) — 已确认的向导范围：画像分类、API镜像与附加设置，含机型皮肤和真实摄像头；SD卡暂缓，跨架构二期
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 107 documents -->
+<!-- 108 documents -->
