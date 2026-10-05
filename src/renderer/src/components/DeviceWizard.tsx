@@ -570,10 +570,12 @@ const DeviceWizard = ({
     <Wrapper>
       <Header>
         {window.api?.platform === 'darwin' ? <TrafficSpacer aria-hidden="true" /> : null}
-        <Heading>新建设备</Heading>
-        <StepIndicator>
-          第 {page} / 2 页 · {PAGE_TITLES[page]}
-        </StepIndicator>
+        <TitleGroup>
+          <Heading>新建设备</Heading>
+          <StepIndicator>
+            第 {page} / 2 页 · {PAGE_TITLES[page]}
+          </StepIndicator>
+        </TitleGroup>
       </Header>
 
       <Body>{renderPage()}</Body>
@@ -609,21 +611,31 @@ const Wrapper = styled.div`
 
 const Header = styled.header`
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   flex: none;
-  padding: 12px 16px 12px 14px;
+  height: 40px;
+  padding: 0 14px;
   border-bottom: 1px solid var(--board-hairline);
-  /* 板头整行是窗口拖拽带（darwin 原生标题条已去，对齐主窗 BoardHead 模式） */
+  /* 板头整行是窗口拖拽带（darwin 原生标题条已去，对齐主窗 BoardHead 模式）；
+     40px 定高居中 + 三灯 y=14——标题与红绿灯共中线（用户裁决：居中对齐） */
   -webkit-app-region: drag;
 `
 
-/** darwin 原生三灯让位（对齐主窗：trafficLightPosition 14,12 + 60px no-drag 占位） */
+/** darwin 原生三灯让位（对齐主窗：60px no-drag 占位，标题起排 x=82） */
 const TrafficSpacer = styled.span`
   flex: none;
   width: 60px;
-  align-self: center;
   -webkit-app-region: no-drag;
+`
+
+/** 标题组：两段字号不同（14/11px）在组内基线对齐，整组在 40px 板头里垂直居中 */
+const TitleGroup = styled.span`
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
 `
 
 const Heading = styled.h3`

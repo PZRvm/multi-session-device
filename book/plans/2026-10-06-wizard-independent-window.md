@@ -8,6 +8,8 @@ created: 2026-10-06
 
 > **追加轮（2026-10-06 用户反馈）**：窗口顶部的系统标题条与 Header 右侧 X 去除，改为对齐主窗的原生三灯——`wizard.ts` darwin 加 `titleBarStyle: 'hiddenInset'` + `trafficLightPosition {14,12}`（其他平台保留系统标题栏的关闭钮）；`DeviceWizard.tsx` Header 整行 `-webkit-app-region: drag`（成为窗口拖拽带）、darwin 侧 60px no-drag Spacer 给三灯让位（BoardHead 同模式）、删 X（关闭路径收敛为红绿灯/Esc/底部取消）。视觉冒烟（CDP DOM 断言 + macOS 系统级截图核验）：三灯存在、无标题条、无 X、标题 left=82 不遮挡、Header app-region=drag。
 
+> **追加轮二（2026-10-06 用户反馈）**：红绿灯与标题改居中对齐——Header 由 baseline+padding 改 40px 定高 + `align-items: center`（BoardHead 同构），Heading/StepIndicator 包进组内基线对齐的 TitleGroup；三灯 y 12→14 落板头中线（实测标题中心 19.5 vs 三灯 20，差 0.5px）。CDP 对齐断言 + 系统级截图核验通过。
+
 # 向导独立窗口（非模态） — plan
 
 > 用户需求：新建设备的模态框固定在屏幕上，希望可移动、像独立窗口一样；点击创建后主页面列表更新即可，向导窗口不影响主窗口操作。关联 [emulator-wizard 主计划](2026-10-05-emulator-wizard.md) 设计 3（「保留现有原生模态单例」的本轮调整即修订该点）与 [wizard 窗口单例](2026-10-04-shell-polish-原生向导与板头.md) 的 open 互斥设计。
