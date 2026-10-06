@@ -16,16 +16,23 @@ import type {
  * `__tests__/fixtures/README.md`（批次 1）。
  */
 
-/** sdklib JAR 内的画像资源（avdmanager list device 的元数据来源） */
-const DEVICE_XML_ENTRIES = [
-  'automotive',
-  'desktop',
-  'devices',
-  'nexus',
-  'tv',
-  'wear',
-  'xr'
-] as const
+/**
+ * sdklib JAR 内的画像资源（avdmanager list device 的元数据来源）。
+ * impliedFormTag = 该源文件全部画像的隐含形态 tag：七份 XML 均不含 tag 元素
+ * （fixture 实证），avdmanager 的 Tag 展示按源文件归类（wear.xml →
+ * android-wear 等）；null = 通用文件（devices/nexus，形态按屏幕尺寸规则判）。
+ * 新增形态专属 XML 只登记这一处——读取清单与隐含 tag 同表派生，不再两处维护
+ * （修复轮 review P3）。
+ */
+const DEVICE_XML_SOURCES: ReadonlyArray<{ name: string; impliedFormTag: string | null }> = [
+  { name: 'automotive', impliedFormTag: 'android-automotive' },
+  { name: 'desktop', impliedFormTag: 'android-desktop' },
+  { name: 'devices', impliedFormTag: null },
+  { name: 'nexus', impliedFormTag: null },
+  { name: 'tv', impliedFormTag: 'android-tv' },
+  { name: 'wear', impliedFormTag: 'android-wear' },
+  { name: 'xr', impliedFormTag: 'android-xr' }
+]
 
 /** 像素密度符号 → 逻辑 dpi（官方 density 定义） */
 const DENSITY_SYMBOLS: Record<string, number> = {
@@ -316,25 +323,10 @@ export const mergeProfiles = (
   return [...profiles.values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
 }
 
-/**
- * 形态专属源文件的隐含形态 tag：七份 XML 均不含 tag 元素（fixture 实证），
- * avdmanager 的 Tag 展示按源文件归类（wear.xml → android-wear 等）。读取层
- * 补入后，纯 JAR 消费方（外观索引 loadFrameKindIndex）与 avdmanager 合并
- * 管道（mergeProfiles 的 tag 并集去重）分类一致——修 JAR-only 索引把
- * wear/tv 按屏幕尺寸误判 phone 的问题（issue 合并融合补充 P3）。
- */
-const FILE_IMPLIED_FORM_TAGS: Record<string, string> = {
-  automotive: 'android-automotive',
-  desktop: 'android-desktop',
-  tv: 'android-tv',
-  wear: 'android-wear',
-  xr: 'android-xr'
-}
-
-/** 按源文件名补隐含形态 tag（纯函数，不改入参；非形态专属文件原样返回） */
+/** 按源文件名补隐含形态 tag（纯函数，不改入参；通用文件或未登记名原样返回） */
 export const withImpliedFormTag = (xmlName: string, metas: RawProfileMeta[]): RawProfileMeta[] => {
-  const implied = FILE_IMPLIED_FORM_TAGS[xmlName]
-  if (implied === undefined) return metas
+  const implied = DEVICE_XML_SOURCES.find((source) => source.name === xmlName)?.impliedFormTag
+  if (implied === null || implied === undefined) return metas
   return metas.map((meta) =>
     meta.tagIds.includes(implied) ? meta : { ...meta, tagIds: [...meta.tagIds, implied] }
   )
@@ -349,11 +341,13 @@ export const readJarProfileMetas = (jarPath: string): RawProfileMeta[] => {
     return []
   }
   const metas: RawProfileMeta[] = []
-  for (const name of DEVICE_XML_ENTRIES) {
-    const entry = zip.getEntry(`com/android/sdklib/devices/${name}.xml`)
+  for (const source of DEVICE_XML_SOURCES) {
+    const entry = zip.getEntry(`com/android/sdklib/devices/${source.name}.xml`)
     if (entry === null) continue
     try {
-      metas.push(...withImpliedFormTag(name, parseDeviceXml(entry.getData().toString('utf8'))))
+      metas.push(
+        ...withImpliedFormTag(source.name, parseDeviceXml(entry.getData().toString('utf8')))
+      )
     } catch {
       // 单份损坏不拖垮其余文件
     }

@@ -57,4 +57,6 @@ Phase 5 检查单八项过了一遍，一项 P3：
 
 1. **P3 — 形态登记两处维护**：`DEVICE_XML_ENTRIES` 与 `FILE_IMPLIED_FORM_TAGS` 并列——未来 cmdline-tools 新增形态专属 XML（或调整归类）需同步改两处，漏登则该形态静默回落屏幕尺寸规则。建议后续合并为单表（name + impliedTag 一体登记）。
 
+**跟进（同日）**：P3 已修——两表合并为 `DEVICE_XML_SOURCES` 单表（name + impliedFormTag 一体登记，通用文件显式 null），读取清单与隐含 tag 同表派生；`withImpliedFormTag` 对未登记名原样返回（新增防御）。定向测试 62 过、typecheck/lint 0 错。
+
 复核确认无问题项：ai-glasses 画像与 xr 同在 xr.xml（fixture 实证），补 android-xr 后索引判 unknown→generic——同类误判一并消除，无残留；`withImpliedFormTag` 纯函数不改入参、未知文件名原样返回、重复 tag 不叠加均有断言；测试 fixture `jarMetas` 为生产组合的镜像（parseDeviceXml ＋ withImpliedFormTag）已注明；无重复代码/竞态/越范围改动；修复后全套 362 过、typecheck/lint 0 错。
