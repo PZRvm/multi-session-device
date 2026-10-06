@@ -423,6 +423,7 @@ const DownloadButton = styled.span`
 `
 
 const EmptyHint = styled.p`
+  grid-column: 1 / -1;
   margin: 0;
   padding: 16px 12px;
   font-size: 12px;

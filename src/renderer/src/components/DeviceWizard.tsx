@@ -302,22 +302,14 @@ const DeviceWizard = ({
   // 显式取消（plan download-cancel）：invoke resolve = main 已收尾（临时物清理、
   // 互斥释放）——本地立即清状态；广播分支服务重开窗与迟到订阅者
   const cancelDownload = async (packageName: string): Promise<void> => {
-    cancelClickedRef.current = true
-    try {
-      if (onDownloadImage) {
-        // 注入场景（测试）无 main——本地直接模拟收尾完成
-        setDownloading(null)
-        return
-      }
-      await window.api.sdk.cancelDownloadImage(packageName)
-      setDownloading((current) => (current?.packageName === packageName ? null : current))
-    } finally {
-      cancelClickedRef.current = false
+    if (onDownloadImage) {
+      // 注入场景（测试）无 main——本地直接模拟收尾完成
+      setDownloading(null)
+      return
     }
+    await window.api.sdk.cancelDownloadImage(packageName)
+    setDownloading((current) => (current?.packageName === packageName ? null : current))
   }
-
-  // 取消点击的瞬时去抖：广播与 resolve 几乎同时到达，ref 防双清后的意外重置
-  const cancelClickedRef = useRef(false)
 
   const retryDownload = (): void => {
     const target = images.data.find((entry) => entry.packageName === downloadError?.packageName)

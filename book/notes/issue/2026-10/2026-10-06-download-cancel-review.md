@@ -27,3 +27,7 @@ tags: [code-review, download, cancel, grid, downloader]
 - `index.d.ts` 为 `typeof Api` 推导，preload 新方法类型自动同步，无需手动登记。
 - 取消通道幂等（无任务/包名不匹配直接成功）与真失败并存的竞态：`await task.done.catch(() => undefined)` 吞的是已广播的错误，链路自洽。
 - subgrid 表头 sticky、`color-mix` 进度填充、收窄后「100%」文本宽度均在 Electron 39 支持范围内。
+
+## 跟进（2026-10-06 修复轮）
+
+P1-1/P1-2/P2-3/P3-5/P3-6 已修（plan 实现记录「review 修复轮」段）；P2-4 补真实 unzip kill 单测部分收口，完整三阶段真机取消仍开放——下次真机窗口顺带验证（下载完整镜像后在解压瞬间点取消）。本 issue 保留为 review 历史与 P2-4 待办。

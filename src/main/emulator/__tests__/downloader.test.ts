@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
+import { join } from 'node:path'
 import {
   buildPackageXml,
   downloadImagePackage,
@@ -376,6 +377,63 @@ describe('downloadImagePackage 取消（plan 2026-10-06-download-cancel）', () 
     // 解压临时目录与 zip 均清理（installImageZip finally）
     expect(state.removed.some((path) => path.includes('.unzipping'))).toBe(true)
     expect(state.removed.some((path) => path.includes('.downloading.zip'))).toBe(true)
+  })
+
+  it('sha1 前取消（review P1-1 泄漏路径）：downloadImageZip 自己的 catch 清理 zip，不进 install', async () => {
+    const { deps, state } = makeEnv()
+    const controller = new AbortController()
+    let extractCalls = 0
+    const deps2 = {
+      ...deps,
+      // 流正常吐完最后一个 chunk 后才 abort——恰好落在 finish 后、sha1 前的检查点
+      openUrl: async (url: string) => {
+        void url
+        return {
+          stream: (async function* (): AsyncGenerator<Uint8Array> {
+            for (let i = 0; i < 10; i += 1) yield new Uint8Array(10)
+            controller.abort()
+          })(),
+          totalBytes: 100
+        }
+      },
+      extractZip: async (...args: unknown[]) => {
+        extractCalls += 1
+        void args
+      }
+    }
+    const outcome = await downloadImagePackage('/sdk', TARGET, () => {}, deps2, controller.signal)
+    expect(outcome).toBe('canceled')
+    // 清理由 downloadImageZip 的 catch 完成（而非 install 的 finally）——根本没进 install
+    expect(extractCalls).toBe(0)
+    expect(state.removed.some((path) => path.includes('.downloading.zip'))).toBe(true)
+  })
+
+  it('default extractZip 的 signal kill 真实行为：真 unzip 子进程被中断后按取消分流', async () => {
+    // 造一个真 zip（含一个足够解压一会儿的条目），用 default extractZip 跑真子进程
+    const { execFileSync } = await import('node:child_process')
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const staging = await mkdtemp(join(tmpdir(), 'msd-unzip-kill-'))
+    try {
+      // ~20MB 随机文件（不可压缩）解压需数百 ms——足够在解压中 abort
+      const big = Buffer.alloc(20 * 1024 * 1024, 7)
+      await writeFile(join(staging, 'big.bin'), big)
+      const zipPath = join(staging, 't.zip')
+      execFileSync('zip', ['-q', '-r', zipPath, 'big.bin'], { cwd: staging })
+      const controller = new AbortController()
+      const targetDir = join(staging, 'out')
+      setTimeout(() => controller.abort(), 30)
+      const { defaultDeps } = await import('../downloader')
+      await expect(
+        (defaultDeps.extractZip as (z: string, d: string, s?: AbortSignal) => Promise<void>)(
+          zipPath,
+          targetDir,
+          controller.signal
+        )
+      ).rejects.toThrow('已取消')
+    } finally {
+      await rm(staging, { recursive: true, force: true })
+    }
   })
 
   it('解压完成后、落位前取消：不进入备份-落位事务，返回 canceled', async () => {

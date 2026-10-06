@@ -316,14 +316,20 @@ export function registerSdkIpc(): void {
       )
     }
     const abort = new AbortController()
-    downloading = { packageName, percent: 0, abort, done: Promise.resolve() }
+    // done 是显式收尾信号：在 finally 里、互斥释放之后 resolve——取消 handler
+    // await 它即得到「收尾完成且可立即重下」的硬保证，不依赖微任务顺序（review P2-3）
+    // executor 同步执行，finally 里必已赋值——! 是给 TS definiteness 分析的明确标注
+    let settleDone!: () => void
+    const done = new Promise<void>((resolve) => {
+      settleDone = resolve
+    })
+    downloading = { packageName, percent: 0, abort, done }
     try {
       // 下载会改变已装状态——失效清单缓存
       imagesCache = null
       // 直连下载（plan 2026-10-06-download-progress-zero）：官方 CLI 无进度流，
       // sdkmanager 执行体退役为 bootstrap 等场景；此处用 manifest zip 流式下载。
-      // done 供取消 handler 等收尾（resolve 时 = 临时物已清理、互斥即将释放）
-      const outcome = await (downloading.done = downloadImagePackage(
+      const outcome = await downloadImagePackage(
         root,
         {
           packageName,
@@ -353,7 +359,7 @@ export function registerSdkIpc(): void {
         },
         {},
         abort.signal
-      ))
+      )
       if (outcome === 'canceled') {
         // 取消不是失败：广播给在听窗口（重开的向导清恢复态），无错误横幅
         pushToAllWindows(IPC_CHANNELS.sdkImageProgress, {
@@ -377,6 +383,7 @@ export function registerSdkIpc(): void {
       throw error
     } finally {
       downloading = null
+      settleDone()
     }
   })
 

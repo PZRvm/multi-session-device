@@ -62,7 +62,8 @@ export interface ChunkSink {
   waitDrain: () => Promise<void>
 }
 
-const defaultDeps: Required<DownloaderDeps> = {
+/** 默认依赖集合（导出供 default extractZip 等真实子进程行为做单测） */
+export const defaultDeps: Required<DownloaderDeps> = {
   openUrl: async (url, signal) => {
     const response = await fetch(url, { signal })
     if (!response.ok || response.body === null) {
@@ -228,13 +229,15 @@ export const downloadImageZip = async (
       }
     }
     await sink.finish()
+    // 下载完成后的取消（sha1/返回前）也必须走 catch 的清理域——此前检查点
+    // 在 try 外，这条路径会残留 .downloading.zip（review P1-1）
+    throwIfCancelled()
   } catch (error) {
     sink.destroy()
     await d.removePath(zipPath).catch(() => undefined)
     throw error
   }
 
-  throwIfCancelled()
   if (target.zipSha1 !== null) {
     const actual = await d.sha1Of(zipPath)
     if (actual !== target.zipSha1) {
