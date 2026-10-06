@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   classifyFormFactor,
+  loadFrameKindIndex,
   logicalDpiFromDensity,
   mergeProfiles,
   parseApiRange,
@@ -199,5 +200,33 @@ describe('mergeProfiles（关联三态）', () => {
   it('deprecated 当前恒 false（官方源无信号，不伪造）', () => {
     const profiles = mergeProfiles(avdEntries, allMetas)
     expect(profiles.every((profile) => profile.deprecated === false)).toBe(true)
+  })
+})
+
+describe('loadFrameKindIndex（外框外观索引：classifyFormFactor 单一分类规则的薄包装）', () => {
+  it('真实 fixture：pixel_7 → phone、tablet 画像命中、wear/未命中 → generic 兜底', async () => {
+    const index = await loadFrameKindIndex('/sdk', { readMetas: () => allMetas })
+    expect(index.lookup('pixel_7')).toBe('phone')
+    const tablet = allMetas.find(
+      (meta) =>
+        classifyFormFactor({
+          tagIds: meta.tagIds,
+          diagonalInches: meta.screen.diagonalInches,
+          foldable: meta.foldable
+        }) === 'tablet'
+    )
+    if (tablet) expect(index.lookup(tablet.id)).toBe('tablet')
+    // 已知局限（融合记录）：裸 XML 元数据不带形态 tag（wear/tv 的 tag 只在
+    // avdmanager 侧，见 mergeProfiles 注释）——JAR-only 索引按屏幕尺寸规则把
+    // wear 判成 phone。frameKind 只是显示提示，非创建/运行语义；富分类走
+    // listDeviceProfiles 的 tag 合并管道。
+    expect(index.lookup('no-such-profile')).toBe('generic')
+    expect(index.entries).toBe(allMetas.length)
+  })
+
+  it('JAR 缺失/解析失败收敛空索引——不抛、lookup 恒 generic', async () => {
+    const index = await loadFrameKindIndex('/sdk', { readMetas: () => [] })
+    expect(index.entries).toBe(0)
+    expect(index.lookup('pixel_7')).toBe('generic')
   })
 })

@@ -2,7 +2,12 @@ import AdmZip from 'adm-zip'
 import { XMLParser } from 'fast-xml-parser'
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { DeviceFormFactor, DeviceProfile, DeviceScreenInfo } from '@shared/types'
+import type {
+  DeviceFormFactor,
+  DeviceFrameKind,
+  DeviceProfile,
+  DeviceScreenInfo
+} from '@shared/types'
 
 /**
  * 官方画像元数据：从 cmdline-tools 的 sdklib JAR 读七份设备 XML（结构化解析，
@@ -340,4 +345,34 @@ export const jarFingerprint = async (jarPath: string): Promise<string> => {
   } catch {
     return 'missing'
   }
+}
+
+/**
+ * 外观索引（投屏外框消费）：profileId → phone/tablet/generic。分类走本模块
+ * 单一规则（classifyFormFactor——外框 plan「不得维护两份分类规则」），非手机/
+ * 平板形态与未命中一律 generic 兜底。JAR 缺失/解析失败收敛为空索引不抛
+ * （readJarProfileMetas 全兜底）。签名沿用外框支原契（async + sdkRoot），
+ * devices 域与既有测试 mock 不变。
+ */
+export interface FrameKindIndex {
+  lookup: (profileId: string) => DeviceFrameKind
+  entries: number
+}
+
+export const loadFrameKindIndex = async (
+  sdkRoot: string,
+  deps: { readMetas?: (jarPath: string) => RawProfileMeta[] } = {}
+): Promise<FrameKindIndex> => {
+  const readMetas = deps.readMetas ?? readJarProfileMetas
+  const metas = readMetas(sdklibJarPathFor(sdkRoot))
+  const index = new Map<string, DeviceFrameKind>()
+  for (const meta of metas) {
+    const form = classifyFormFactor({
+      tagIds: meta.tagIds,
+      diagonalInches: meta.screen.diagonalInches,
+      foldable: meta.foldable
+    })
+    index.set(meta.id, form === 'phone' ? 'phone' : form === 'tablet' ? 'tablet' : 'generic')
+  }
+  return { lookup: (profileId) => index.get(profileId) ?? 'generic', entries: index.size }
 }

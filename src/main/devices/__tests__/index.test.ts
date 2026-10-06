@@ -94,6 +94,16 @@ const mocks = vi.hoisted(() => {
       source: 'app-sdk',
       protocolVersion: 41
     })),
+    loadFrameKindIndex: vi.fn(
+      async (): Promise<{
+        lookup: (profileId: string) => 'phone' | 'tablet' | 'generic'
+        entries: number
+      }> => ({
+        lookup: (profileId) =>
+          profileId === 'pixel_tablet' ? 'tablet' : profileId === 'pixel_8' ? 'phone' : 'generic',
+        entries: 2
+      })
+    ),
     // fake runner：devices 层以 createRunner() 工厂接入，测试持有实例与构造回调
     runnerInstance: {
       start: vi.fn(async () => ({ runId: 'run-1', serial: 'emulator-5554' })),
@@ -175,7 +185,8 @@ vi.mock('../../emulator/profiles', () => ({
   avdmanagerPathFor: () => '/avdmanager'
 }))
 vi.mock('../../emulator/profileMetadata', () => ({
-  sdklibJarPathFor: () => '/sdklib.jar'
+  sdklibJarPathFor: () => '/sdklib.jar',
+  loadFrameKindIndex: mocks.loadFrameKindIndex
 }))
 vi.mock('../../emulator/packageOps', () => ({
   activePackageOp: mocks.activePackageOp,
@@ -309,6 +320,52 @@ describe('devices 域（创建/删除事务）', () => {
     expect(mocks.createAvd).not.toHaveBeenCalled()
   })
 
+  it('外观提示：创建的设备快照携带派生 frameKind，落盘元数据不含', async () => {
+    const { handlerFor } = await freshDomain()
+    const result = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { snapshot: { devices: Array<{ profileId: string; frameKind?: string }> } }
+    expect(mocks.loadFrameKindIndex).toHaveBeenCalled()
+    expect(result.snapshot.devices.at(-1)!.frameKind).toBe('phone')
+    const persisted = mocks.writeDeviceMetas.mock.calls.at(-1)![0] as DeviceMeta[]
+    expect((persisted[0] as unknown as Record<string, unknown>).frameKind).toBeUndefined()
+  })
+
+  it('外观提示：加载既有设备同样派生，未知画像 generic 兜底', async () => {
+    mocks.readDeviceMetas.mockResolvedValue([
+      {
+        id: 'd1',
+        name: '旧机',
+        profileId: 'mystery',
+        profileLabel: 'Mystery',
+        imagePackageName: 'system-images;android-35;google_apis;arm64-v8a',
+        apiDisplay: '35',
+        formFactor: 'unknown',
+        screenSummary: null,
+        advancedSettings: null,
+        snapshotReadyAt: null,
+        createdAt: 1
+      }
+    ])
+    const { handlerFor } = await freshDomain()
+    const list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: Array<{ profileId: string; frameKind?: string }>
+    }
+    expect(list.devices[0].frameKind).toBe('generic')
+  })
+
+  it('外观提示：SDK 缺失收敛空索引——快照 generic、创建不受阻', async () => {
+    // ensureLoaded 与 createDevice 各触发一次索引刷新，用持久 mock 而非 Once
+    mocks.loadFrameKindIndex.mockResolvedValue({ lookup: () => 'generic', entries: 0 })
+    const { handlerFor } = await freshDomain()
+    const result = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { snapshot: { devices: Array<{ frameKind?: string }> } }
+    expect(result.snapshot.devices.at(-1)!.frameKind).toBe('generic')
+  })
+
   it('create：AVD 建失败 → 撤回临时行 + 回滚本次 AVD + 抛错', async () => {
     mocks.createAvd.mockRejectedValue(new Error('画像未知'))
     const { handlerFor } = await freshDomain()
@@ -396,6 +453,53 @@ describe('devices 域（创建/删除事务）', () => {
     releaseDelete?.()
     await Promise.all([first, second])
     expect(mocks.deleteAvd).toHaveBeenCalledTimes(1)
+  })
+
+  it('list：首载窗口并发调用只读一次盘（issue 2026-10-03 双读的收口）', async () => {
+    let releaseRead: (() => void) | undefined
+    mocks.readDeviceMetas.mockReturnValue(
+      new Promise<DeviceMeta[]>((resolve) => {
+        releaseRead = () => resolve([])
+      })
+    )
+    const { handlerFor } = await freshDomain()
+    // 读挂在 pending 上时第二个调用进来——两者必须共享同一次加载
+    const first = handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)
+    const second = handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)
+    releaseRead?.()
+    const snapshots = (await Promise.all([first, second])) as Array<{ devices: unknown[] }>
+    expect(mocks.readDeviceMetas).toHaveBeenCalledTimes(1)
+    expect(snapshots).toHaveLength(2)
+  })
+
+  it('delete：AVD 已删但写盘失败 → 保留 delete-failed；写盘恢复后队列仍可用', async () => {
+    const { handlerFor } = await freshDomain()
+    const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { createdId: string }
+    mocks.writeDeviceMetas.mockRejectedValueOnce(new Error('磁盘满'))
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesDelete)(mainWindowEvent(), { id: created.createdId })
+    ).rejects.toThrow('磁盘满')
+    expect(mocks.deleteAvd).toHaveBeenCalledTimes(1)
+    const afterFailure = (await handlerFor(IPC_CHANNELS.devicesList)(
+      mainWindowEvent(),
+      undefined
+    )) as { devices: Array<{ status: string; lastError?: { code: string } }> }
+    expect(afterFailure.devices).toHaveLength(1)
+    expect(afterFailure.devices[0].status).toBe('stopped')
+    expect(afterFailure.devices[0].lastError?.code).toBe('delete-failed')
+    // writeQueue 单次失败不断队列：写盘恢复后 rename 正常提交
+    await handlerFor(IPC_CHANNELS.devicesRename)(mainWindowEvent(), {
+      id: created.createdId,
+      name: '队列存活'
+    })
+    const afterRename = (await handlerFor(IPC_CHANNELS.devicesList)(
+      mainWindowEvent(),
+      undefined
+    )) as { devices: Array<{ name: string }> }
+    expect(afterRename.devices[0].name).toBe('队列存活')
   })
 
   it('delete：删除失败 → 回到 stopped + lastError，可重试', async () => {
@@ -567,6 +671,9 @@ describe('devices 域（启动/停止/取消状态机）', () => {
     mocks.readDeviceMetas.mockResolvedValue([])
     mocks.writeDeviceMetas.mockResolvedValue(undefined)
     mocks.isPackageNameInstalled.mockResolvedValue(true)
+    // clearAllMocks 不重置实现：上一组用例遗留的 reject 会渗进来，本组自己兜底
+    mocks.createAvd.mockResolvedValue('/avd')
+    mocks.deleteAvd.mockResolvedValue(undefined)
     mocks.avdExists.mockResolvedValue(true)
     mocks.getMainWindow.mockReturnValue({ webContents: { id: 7, send: vi.fn() } })
     mocks.wizardOwns.mockImplementation((sender: { id: number }) => sender.id === 9)
@@ -745,6 +852,27 @@ describe('devices 域（启动/停止/取消状态机）', () => {
     expect(row.status).toBe('stopped')
     expect(row.serial).toBeUndefined()
     expect(row.runId).toBeUndefined()
+  })
+
+  it('delete：running 设备先停后删——stop 先于 deleteAvd，落盘不含该 id', async () => {
+    const { handlerFor, runnerEvents } = await freshDomain()
+    const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { createdId: string }
+    await handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id: created.createdId })
+    runnerEvents().onRunning(created.createdId, 'run-1', 'emulator-5554')
+    const snapshot = (await handlerFor(IPC_CHANNELS.devicesDelete)(mainWindowEvent(), {
+      id: created.createdId
+    })) as { devices: unknown[] }
+    expect(mocks.runnerInstance.stop).toHaveBeenCalledTimes(1)
+    expect(mocks.deleteAvd).toHaveBeenCalledTimes(1)
+    expect(mocks.runnerInstance.stop.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.deleteAvd.mock.invocationCallOrder[0]
+    )
+    expect(snapshot.devices).toHaveLength(0)
+    const persisted = mocks.writeDeviceMetas.mock.calls.at(-1)![0] as DeviceMeta[]
+    expect(persisted).toHaveLength(0)
   })
 
   it('delete：running 设备先经 runner.stop，停止失败不删 AVD', async () => {

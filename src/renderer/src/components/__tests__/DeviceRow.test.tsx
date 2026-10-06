@@ -150,6 +150,13 @@ describe('DeviceRow', () => {
     expect(onSelect).toHaveBeenCalledTimes(2)
   })
 
+  it('键盘可达性：行声明 aria-keyshortcuts="F2"', () => {
+    setup()
+    expect(
+      screen.getByText('Pixel 8 API 34').closest('div')?.getAttribute('aria-keyshortcuts')
+    ).toBe('F2')
+  })
+
   it('选中态：aria-current 上行', () => {
     setup({ selected: true })
     expect(screen.getByText('Pixel 8 API 34').closest('div')?.getAttribute('aria-current')).toBe(
@@ -193,6 +200,47 @@ describe('DeviceRow', () => {
       fireEvent.change(input, { target: { value: '   ' } })
       fireEvent.keyDown(input, { key: 'Enter' })
       expect(onRename).not.toHaveBeenCalled()
+    })
+
+    it('F2 进入重命名：输入框出现、回填现名、自动聚焦', () => {
+      setup()
+      fireEvent.keyDown(screen.getByText('Pixel 8 API 34').parentElement!, { key: 'F2' })
+      const input = screen.getByLabelText('重命名设备') as HTMLInputElement
+      expect(input.value).toBe('Pixel 8 API 34')
+      expect(document.activeElement).toBe(input)
+    })
+
+    it('选中态下再按 Enter 进入重命名（macOS Finder 惯例）', () => {
+      setup({ selected: true })
+      fireEvent.keyDown(screen.getByText('Pixel 8 API 34').parentElement!, { key: 'Enter' })
+      expect(screen.getByLabelText('重命名设备')).toBeTruthy()
+    })
+
+    it('未选中 Enter 仅选中，不进重命名', () => {
+      const { onSelect } = setup()
+      fireEvent.keyDown(screen.getByText('Pixel 8 API 34').parentElement!, { key: 'Enter' })
+      expect(onSelect).toHaveBeenCalledTimes(1)
+      expect(screen.queryByLabelText('重命名设备')).toBeNull()
+    })
+
+    it('创建中/删除中：F2 不进重命名', () => {
+      for (const status of ['creating', 'deleting'] as const) {
+        setup({ device: { ...baseDevice, status } })
+        fireEvent.keyDown(screen.getByText('Pixel 8 API 34').parentElement!, { key: 'F2' })
+        expect(screen.queryByLabelText('重命名设备')).toBeNull()
+        cleanup()
+      }
+    })
+
+    it('重命名中输入框按键不触发行级语义', () => {
+      const { onSelect, onRename } = setup()
+      const row = screen.getByText('Pixel 8 API 34').parentElement!
+      fireEvent.keyDown(row, { key: 'F2' })
+      const input = screen.getByLabelText('重命名设备')
+      fireEvent.change(input, { target: { value: '键盘名' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+      expect(onRename).toHaveBeenCalledWith('键盘名')
+      expect(onSelect).not.toHaveBeenCalled()
     })
 
     it('失焦提交；与原名相同不提交', () => {

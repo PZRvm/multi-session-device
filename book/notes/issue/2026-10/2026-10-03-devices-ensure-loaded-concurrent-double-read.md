@@ -9,3 +9,7 @@ description: devices 域 ensureLoaded 无互斥——首个命令与并发 IPC �
 - **Suggested direction**: 把 `ensureLoaded` 改成缓存单例 promise（`loading ??= readDeviceMetas().then(...)`），并发调用共享同一次加载；或上简单 mutex。改动约 5 行，等后续轮次单独处理。
 
 严重级：P3（单窗口 + 秒级人操作下窗口趋近于零，但违背「主进程单写者」的精神，stage 04 多窗口/多调用前应修）。
+
+## 跟进（2026-10-05）——已修
+
+stage 04 步骤 4（commit 7099076）已按建议方向改成 `loadPromise` 缓存单例（失败置 null 可重试），并发调用共享同一次 `readDeviceMetas()`。本批（plan 2026-10-05-device-store-issue-batch）补回归锚：「list：首载窗口并发调用只读一次盘」——读挂在 pending 上时第二个调用进来，断言只读一次。

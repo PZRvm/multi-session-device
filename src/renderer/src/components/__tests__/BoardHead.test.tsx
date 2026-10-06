@@ -11,8 +11,13 @@ describe('BoardHead', () => {
     vi.clearAllMocks()
     window.localStorage.clear()
     useThemeStore.setState({ systemId: 'amber', mode: 'system' })
+    // 切换外观会经 themeStore 落盘主进程（theme:set-mode）——stub 掉 IPC 面
     ;(window as unknown as { api: unknown }).api = {
-      platform: 'darwin'
+      platform: 'darwin',
+      theme: {
+        setMode: vi.fn().mockResolvedValue(undefined),
+        setSystemId: vi.fn().mockResolvedValue(undefined)
+      }
     }
   })
 

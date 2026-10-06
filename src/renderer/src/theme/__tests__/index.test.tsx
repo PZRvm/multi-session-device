@@ -1,6 +1,5 @@
-import { act, cleanup, render, waitFor } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ThemeMode } from '@shared/types'
 import { useThemeStore } from '../../stores/themeStore'
 import { DeviceThemeProvider } from '..'
 
@@ -10,13 +9,13 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('原生与页面外观同步', () => {
-  const setNativeMode = vi.fn<(mode: ThemeMode) => Promise<void>>()
+// 原生外观同步已在主进程侧（boot 恢复 + theme:set-mode 落盘时一并设置）；
+// provider 只担 CSS 变量注入链与跟随系统的 matchMedia 监听
+describe('页面外观注入链', () => {
   let mediaDark: boolean
   let onMediaChange: (() => void) | undefined
 
   beforeEach(() => {
-    setNativeMode.mockReset().mockResolvedValue(undefined)
     mediaDark = true
     onMediaChange = undefined
     vi.stubGlobal('matchMedia', () => ({
@@ -28,42 +27,25 @@ describe('原生与页面外观同步', () => {
       },
       removeEventListener: (): void => {}
     }))
-    ;(window as unknown as { api: unknown }).api = {
-      platform: 'darwin',
-      theme: { setMode: setNativeMode }
-    }
     useThemeStore.setState({ systemId: 'amber', mode: 'light' })
   })
 
-  it('恢复白天选择时，即使系统深色也同步原生为 light', () => {
+  it('亮态选择注入 color-scheme 与亮态 token', () => {
     render(<DeviceThemeProvider>设备</DeviceThemeProvider>)
     expect(document.documentElement.style.colorScheme).toBe('light')
-    expect(setNativeMode).toHaveBeenCalledWith('light')
+    expect(document.documentElement.style.getPropertyValue('--board-bg')).toBe('#f6f4ee')
   })
 
-  it('切换黑夜与跟随系统时同步原值，系统变化继续更新页面', () => {
+  it('切黑与跟随系统同链路翻转，系统变化继续更新页面', () => {
     render(<DeviceThemeProvider>设备</DeviceThemeProvider>)
-    act(() => useThemeStore.getState().setMode('dark'))
-    expect(setNativeMode).toHaveBeenLastCalledWith('dark')
+    act(() => useThemeStore.setState({ mode: 'dark' }))
     expect(document.documentElement.style.colorScheme).toBe('dark')
-    act(() => useThemeStore.getState().setMode('system'))
-    expect(setNativeMode).toHaveBeenLastCalledWith('system')
+    expect(document.documentElement.style.getPropertyValue('--board-bg')).toBe('#101418')
+    act(() => useThemeStore.setState({ mode: 'system' }))
+    expect(document.documentElement.style.colorScheme).toBe('dark')
     mediaDark = false
     act(() => onMediaChange?.())
     expect(document.documentElement.style.colorScheme).toBe('light')
-  })
-
-  it('非 macOS 沿用页面外观，不同步原生主题', () => {
-    ;(window as unknown as { api: unknown }).api = { platform: 'win32' }
-    render(<DeviceThemeProvider>设备</DeviceThemeProvider>)
-    expect(document.documentElement.style.colorScheme).toBe('light')
-    expect(setNativeMode).not.toHaveBeenCalled()
-  })
-
-  it('同步失败时记录错误，不泄漏未处理的拒绝', async () => {
-    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
-    setNativeMode.mockRejectedValueOnce(new Error('同步失败'))
-    render(<DeviceThemeProvider>设备</DeviceThemeProvider>)
-    await waitFor(() => expect(errorLog).toHaveBeenCalledWith('同步原生外观失败:', '同步失败'))
+    expect(document.documentElement.style.getPropertyValue('--board-bg')).toBe('#f6f4ee')
   })
 })

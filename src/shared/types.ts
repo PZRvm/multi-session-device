@@ -1,5 +1,18 @@
+import type { ThemeSystemId } from './themeSystems'
+
 /** 应用与原生窗口共用的亮暗选择 */
 export type ThemeMode = 'system' | 'light' | 'dark'
+
+/** 主题选择快照——theme.json 落盘与 IPC 传输的载荷（色系 + 亮暗三态） */
+export interface ThemeSelection {
+  systemId: ThemeSystemId
+  mode: ThemeMode
+}
+
+/** boot 同步下发的主题初值：快照 + fresh（本次启动 theme.json 是否不存在，legacy 收编判定） */
+export interface ThemeInitialState extends ThemeSelection {
+  fresh: boolean
+}
 
 /** 原生对话框入参——Electron MessageBoxOptions 的白名单子集 */
 export interface DialogOptions {
@@ -107,6 +120,13 @@ export interface DeviceMetaLegacy {
 }
 
 /**
+ * 设备外观类别：投屏外框的展示提示（手机/平板/未知中性）。由 main 从 SDK 画像
+ * 元数据按 profileId 派生进内存快照，不入盘、不进 AVD 硬件配置；缺省按 generic
+ * 兜底，旧快照无此字段亦兼容。
+ */
+export type DeviceFrameKind = 'phone' | 'tablet' | 'generic'
+
+/**
  * 运行态不入盘：重启一律回到「停止」，主进程内存持有。
  * creating/deleting 是创建/删除事务的临时态；starting 可取消；stopping 是停止/取消/
  * 异常回收共用的过渡态，停止失败时保留在 stopping 并附 lastError 等待重试。
@@ -120,6 +140,8 @@ export interface DeviceError {
 }
 
 export interface Device extends DeviceMeta {
+  /** 外观提示（派生、可缺席）：缺省 generic，renderer 侧不落盘不迁移 */
+  frameKind?: DeviceFrameKind
   status: DeviceStatus
   /** 最近一次运行/命令失败；下次命令成功接纳时清除 */
   lastError?: DeviceError

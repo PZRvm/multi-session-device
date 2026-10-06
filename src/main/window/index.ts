@@ -2,6 +2,7 @@ import { BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { appIcon } from '../app-icon'
+import { themeWindowBackground } from '../theme'
 import { closeWizardWindow } from './wizard'
 
 // 主窗登记（devices 域 sender 白名单的判定源）：引用随窗口销毁清空
@@ -16,6 +17,8 @@ export function createMainWindow(): BrowserWindow {
     width: 900,
     height: 670,
     show: false,
+    // 建窗底色即主题板面底（boot 已恢复主题），深色用户首帧不闪白
+    backgroundColor: themeWindowBackground(),
     autoHideMenuBar: true,
     // macOS 原生三灯嵌入 40px 板头，hiddenInset 保留原生按钮及失焦行为。
     // 标题用于任务切换器；page-title-updated 防止页面覆写。

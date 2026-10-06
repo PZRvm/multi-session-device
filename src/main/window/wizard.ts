@@ -3,6 +3,7 @@ import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import { appIcon } from '../app-icon'
+import { themeWindowBackground } from '../theme'
 
 // 新建设备独立窗口单例（2026-10-06 用户确认由模态改非模态，plan
 // 2026-10-06-wizard-independent-window）：可移动、不阻塞主窗输入。
@@ -46,6 +47,8 @@ export function openWizardWindow(): void {
     minWidth: 860,
     minHeight: 620,
     show: false,
+    // 与主窗同源：向导窗首帧也是主题板面底
+    backgroundColor: themeWindowBackground(),
     title: '新建设备',
     icon: appIcon,
     // darwin 去原生标题条、三灯嵌入。y=12 实测居中：灯 12px 高且 Electron 有 +2 内禀偏移

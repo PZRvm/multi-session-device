@@ -22,6 +22,11 @@
 // - confirmCardBg 亮恒 #ffffff（弹层 elevated 白同源）；暗 ≡ raised。
 // - tileInk 与 loading 昼夜翻转：亮 = accentDeep、暗 = accentBase。
 // - accentDeep 暗态值仅作结构补齐，暗态无消费方（对比度矩阵注 1）。
+// - 设备外框三 token（2026-10-05 投屏工作台引入）：deviceShell 亮 ≡ hairline /
+//   暗 ≡ tileLine；deviceShellEdge ≡ controlLine；deviceBezelInk ≡ inkDim——
+//   均为既有值的新语义位（同值异义 token 先例：scrollbarHover ≡ controlLine）。
+
+import type { ThemeMode } from './types'
 
 export type ThemeSystemId = 'amber' | 'mist' | 'moss'
 
@@ -30,6 +35,23 @@ export const THEME_SYSTEM_IDS: ThemeSystemId[] = ['amber', 'mist', 'moss']
 
 export function isThemeSystemId(value: unknown): value is ThemeSystemId {
   return (THEME_SYSTEM_IDS as string[]).includes(value as ThemeSystemId)
+}
+
+// 亮暗三态闭集守卫与 isThemeSystemId 同居：theme.json 落盘校验与 IPC 入参校验共用
+const THEME_MODES: ThemeMode[] = ['system', 'light', 'dark']
+
+export function isThemeMode(value: unknown): value is ThemeMode {
+  return (THEME_MODES as string[]).includes(value as ThemeMode)
+}
+
+/** 解析后的亮暗最终态（显式选择或系统解析的结果） */
+export type ResolvedMode = 'light' | 'dark'
+
+/** 亮暗解析单源纯函数：显式亮暗直读；system 由调用方的「系统当前是否深色」判定决定——
+ * main 传 nativeTheme.shouldUseDarkColors（themeSource 需先行设置），renderer 传 matchMedia */
+export function resolveThemeMode(mode: ThemeMode, prefersDark: boolean): ResolvedMode {
+  if (mode === 'light' || mode === 'dark') return mode
+  return prefersDark ? 'dark' : 'light'
 }
 
 /** 单套系统单态的全部主题化 token（值即 CSS 变量字面量，经 themeCssVariables 映射） */
@@ -79,6 +101,12 @@ export interface ThemeModeTokens {
   loading: string
   /** 确认弹层卡片底 --settings-confirm-card-bg（亮 #ffffff / 暗 ≡ raised） */
   confirmCardBg: string
+  /** 设备外壳面 --device-shell（亮 ≡ hairline / 暗 ≡ tileLine，2026-10-05 投屏外框引入） */
+  deviceShell: string
+  /** 设备外壳外缘线 --device-shell-edge（≡ controlLine，同值异义 token） */
+  deviceShellEdge: string
+  /** 外框上听筒/摄像头装饰 --device-bezel-ink（≡ inkDim） */
+  deviceBezelInk: string
 }
 
 export interface ThemeSystem {
@@ -118,7 +146,10 @@ export const THEME_SYSTEMS: Record<ThemeSystemId, ThemeSystem> = {
       accentInk: '#221a00',
       accentVeil: 'rgba(34, 26, 0, 0.12)',
       loading: '#9a5f00',
-      confirmCardBg: '#ffffff'
+      confirmCardBg: '#ffffff',
+      deviceShell: '#d8d2c5',
+      deviceShellEdge: '#bcb4a6',
+      deviceBezelInk: '#616974'
     },
     dark: {
       bg: '#101418',
@@ -142,7 +173,10 @@ export const THEME_SYSTEMS: Record<ThemeSystemId, ThemeSystem> = {
       accentInk: '#221a00',
       accentVeil: 'rgba(34, 26, 0, 0.12)',
       loading: '#ffb000',
-      confirmCardBg: '#1a2026'
+      confirmCardBg: '#1a2026',
+      deviceShell: '#2a313a',
+      deviceShellEdge: '#3a434e',
+      deviceBezelInk: '#9aa3ad'
     }
   },
   mist: {
@@ -171,7 +205,10 @@ export const THEME_SYSTEMS: Record<ThemeSystemId, ThemeSystem> = {
       accentInk: '#101c29',
       accentVeil: 'rgba(16, 28, 41, 0.12)',
       loading: '#31536e',
-      confirmCardBg: '#ffffff'
+      confirmCardBg: '#ffffff',
+      deviceShell: '#ccd2d9',
+      deviceShellEdge: '#b5bfc8',
+      deviceBezelInk: '#5c6875'
     },
     dark: {
       bg: '#11151a',
@@ -195,7 +232,10 @@ export const THEME_SYSTEMS: Record<ThemeSystemId, ThemeSystem> = {
       accentInk: '#101c29',
       accentVeil: 'rgba(16, 28, 41, 0.12)',
       loading: '#a4bcd1',
-      confirmCardBg: '#1b222b'
+      confirmCardBg: '#1b222b',
+      deviceShell: '#2c3745',
+      deviceShellEdge: '#3b4754',
+      deviceBezelInk: '#909ba8'
     }
   },
   moss: {
@@ -226,7 +266,10 @@ export const THEME_SYSTEMS: Record<ThemeSystemId, ThemeSystem> = {
       accentInk: '#172207',
       accentVeil: 'rgba(23, 34, 7, 0.12)',
       loading: '#477329',
-      confirmCardBg: '#ffffff'
+      confirmCardBg: '#ffffff',
+      deviceShell: '#ced6bd',
+      deviceShellEdge: '#b9c2a5',
+      deviceBezelInk: '#616a55'
     },
     dark: {
       bg: '#0f140f',
@@ -250,7 +293,10 @@ export const THEME_SYSTEMS: Record<ThemeSystemId, ThemeSystem> = {
       accentInk: '#172207',
       accentVeil: 'rgba(23, 34, 7, 0.12)',
       loading: '#a8cf8e',
-      confirmCardBg: '#19221a'
+      confirmCardBg: '#19221a',
+      deviceShell: '#2a3a2c',
+      deviceShellEdge: '#3a4534',
+      deviceBezelInk: '#92a289'
     }
   }
 }
@@ -286,7 +332,10 @@ export function themeCssVariables(
     '--accent-ink': t.accentInk,
     '--accent-veil': t.accentVeil,
     '--loading': t.loading,
-    '--settings-confirm-card-bg': t.confirmCardBg
+    '--settings-confirm-card-bg': t.confirmCardBg,
+    '--device-shell': t.deviceShell,
+    '--device-shell-edge': t.deviceShellEdge,
+    '--device-bezel-ink': t.deviceBezelInk
   }
 }
 
