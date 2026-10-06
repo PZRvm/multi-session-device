@@ -430,8 +430,9 @@ export async function fetchImageCatalog(
     sourceWarnings,
     offline: settled.every((outcome) => outcome.status === 'rejected'),
     fetchedAt: Date.now(),
-    // 实时下载任务由 IPC 层（sdk:images handler）按当前状态合并，清单本体恒 null
-    activeDownload: null
+    // 实时下载/卸载任务由 IPC 层（sdk:images handler）按当前状态合并，清单本体恒 null
+    activeDownload: null,
+    activeUninstall: null
   }
 }
 

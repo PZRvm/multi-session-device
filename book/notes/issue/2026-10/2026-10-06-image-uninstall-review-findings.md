@@ -47,3 +47,7 @@ P1/P2 与全部 P3 已修（并发安全结论先行：下载+卸载并发不崩
 
 - **roving tabindex 精修**：ImageTable 整表一个 Tab 停留点——焦点行 tabIndex 0、其余 -1，行内操作钮只在焦点行可 Tab；↑↓ 行间移动（未装行同样可聚焦，仅不可选），列表刷新时索引钳制。单测覆盖初始态/移动/钮随行翻转。实现注意：jsdom 无 `CSS.escape`，行定位用引号插值（包名受 splitPackageName 约束无引号字符）。
 - **卸载超时对注入 runner 生效**：`uninstallSdkManagerPackage` 包装层 `Promise.race` + `timeoutMs` 依赖（默认 180s）；默认 runner 内部计时器仍负责 kill 真实子进程，超时赢时吃掉迟到拒绝避免 unhandled。单测：注入挂死 runner 40ms 超时拒绝。
+
+## 补充（2026-10-06，用户实测反馈）
+
+**卸载重开恢复缺失**：卸载中关闭向导再重开，卸载状态不渲染（main 仍在卸载）。与下载恢复（activeDownload）不对称——当时只做了下载侧。已补齐：`sdk:images` 返回新增 `activeUninstall` 快照（packageOps 实时合并，缓存命中同样生效），重开向导恢复该行 spinner、其余删除钮与下载钮互斥禁用；新增 `sdk:uninstall-state` 终态广播（完成/失败，发起窗口可能已关），重开窗口收到后清状态并重拉清单（失败展示 main 文案）。测试 2 例：恢复+完成解除+重拉、失败广播解除与文案。

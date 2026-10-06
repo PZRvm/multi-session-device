@@ -41,6 +41,8 @@ export const IPC_CHANNELS = {
   sdkUninstallImage: 'sdk:uninstall-image',
   /** 镜像下载进度推送（main → renderer） */
   sdkImageProgress: 'sdk:image-progress',
+  /** 卸载终态广播（main → renderer）：完成或失败 */
+  sdkUninstallState: 'sdk:uninstall-state',
   /** 向导设置能力：defaults/枚举/边界/禁用原因（按画像×镜像×emulator 版本） */
   sdkWizardCapabilities: 'sdk:wizard-capabilities',
   /** 机型皮肤清单（SDK 已装 + 导入/下载库；主窗与向导只读） */

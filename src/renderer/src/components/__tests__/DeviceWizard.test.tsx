@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type {
   DeviceProfile,
   ImageCatalogResult,
+  SdkUninstallState,
   ImageEntry,
   SdkImageProgress,
   WizardCapabilities
@@ -96,13 +97,15 @@ const IMAGES: ImageEntry[] = [
 /** sdk.images() 返回 ImageCatalogResult——mock 统一包一层（默认无进行中下载） */
 const catalogOf = (
   images: ImageEntry[],
-  activeDownload: ImageCatalogResult['activeDownload'] = null
+  activeDownload: ImageCatalogResult['activeDownload'] = null,
+  activeUninstall: ImageCatalogResult['activeUninstall'] = null
 ): ImageCatalogResult => ({
   images,
   sourceWarnings: [],
   offline: false,
   fetchedAt: 0,
-  activeDownload
+  activeDownload,
+  activeUninstall
 })
 
 /** 固定能力样本（与 main buildCapabilities 的默认形态对齐；Quick 关闭） */
@@ -413,13 +416,19 @@ const deferred = <T,>(): Deferred<T> => {
   return { promise, resolve, reject }
 }
 
-/** 安装完整 window.api 桩；进度回调用 handle.emitProgress 转发 */
+/** 安装完整 window.api 桩；进度/卸载终态经 handle.emit* 转发 */
 const installSdkStub = (parts: {
   profiles?: Mock<() => Promise<DeviceProfile[]>>
   images?: Mock<() => Promise<ImageCatalogResult>>
   downloadImage?: Mock<(packageName: string) => Promise<void>>
-}): { emitProgress: (progress: SdkImageProgress) => void } => {
-  const handle: { emitProgress: (progress: SdkImageProgress) => void } = { emitProgress: () => {} }
+}): {
+  emitProgress: (progress: SdkImageProgress) => void
+  emitUninstallState: (state: SdkUninstallState) => void
+} => {
+  const handle = {
+    emitProgress: () => {},
+    emitUninstallState: () => {}
+  }
   ;(window as { api?: unknown }).api = {
     sdk: {
       profiles: parts.profiles ?? vi.fn(async () => PROFILES),
@@ -428,6 +437,10 @@ const installSdkStub = (parts: {
       wizardCapabilities: vi.fn(async () => CAPABILITIES),
       onImageProgress: (cb: (progress: SdkImageProgress) => void): (() => void) => {
         handle.emitProgress = cb
+        return () => {}
+      },
+      onUninstallState: (cb: (state: SdkUninstallState) => void): (() => void) => {
+        handle.emitUninstallState = cb
         return () => {}
       }
     }
@@ -716,6 +729,49 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     const button = screen.getByRole('button', { name: /删除已安装镜像 API 36/ })
     fireEvent.keyDown(button, { key: 'Enter' })
     await waitFor(() => expect(button.getAttribute('aria-busy')).toBe('true'))
+  })
+
+  it('重开向导：清单带回进行中的卸载 → 该行 spinner、其余删除钮禁用、下载钮互斥', async () => {
+    const imagesMock = vi.fn(async () => catalogOf(IMAGES, null, { packageName: PKG36 }))
+    const handle = installSdkStub({ images: imagesMock })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    // 恢复：36 行 aria-busy，34 行删除钮禁用且不 busy
+    const busyRow = screen.getByRole('button', { name: /删除已安装镜像 API 36/ })
+    await waitFor(() => expect(busyRow.getAttribute('aria-busy')).toBe('true'))
+    const other = screen.getByRole('button', { name: /删除已安装镜像 API 34/ })
+    expect(other.getAttribute('aria-disabled')).toBe('true')
+    expect(other.getAttribute('aria-busy')).toBe('false')
+    // 下载钮也感知卸载互斥
+    expect(
+      (screen.getByRole('button', { name: /下载 API 35/ }) as HTMLElement).getAttribute(
+        'aria-disabled'
+      )
+    ).toBe('true')
+    // 卸载完成广播（后台 main 发出，重开窗口收到）→ 清状态 + 重拉
+    act(() => handle.emitUninstallState({ packageName: PKG36 }))
+    await waitFor(() => expect(busyRow.getAttribute('aria-busy')).toBe('false'))
+    await waitFor(() => expect(imagesMock.mock.calls.length).toBeGreaterThanOrEqual(2))
+  })
+
+  it('后台卸载失败广播：重开的向导展示中文错误并解除 busy', async () => {
+    const handle = installSdkStub({
+      images: vi.fn(async () => catalogOf(IMAGES, null, { packageName: PKG36 }))
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    const busyRow = screen.getByRole('button', { name: /删除已安装镜像 API 36/ })
+    await waitFor(() => expect(busyRow.getAttribute('aria-busy')).toBe('true'))
+    act(() =>
+      handle.emitUninstallState({
+        packageName: PKG36,
+        error: 'sdkmanager --uninstall 超时（180 秒）'
+      })
+    )
+    expect(await screen.findByText(/超时/)).toBeTruthy()
+    expect(busyRow.getAttribute('aria-busy')).toBe('false')
   })
 
   it('卸载被拒（设备引用）：main 守卫文案直接展示，「知道了」可关闭', async () => {

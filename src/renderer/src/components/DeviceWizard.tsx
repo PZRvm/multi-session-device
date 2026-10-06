@@ -91,8 +91,9 @@ const fetchProfiles = async (): Promise<DeviceProfile[]> => {
   return window.api.sdk.profiles()
 }
 
-/** 最近一次清单响应携带的下载任务（向导重开恢复用；ref 避免绕过请求代次守卫） */
+/** 最近一次清单响应携带的下载/卸载任务（向导重开恢复用；ref 避免绕过请求代次守卫） */
 let lastActiveDownload: { packageName: string; percent: number } | null = null
+let lastActiveUninstall: { packageName: string } | null = null
 
 const fetchImages = async (): Promise<ImageEntry[]> => {
   if (typeof window === 'undefined' || !window.api?.sdk) {
@@ -100,6 +101,7 @@ const fetchImages = async (): Promise<ImageEntry[]> => {
   }
   const catalog = await window.api.sdk.images()
   lastActiveDownload = catalog.activeDownload
+  lastActiveUninstall = catalog.activeUninstall
   return catalog.images
 }
 
@@ -204,6 +206,15 @@ const DeviceWizard = ({
   // 其余行禁用）+ 中文错误（main 守卫文案直接展示）
   const [uninstallingPackage, setUninstallingPackage] = useState<string | null>(null)
   const [uninstallError, setUninstallError] = useState<string | null>(null)
+  // 卸载重开恢复（与下载恢复同口径）：main 同一时刻只有一个包操作，两个恢复互斥
+  useEffect(() => {
+    if (images.phase === 'ready' && uninstallingPackage === null && lastActiveUninstall !== null) {
+      const restore = lastActiveUninstall
+      lastActiveUninstall = null
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setUninstallingPackage(restore.packageName)
+    }
+  }, [images.phase, uninstallingPackage])
 
   // 皮肤域：清单（导入/下载后刷新）、下载互斥与进度
   const [skins, setSkins] = useState<Array<{ skinRef: string; name: string; source: string }>>([])
@@ -309,6 +320,21 @@ const DeviceWizard = ({
       setSkinDownloading(null)
     }
   }
+
+  // 卸载终态订阅（重开向导由此解除恢复的卸载状态）：完成 → 清状态 + 重拉；
+  // 失败 → 展示 main 文案。发起窗口自身也收（幂等：仅包名匹配时清理）
+  useEffect(() => {
+    if (data) return
+    if (typeof window.api.sdk.onUninstallState !== 'function') return
+    return window.api.sdk.onUninstallState((state) => {
+      setUninstallingPackage((current) => (current === state.packageName ? null : current))
+      if (state.error !== undefined) {
+        setUninstallError(state.error)
+        return
+      }
+      void reloadImages()
+    })
+  }, [data, reloadImages])
 
   const download = async (entry: ImageEntry): Promise<void> => {
     if (downloadingRef.current) return

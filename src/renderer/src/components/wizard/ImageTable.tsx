@@ -238,7 +238,7 @@ const ImageTable = ({
                   <DownloadButton
                     role="button"
                     tabIndex={index === safeRovingIndex ? 0 : -1}
-                    aria-disabled={downloadBusy}
+                    aria-disabled={downloadBusy || uninstallingPackage !== null}
                     aria-label={`下载 API ${apiDisplay(image)} ${serviceLabel(image)}`}
                     onClick={(event) => {
                       event.stopPropagation()

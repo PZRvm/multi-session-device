@@ -324,6 +324,13 @@ export interface SdkProgress {
 }
 
 /** 镜像下载进度（sdkmanager 跑包） */
+/** 卸载终态广播（main → renderer）：完成（error 空）或失败；发起窗口可能已关 */
+export interface SdkUninstallState {
+  packageName: string
+  /** 失败原因；空/未定义 = 卸载完成 */
+  error?: string
+}
+
 export interface SdkImageProgress {
   packageName: string
   percent: number
@@ -392,6 +399,11 @@ export interface ImageCatalogResult {
    * 恢复下载状态——关闭向导不取消后台下载（plan 设计 3/9），后续进度走事件流。
    */
   activeDownload: { packageName: string; percent: number } | null
+  /**
+   * 当前进行中的卸载任务（同上口径）：重开向导由 spinner 恢复渲染，
+   * 结束信号走 sdk:uninstall-state 广播。
+   */
+  activeUninstall: { packageName: string } | null
 }
 
 /** 画像形态（官方分类规则：特殊 tag 优先，无 tag 按屏幕尺寸判定；unknown = 数据不足不硬猜） */

@@ -3,6 +3,7 @@ import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type {
   DeviceProfile,
   DeviceSkinSummary,
+  SdkUninstallState,
   ImageCatalogResult,
   SdkImageProgress,
   SdkProgress,
@@ -39,6 +40,16 @@ export const sdkApi = {
   /** 向导设置能力（画像×镜像×emulator 版本；defaults/枚举/边界/禁用原因） */
   wizardCapabilities: (profileId: string, imagePackageName: string): Promise<WizardCapabilities> =>
     ipcRenderer.invoke(IPC_CHANNELS.sdkWizardCapabilities, { profileId, imagePackageName }),
+  /** 卸载终态订阅（完成/失败广播；重开向导由此解除恢复的卸载状态） */
+  onUninstallState: (callback: (state: SdkUninstallState) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: SdkUninstallState): void => {
+      callback(state)
+    }
+    ipcRenderer.on(IPC_CHANNELS.sdkUninstallState, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.sdkUninstallState, listener)
+    }
+  },
   onImageProgress: (callback: (progress: SdkImageProgress) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, progress: SdkImageProgress): void => {
       callback(progress)

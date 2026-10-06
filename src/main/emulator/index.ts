@@ -23,6 +23,7 @@ import { listWebcams } from './cameras'
 import type {
   DeviceProfile,
   DeviceSkinSummary,
+  SdkUninstallState,
   ImageCatalogResult,
   SdkSkinProgress,
   WizardCapabilities
@@ -156,13 +157,22 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     async (_event, raw: unknown): Promise<ImageCatalogResult> => {
       const root = resolveRoot(raw)
       const now = Date.now()
-      // activeDownload 是实时状态：缓存命中也按当前任务合并（重开向导即由此恢复）
+      // activeDownload/activeUninstall 是实时状态：缓存命中也按当前任务合并
+      // （重开向导即由此恢复渲染）
+      const activeOp = activePackageOp()
+      const live = {
+        activeDownload: downloading,
+        activeUninstall:
+          activeOp !== null && activeOp.kind === 'uninstall'
+            ? { packageName: activeOp.packageName }
+            : null
+      }
       if (imagesCache && imagesCache.root === root && now - imagesCache.at < IMAGES_CACHE_MS) {
-        return { ...imagesCache.result, activeDownload: downloading }
+        return { ...imagesCache.result, ...live }
       }
       const result = await listImagesWithState(root)
       imagesCache = { at: now, root, result }
-      return { ...result, activeDownload: downloading }
+      return { ...result, ...live }
     }
   )
 
@@ -312,7 +322,19 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     })
     beginPackageOp({ kind: 'uninstall', packageName })
     try {
-      await uninstallSdkManagerPackage(root, packageName)
+      try {
+        await uninstallSdkManagerPackage(root, packageName)
+      } catch (error) {
+        // 终态广播（发起窗口可能已关——错误只 throw 给 invoke 方对它无意义）
+        pushToAllWindows(IPC_CHANNELS.sdkUninstallState, {
+          packageName,
+          error: error instanceof Error ? error.message : String(error)
+        } satisfies SdkUninstallState)
+        throw error
+      }
+      pushToAllWindows(IPC_CHANNELS.sdkUninstallState, {
+        packageName
+      } satisfies SdkUninstallState)
       // 落盘复核：直接探测包目录存在性（scanLocalImages 只认带 package.xml 的
       // 目录——非标准残留会被它漏掉，review 2026-10-06 P2）
       const parts = splitPackageName(packageName)
