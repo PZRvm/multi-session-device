@@ -189,7 +189,17 @@ const ImageTable = ({
                       onDownload(image)
                     }}
                   >
-                    {isDownloading ? `${downloading.percent}%` : <Download size={13} />}
+                    {isDownloading ? (
+                      <>
+                        <ProgressFill
+                          aria-hidden="true"
+                          style={{ width: `${downloading.percent}%` }}
+                        />
+                        <PercentText>{downloading.percent}%</PercentText>
+                      </>
+                    ) : (
+                      <Download size={13} />
+                    )}
                   </DownloadButton>
                 )}
                 {isDownloading ? (
@@ -225,6 +235,9 @@ const Layout = styled.div`
   flex: 1;
   gap: 8px;
 `
+
+/** 全表唯一轨道定义（API 弹性吸收余宽；状态列定宽容纳进度钮+取消钮） */
+const GRID_COLUMNS = 'minmax(200px, 1.6fr) minmax(110px, 1fr) 84px 76px 132px'
 
 const Toolbar = styled.div`
   display: flex;
@@ -278,6 +291,8 @@ const Scroller = styled.div`
   border: 1px solid var(--board-hairline);
   border-radius: 4px;
   background: var(--board-bg);
+  display: grid;
+  grid-template-columns: ${GRID_COLUMNS};
 `
 
 const HeadRow = styled.div`
@@ -285,10 +300,8 @@ const HeadRow = styled.div`
   top: 0;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) minmax(120px, 1fr) 90px 80px minmax(
-      110px,
-      max-content
-    );
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   background: var(--board-bg-raised);
   border-bottom: 1px solid var(--board-hairline);
 `
@@ -306,10 +319,8 @@ const HeadCell = styled.div`
 
 const Row = styled.div`
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) minmax(120px, 1fr) 90px 80px minmax(
-      110px,
-      max-content
-    );
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   align-items: center;
   cursor: pointer;
   transition: background-color 0.12s;
@@ -385,12 +396,14 @@ const RowTag = styled.span`
 `
 
 const DownloadButton = styled.span`
+  position: relative;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 56px;
+  min-width: 45px;
   height: 24px;
-  padding: 0 8px;
+  padding: 0 6px;
   border: 1px solid var(--board-hairline);
   border-radius: 4px;
   background: var(--board-bg-raised);
@@ -444,4 +457,22 @@ const CancelDownloadButton = styled.button`
     outline: 2px solid var(--accent);
     outline-offset: 1px;
   }
+`
+
+/** 下载钮内的进度填充层：按百分比铺宽，视觉即「下载到哪了」 */
+const ProgressFill = styled.span`
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--loading) 28%, transparent);
+  transition: width 0.3s ease-out;
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+const PercentText = styled.span`
+  position: relative;
+  z-index: 1;
+  font-variant-numeric: tabular-nums;
 `
