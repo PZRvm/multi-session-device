@@ -50,3 +50,11 @@ tags: [review, wizard, capabilities, skins, camera, race-condition, ipc]
 ### 跟进（同日修复轮）
 
 - **P3 已修**：`readJarProfileMetas` 读取层按源文件补隐含形态 tag（新增 `withImpliedFormTag` 纯函数——fixture 实证七份 XML 零 tag 元素、avdmanager 的 Tag 按源文件归类：wear.xml→android-wear，tv/desktop/automotive/xr 同理）。纯 JAR 消费方（外观索引）与 avdmanager 合并管道分类就此一致：wearos_large_round 等非手机/平板形态 → generic 兜底，不再按屏幕尺寸误判 phone；mergeProfiles 的 tag 并集天然去重，向导管道行为不变（XML-only 画像的无 avd 条目分类也随之修正）。测试 +2（隐含 tag 纯函数四断言、索引 wear/tv→generic），全套 362 过。
+
+### 修复轮 review（2026-10-06，d612c8d..9497b75）
+
+Phase 5 检查单八项过了一遍，一项 P3：
+
+1. **P3 — 形态登记两处维护**：`DEVICE_XML_ENTRIES` 与 `FILE_IMPLIED_FORM_TAGS` 并列——未来 cmdline-tools 新增形态专属 XML（或调整归类）需同步改两处，漏登则该形态静默回落屏幕尺寸规则。建议后续合并为单表（name + impliedTag 一体登记）。
+
+复核确认无问题项：ai-glasses 画像与 xr 同在 xr.xml（fixture 实证），补 android-xr 后索引判 unknown→generic——同类误判一并消除，无残留；`withImpliedFormTag` 纯函数不改入参、未知文件名原样返回、重复 tag 不叠加均有断言；测试 fixture `jarMetas` 为生产组合的镜像（parseDeviceXml ＋ withImpliedFormTag）已注明；无重复代码/竞态/越范围改动；修复后全套 362 过、typecheck/lint 0 错。
