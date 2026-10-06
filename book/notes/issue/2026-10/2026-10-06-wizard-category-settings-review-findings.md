@@ -41,3 +41,8 @@ tags: [review, wizard, capabilities, skins, camera, race-condition, ipc]
 
 - 历轮修复全部在位：packageOps 双向互斥、取消幂等 ＋ done 显式收尾信号、卸载终态广播在落盘复核 ＋ 缓存失效之后、写流错误常驻监听与背压竞争、sha1 前检查点并入清理域、扫描点前缀过滤、自生成 package.xml 元素序对齐官方 XSD、卸载 executor 的 stdout 收集 ＋ 180s 有界超时。
 - downloader 落位事务（备份/落位/三件套核验/回滚）与临时物点前缀纪律完整；store v2 显式双版本读取 ＋ 写保护 ＋ v1 一次性备份 ＋ commitMetas 全局串行且写盘成功才换内存；packageName 单一身份贯穿清单/下载/创建/落盘；兼容性判定 shared 单源、UI 与 main 同函数；IPC 面 sender 三档白名单（main/create/wizard）与通道名单源对齐；皮肤导入逃逸核验（禁 `..` ＋ entries.includes ＋ resolve 前缀）实际有效。
+
+## 合并融合补充（2026-10-06，集成分支并入 a48ab0d）
+
+- **P3 — JAR-only 外观索引对 wear/tv 误判 phone**：融合后的 `loadFrameKindIndex`（`classifyFormFactor` 薄包装）只读 sdklib JAR 的裸 XML 元数据，而 wear/tv 的形态 tag 只在 avdmanager 输出侧（见 `mergeProfiles` 注释「tag 互补」）——`wearos_large_round` 按屏幕尺寸规则判成 `phone`，投屏将套手机壳。frameKind 仅为显示提示（不入盘、不影响创建/运行语义），富分类管道（listDeviceProfiles 的 tag 合并）不受影响；待外框支持更多形态或索引接富分类时修正。单测已按实际行为断言并注明局限。
+- 融合过程另修复两处自动合并暗坑：devices 测试的 `vi.mock('../../emulator/profileMetadata')` 被并成两份（后份覆盖前份会丢 `sdklibJarPathFor` mock）——合并为单一 factory；`book/README.md` 索引冲突按生成物再生成解决（122 篇）。
