@@ -112,6 +112,16 @@ describe('uninstallSdkManagerPackage（注入接缝）', () => {
       'exit 1'
     )
   })
+
+  it('注入 runner 挂死 → 有界超时拒绝（review 遗留：超时对注入同样生效）', async () => {
+    const { uninstallSdkManagerPackage } = await import('../sdk')
+    await expect(
+      uninstallSdkManagerPackage('/sdk', PKG, {
+        runner: () => new Promise(() => {}),
+        timeoutMs: 40
+      })
+    ).rejects.toThrow('超时')
+  })
 })
 
 describe('packageOps（统一互斥）', () => {

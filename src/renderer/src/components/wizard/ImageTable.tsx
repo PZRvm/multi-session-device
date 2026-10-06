@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import styled from 'styled-components'
 import { Download, Loader2, Trash2 } from 'lucide-react'
 import type { CompatibilityVerdict } from '@shared/compatibility'
@@ -48,6 +49,9 @@ const ImageTable = ({
   uninstallingPackage
 }: ImageTableProps): React.JSX.Element => {
   const window = recommendedWindow(images)
+  // roving tabindex（review 遗留精修）：整个表格一个 Tab 停留点——焦点行 0、
+  // 其余行 -1；行内操作钮只在焦点行可 Tab。↑↓ 行间移动，Tab 不再逐行穿越
+  const [rovingIndex, setRovingIndex] = useState(0)
   const rows = images.filter((image) => {
     const verdict = verdicts.get(image.packageName)
     const status = verdict?.status ?? 'unknown'
@@ -65,6 +69,15 @@ const ImageTable = ({
     }
     return true
   })
+  const safeRovingIndex = rows.length === 0 ? 0 : Math.min(rovingIndex, rows.length - 1)
+
+  const moveRovingFocus = (fromIndex: number, delta: number): void => {
+    const next = Math.min(Math.max(fromIndex + delta, 0), rows.length - 1)
+    setRovingIndex(next)
+    document
+      .querySelector<HTMLDivElement>(`[data-image-package="${rows[next].packageName}"]`)
+      ?.focus()
+  }
 
   const serviceOptions: Array<{ value: ImageFilters['service']; label: string }> = [
     { value: 'all', label: '全部服务' },
@@ -137,7 +150,7 @@ const ImageTable = ({
           <HeadCell className="num">大小</HeadCell>
           <HeadCell className="center">状态</HeadCell>
         </HeadRow>
-        {rows.map((image) => {
+        {rows.map((image, index) => {
           const verdict = verdicts.get(image.packageName)
           const selected = image.packageName === selectedPackageName
           const isDownloading = downloading?.packageName === image.packageName
@@ -146,14 +159,20 @@ const ImageTable = ({
             <Row
               key={image.packageName}
               role="button"
-              tabIndex={0}
+              tabIndex={index === safeRovingIndex ? 0 : -1}
               aria-pressed={selected}
               aria-disabled={!selectable}
               data-image-package={image.packageName}
+              onFocus={() => setRovingIndex(index)}
               onClick={() => {
                 if (selectable) onSelect(image)
               }}
               onKeyDown={(event) => {
+                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                  event.preventDefault()
+                  moveRovingFocus(index, event.key === 'ArrowDown' ? 1 : -1)
+                  return
+                }
                 if ((event.key === 'Enter' || event.key === ' ') && selectable) {
                   event.preventDefault()
                   onSelect(image)
@@ -190,7 +209,7 @@ const ImageTable = ({
                     {onUninstall !== null ? (
                       <UninstallButton
                         role="button"
-                        tabIndex={0}
+                        tabIndex={index === safeRovingIndex ? 0 : -1}
                         aria-disabled={uninstallingPackage !== null || downloadBusy}
                         aria-busy={uninstallingPackage === image.packageName}
                         aria-label={`删除已安装镜像 API ${apiDisplay(image)} ${serviceLabel(image)}`}
@@ -218,7 +237,7 @@ const ImageTable = ({
                 ) : (
                   <DownloadButton
                     role="button"
-                    tabIndex={0}
+                    tabIndex={index === safeRovingIndex ? 0 : -1}
                     aria-disabled={downloadBusy}
                     aria-label={`下载 API ${apiDisplay(image)} ${serviceLabel(image)}`}
                     onClick={(event) => {

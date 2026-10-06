@@ -43,4 +43,7 @@ P1/P2 与全部 P3 已修（并发安全结论先行：下载+卸载并发不崩
 - **P2-残留复核**：改为直接探测 `system-images/<平台>/<tag>/<abi>` 目录存在性；真机冒烟验证标准卸载判干净、人工构造的无 package.xml 空壳残留被捕获（旧实现漏）。
 - **P3**：确认框措辞改「下载体积约…（解压后磁盘占用更大）」；`assertUninstallable` 改 void；卸载 executor 收集 stdout+stderr 并加 180s 有界超时（超时 SIGTERM + 中文错误）；删除/下载 icon 补 tabIndex + Enter/Space（Enter 触发卸载有单测）、DownloadButton 补 focus-visible；卸载/下载错误区挪到 TabBar 下方跨标签可见；`registerSdkIpc` 改依赖注入引用查询（emulator 域不再 import devices）；补 env 断言。
 
-遗留：icon 键盘可达的 Tab 焦点顺序未做 roving tabindex 精修（可达性已通，顺序优化归 test-infra-and-roving-focus 计划口径）；卸载超时仅默认 runner 生效（注入 runner 由用例自理）。
+遗留两项已于同日收口（用户指示不等 test-infra-and-roving-focus 计划；该计划仍覆盖 ProfilePage 与全局焦点模式）：
+
+- **roving tabindex 精修**：ImageTable 整表一个 Tab 停留点——焦点行 tabIndex 0、其余 -1，行内操作钮只在焦点行可 Tab；↑↓ 行间移动（未装行同样可聚焦，仅不可选），列表刷新时索引钳制。单测覆盖初始态/移动/钮随行翻转。实现注意：jsdom 无 `CSS.escape`，行定位用引号插值（包名受 splitPackageName 约束无引号字符）。
+- **卸载超时对注入 runner 生效**：`uninstallSdkManagerPackage` 包装层 `Promise.race` + `timeoutMs` 依赖（默认 180s）；默认 runner 内部计时器仍负责 kill 真实子进程，超时赢时吃掉迟到拒绝避免 unhandled。单测：注入挂死 runner 40ms 超时拒绝。

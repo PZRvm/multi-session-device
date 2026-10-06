@@ -681,6 +681,33 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     )
   })
 
+  it('roving tabindex：↑↓ 行间移动焦点，非焦点行钮不在 Tab 序（review 遗留精修）', async () => {
+    installSdkStub({})
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    const rowOf = (pkg: string): HTMLElement =>
+      document.querySelector(`[data-image-package="${pkg}"]`) as HTMLElement
+    const PKG35 = 'system-images;android-35;google_apis;arm64-v8a'
+    // 初始：首行（36）可 Tab，第二行（35，未装行同样可聚焦）-1
+    expect(rowOf(PKG36).getAttribute('tabindex')).toBe('0')
+    expect(rowOf(PKG35).getAttribute('tabindex')).toBe('-1')
+    // ↓ 移动焦点到 35 行：tabindex 随焦点行翻转
+    fireEvent.keyDown(rowOf(PKG36), { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(rowOf(PKG35))
+    expect(rowOf(PKG35).getAttribute('tabindex')).toBe('0')
+    expect(rowOf(PKG36).getAttribute('tabindex')).toBe('-1')
+    // 焦点行（35，未装）的下载钮可 Tab；36 行的删除钮 -1
+    expect(
+      (screen.getByRole('button', { name: /下载 API 35/ }) as HTMLElement).getAttribute('tabindex')
+    ).toBe('0')
+    expect(
+      (screen.getByRole('button', { name: /删除已安装镜像 API 36/ }) as HTMLElement).getAttribute(
+        'tabindex'
+      )
+    ).toBe('-1')
+  })
+
   it('删除 icon 键盘可达：Enter 触发卸载（review P3）', async () => {
     installSdkStub({})
     render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} onUninstallImage={async () => {}} />)
