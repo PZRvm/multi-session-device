@@ -288,8 +288,8 @@ const DeviceWizard = ({
     try {
       if (onUninstallImage) await onUninstallImage(entry.packageName)
       else await window.api.sdk.uninstallImage(entry.packageName)
-      // 注入场景（测试）与 download() 同口径：不做真实重拉
-      if (!data) await reloadImages()
+      // 完成后的清状态与重拉由 sdk:uninstall-state 订阅统一负责（发起窗口也收
+      // 广播）；注入场景无订阅，与 download() 同口径不做真实重拉——避免双拉
     } catch (error) {
       setUninstallError(messageOf(error))
     } finally {

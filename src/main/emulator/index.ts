@@ -23,9 +23,9 @@ import { listWebcams } from './cameras'
 import type {
   DeviceProfile,
   DeviceSkinSummary,
-  SdkUninstallState,
   ImageCatalogResult,
   SdkSkinProgress,
+  SdkUninstallState,
   WizardCapabilities
 } from '@shared/types'
 
@@ -325,16 +325,14 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
       try {
         await uninstallSdkManagerPackage(root, packageName)
       } catch (error) {
-        // 终态广播（发起窗口可能已关——错误只 throw 给 invoke 方对它无意义）
+        // 卸载进程失败：终态广播（发起窗口可能已关——错误只 throw 给 invoke 方
+        // 对它无意义），文案标注是卸载步骤
         pushToAllWindows(IPC_CHANNELS.sdkUninstallState, {
           packageName,
-          error: error instanceof Error ? error.message : String(error)
+          error: `卸载失败：${error instanceof Error ? error.message : String(error)}`
         } satisfies SdkUninstallState)
         throw error
       }
-      pushToAllWindows(IPC_CHANNELS.sdkUninstallState, {
-        packageName
-      } satisfies SdkUninstallState)
       // 落盘复核：直接探测包目录存在性（scanLocalImages 只认带 package.xml 的
       // 目录——非标准残留会被它漏掉，review 2026-10-06 P2）
       const parts = splitPackageName(packageName)
@@ -345,10 +343,20 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
           () => false
         )
         if (dirExists) {
+          // 复核失败就地广播（重开窗口只依赖广播，不看 invoke 拒绝）
+          pushToAllWindows(IPC_CHANNELS.sdkUninstallState, {
+            packageName,
+            error: `卸载后仍检测到残留目录（${dir}），可手动清理后刷新清单`
+          } satisfies SdkUninstallState)
           throw new Error(`卸载后仍检测到残留目录（${dir}），可手动清理后刷新清单`)
         }
       }
       imagesCache = null
+      // 完成广播必须在复核通过 + 缓存失效之后：广播触发 renderer 重拉清单，
+      // 先广播会命中 60s 旧缓存闪回「已安装」（二轮 review P1）
+      pushToAllWindows(IPC_CHANNELS.sdkUninstallState, {
+        packageName
+      } satisfies SdkUninstallState)
     } finally {
       endPackageOp()
     }

@@ -216,12 +216,14 @@ const ImageTable = ({
                         title="删除已安装的镜像"
                         onClick={(event) => {
                           event.stopPropagation()
+                          if (uninstallingPackage !== null || downloadBusy) return
                           onUninstall(image)
                         }}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault()
                             event.stopPropagation()
+                            if (uninstallingPackage !== null || downloadBusy) return
                             onUninstall(image)
                           }
                         }}
@@ -242,12 +244,14 @@ const ImageTable = ({
                     aria-label={`下载 API ${apiDisplay(image)} ${serviceLabel(image)}`}
                     onClick={(event) => {
                       event.stopPropagation()
+                      if (downloadBusy || uninstallingPackage !== null) return
                       onDownload(image)
                     }}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault()
                         event.stopPropagation()
+                        if (downloadBusy || uninstallingPackage !== null) return
                         onDownload(image)
                       }
                     }}

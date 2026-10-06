@@ -323,7 +323,6 @@ export interface SdkProgress {
   message: string
 }
 
-/** 镜像下载进度（sdkmanager 跑包） */
 /** 卸载终态广播（main → renderer）：完成（error 空）或失败；发起窗口可能已关 */
 export interface SdkUninstallState {
   packageName: string
@@ -331,6 +330,7 @@ export interface SdkUninstallState {
   error?: string
 }
 
+/** 镜像下载进度（sdkmanager 跑包） */
 export interface SdkImageProgress {
   packageName: string
   percent: number

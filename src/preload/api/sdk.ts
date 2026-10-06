@@ -3,9 +3,9 @@ import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type {
   DeviceProfile,
   DeviceSkinSummary,
-  SdkUninstallState,
   ImageCatalogResult,
   SdkImageProgress,
+  SdkUninstallState,
   SdkProgress,
   SdkSkinProgress,
   SdkSnapshot,

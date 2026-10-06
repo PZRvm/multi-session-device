@@ -425,7 +425,10 @@ const installSdkStub = (parts: {
   emitProgress: (progress: SdkImageProgress) => void
   emitUninstallState: (state: SdkUninstallState) => void
 } => {
-  const handle = {
+  const handle: {
+    emitProgress: (progress: SdkImageProgress) => void
+    emitUninstallState: (state: SdkUninstallState) => void
+  } = {
     emitProgress: () => {},
     emitUninstallState: () => {}
   }
@@ -678,8 +681,17 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
             )
       )
     })
-    installSdkStub({ images: imagesMock })
-    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} onUninstallImage={async () => {}} />)
+    const handle = installSdkStub({ images: imagesMock })
+    render(
+      <DeviceWizard
+        onCreate={vi.fn()}
+        onCancel={vi.fn()}
+        // 模拟 main 时序：invoke 成功后发完成终态广播（清状态与重拉由订阅驱动）
+        onUninstallImage={async () => {
+          handle.emitUninstallState({ packageName: PKG36 })
+        }}
+      />
+    )
     await screen.findByText('Pixel 8')
     gotoConfigure()
     fireEvent.click(screen.getByRole('button', { name: /删除已安装镜像 API 36/ }))
