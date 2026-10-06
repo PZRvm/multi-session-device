@@ -285,7 +285,10 @@ const HeadRow = styled.div`
   top: 0;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) minmax(120px, 1fr) 90px 80px 110px;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(120px, 1fr) 90px 80px minmax(
+      110px,
+      max-content
+    );
   background: var(--board-bg-raised);
   border-bottom: 1px solid var(--board-hairline);
 `
@@ -303,7 +306,10 @@ const HeadCell = styled.div`
 
 const Row = styled.div`
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) minmax(120px, 1fr) 90px 80px 110px;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(120px, 1fr) 90px 80px minmax(
+      110px,
+      max-content
+    );
   align-items: center;
   cursor: pointer;
   transition: background-color 0.12s;
@@ -352,10 +358,13 @@ const Cell = styled.div`
 
 const StatusCell = styled.div`
   display: flex;
+  flex-wrap: nowrap;
   justify-content: flex-end;
+  gap: 6px;
   padding: 5px 10px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 `
 
 const Reason = styled.span`
@@ -417,7 +426,7 @@ const Legend = styled.p`
 export default ImageTable
 
 const CancelDownloadButton = styled.button`
-  margin-left: 6px;
+  flex: none;
   padding: 3px 10px;
   border: 1px solid var(--board-hairline);
   border-radius: 4px;
