@@ -10,6 +10,7 @@ import {
   parseApiRange,
   parseDeviceXml,
   parseSizeToMiB,
+  withImpliedFormTag,
   type AvdDeviceEntry
 } from '../profileMetadata'
 import { parseAvdDeviceEntries } from '../profiles'
@@ -23,6 +24,10 @@ const readXml = (name: string): string => readFileSync(join(fixtureDir, name), '
 const XML_FILES = ['automotive', 'desktop', 'devices', 'nexus', 'tv', 'wear', 'xr']
 
 const allMetas = XML_FILES.flatMap((name) => parseDeviceXml(readXml(`${name}.xml`)))
+/** 生产 readJarProfileMetas 同构的镜像 fixture：裸解析 + 源文件隐含形态 tag */
+const jarMetas = XML_FILES.flatMap((name) =>
+  withImpliedFormTag(name, parseDeviceXml(readXml(`${name}.xml`)))
+)
 
 describe('parseDeviceXml（真实 XML，namespace 1–10 全容忍）', () => {
   it('七份文件全部可解析且 id 唯一（≥91 个，与 avdmanager 输出对齐）', () => {
@@ -203,11 +208,38 @@ describe('mergeProfiles（关联三态）', () => {
   })
 })
 
+describe('withImpliedFormTag（源文件隐含形态 tag——avdmanager Tag 按文件归类的镜像）', () => {
+  it('形态专属文件补 tag、通用文件原样、不改动入参、重复 tag 不叠加', () => {
+    const wearMetas = parseDeviceXml(readXml('wear.xml'))
+    const enriched = withImpliedFormTag('wear', wearMetas)
+    expect(enriched.every((meta) => meta.tagIds.includes('android-wear'))).toBe(true)
+    // 纯函数：入参对象不被改动
+    expect(wearMetas.some((meta) => meta.tagIds.includes('android-wear'))).toBe(false)
+    // 通用文件（devices/nexus）无隐含 tag
+    expect(withImpliedFormTag('devices', parseDeviceXml(readXml('devices.xml')))).toEqual(
+      parseDeviceXml(readXml('devices.xml'))
+    )
+    // 已含隐含 tag 的输入不重复叠加
+    expect(
+      withImpliedFormTag('wear', enriched).every((meta) => {
+        const count = meta.tagIds.filter((tag) => tag === 'android-wear').length
+        return count === 1
+      })
+    ).toBe(true)
+  })
+
+  it('补 tag 后无 avdmanager 条目也能正确分类（此前裸元数据把 wear 判成 phone）', () => {
+    const profiles = mergeProfiles([], jarMetas)
+    expect(profiles.find((profile) => profile.id === 'wearos_large_round')?.formFactor).toBe('wear')
+    expect(profiles.find((profile) => profile.id === 'pixel_7')?.formFactor).toBe('phone')
+  })
+})
+
 describe('loadFrameKindIndex（外框外观索引：classifyFormFactor 单一分类规则的薄包装）', () => {
-  it('真实 fixture：pixel_7 → phone、tablet 画像命中、wear/未命中 → generic 兜底', async () => {
-    const index = await loadFrameKindIndex('/sdk', { readMetas: () => allMetas })
+  it('真实 fixture（含隐含 tag）：pixel_7 → phone、tablet 命中、wear/tv/未命中 → generic', async () => {
+    const index = await loadFrameKindIndex('/sdk', { readMetas: () => jarMetas })
     expect(index.lookup('pixel_7')).toBe('phone')
-    const tablet = allMetas.find(
+    const tablet = jarMetas.find(
       (meta) =>
         classifyFormFactor({
           tagIds: meta.tagIds,
@@ -216,12 +248,13 @@ describe('loadFrameKindIndex（外框外观索引：classifyFormFactor 单一分
         }) === 'tablet'
     )
     if (tablet) expect(index.lookup(tablet.id)).toBe('tablet')
-    // 已知局限（融合记录）：裸 XML 元数据不带形态 tag（wear/tv 的 tag 只在
-    // avdmanager 侧，见 mergeProfiles 注释）——JAR-only 索引按屏幕尺寸规则把
-    // wear 判成 phone。frameKind 只是显示提示，非创建/运行语义；富分类走
-    // listDeviceProfiles 的 tag 合并管道。
+    // 隐含 tag 修复（issue 合并融合补充 P3）：wear/tv 非手机/平板形态 →
+    // generic 兜底（外框无对应壳），不再按屏幕尺寸误判 phone
+    expect(index.lookup('wearos_large_round')).toBe('generic')
+    const tv = jarMetas.find((meta) => meta.tagIds.includes('android-tv'))
+    if (tv) expect(index.lookup(tv.id)).toBe('generic')
     expect(index.lookup('no-such-profile')).toBe('generic')
-    expect(index.entries).toBe(allMetas.length)
+    expect(index.entries).toBe(jarMetas.length)
   })
 
   it('JAR 缺失/解析失败收敛空索引——不抛、lookup 恒 generic', async () => {

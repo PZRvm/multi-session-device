@@ -316,6 +316,30 @@ export const mergeProfiles = (
   return [...profiles.values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
 }
 
+/**
+ * 形态专属源文件的隐含形态 tag：七份 XML 均不含 tag 元素（fixture 实证），
+ * avdmanager 的 Tag 展示按源文件归类（wear.xml → android-wear 等）。读取层
+ * 补入后，纯 JAR 消费方（外观索引 loadFrameKindIndex）与 avdmanager 合并
+ * 管道（mergeProfiles 的 tag 并集去重）分类一致——修 JAR-only 索引把
+ * wear/tv 按屏幕尺寸误判 phone 的问题（issue 合并融合补充 P3）。
+ */
+const FILE_IMPLIED_FORM_TAGS: Record<string, string> = {
+  automotive: 'android-automotive',
+  desktop: 'android-desktop',
+  tv: 'android-tv',
+  wear: 'android-wear',
+  xr: 'android-xr'
+}
+
+/** 按源文件名补隐含形态 tag（纯函数，不改入参；非形态专属文件原样返回） */
+export const withImpliedFormTag = (xmlName: string, metas: RawProfileMeta[]): RawProfileMeta[] => {
+  const implied = FILE_IMPLIED_FORM_TAGS[xmlName]
+  if (implied === undefined) return metas
+  return metas.map((meta) =>
+    meta.tagIds.includes(implied) ? meta : { ...meta, tagIds: [...meta.tagIds, implied] }
+  )
+}
+
 /** 读取 sdklib JAR 内全部画像 XML；JAR 缺失/不可读返回空数组（降级为 avd-only 贫元数据） */
 export const readJarProfileMetas = (jarPath: string): RawProfileMeta[] => {
   let zip: AdmZip
@@ -329,7 +353,7 @@ export const readJarProfileMetas = (jarPath: string): RawProfileMeta[] => {
     const entry = zip.getEntry(`com/android/sdklib/devices/${name}.xml`)
     if (entry === null) continue
     try {
-      metas.push(...parseDeviceXml(entry.getData().toString('utf8')))
+      metas.push(...withImpliedFormTag(name, parseDeviceXml(entry.getData().toString('utf8'))))
     } catch {
       // 单份损坏不拖垮其余文件
     }

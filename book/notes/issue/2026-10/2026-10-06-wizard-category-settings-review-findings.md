@@ -46,3 +46,7 @@ tags: [review, wizard, capabilities, skins, camera, race-condition, ipc]
 
 - **P3 — JAR-only 外观索引对 wear/tv 误判 phone**：融合后的 `loadFrameKindIndex`（`classifyFormFactor` 薄包装）只读 sdklib JAR 的裸 XML 元数据，而 wear/tv 的形态 tag 只在 avdmanager 输出侧（见 `mergeProfiles` 注释「tag 互补」）——`wearos_large_round` 按屏幕尺寸规则判成 `phone`，投屏将套手机壳。frameKind 仅为显示提示（不入盘、不影响创建/运行语义），富分类管道（listDeviceProfiles 的 tag 合并）不受影响；待外框支持更多形态或索引接富分类时修正。单测已按实际行为断言并注明局限。
 - 融合过程另修复两处自动合并暗坑：devices 测试的 `vi.mock('../../emulator/profileMetadata')` 被并成两份（后份覆盖前份会丢 `sdklibJarPathFor` mock）——合并为单一 factory；`book/README.md` 索引冲突按生成物再生成解决（122 篇）。
+
+### 跟进（同日修复轮）
+
+- **P3 已修**：`readJarProfileMetas` 读取层按源文件补隐含形态 tag（新增 `withImpliedFormTag` 纯函数——fixture 实证七份 XML 零 tag 元素、avdmanager 的 Tag 按源文件归类：wear.xml→android-wear，tv/desktop/automotive/xr 同理）。纯 JAR 消费方（外观索引）与 avdmanager 合并管道分类就此一致：wearos_large_round 等非手机/平板形态 → generic 兜底，不再按屏幕尺寸误判 phone；mergeProfiles 的 tag 并集天然去重，向导管道行为不变（XML-only 画像的无 avd 条目分类也随之修正）。测试 +2（隐含 tag 纯函数四断言、索引 wear/tv→generic），全套 362 过。
