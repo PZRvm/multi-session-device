@@ -224,6 +224,81 @@ export async function runSdkManagerPackages(
   return defaultRunner(root, packages, onPercent)
 }
 
+/** 卸载有界超时：本地卸载通常秒级，3 分钟足够覆盖首次 JVM 慢启动 */
+const UNINSTALL_TIMEOUT_MS = 180_000
+
+export interface UninstallDeps {
+  /** 执行器接缝：默认 spawn sdkmanager --uninstall；单测注入固定结果或错误 */
+  runner?: (sdkmanagerBin: string, args: string[], env: NodeJS.ProcessEnv) => Promise<void>
+  /** 有界超时（默认 180s；对注入 runner 同样生效——超时只拒绝，不 kill 注入进程） */
+  timeoutMs?: number
+}
+
+/**
+ * 卸载单个已装包（plan 2026-10-06-image-uninstall）：官方 `--uninstall` 路径，
+ * env 与安装一致。卸载后的落盘复核由调用方（IPC 守卫链）负责——此处只管进程。
+ * 超时双保险：默认 runner 内部计时器负责 kill 真实子进程；包装层 race 对
+ * 注入 runner 也强制有界（review 遗留项）。
+ */
+export async function uninstallSdkManagerPackage(
+  root: string,
+  packageName: string,
+  deps: UninstallDeps = {}
+): Promise<void> {
+  const paths = sdkPaths(root)
+  const timeoutMs = deps.timeoutMs ?? UNINSTALL_TIMEOUT_MS
+  const run =
+    deps.runner ??
+    ((bin: string, args: string[], env: NodeJS.ProcessEnv): Promise<void> =>
+      new Promise((resolve, reject) => {
+        const child = spawn(bin, args, { env, stdio: ['ignore', 'pipe', 'pipe'] })
+        // stdout 也收：sdkmanager 偶尔把错误写 stdout（review P3）
+        const output: Buffer[] = []
+        child.stdout?.on('data', (chunk: Buffer) => output.push(chunk))
+        child.stderr?.on('data', (chunk: Buffer) => output.push(chunk))
+        // 有界超时：sdkmanager 挂死不再永久占住删除互斥（review P3）
+        const timer = setTimeout(() => {
+          child.kill('SIGTERM')
+          reject(
+            new Error(
+              `sdkmanager --uninstall ${packageName} 超时（${timeoutMs / 1000} 秒），进程已终止`
+            )
+          )
+        }, timeoutMs)
+        child.on('error', (error) => {
+          clearTimeout(timer)
+          reject(error)
+        })
+        child.on('close', (code) => {
+          clearTimeout(timer)
+          if (code === 0) return resolve()
+          reject(
+            new Error(
+              `sdkmanager --uninstall ${packageName} 失败（exit ${code}）：${Buffer.concat(output).toString('utf8').slice(-500)}`
+            )
+          )
+        })
+      }))
+  const runPromise = Promise.resolve(
+    run(paths.sdkmanagerBin, ['--sdk_root', root, '--uninstall', packageName], sdkManagerEnv(root))
+  )
+  // 超时赢时 runPromise 的迟到拒绝不再冒泡为 unhandled
+  runPromise.catch(() => undefined)
+  let timer: NodeJS.Timeout | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(new Error(`sdkmanager --uninstall ${packageName} 超时（${timeoutMs / 1000} 秒）`)),
+      timeoutMs
+    )
+  })
+  try {
+    await Promise.race([runPromise, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /** 默认 sdkmanager：stdout 逐行喂给 onPercent（进度行重复出现，取最后一次即可） */
 const defaultRunner = async (
   root: string,

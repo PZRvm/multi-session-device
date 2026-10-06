@@ -17,7 +17,7 @@ import ProfilePage from './wizard/ProfilePage'
 import ImageTable, { type ImageFilters } from './wizard/ImageTable'
 import SummaryPanel from './wizard/SummaryPanel'
 import SettingsForm from './wizard/SettingsForm'
-import { apiDisplay, messageOf } from './wizard/shared'
+import { apiDisplay, formatSize, messageOf, serviceLabel } from './wizard/shared'
 
 /**
  * 两页向导（plan 2026-10-05-emulator-wizard 设计 3）：
@@ -91,8 +91,9 @@ const fetchProfiles = async (): Promise<DeviceProfile[]> => {
   return window.api.sdk.profiles()
 }
 
-/** 最近一次清单响应携带的下载任务（向导重开恢复用；ref 避免绕过请求代次守卫） */
+/** 最近一次清单响应携带的下载/卸载任务（向导重开恢复用；ref 避免绕过请求代次守卫） */
 let lastActiveDownload: { packageName: string; percent: number } | null = null
+let lastActiveUninstall: { packageName: string } | null = null
 
 const fetchImages = async (): Promise<ImageEntry[]> => {
   if (typeof window === 'undefined' || !window.api?.sdk) {
@@ -100,6 +101,7 @@ const fetchImages = async (): Promise<ImageEntry[]> => {
   }
   const catalog = await window.api.sdk.images()
   lastActiveDownload = catalog.activeDownload
+  lastActiveUninstall = catalog.activeUninstall
   return catalog.images
 }
 
@@ -118,6 +120,8 @@ type DeviceWizardProps = {
     profileId: string,
     imagePackageName: string
   ) => Promise<WizardCapabilities>
+  /** 卸载触发注入（测试用）；缺省走 sdk.uninstallImage（原生确认框在组件内弹） */
+  onUninstallImage?: (packageName: string) => Promise<void>
 }
 
 const PAGE_TITLES: Record<1 | 2, string> = {
@@ -130,7 +134,8 @@ const DeviceWizard = ({
   onCancel,
   data,
   onDownloadImage,
-  onWizardCapabilities
+  onWizardCapabilities,
+  onUninstallImage
 }: DeviceWizardProps): React.JSX.Element => {
   const [page, setPage] = useState<1 | 2>(1)
   // 画像页筛选
@@ -197,6 +202,20 @@ const DeviceWizard = ({
   }>({ phase: 'idle', data: null, error: null })
   const [advancedSettings, setAdvancedSettings] = useState<DeviceAdvancedSettings | null>(null)
   const capabilityGenerationRef = useRef(0)
+  // 镜像卸载（plan 2026-10-06-image-uninstall）：进行中的包名（该行 spinner、
+  // 其余行禁用）+ 中文错误（main 守卫文案直接展示）
+  const [uninstallingPackage, setUninstallingPackage] = useState<string | null>(null)
+  const [uninstallError, setUninstallError] = useState<string | null>(null)
+  // 卸载重开恢复（与下载恢复同口径）：main 同一时刻只有一个包操作，两个恢复互斥
+  useEffect(() => {
+    if (images.phase === 'ready' && uninstallingPackage === null && lastActiveUninstall !== null) {
+      const restore = lastActiveUninstall
+      lastActiveUninstall = null
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setUninstallingPackage(restore.packageName)
+    }
+  }, [images.phase, uninstallingPackage])
+
   // 皮肤域：清单（导入/下载后刷新）、下载互斥与进度
   const [skins, setSkins] = useState<Array<{ skinRef: string; name: string; source: string }>>([])
   const [skinDownloading, setSkinDownloading] = useState<string | null>(null)
@@ -257,6 +276,34 @@ const DeviceWizard = ({
     }
   }, [data, page])
 
+  // 卸载已装镜像：原生确认框列后果 → main 守卫链（引用/互斥拒绝文案直接展示）
+  // → 成功后重拉清单（选中镜像若被删，选择核验派生自动清空）
+  const uninstall = async (entry: ImageEntry): Promise<void> => {
+    if (uninstallingPackage !== null) return
+    if (typeof window.api?.dialog?.show === 'function') {
+      const result = await window.api.dialog.show({
+        title: '删除已安装镜像',
+        message: `确定删除 API ${apiDisplay(entry)}（${serviceLabel(entry)}）的已安装镜像吗？`,
+        detail: `包：${entry.packageName}\n下载体积约 ${formatSize(entry.sizeBytes)}（解压后磁盘占用更大）。删除后新建使用该镜像的设备需要重新下载。`,
+        buttons: ['删除', '取消'],
+        cancelId: 1
+      })
+      if (result.response !== 0) return
+    }
+    setUninstallingPackage(entry.packageName)
+    setUninstallError(null)
+    try {
+      if (onUninstallImage) await onUninstallImage(entry.packageName)
+      else await window.api.sdk.uninstallImage(entry.packageName)
+      // 完成后的清状态与重拉由 sdk:uninstall-state 订阅统一负责（发起窗口也收
+      // 广播）；注入场景无订阅，与 download() 同口径不做真实重拉——避免双拉
+    } catch (error) {
+      setUninstallError(messageOf(error))
+    } finally {
+      setUninstallingPackage(null)
+    }
+  }
+
   const importSkin = async (): Promise<void> => {
     try {
       const added = await window.api.sdk.chooseDeviceSkin()
@@ -280,6 +327,21 @@ const DeviceWizard = ({
       setSkinDownloading(null)
     }
   }
+
+  // 卸载终态订阅（重开向导由此解除恢复的卸载状态）：完成 → 清状态 + 重拉；
+  // 失败 → 展示 main 文案。发起窗口自身也收（幂等：仅包名匹配时清理）
+  useEffect(() => {
+    if (data) return
+    if (typeof window.api.sdk.onUninstallState !== 'function') return
+    return window.api.sdk.onUninstallState((state) => {
+      setUninstallingPackage((current) => (current === state.packageName ? null : current))
+      if (state.error !== undefined) {
+        setUninstallError(state.error)
+        return
+      }
+      void reloadImages()
+    })
+  }, [data, reloadImages])
 
   const download = async (entry: ImageEntry): Promise<void> => {
     if (downloadingRef.current) return
@@ -525,6 +587,20 @@ const DeviceWizard = ({
             </Tab>
           </TabBar>
 
+          {/* 卸载/下载错误跨标签可见（review P3：切标签不丢错误视野） */}
+          {downloadError !== null ? (
+            <ErrorBlock role="alert">
+              <ErrorText>{downloadError.message}</ErrorText>
+              <Button onClick={retryDownload}>重试下载</Button>
+            </ErrorBlock>
+          ) : null}
+          {uninstallError !== null ? (
+            <ErrorBlock role="alert">
+              <ErrorText>{uninstallError}</ErrorText>
+              <Button onClick={() => setUninstallError(null)}>知道了</Button>
+            </ErrorBlock>
+          ) : null}
+
           {tab === 'device' ? (
             <DevicePane>
               <NameBlock>
@@ -552,13 +628,9 @@ const DeviceWizard = ({
                 onDownload={(entry) => void download(entry)}
                 onCancelDownload={(packageName) => void cancelDownload(packageName)}
                 downloadBusy={downloading !== null}
+                onUninstall={(entry) => void uninstall(entry)}
+                uninstallingPackage={uninstallingPackage}
               />
-              {downloadError !== null ? (
-                <ErrorBlock role="alert">
-                  <ErrorText>{downloadError.message}</ErrorText>
-                  <Button onClick={retryDownload}>重试下载</Button>
-                </ErrorBlock>
-              ) : null}
             </DevicePane>
           ) : (
             <SettingsPane>

@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import styled from 'styled-components'
-import { Download } from 'lucide-react'
+import { Download, Loader2, Trash2 } from 'lucide-react'
 import type { CompatibilityVerdict } from '@shared/compatibility'
 import type { ImageEntry, ImageService } from '@shared/types'
 import { apiDisplay, formatSize, recommendedWindow, serviceLabel, serviceLabels } from './shared'
@@ -30,6 +31,10 @@ export interface ImageTableProps {
   /** 取消进行中的下载（与 onDownload 同一行内，仅下载中可见） */
   onCancelDownload: (packageName: string) => void
   downloadBusy: boolean
+  /** 卸载已装镜像（确认框在 DeviceWizard 层统一处理）；null = 未提供该能力 */
+  onUninstall: ((image: ImageEntry) => void) | null
+  /** 正在卸载的包名（该行显示 spinner，其余行禁用）；null = 无卸载任务 */
+  uninstallingPackage: string | null
 }
 
 const ImageTable = ({
@@ -42,9 +47,14 @@ const ImageTable = ({
   downloading,
   onDownload,
   onCancelDownload,
-  downloadBusy
+  downloadBusy,
+  onUninstall,
+  uninstallingPackage
 }: ImageTableProps): React.JSX.Element => {
   const window = recommendedWindow(images)
+  // roving tabindex（review 遗留精修）：整个表格一个 Tab 停留点——焦点行 0、
+  // 其余行 -1；行内操作钮只在焦点行可 Tab。↑↓ 行间移动，Tab 不再逐行穿越
+  const [rovingIndex, setRovingIndex] = useState(0)
   const rows = images.filter((image) => {
     const verdict = verdicts.get(image.packageName)
     const status = verdict?.status ?? 'unknown'
@@ -62,6 +72,15 @@ const ImageTable = ({
     }
     return true
   })
+  const safeRovingIndex = rows.length === 0 ? 0 : Math.min(rovingIndex, rows.length - 1)
+
+  const moveRovingFocus = (fromIndex: number, delta: number): void => {
+    const next = Math.min(Math.max(fromIndex + delta, 0), rows.length - 1)
+    setRovingIndex(next)
+    document
+      .querySelector<HTMLDivElement>(`[data-image-package="${rows[next].packageName}"]`)
+      ?.focus()
+  }
 
   const serviceOptions: Array<{ value: ImageFilters['service']; label: string }> = [
     { value: 'all', label: '全部服务' },
@@ -132,9 +151,9 @@ const ImageTable = ({
           <HeadCell>服务</HeadCell>
           <HeadCell>ABI</HeadCell>
           <HeadCell className="num">大小</HeadCell>
-          <HeadCell className="num">状态</HeadCell>
+          <HeadCell className="center">状态</HeadCell>
         </HeadRow>
-        {rows.map((image) => {
+        {rows.map((image, index) => {
           const verdict = verdicts.get(image.packageName)
           const selected = image.packageName === selectedPackageName
           const isDownloading = downloading?.packageName === image.packageName
@@ -143,14 +162,20 @@ const ImageTable = ({
             <Row
               key={image.packageName}
               role="button"
-              tabIndex={0}
+              tabIndex={index === safeRovingIndex ? 0 : -1}
               aria-pressed={selected}
               aria-disabled={!selectable}
               data-image-package={image.packageName}
+              onFocus={() => setRovingIndex(index)}
               onClick={() => {
                 if (selectable) onSelect(image)
               }}
               onKeyDown={(event) => {
+                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                  event.preventDefault()
+                  moveRovingFocus(index, event.key === 'ArrowDown' ? 1 : -1)
+                  return
+                }
                 if ((event.key === 'Enter' || event.key === ' ') && selectable) {
                   event.preventDefault()
                   onSelect(image)
@@ -172,21 +197,66 @@ const ImageTable = ({
               <Cell className="num">{image.installed ? '—' : formatSize(image.sizeBytes)}</Cell>
               <StatusCell className="num">
                 {image.installed ? (
-                  verdict?.status === 'supported' ? (
-                    '已安装'
-                  ) : (
-                    <Reason title={verdict?.reasons.join('；') ?? ''}>
-                      已安装 · {verdict?.status === 'unknown' ? '兼容性未知' : '不兼容'}
-                    </Reason>
-                  )
+                  <>
+                    <StatusText
+                      title={
+                        verdict?.status === 'supported'
+                          ? undefined
+                          : (verdict?.reasons.join('；') ?? '')
+                      }
+                    >
+                      {verdict?.status === 'supported'
+                        ? '已安装'
+                        : `已安装 · ${verdict?.status === 'unknown' ? '兼容性未知' : '不兼容'}`}
+                    </StatusText>
+                    {onUninstall !== null ? (
+                      <UninstallButton
+                        role="button"
+                        tabIndex={index === safeRovingIndex ? 0 : -1}
+                        aria-disabled={uninstallingPackage !== null || downloadBusy}
+                        aria-busy={uninstallingPackage === image.packageName}
+                        aria-label={`删除已安装镜像 API ${apiDisplay(image)} ${serviceLabel(image)}`}
+                        title="删除已安装的镜像"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          if (uninstallingPackage !== null || downloadBusy) return
+                          onUninstall(image)
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            if (uninstallingPackage !== null || downloadBusy) return
+                            onUninstall(image)
+                          }
+                        }}
+                      >
+                        {uninstallingPackage === image.packageName ? (
+                          <UninstallSpinner size={14} aria-hidden="true" />
+                        ) : (
+                          <Trash2 size={14} aria-hidden="true" />
+                        )}
+                      </UninstallButton>
+                    ) : null}
+                  </>
                 ) : (
                   <DownloadButton
                     role="button"
-                    aria-disabled={downloadBusy}
+                    tabIndex={index === safeRovingIndex ? 0 : -1}
+                    aria-disabled={downloadBusy || uninstallingPackage !== null}
                     aria-label={`下载 API ${apiDisplay(image)} ${serviceLabel(image)}`}
                     onClick={(event) => {
                       event.stopPropagation()
+                      if (downloadBusy || uninstallingPackage !== null) return
                       onDownload(image)
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        if (downloadBusy || uninstallingPackage !== null) return
+                        onDownload(image)
+                      }
                     }}
                   >
                     {isDownloading ? (
@@ -287,7 +357,7 @@ const Switch = styled.div`
 const Scroller = styled.div`
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: auto;
   border: 1px solid var(--board-hairline);
   border-radius: 4px;
   background: var(--board-bg);
@@ -314,6 +384,10 @@ const HeadCell = styled.div`
 
   &.num {
     text-align: right;
+  }
+
+  &.center {
+    text-align: center;
   }
 `
 
@@ -370,18 +444,18 @@ const Cell = styled.div`
 const StatusCell = styled.div`
   display: flex;
   flex-wrap: nowrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 6px;
+  min-height: 34px;
   padding: 5px 10px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 `
 
-const Reason = styled.span`
-  color: var(--board-ink-dim);
-  cursor: help;
-  text-decoration: underline dotted;
+const StatusText = styled.span`
+  white-space: nowrap;
 `
 
 const RowTag = styled.span`
@@ -419,6 +493,11 @@ const DownloadButton = styled.span`
   &[aria-disabled='true'] {
     cursor: default;
     opacity: 0.7;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
 `
 
@@ -476,4 +555,53 @@ const PercentText = styled.span`
   position: relative;
   z-index: 1;
   font-variant-numeric: tabular-nums;
+`
+
+const UninstallButton = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--danger, #b3261e);
+  cursor: pointer;
+  transition: background-color 0.12s;
+
+  &:hover {
+    background: var(--board-hover-veil);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  &[aria-disabled='true'] {
+    cursor: default;
+    opacity: 0.45;
+
+    &:hover {
+      background: transparent;
+    }
+  }
+`
+
+const UninstallSpinner = styled(Loader2)`
+  color: var(--loading);
+  animation: uninstall-spin 1.2s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+
+  @keyframes uninstall-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 `

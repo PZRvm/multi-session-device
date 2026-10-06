@@ -5,6 +5,7 @@ import type {
   DeviceSkinSummary,
   ImageCatalogResult,
   SdkImageProgress,
+  SdkUninstallState,
   SdkProgress,
   SdkSkinProgress,
   SdkSnapshot,
@@ -36,9 +37,22 @@ export const sdkApi = {
   /** 取消进行中的下载（幂等；resolve = main 已收尾清理） */
   cancelDownloadImage: (packageName: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.sdkCancelDownloadImage, { packageName }),
+  /** 卸载已装镜像（设备引用/下载互斥守卫在 main；错误文案含原因） */
+  uninstallImage: (packageName: string): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.sdkUninstallImage, { packageName }),
   /** 向导设置能力（画像×镜像×emulator 版本；defaults/枚举/边界/禁用原因） */
   wizardCapabilities: (profileId: string, imagePackageName: string): Promise<WizardCapabilities> =>
     ipcRenderer.invoke(IPC_CHANNELS.sdkWizardCapabilities, { profileId, imagePackageName }),
+  /** 卸载终态订阅（完成/失败广播；重开向导由此解除恢复的卸载状态） */
+  onUninstallState: (callback: (state: SdkUninstallState) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: SdkUninstallState): void => {
+      callback(state)
+    }
+    ipcRenderer.on(IPC_CHANNELS.sdkUninstallState, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.sdkUninstallState, listener)
+    }
+  },
   onImageProgress: (callback: (progress: SdkImageProgress) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, progress: SdkImageProgress): void => {
       callback(progress)

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type {
   DeviceProfile,
   ImageCatalogResult,
+  SdkUninstallState,
   ImageEntry,
   SdkImageProgress,
   WizardCapabilities
@@ -99,13 +100,15 @@ const IMAGES: ImageEntry[] = [
 /** sdk.images() 返回 ImageCatalogResult——mock 统一包一层（默认无进行中下载） */
 const catalogOf = (
   images: ImageEntry[],
-  activeDownload: ImageCatalogResult['activeDownload'] = null
+  activeDownload: ImageCatalogResult['activeDownload'] = null,
+  activeUninstall: ImageCatalogResult['activeUninstall'] = null
 ): ImageCatalogResult => ({
   images,
   sourceWarnings: [],
   offline: false,
   fetchedAt: 0,
-  activeDownload
+  activeDownload,
+  activeUninstall
 })
 
 /** 固定能力样本（与 main buildCapabilities 的默认形态对齐；Quick 关闭） */
@@ -416,14 +419,23 @@ const deferred = <T,>(): Deferred<T> => {
   return { promise, resolve, reject }
 }
 
-/** 安装完整 window.api 桩；进度回调用 handle.emitProgress 转发 */
+/** 安装完整 window.api 桩；进度/卸载终态经 handle.emit* 转发 */
 const installSdkStub = (parts: {
   profiles?: Mock<() => Promise<DeviceProfile[]>>
   images?: Mock<() => Promise<ImageCatalogResult>>
   downloadImage?: Mock<(packageName: string) => Promise<void>>
   cancelDownloadImage?: Mock<(packageName: string) => Promise<void>>
-}): { emitProgress: (progress: SdkImageProgress) => void } => {
-  const handle: { emitProgress: (progress: SdkImageProgress) => void } = { emitProgress: () => {} }
+}): {
+  emitProgress: (progress: SdkImageProgress) => void
+  emitUninstallState: (state: SdkUninstallState) => void
+} => {
+  const handle: {
+    emitProgress: (progress: SdkImageProgress) => void
+    emitUninstallState: (state: SdkUninstallState) => void
+  } = {
+    emitProgress: () => {},
+    emitUninstallState: () => {}
+  }
   ;(window as { api?: unknown }).api = {
     sdk: {
       profiles: parts.profiles ?? vi.fn(async () => PROFILES),
@@ -433,6 +445,10 @@ const installSdkStub = (parts: {
       wizardCapabilities: vi.fn(async () => CAPABILITIES),
       onImageProgress: (cb: (progress: SdkImageProgress) => void): (() => void) => {
         handle.emitProgress = cb
+        return () => {}
+      },
+      onUninstallState: (cb: (state: SdkUninstallState) => void): (() => void) => {
+        handle.emitUninstallState = cb
         return () => {}
       }
     }
@@ -686,6 +702,7 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     expect(screen.queryByRole('button', { name: '重试下载' })).toBeNull()
   })
 
+
   it('取消广播（重开窗场景）：清下载态且不显示错误横幅', async () => {
     const handle = installSdkStub({
       images: vi.fn(async () => catalogOf(IMAGES, { packageName: PKG_MISSING, percent: 55 }))
@@ -706,6 +723,173 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     await waitFor(() => expect(screen.queryByText('55%')).toBeNull())
     expect(screen.queryByRole('button', { name: '重试下载' })).toBeNull()
     expect(screen.getByRole('button', { name: /下载 API 35/ })).toBeTruthy()
+  })
+
+  it('已装行删除镜像：确认（注入场景直通）→ 调用卸载 → 成功后重拉清单', async () => {
+    let calls = 0
+    const imagesMock = vi.fn(async () => {
+      calls += 1
+      // 卸载后重拉：36 变未装（显示下载钮）
+      return catalogOf(
+        calls === 1
+          ? IMAGES
+          : IMAGES.map((entry) =>
+              entry.packageName === PKG36 ? { ...entry, installed: false } : entry
+            )
+      )
+    })
+    const handle = installSdkStub({ images: imagesMock })
+    render(
+      <DeviceWizard
+        onCreate={vi.fn()}
+        onCancel={vi.fn()}
+        // 模拟 main 时序：invoke 成功后发完成终态广播（清状态与重拉由订阅驱动）
+        onUninstallImage={async () => {
+          handle.emitUninstallState({ packageName: PKG36 })
+        }}
+      />
+    )
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    fireEvent.click(screen.getByRole('button', { name: /删除已安装镜像 API 36/ }))
+    await waitFor(() => expect(imagesMock.mock.calls.length).toBeGreaterThanOrEqual(2))
+    // 重拉后 36 行回到下载态
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('button', { name: /下载 API 36/ }) as HTMLElement).getAttribute(
+          'aria-disabled'
+        )
+      ).toBe('false')
+    )
+  })
+
+  it('roving tabindex：↑↓ 行间移动焦点，非焦点行钮不在 Tab 序（review 遗留精修）', async () => {
+    installSdkStub({})
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    const rowOf = (pkg: string): HTMLElement =>
+      document.querySelector(`[data-image-package="${pkg}"]`) as HTMLElement
+    const PKG35 = 'system-images;android-35;google_apis;arm64-v8a'
+    // 初始：首行（36）可 Tab，第二行（35，未装行同样可聚焦）-1
+    expect(rowOf(PKG36).getAttribute('tabindex')).toBe('0')
+    expect(rowOf(PKG35).getAttribute('tabindex')).toBe('-1')
+    // ↓ 移动焦点到 35 行：tabindex 随焦点行翻转
+    fireEvent.keyDown(rowOf(PKG36), { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(rowOf(PKG35))
+    expect(rowOf(PKG35).getAttribute('tabindex')).toBe('0')
+    expect(rowOf(PKG36).getAttribute('tabindex')).toBe('-1')
+    // 焦点行（35，未装）的下载钮可 Tab；36 行的删除钮 -1
+    expect(
+      (screen.getByRole('button', { name: /下载 API 35/ }) as HTMLElement).getAttribute('tabindex')
+    ).toBe('0')
+    expect(
+      (screen.getByRole('button', { name: /删除已安装镜像 API 36/ }) as HTMLElement).getAttribute(
+        'tabindex'
+      )
+    ).toBe('-1')
+  })
+
+  it('删除 icon 键盘可达：Enter 触发卸载（review P3）', async () => {
+    installSdkStub({})
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} onUninstallImage={async () => {}} />)
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    const button = screen.getByRole('button', { name: /删除已安装镜像 API 36/ })
+    fireEvent.keyDown(button, { key: 'Enter' })
+    await waitFor(() => expect(button.getAttribute('aria-busy')).toBe('true'))
+  })
+
+  it('重开向导：清单带回进行中的卸载 → 该行 spinner、其余删除钮禁用、下载钮互斥', async () => {
+    const imagesMock = vi.fn(async () => catalogOf(IMAGES, null, { packageName: PKG36 }))
+    const handle = installSdkStub({ images: imagesMock })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    // 恢复：36 行 aria-busy，34 行删除钮禁用且不 busy
+    const busyRow = screen.getByRole('button', { name: /删除已安装镜像 API 36/ })
+    await waitFor(() => expect(busyRow.getAttribute('aria-busy')).toBe('true'))
+    const other = screen.getByRole('button', { name: /删除已安装镜像 API 34/ })
+    expect(other.getAttribute('aria-disabled')).toBe('true')
+    expect(other.getAttribute('aria-busy')).toBe('false')
+    // 下载钮也感知卸载互斥
+    expect(
+      (screen.getByRole('button', { name: /下载 API 35/ }) as HTMLElement).getAttribute(
+        'aria-disabled'
+      )
+    ).toBe('true')
+    // 卸载完成广播（后台 main 发出，重开窗口收到）→ 清状态 + 重拉
+    act(() => handle.emitUninstallState({ packageName: PKG36 }))
+    await waitFor(() => expect(busyRow.getAttribute('aria-busy')).toBe('false'))
+    await waitFor(() => expect(imagesMock.mock.calls.length).toBeGreaterThanOrEqual(2))
+  })
+
+  it('后台卸载失败广播：重开的向导展示中文错误并解除 busy', async () => {
+    const handle = installSdkStub({
+      images: vi.fn(async () => catalogOf(IMAGES, null, { packageName: PKG36 }))
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    const busyRow = screen.getByRole('button', { name: /删除已安装镜像 API 36/ })
+    await waitFor(() => expect(busyRow.getAttribute('aria-busy')).toBe('true'))
+    act(() =>
+      handle.emitUninstallState({
+        packageName: PKG36,
+        error: 'sdkmanager --uninstall 超时（180 秒）'
+      })
+    )
+    expect(await screen.findByText(/超时/)).toBeTruthy()
+    expect(busyRow.getAttribute('aria-busy')).toBe('false')
+  })
+
+  it('卸载被拒（设备引用）：main 守卫文案直接展示，「知道了」可关闭', async () => {
+    installSdkStub({})
+    render(
+      <DeviceWizard
+        onCreate={vi.fn()}
+        onCancel={vi.fn()}
+        onUninstallImage={async () => {
+          throw new Error('镜像正被设备引用（测试机 A），删除这些设备后才可卸载')
+        }}
+      />
+    )
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    fireEvent.click(screen.getByRole('button', { name: /删除已安装镜像 API 36/ }))
+    expect(await screen.findByText(/正被设备引用/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '知道了' }))
+    expect(screen.queryByText(/正被设备引用/)).toBeNull()
+  })
+
+  it('卸载进行中：删除钮显示「删除中…」且互斥', async () => {
+    let resolveUninstall: () => void = () => {}
+    installSdkStub({})
+    render(
+      <DeviceWizard
+        onCreate={vi.fn()}
+        onCancel={vi.fn()}
+        onUninstallImage={() =>
+          new Promise<void>((resolve) => {
+            resolveUninstall = resolve
+          })
+        }
+      />
+    )
+    await screen.findByText('Pixel 8')
+    gotoConfigure()
+    fireEvent.click(screen.getByRole('button', { name: /删除已安装镜像 API 36/ }))
+    // 正在删的行：icon 变加载态（aria-busy）且禁用
+    const busy = screen.getByRole('button', { name: /删除已安装镜像 API 36/ }) as HTMLElement
+    await waitFor(() => expect(busy.getAttribute('aria-busy')).toBe('true'))
+    expect(busy.getAttribute('aria-disabled')).toBe('true')
+    // 其余已装行的删除 icon 同步互斥禁用
+    const other = screen.getByRole('button', { name: /删除已安装镜像 API 34/ }) as HTMLElement
+    expect(other.getAttribute('aria-disabled')).toBe('true')
+    expect(other.getAttribute('aria-busy')).toBe('false')
+    await act(async () => {
+      resolveUninstall()
+    })
   })
 
   it('下载同 tick 原生连点只触发一次下载（ref 守卫）', async () => {

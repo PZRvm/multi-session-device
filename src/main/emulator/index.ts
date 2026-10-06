@@ -1,9 +1,10 @@
 import { BrowserWindow, app, dialog, ipcMain } from 'electron'
 import { join } from 'node:path'
+import { stat } from 'node:fs/promises'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { SdkImageProgress, SdkProgress, SdkSnapshot } from '@shared/types'
 import { appIcon } from '../app-icon'
-import { bootstrapSdk, detectSdk } from './sdk'
+import { bootstrapSdk, detectSdk, uninstallSdkManagerPackage } from './sdk'
 import { avdmanagerPathFor, listDeviceProfiles } from './profiles'
 import { jarFingerprint, sdklibJarPathFor } from './profileMetadata'
 import { listImagesWithState, scanLocalImages, splitPackageName } from './catalog'
@@ -17,12 +18,15 @@ import {
   type SkinRecord
 } from './skins'
 import { wizardOwns } from '../window/wizard'
+import { assertUninstallable } from './uninstall'
+import { activePackageOp, beginPackageOp, endPackageOp } from './packageOps'
 import { listWebcams } from './cameras'
 import type {
   DeviceProfile,
   DeviceSkinSummary,
   ImageCatalogResult,
   SdkSkinProgress,
+  SdkUninstallState,
   WizardCapabilities
 } from '@shared/types'
 
@@ -121,7 +125,12 @@ const requireSdkReady = async (root: string): Promise<void> => {
   }
 }
 
-export function registerSdkIpc(): void {
+/** registerSdkIpc 可选依赖（默认空实现）：镜像删除守卫的设备引用查询 */
+export interface SdkIpcDeps {
+  referencingDeviceNames?: (packageName: string) => string[]
+}
+
+export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
   ipcMain.handle(IPC_CHANNELS.sdkStatus, (_event, raw: unknown): Promise<SdkSnapshot> =>
     detectSdk(resolveRoot(raw))
   )
@@ -155,13 +164,22 @@ export function registerSdkIpc(): void {
     async (_event, raw: unknown): Promise<ImageCatalogResult> => {
       const root = resolveRoot(raw)
       const now = Date.now()
-      // activeDownload 是实时状态：缓存命中也按当前任务合并（重开向导即由此恢复）
+      // activeDownload/activeUninstall 是实时状态：缓存命中也按当前任务合并
+      // （重开向导即由此恢复渲染）
+      const activeOp = activePackageOp()
+      const live = {
+        activeDownload: downloading,
+        activeUninstall:
+          activeOp !== null && activeOp.kind === 'uninstall'
+            ? { packageName: activeOp.packageName }
+            : null
+      }
       if (imagesCache && imagesCache.root === root && now - imagesCache.at < IMAGES_CACHE_MS) {
-        return { ...imagesCache.result, activeDownload: downloading }
+        return { ...imagesCache.result, ...live }
       }
       const result = await listImagesWithState(root)
       imagesCache = { at: now, root, result }
-      return { ...result, activeDownload: downloading }
+      return { ...result, ...live }
     }
   )
 
@@ -287,6 +305,70 @@ export function registerSdkIpc(): void {
     }
   )
 
+  // 卸载已装镜像（plan 2026-10-06-image-uninstall）：守卫链（uninstall.ts 纯函数，
+  // 顺序固定）→ 官方 --uninstall → 落盘复核 → 缓存失效
+  ipcMain.handle(IPC_CHANNELS.sdkUninstallImage, async (_event, raw: unknown): Promise<void> => {
+    if (
+      typeof raw !== 'object' ||
+      raw === null ||
+      typeof (raw as Record<string, unknown>).packageName !== 'string'
+    ) {
+      throw new Error(`${IPC_CHANNELS.sdkUninstallImage}: 非法的入参`)
+    }
+    const packageName = (raw as Record<string, unknown>).packageName as string
+    const root = resolveRoot(undefined)
+    await requireSdkReady(root)
+    const catalog =
+      imagesCache && imagesCache.root === root
+        ? imagesCache.result
+        : await listImagesWithState(root)
+    assertUninstallable(packageName, {
+      catalog,
+      activeOp: activePackageOp(),
+      referencing: deps.referencingDeviceNames?.(packageName) ?? []
+    })
+    beginPackageOp({ kind: 'uninstall', packageName })
+    try {
+      try {
+        await uninstallSdkManagerPackage(root, packageName)
+      } catch (error) {
+        // 卸载进程失败：终态广播（发起窗口可能已关——错误只 throw 给 invoke 方
+        // 对它无意义），文案标注是卸载步骤
+        pushToAllWindows(IPC_CHANNELS.sdkUninstallState, {
+          packageName,
+          error: `卸载失败：${error instanceof Error ? error.message : String(error)}`
+        } satisfies SdkUninstallState)
+        throw error
+      }
+      // 落盘复核：直接探测包目录存在性（scanLocalImages 只认带 package.xml 的
+      // 目录——非标准残留会被它漏掉，review 2026-10-06 P2）
+      const parts = splitPackageName(packageName)
+      if (parts !== null) {
+        const dir = join(root, 'system-images', parts.platformSegment, parts.tagSegment, parts.abi)
+        const dirExists = await stat(dir).then(
+          () => true,
+          () => false
+        )
+        if (dirExists) {
+          // 复核失败就地广播（重开窗口只依赖广播，不看 invoke 拒绝）
+          pushToAllWindows(IPC_CHANNELS.sdkUninstallState, {
+            packageName,
+            error: `卸载后仍检测到残留目录（${dir}），可手动清理后刷新清单`
+          } satisfies SdkUninstallState)
+          throw new Error(`卸载后仍检测到残留目录（${dir}），可手动清理后刷新清单`)
+        }
+      }
+      imagesCache = null
+      // 完成广播必须在复核通过 + 缓存失效之后：广播触发 renderer 重拉清单，
+      // 先广播会命中 60s 旧缓存闪回「已安装」（二轮 review P1）
+      pushToAllWindows(IPC_CHANNELS.sdkUninstallState, {
+        packageName
+      } satisfies SdkUninstallState)
+    } finally {
+      endPackageOp()
+    }
+  })
+
   ipcMain.handle(IPC_CHANNELS.sdkDownloadImage, async (_event, raw: unknown): Promise<void> => {
     if (
       typeof raw !== 'object' ||
@@ -310,11 +392,9 @@ export function registerSdkIpc(): void {
     if (entry.abi !== 'arm64-v8a') {
       throw new Error(`${IPC_CHANNELS.sdkDownloadImage}: 跨架构镜像（${entry.abi}）本期不支持下载`)
     }
-    if (downloading) {
-      throw new Error(
-        `已有镜像在下载（${downloading.packageName}，${downloading.percent}%），请等待完成`
-      )
-    }
+    // 统一包操作互斥（packageOps）：拒绝进行中的下载/卸载（文案含包名）；
+    // 下载侧的取消链路（abort/done）保留在 downloading 对象上
+    beginPackageOp({ kind: 'download', packageName })
     const abort = new AbortController()
     // done 是显式收尾信号：在 finally 里、互斥释放之后 resolve——取消 handler
     // await 它即得到「收尾完成且可立即重下」的硬保证，不依赖微任务顺序（review P2-3）
@@ -383,6 +463,7 @@ export function registerSdkIpc(): void {
       throw error
     } finally {
       downloading = null
+      endPackageOp()
       settleDone()
     }
   })

@@ -104,7 +104,10 @@ const mocks = vi.hoisted(() => {
       disposeAll: vi.fn(async () => [] as string[]),
       resumeAccepting: vi.fn()
     },
-    createRunner: vi.fn()
+    createRunner: vi.fn(),
+    activePackageOp: vi.fn(
+      (): { kind: 'download' | 'uninstall'; packageName: string } | null => null
+    )
   }
 })
 
@@ -173,6 +176,11 @@ vi.mock('../../emulator/profiles', () => ({
 }))
 vi.mock('../../emulator/profileMetadata', () => ({
   sdklibJarPathFor: () => '/sdklib.jar'
+}))
+vi.mock('../../emulator/packageOps', () => ({
+  activePackageOp: mocks.activePackageOp,
+  beginPackageOp: vi.fn(),
+  endPackageOp: vi.fn()
 }))
 vi.mock('../../emulator/adb', () => ({
   candidateAdbPaths: () => [{ path: '/adb', source: 'app-sdk' }],
@@ -409,39 +417,39 @@ describe('devices 域（创建/删除事务）', () => {
   })
 })
 
-describe('Quick Boot 运行路径（plan 设计 8；门槛未过保持禁用）', () => {
-  const quickDevice = (
-    overrides: Partial<Record<string, unknown>> = {}
-  ): Record<string, unknown> => ({
-    id: 'quick-1',
-    name: 'Quick 机',
-    profileId: 'pixel_8',
-    profileLabel: 'Pixel 8',
-    imagePackageName: 'system-images;android-36;google_apis_playstore;arm64-v8a',
-    apiDisplay: '36',
-    formFactor: 'phone',
-    screenSummary: null,
-    advancedSettings: {
-      skinRef: null,
-      frontCamera: { mode: 'emulated', deviceId: null },
-      rearCamera: { mode: 'emulated', deviceId: null },
-      networkSpeed: null,
-      networkLatency: null,
-      orientation: null,
-      bootMode: 'quick',
-      internalStorageMiB: 6144,
-      cpuCores: 4,
-      graphics: 'auto',
-      ramMiB: 2048,
-      vmHeapMiB: 256,
-      preferredAbi: 'optimal'
-    },
-    snapshotReadyAt: null,
-    createdAt: 0,
-    status: 'stopped',
-    ...overrides
-  })
+const quickDevice = (
+  overrides: Partial<Record<string, unknown>> = {}
+): Record<string, unknown> => ({
+  id: 'quick-1',
+  name: 'Quick 机',
+  profileId: 'pixel_8',
+  profileLabel: 'Pixel 8',
+  imagePackageName: 'system-images;android-36;google_apis_playstore;arm64-v8a',
+  apiDisplay: '36',
+  formFactor: 'phone',
+  screenSummary: null,
+  advancedSettings: {
+    skinRef: null,
+    frontCamera: { mode: 'emulated', deviceId: null },
+    rearCamera: { mode: 'emulated', deviceId: null },
+    networkSpeed: null,
+    networkLatency: null,
+    orientation: null,
+    bootMode: 'quick',
+    internalStorageMiB: 6144,
+    cpuCores: 4,
+    graphics: 'auto',
+    ramMiB: 2048,
+    vmHeapMiB: 256,
+    preferredAbi: 'optimal'
+  },
+  snapshotReadyAt: null,
+  createdAt: 0,
+  status: 'stopped',
+  ...overrides
+})
 
+describe('Quick Boot 运行路径（plan 设计 8；门槛未过保持禁用）', () => {
   const extraArgsFromConfig = (): ((id: string) => string[]) => {
     const config = mocks.createRunner.mock.calls.at(-1)![0] as {
       extraArgsFor: (id: string) => string[]
@@ -483,6 +491,73 @@ describe('Quick Boot 运行路径（plan 设计 8；门槛未过保持禁用）'
     const { handlerFor } = await freshDomain()
     await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)
     expect(extraArgsFromConfig()('quick-1')).toContain('-no-snapshot')
+  })
+})
+
+describe('createDevice 与包操作互斥（review P2 TOCTOU 收口）', () => {
+  it('同包卸载进行中 → 拒绝创建；不同包不拦', async () => {
+    mocks.readDeviceMetas.mockResolvedValue([])
+    const pkg = 'system-images;android-36;google_apis_playstore;arm64-v8a'
+    const { handlerFor } = await freshDomain()
+    mocks.activePackageOp.mockReturnValue({ kind: 'uninstall', packageName: pkg })
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), validCreateInput)
+    ).rejects.toThrow('镜像正在卸载')
+    expect(mocks.createAvd).not.toHaveBeenCalled()
+    // 不同包的卸载不拦创建
+    mocks.activePackageOp.mockReturnValue({
+      kind: 'uninstall',
+      packageName: 'system-images;android-35;google_apis;arm64-v8a'
+    })
+    await handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), validCreateInput)
+    expect(mocks.createAvd).toHaveBeenCalledTimes(1)
+    mocks.activePackageOp.mockReturnValue(null)
+  })
+
+  it('同包下载进行中 → 拒绝创建', async () => {
+    mocks.readDeviceMetas.mockResolvedValue([])
+    const { handlerFor } = await freshDomain()
+    mocks.activePackageOp.mockReturnValue({
+      kind: 'download',
+      packageName: 'system-images;android-36;google_apis_playstore;arm64-v8a'
+    })
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), validCreateInput)
+    ).rejects.toThrow('镜像正在下载')
+    expect(mocks.createAvd).not.toHaveBeenCalled()
+    mocks.activePackageOp.mockReturnValue(null)
+  })
+})
+
+describe('listDeviceNamesReferencing（镜像删除守卫）', () => {
+  it('列出引用该包的设备名；creating 态同样计入；无关设备不出现', async () => {
+    const pkg = 'system-images;android-36;google_apis_playstore;arm64-v8a'
+    mocks.readDeviceMetas.mockResolvedValue([
+      quickDevice({ id: 'a', name: '测试机 A' }),
+      quickDevice({
+        id: 'b',
+        name: '测试机 B',
+        imagePackageName: 'system-images;android-35;google_apis;arm64-v8a'
+      })
+    ] as never)
+    const { handlerFor } = await freshDomain()
+    await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)
+    const { listDeviceNamesReferencing } = await import('..')
+    expect(listDeviceNamesReferencing(pkg)).toEqual(['测试机 A'])
+    expect(listDeviceNamesReferencing('system-images;android-35;google_apis;arm64-v8a')).toEqual([
+      '测试机 B'
+    ])
+    expect(listDeviceNamesReferencing('system-images;android-99;default;arm64-v8a')).toEqual([])
+  })
+
+  it('创建中事务行计入引用（imagePackageName 在 creating 时已写入）', async () => {
+    const pkg = 'system-images;android-36;google_apis_playstore;arm64-v8a'
+    // 走真实 create 流程挂 creating 行再查询太绕——直接用 creating 态元数据装载
+    mocks.readDeviceMetas.mockResolvedValue([quickDevice({ id: 'c', name: '创建中机' })] as never)
+    const { handlerFor } = await freshDomain()
+    await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)
+    const { listDeviceNamesReferencing } = await import('..')
+    expect(listDeviceNamesReferencing(pkg)).toEqual(['创建中机'])
   })
 })
 
