@@ -30,7 +30,18 @@ const mocks = vi.hoisted(() => {
       webcamDeviceIds: [],
       skinIds: []
     })),
-    normalizeAdvancedSettings: vi.fn((raw: unknown) => ({
+    buildEnrichedCapabilities: vi.fn(async () => ({
+      capabilityContextId: 'pixel_8|pkg|36.1.9|enriched',
+      emulatorVersion: '36.1.9',
+      defaults: null,
+      fields: {},
+      quickBootAvailable: false,
+      quickBootDisabledReason: '门槛未过',
+      webcamDeviceIds: [],
+      skinIds: []
+    })),
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- P1 接线锚：mock 需携带第二参（capabilities）供 calls[1] 断言
+    normalizeAdvancedSettings: vi.fn((raw: unknown, _capabilities: unknown) => ({
       settings: raw === null ? null : raw,
       errors: {}
     })),
@@ -39,6 +50,7 @@ const mocks = vi.hoisted(() => {
       // 与真实契约一致：cold 带 -no-snapshot；quick 不带快照禁止参数
       settings !== null && settings.bootMode === 'quick' ? [] : ['-no-snapshot', '-gpu', 'host']
     ),
+    listWebcams: vi.fn(async () => [{ id: 'webcam0', deviceLabel: 'host-a' }]),
     deleteAvd: vi.fn<(dirs: unknown) => Promise<void>>(async () => {}),
     avdExists: vi.fn(async () => true),
     isPackageNameInstalled: vi.fn<(root: string, packageName: string) => Promise<boolean>>(
@@ -106,7 +118,9 @@ const mocks = vi.hoisted(() => {
     ),
     // fake runner：devices 层以 createRunner() 工厂接入，测试持有实例与构造回调
     runnerInstance: {
-      start: vi.fn(async () => ({ runId: 'run-1', serial: 'emulator-5554' })),
+      start: vi.fn<(id: string, runId: string) => Promise<{ runId: string; serial: string }>>(
+        async () => ({ runId: 'run-1', serial: 'emulator-5554' })
+      ),
       stop: vi.fn(async () => undefined),
       cancelStart: vi.fn(async () => undefined),
       phaseOf: vi.fn((): 'starting' | 'running' | 'stopping' | null => null),
@@ -117,7 +131,10 @@ const mocks = vi.hoisted(() => {
     createRunner: vi.fn(),
     activePackageOp: vi.fn(
       (): { kind: 'download' | 'uninstall'; packageName: string } | null => null
-    )
+    ),
+    beginPackageCreation: vi.fn(),
+    endPackageCreation: vi.fn(),
+    isPackageCreating: vi.fn((): boolean => false)
   }
 })
 
@@ -142,6 +159,7 @@ vi.mock('../../emulator/avd', () => ({
 vi.mock('../../emulator/settings', () => ({
   readEmulatorVersion: mocks.readEmulatorVersion,
   buildCapabilities: mocks.buildCapabilities,
+  buildEnrichedCapabilities: mocks.buildEnrichedCapabilities,
   normalizeAdvancedSettings: mocks.normalizeAdvancedSettings,
   settingsToConfigPatch: mocks.settingsToConfigPatch,
   settingsToRunnerArgs: mocks.settingsToRunnerArgs
@@ -191,7 +209,10 @@ vi.mock('../../emulator/profileMetadata', () => ({
 vi.mock('../../emulator/packageOps', () => ({
   activePackageOp: mocks.activePackageOp,
   beginPackageOp: vi.fn(),
-  endPackageOp: vi.fn()
+  endPackageOp: vi.fn(),
+  beginPackageCreation: mocks.beginPackageCreation,
+  endPackageCreation: mocks.endPackageCreation,
+  isPackageCreating: mocks.isPackageCreating
 }))
 vi.mock('../../emulator/adb', () => ({
   candidateAdbPaths: () => [{ path: '/adb', source: 'app-sdk' }],
@@ -199,9 +220,11 @@ vi.mock('../../emulator/adb', () => ({
   listAdbSerials: mocks.listAdbSerials,
   resolveAdbExecutable: mocks.resolveAdbExecutable
 }))
-vi.mock('../../emulator/runner', () => ({
+vi.mock('../../emulator/runner', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../emulator/runner')>()),
   createRunner: mocks.createRunner
 }))
+vi.mock('../../emulator/cameras', () => ({ listWebcams: mocks.listWebcams }))
 vi.mock('../../window', () => ({ getMainWindow: mocks.getMainWindow }))
 vi.mock('../../window/wizard', () => ({ wizardOwns: mocks.wizardOwns }))
 
@@ -309,6 +332,32 @@ describe('devices 域（创建/删除事务）', () => {
     ).rejects.toThrow('画像已不可创建')
     expect(mocks.createAvd).not.toHaveBeenCalled()
     expect(mocks.writeDeviceMetas).not.toHaveBeenCalled()
+  })
+
+  it('create：能力经唯一入口 buildEnrichedCapabilities 构建并喂给归一化（P1 接线锚）', async () => {
+    const { handlerFor } = await freshDomain()
+    await handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), validCreateInput)
+    expect(mocks.buildEnrichedCapabilities).toHaveBeenCalledTimes(1)
+    const caps = await mocks.buildEnrichedCapabilities.mock.results.at(-1)!.value
+    // 归一化消费的正是富化能力的解析值——向导与创建两侧口径同源
+    expect(mocks.normalizeAdvancedSettings.mock.calls.at(-1)![1]).toBe(caps)
+  })
+
+  it('create：创建意向全程持有，失败路径同样释放（P2-2 接线锚）', async () => {
+    mocks.createAvd.mockRejectedValueOnce(new Error('boom'))
+    const { handlerFor } = await freshDomain()
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), validCreateInput)
+    ).rejects.toThrow('boom')
+    expect(mocks.beginPackageCreation).toHaveBeenCalledWith(validCreateInput.imagePackageName)
+    expect(mocks.endPackageCreation).toHaveBeenCalledWith(validCreateInput.imagePackageName)
+    // begin 先于 AVD 创建、end 后于回滚（invocationCallOrder 校验次序）
+    expect(mocks.beginPackageCreation.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.createAvd.mock.invocationCallOrder[0]
+    )
+    expect(mocks.endPackageCreation.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mocks.deleteAvd.mock.invocationCallOrder[0]
+    )
   })
 
   it('create：镜像半安装（核验不过）→ 拒绝', async () => {
@@ -708,6 +757,90 @@ describe('devices 域（启动/停止/取消状态机）', () => {
     expect(runner.start).toHaveBeenCalledTimes(1)
   })
 
+  it('start：准备阶段取消正常回停止，无启动错误或运行字段残留', async () => {
+    const { StartCancelledError } = await import('../../emulator/runner')
+    let rejectStart: (error: Error) => void = () => {}
+    mocks.runnerInstance.start.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectStart = reject
+        })
+    )
+    mocks.runnerInstance.cancelStart.mockImplementationOnce(async () => {
+      rejectStart(new StartCancelledError())
+    })
+    const { handlerFor } = await freshDomain()
+    const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { createdId: string }
+    const start = handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), {
+      id: created.createdId
+    })
+    await vi.waitFor(() => expect(mocks.runnerInstance.start).toHaveBeenCalledTimes(1))
+    const snapshot = (await handlerFor(IPC_CHANNELS.devicesCancelStart)(mainWindowEvent(), {
+      id: created.createdId
+    })) as {
+      devices: Array<{
+        status: string
+        runId?: string
+        serial?: string
+        startedAt?: number
+        lastError?: unknown
+      }>
+    }
+    await expect(start).resolves.toMatchObject({
+      devices: [expect.objectContaining({ status: 'stopping', lastError: undefined })]
+    })
+    expect(snapshot.devices[0]).toMatchObject({ status: 'stopped' })
+    expect(snapshot.devices[0].runId).toBeUndefined()
+    expect(snapshot.devices[0].serial).toBeUndefined()
+    expect(snapshot.devices[0].startedAt).toBeUndefined()
+    expect(snapshot.devices[0].lastError).toBeUndefined()
+  })
+
+  it('start：旧准备的迟到结果不污染取消后的新启动', async () => {
+    let resolveStart: (result: { runId: string; serial: string }) => void = () => {}
+    mocks.runnerInstance.start.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveStart = resolve
+        })
+    )
+    const { handlerFor } = await freshDomain()
+    const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { createdId: string }
+    const oldStart = handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), {
+      id: created.createdId
+    })
+    await vi.waitFor(() => expect(mocks.runnerInstance.start).toHaveBeenCalledTimes(1))
+    await handlerFor(IPC_CHANNELS.devicesCancelStart)(mainWindowEvent(), { id: created.createdId })
+    await handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id: created.createdId })
+    resolveStart({ runId: 'old-run', serial: 'emulator-5556' })
+    const snapshot = (await oldStart) as { devices: Array<{ runId?: string; serial?: string }> }
+    expect(snapshot.devices[0].runId).toBe('run-1')
+    expect(snapshot.devices[0].serial).toBe('emulator-5554')
+  })
+
+  it('start：准备完成前的 onRunning 已有代次，可直接进入运行态', async () => {
+    const { handlerFor, runnerEvents } = await freshDomain()
+    mocks.runnerInstance.start.mockImplementationOnce(async (id: string, runId: string) => {
+      runnerEvents().onRunning(id, runId, 'emulator-5554')
+      return { runId, serial: 'emulator-5554' }
+    })
+    const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { createdId: string }
+    const snapshot = (await handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), {
+      id: created.createdId
+    })) as { devices: Array<{ status: string; serial?: string }> }
+    expect(snapshot.devices[0].status).toBe('running')
+    expect(snapshot.devices[0].serial).toBe('emulator-5554')
+  })
+
   it('start：AVD 缺失 → 拒绝并标 avd-missing（步骤 6 前的最小存在性校验）', async () => {
     mocks.avdExists.mockResolvedValue(false)
     const { handlerFor } = await freshDomain()
@@ -739,6 +872,8 @@ describe('devices 域（启动/停止/取消状态机）', () => {
     }
     expect(list.devices[0].status).toBe('stopped')
     expect(list.devices[0].lastError?.code).toBe('start-failed')
+    expect(list.devices[0]).not.toHaveProperty('runId', expect.anything())
+    expect(list.devices[0]).not.toHaveProperty('startedAt', expect.anything())
   })
 
   it('onRunning：runId 匹配才转 running', async () => {
@@ -903,6 +1038,84 @@ describe('devices 域（启动/停止/取消状态机）', () => {
     runnerEvents().onRunning(created.createdId, 'run-1', 'emulator-5554')
     await handlerFor(IPC_CHANNELS.devicesCopySerial)(mainWindowEvent(), { id: created.createdId })
     expect(mocks.clipboardWriteText).toHaveBeenCalledWith('emulator-5554')
+  })
+})
+
+describe('启动前摄像头核验（review P3：文案不叠加建议从句）', () => {
+  /** 前置绑定 webcam0 的设备（normalizeAdvancedSettings 为透传 mock） */
+  const createWebcamDevice = async (
+    handlerFor: (channel: string) => (event: unknown, raw: unknown) => Promise<unknown>
+  ): Promise<string> => {
+    const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), {
+      ...validCreateInput,
+      advancedSettings: {
+        skinRef: null,
+        frontCamera: { mode: 'webcam', deviceId: 'webcam0' },
+        rearCamera: { mode: 'emulated', deviceId: null },
+        networkSpeed: null,
+        networkLatency: null,
+        orientation: null,
+        bootMode: 'cold',
+        internalStorageMiB: 6144,
+        cpuCores: 4,
+        graphics: 'auto',
+        ramMiB: 2048,
+        vmHeapMiB: 256,
+        preferredAbi: 'optimal'
+      }
+    })) as { createdId: string }
+    return created.createdId
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.readDeviceMetas.mockResolvedValue([])
+    mocks.writeDeviceMetas.mockResolvedValue(undefined)
+    mocks.isPackageNameInstalled.mockResolvedValue(true)
+    mocks.createAvd.mockResolvedValue('/avd')
+    mocks.avdExists.mockResolvedValue(true)
+    mocks.getMainWindow.mockReturnValue({ webContents: { id: 7, send: vi.fn() } })
+    mocks.wizardOwns.mockImplementation((sender: { id: number }) => sender.id === 9)
+    mocks.runnerInstance.start.mockResolvedValue({ runId: 'run-1', serial: 'emulator-5554' })
+    mocks.listWebcams.mockResolvedValue([{ id: 'webcam0', deviceLabel: 'host-a' }])
+  })
+
+  it('枚举失败且底层错误自带建议从句：不再叠加第二条建议', async () => {
+    mocks.listWebcams.mockRejectedValue(new Error('摄像头输出格式无法识别，请检查 emulator 版本'))
+    const { handlerFor } = await freshDomain()
+    const id = await createWebcamDevice(handlerFor)
+    await expect(handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id })).rejects.toThrow(
+      '启动前无法核验摄像头'
+    )
+    const list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: Array<{ lastError?: { code: string; message: string } }>
+    }
+    expect(list.devices[0].lastError?.code).toBe('webcam-missing')
+    expect(list.devices[0].lastError?.message).toBe(
+      '启动前无法核验摄像头：摄像头输出格式无法识别，请检查 emulator 版本'
+    )
+  })
+
+  it('枚举失败为裸错误：保留原错误并附行动建议', async () => {
+    mocks.listWebcams.mockRejectedValue(new Error('spawn ENOENT'))
+    const { handlerFor } = await freshDomain()
+    const id = await createWebcamDevice(handlerFor)
+    await expect(handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id })).rejects.toThrow(
+      '启动前无法核验摄像头：spawn ENOENT，请检查权限或改用模拟画面'
+    )
+  })
+
+  it('配置的宿主摄像头消失：原样透传，不进枚举失败分支', async () => {
+    mocks.listWebcams.mockResolvedValue([])
+    const { handlerFor } = await freshDomain()
+    const id = await createWebcamDevice(handlerFor)
+    await expect(handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id })).rejects.toThrow(
+      '宿主摄像头（webcam0）已不可用'
+    )
+    const list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: Array<{ lastError?: { code: string; message: string } }>
+    }
+    expect(list.devices[0].lastError?.message).not.toContain('启动前无法核验')
   })
 })
 

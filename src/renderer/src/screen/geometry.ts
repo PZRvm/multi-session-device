@@ -1,9 +1,9 @@
-import type { DeviceFrameKind } from '@shared/types'
+import type { DeviceFrameKind, DeviceSkinOrientation, DeviceSkinPresentation } from '@shared/types'
 
 /**
  * 等比居中布局（纯函数）：容器 W×H、视频 w×h 与外框类别 → 屏幕矩形 + 外框矩形。
  * 布局次序：先给外框和视口安全间距留空，再缩放视频；整只外框（含边距）居中，
- * 屏幕矩形 = 外框矩形按非对称边距内缩。屏幕自身无圆角无开孔（不裁切视频像素），
+ * 屏幕矩形 = 外框矩形按非对称边距内缩。通用外框不裁切视频；真实皮肤可由前景遮罩遮挡，
  * 外圆角只属于屏幕之外的外壳。
  */
 
@@ -42,6 +42,7 @@ export interface FrameRect {
 }
 
 export interface ScreenLayout {
+  skin?: { orientation: DeviceSkinOrientation; rotated: boolean; artScale: number }
   scale: number
   /** 屏幕尺寸（CSS 像素，与视频同比例） */
   width: number
@@ -51,6 +52,63 @@ export interface ScreenLayout {
   offsetY: number
   /** 外框矩形（装饰，pointer-events:none，不参与命中） */
   frame: FrameRect
+}
+
+/** 真实皮肤与视频共用同一屏幕矩形，输入映射不另算一套。 */
+export function computeSkinLayout(
+  containerWidth: number,
+  containerHeight: number,
+  videoWidth: number,
+  videoHeight: number,
+  skin: DeviceSkinPresentation
+): ScreenLayout | null {
+  if (
+    ![containerWidth, containerHeight, videoWidth, videoHeight].every(
+      (value) => Number.isFinite(value) && value > 0
+    )
+  )
+    return null
+  const candidates = [skin.portrait, skin.landscape].filter(
+    (entry): entry is DeviceSkinOrientation => entry !== null
+  )
+  const ratioMatches = (width: number, height: number): boolean =>
+    Math.abs(width / height / (videoWidth / videoHeight) - 1) < 0.01
+  const direct = candidates.find((entry) => ratioMatches(entry.screenWidth, entry.screenHeight))
+  const orientation =
+    direct ?? candidates.find((entry) => ratioMatches(entry.screenHeight, entry.screenWidth))
+  if (!orientation || orientation.screenX === null || orientation.screenY === null) return null
+  const rotated = direct === undefined
+  const frameWidth = rotated ? orientation.frameHeight : orientation.frameWidth
+  const frameHeight = rotated ? orientation.frameWidth : orientation.frameHeight
+  const screenX = rotated
+    ? orientation.frameHeight - orientation.screenY - orientation.screenHeight
+    : orientation.screenX
+  const screenY = rotated ? orientation.screenX : orientation.screenY
+  const screenWidth = rotated ? orientation.screenHeight : orientation.screenWidth
+  const screenHeight = rotated ? orientation.screenWidth : orientation.screenHeight
+  const availableWidth = containerWidth - SAFE_PADDING * 2
+  const availableHeight = containerHeight - SAFE_PADDING * 2
+  if (availableWidth <= 0 || availableHeight <= 0) return null
+  const artScale = Math.min(availableWidth / frameWidth, availableHeight / frameHeight)
+  const x = (containerWidth - frameWidth * artScale) / 2
+  const y = (containerHeight - frameHeight * artScale) / 2
+  return {
+    scale: (screenWidth * artScale) / videoWidth,
+    width: screenWidth * artScale,
+    height: screenHeight * artScale,
+    offsetX: x + screenX * artScale,
+    offsetY: y + screenY * artScale,
+    frame: {
+      x,
+      y,
+      width: frameWidth * artScale,
+      height: frameHeight * artScale,
+      radius: 0,
+      kind: 'generic',
+      metrics: { left: 0, right: 0, top: 0, bottom: 0, outerRadius: 0 }
+    },
+    skin: { orientation, rotated, artScale }
+  }
 }
 
 const scaledMetrics = (base: FrameMetrics, compact: boolean): FrameMetrics => {
@@ -139,7 +197,13 @@ export function toNormalized(
 ): { x: number; y: number } | null {
   const localX = clientX - containerOffsetX - layout.offsetX
   const localY = clientY - containerOffsetY - layout.offsetY
-  if (localX < 0 || localY < 0 || localX > layout.width || localY > layout.height) return null
+  if (
+    localX < -1e-7 ||
+    localY < -1e-7 ||
+    localX > layout.width + 1e-7 ||
+    localY > layout.height + 1e-7
+  )
+    return null
   return { x: clamp01(localX / layout.width), y: clamp01(localY / layout.height) }
 }
 
@@ -154,4 +218,23 @@ export function toNormalizedClamped(
   const localX = clientX - containerOffsetX - layout.offsetX
   const localY = clientY - containerOffsetY - layout.offsetY
   return { x: clamp01(localX / layout.width), y: clamp01(localY / layout.height) }
+}
+
+/** 前景与 display 共用方向，绕屏幕原点旋转后补齐边界偏移。 */
+export const skinMaskStyle = (
+  layout: ScreenLayout
+): { width: number; height: number; transform: string } => {
+  const turns = ((layout.skin?.orientation.rotation ?? 0) + (layout.skin?.rotated ? 1 : 0)) % 4
+  return {
+    width: turns % 2 ? layout.height : layout.width,
+    height: turns % 2 ? layout.width : layout.height,
+    transform:
+      turns === 1
+        ? `translateX(${layout.width}px) rotate(90deg)`
+        : turns === 2
+          ? `translate(${layout.width}px, ${layout.height}px) rotate(180deg)`
+          : turns === 3
+            ? `translateY(${layout.height}px) rotate(270deg)`
+            : 'none'
+  }
 }

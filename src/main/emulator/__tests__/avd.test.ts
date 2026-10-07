@@ -1,8 +1,8 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import { createAvd, deleteAvd, avdExists } from '../avd'
+import { createAvd, deleteAvd, avdExists, patchAvdConfig } from '../avd'
 
 const tmpDirs: string[] = []
 const makeTmp = async (): Promise<string> => {
@@ -100,5 +100,32 @@ describe('deleteAvd', () => {
   it('文件缺失按已删成功（force 语义）', async () => {
     const avdHome = await makeTmp()
     await expect(deleteAvd('mst-never-existed', dirs(avdHome))).resolves.toBeUndefined()
+  })
+})
+
+describe('patchAvdConfig（真实 tmp 目录读写）', () => {
+  it('白名单键全量重写、未知键与注释保留；同键多行全部重写（review P3：末次优先不被旧行盖掉）', async () => {
+    const avdHome = await makeTmp()
+    const configDir = join(avdHome, 'test.avd')
+    await mkdir(configDir, { recursive: true })
+    const original = [
+      '# 生成注释保留',
+      'hw.cpu.ncore=2',
+      'unknown.key=keep',
+      'hw.cpu.ncore=8',
+      ''
+    ].join('\n')
+    await writeFile(join(configDir, 'config.ini'), original, 'utf8')
+
+    await patchAvdConfig('test', dirs(avdHome), { 'hw.cpu.ncore': '6' })
+
+    const patched = await readFile(join(configDir, 'config.ini'), 'utf8')
+    // properties 末次读取优先：两处重复键都必须重写，只改首处会被旧行盖掉
+    expect(patched.split('\n').filter((line) => line.startsWith('hw.cpu.ncore='))).toEqual([
+      'hw.cpu.ncore=6',
+      'hw.cpu.ncore=6'
+    ])
+    expect(patched).toContain('unknown.key=keep')
+    expect(patched).toContain('# 生成注释保留')
   })
 })

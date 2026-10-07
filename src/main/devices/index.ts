@@ -22,7 +22,7 @@ import {
 } from '../emulator/catalog'
 import { assessImageCompatibility } from '@shared/compatibility'
 import {
-  buildCapabilities,
+  buildEnrichedCapabilities,
   normalizeAdvancedSettings,
   readEmulatorVersion,
   settingsToConfigPatch,
@@ -43,15 +43,16 @@ import {
   type AdbExecutable
 } from '../emulator/adb'
 import { PortAllocator, tcpProbe } from '../emulator/ports'
-import { createRunner } from '../emulator/runner'
+import { createRunner, StartCancelledError } from '../emulator/runner'
 import { getMainWindow } from '../window'
 import { wizardOwns } from '../window/wizard'
 import { importedSkinsRoot } from '../emulator/skins'
 import { listWebcams } from '../emulator/cameras'
-import { activePackageOp } from '../emulator/packageOps'
+import { activePackageOp, beginPackageCreation, endPackageCreation } from '../emulator/packageOps'
 
-/** skinRef → 皮肤目录（sdk:* 解析 SDK skins；其余查应用库）；未知返回 null */
-const skinDirectoryFor = (skinRef: string): string | null => {
+/** skinRef → 皮肤目录（sdk:* 解析 SDK skins；其余查应用库）。skinRef 已按能力
+ * 枚举（skinIds 白名单）归一化校验，id 来源受信扫描（uuid/目录名），无逃逸面 */
+const skinDirectoryFor = (skinRef: string): string => {
   if (skinRef.startsWith('sdk:')) {
     return join(sdkRoot(), 'skins', skinRef.slice(4))
   }
@@ -182,6 +183,12 @@ export function attachDeviceStreamBridge(bridge: typeof streamBridge): void {
  * 引用查询（镜像删除守卫用）：按 imagePackageName 列设备名。devices 内存数组
  * 含 creating 事务行——创建中的引用同样拦住删除（plan 2026-10-06-image-uninstall）。
  */
+/** 主窗皮肤读取只从已保存设备取引用；SDK 域经注入消费。 */
+export const savedDeviceSkinRef = async (id: string): Promise<string | null> => {
+  await ensureLoaded()
+  return requireDevice(id).advancedSettings?.skinRef ?? null
+}
+
 export const listDeviceNamesReferencing = (packageName: string): string[] =>
   devices.filter((device) => device.imagePackageName === packageName).map((device) => device.name)
 
@@ -363,7 +370,9 @@ const startDevice = async (id: string): Promise<DeviceSnapshot> => {
     device.advancedSettings?.rearCamera.mode === 'webcam'
   if (webcams === true && device.advancedSettings !== null) {
     try {
-      const available = new Set((await listWebcams(sdkRoot())).map((entry) => entry.id))
+      const available = new Map(
+        (await listWebcams(sdkRoot())).map((entry) => [entry.id, entry.deviceLabel])
+      )
       const missing: string[] = []
       for (const camera of [
         device.advancedSettings.frontCamera,
@@ -372,7 +381,9 @@ const startDevice = async (id: string): Promise<DeviceSnapshot> => {
         if (
           camera.mode === 'webcam' &&
           camera.deviceId !== null &&
-          !available.has(camera.deviceId)
+          (!available.has(camera.deviceId) ||
+            (camera.hostDeviceId !== undefined &&
+              available.get(camera.deviceId) !== camera.hostDeviceId))
         ) {
           missing.push(camera.deviceId)
         }
@@ -387,26 +398,43 @@ const startDevice = async (id: string): Promise<DeviceSnapshot> => {
       }
     } catch (error) {
       if (error instanceof Error && error.message.includes('不可用')) throw error
-      // 枚举本身失败不阻断启动（emulator 启动时会给出自己的错误）
+      // 底层错误自带建议从句（如「请检查 emulator 版本」）时不再叠加第二条建议
+      const cause = messageOf(error)
+      device.lastError = {
+        code: 'webcam-missing',
+        message: cause.includes('请')
+          ? `启动前无法核验摄像头：${cause}`
+          : `启动前无法核验摄像头：${cause}，请检查权限或改用模拟画面`
+      }
+      broadcastChanged()
+      throw new Error(device.lastError.message)
     }
   }
   device.status = 'starting'
   device.lastError = undefined
   device.startedAt = Date.now()
+  const attemptId = randomUUID()
+  device.runId = attemptId
   broadcastChanged()
   try {
-    const { runId, serial } = await runner.start(id)
-    const target = requireDevice(id)
-    target.runId = runId
-    if (target.status === 'starting') target.serial = serial
-    broadcastChanged()
-  } catch (error) {
-    const target = requireDevice(id)
-    if (target.status === 'starting') {
-      target.status = 'stopped'
-      target.lastError = { code: 'start-failed', message: messageOf(error) }
+    const { runId, serial } = await runner.start(id, attemptId)
+    const target = devices.find((entry) => entry.id === id)
+    if (target?.runId === attemptId && target.status === 'starting') {
+      target.runId = runId
+      target.serial = serial
+      broadcastChanged()
     }
-    broadcastChanged()
+  } catch (error) {
+    if (error instanceof StartCancelledError) return snapshotNow()
+    const target = devices.find((entry) => entry.id === id)
+    if (target?.runId === attemptId && target.status === 'starting') {
+      target.status = 'stopped'
+      target.serial = undefined
+      target.runId = undefined
+      target.startedAt = undefined
+      target.lastError = { code: 'start-failed', message: messageOf(error) }
+      broadcastChanged()
+    }
     throw error
   }
   return snapshotNow()
@@ -504,6 +532,7 @@ const cancelStartDevice = async (id: string): Promise<DeviceSnapshot> => {
     target.status = 'stopped'
     target.serial = undefined
     target.runId = undefined
+    target.startedAt = undefined
     broadcastChanged()
     streamBridge.stopped?.(target.id)
   }
@@ -563,6 +592,21 @@ const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult>
         : `镜像正在下载（${packageName}），下载完成后再创建设备`
     )
   }
+  // 创建意向全程持有（review P2-2 残窗收口）：本地扫描/画像重查的秒级 await
+  // 间隙里，同包下载/卸载会被 beginPackageOp 与卸载守卫拒绝——设备临时行此
+  // 时尚未入列，引用查询看不到它
+  beginPackageCreation(packageName)
+  try {
+    return await createDeviceTransaction(raw, packageName)
+  } finally {
+    endPackageCreation(packageName)
+  }
+}
+
+const createDeviceTransaction = async (
+  raw: CreateDeviceInput,
+  packageName: string
+): Promise<CreateDeviceResult> => {
   // 创建时重新核验（plan 设计 2：拒绝陈旧选择）——镜像完整安装 + 画像仍可创建 + 兼容性
   const local = await scanLocalImages(sdkRoot())
   const imageRecord = local.get(packageName)
@@ -593,13 +637,18 @@ const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult>
   if (verdict.status !== 'supported') {
     throw new Error(`镜像与画像不兼容：${verdict.reasons.join('；')}`)
   }
-  // 设置归一化（能力上下文 = 当前画像×镜像×emulator）：字段错误拒绝创建，
-  // Quick 未开放回落 Cold——伪造入参不改变开放门槛
-  const capabilities = buildCapabilities({
-    profile,
-    imagePackageName: packageName,
-    emulatorVersion: await readEmulatorVersion(sdkRoot())
-  })
+  // 设置归一化（能力上下文 = 当前画像×镜像×emulator，经唯一入口补齐皮肤/摄像头
+  // 枚举——review P1：与向导能力查询同源，UI 放行的设置创建侧同样放行）：
+  // 字段错误拒绝创建，Quick 未开放回落 Cold——伪造入参不改变开放门槛
+  const capabilities = await buildEnrichedCapabilities(
+    {
+      profile,
+      imagePackageName: packageName,
+      emulatorVersion: await readEmulatorVersion(sdkRoot())
+    },
+    sdkRoot(),
+    app.getPath('userData')
+  )
   const normalized = normalizeAdvancedSettings(
     (raw.advancedSettings as CreateDeviceInput['advancedSettings']) ?? null,
     capabilities
@@ -668,12 +717,8 @@ const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult>
     if (advancedSettings !== null) {
       const patch = settingsToConfigPatch(advancedSettings)
       // 导入/下载皮肤：config 写绝对 skin.path（应用自有目录，随库稳定）
-      if (
-        advancedSettings.skinRef !== null &&
-        !advancedSettings.skinRef.startsWith('sdk:') &&
-        skinDirectoryFor(advancedSettings.skinRef) !== null
-      ) {
-        patch['skin.path'] = skinDirectoryFor(advancedSettings.skinRef) as string
+      if (advancedSettings.skinRef !== null && !advancedSettings.skinRef.startsWith('sdk:')) {
+        patch['skin.path'] = skinDirectoryFor(advancedSettings.skinRef)
       }
       await patchAvdConfig(device.id, avdDirs(), patch)
     }

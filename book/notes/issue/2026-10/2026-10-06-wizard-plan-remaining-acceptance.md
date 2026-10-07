@@ -1,5 +1,5 @@
 ---
-description: 模拟器向导 plan（2026-10-05-emulator-wizard）批次 1-9 交付后的遗留清单——皮肤独立下载源核实无果、投屏显示挂通用外框几何、Quick 门槛与六类真机验收未跑
+description: 向导扩展验收遗留：官方皮肤获取与投屏已接通，Quick 稳定性、摄像头取景、六类设备及部分真机验证仍未完成
 tags: [wizard, emulator, skins, quick-boot, acceptance]
 ---
 
@@ -12,3 +12,11 @@ tags: [wizard, emulator, skins, quick-boot, acceptance]
   3. **Quick Boot 门槛**：实现路径（快照就绪生命周期、首启/失效冷启动 argv、正常停止核验）已交付且选择器禁用中；「连续 10 次 + 双机各 5 次」稳定性门槛未跑，`quickBootAvailable` 保持 false。
   4. **六类真机验收**：Wear/TV/Desktop/Automotive 的真实创建/boot/投屏/输入验证未做（desktop 无官方镜像源，能力判 unknown 已如实展示）；AVD 创建 + config patch + 回滚已真机冒烟通过（pixel_7 × android-36.1，六键生效、133 未知键保留）。
 - **建议方向**: ①通用外框合并后接皮肤显示与输入（batch 7 收尾）；②跑 Quick 门槛脚本后开放选择器；③六类逐类真机验收（每类至少一个 arm64 镜像）后按结果开放/标注；④Samsung 或其他 OEM 源核实到固定包 URL 后登记下载源。
+
+## 2026-10-08 阶段 4 收尾核对
+
+前述四项为 2026-10-06 的发现记录。当前第 1 项的固定官方源已落地：58 个目录白名单、精确画像匹配、逐文件 Git blob 核验与缓存；OEM/别名/折叠扩展仍未覆盖。第 2 项已接实际皮肤位图和输入共用几何，按用户约定允许前景遮挡，见 [集成 plan](../../../plans/2026-10-07-skin-camera-integration.md) 与 [遮挡 plan](../../../plans/2026-10-07-skin-foreground-occlusion.md)。
+
+第 3 项 Quick 门槛、第 4 项六类完整验收仍未完成；Android 摄像头取景与签名版、能力时延六次测量、解压瞬间取消也继续按 [验收 plan](../../../plans/2026-10-06-real-machine-verification.md) 跟踪。摄像头解析与本应用权限入口已实现，不能再将旧的枚举为空结论当作当前唯一阻碍。
+
+基础阶段收尾只确认五个正式步骤和各自 completed plan。向导扩展 plan、验收 plan 保持 in-progress，不以代码合入 dev 或局部冒烟代替完整验收。直连包 package.xml P1 仍见 [验收发现](2026-10-06-real-machine-acceptance-findings.md)。

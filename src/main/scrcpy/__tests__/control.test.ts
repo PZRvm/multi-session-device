@@ -1,6 +1,143 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest'
-import { BUTTON_KEYCODE_MAP, chunkUtf8, KEYCODE_MAP, validateInputRequest } from '../control'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  AndroidKeyCode,
+  AndroidKeyEventAction,
+  AndroidMotionEventAction,
+  type ScrcpyControlMessageWriter
+} from '@yume-chan/scrcpy'
+import type { ScreenInputRequest } from '@shared/types'
+import {
+  BUTTON_KEYCODE_MAP,
+  chunkUtf8,
+  injectInput,
+  KEYCODE_MAP,
+  validateInputRequest,
+  type InjectContext
+} from '../control'
+
+describe('手动旋转保持方向', () => {
+  const request: ScreenInputRequest = {
+    deviceId: 'd1',
+    runId: 'r1',
+    streamId: 's1',
+    generation: 1,
+    viewToken: 'vt',
+    width: 1080,
+    height: 2400,
+    input: { kind: 'rotate' }
+  }
+
+  it('先释放触点，锁定完成后才发送一次旋转', async () => {
+    const calls: string[] = []
+    let unlock!: () => void
+    const locked = new Promise<void>((resolve) => {
+      unlock = resolve
+    })
+    const injectTouch = vi.fn(async () => {
+      calls.push('up')
+    })
+    const rotateDevice = vi.fn(async () => {
+      calls.push('rotate')
+    })
+    const injectKeyCode = vi.fn(async () => {
+      calls.push('key-up')
+    })
+    const context: InjectContext = {
+      writer: { injectTouch, injectKeyCode, rotateDevice } as unknown as ScrcpyControlMessageWriter,
+      width: 1080,
+      height: 2400,
+      pressedPointers: new Set([0, 1]),
+      pressedKeys: new Set([AndroidKeyCode.ArrowDown]),
+      clipboardPaste: vi.fn(),
+      lockRotation: vi.fn(async () => {
+        calls.push('lock')
+        await locked
+      })
+    }
+    const pending = injectInput(request, context)
+    await vi.waitFor(() => expect(context.lockRotation).toHaveBeenCalledOnce())
+    expect(calls).toEqual(['up', 'up', 'key-up', 'lock'])
+    expect(rotateDevice).not.toHaveBeenCalled()
+    expect(context.pressedPointers.size).toBe(0)
+    expect(context.pressedKeys.size).toBe(0)
+    expect(injectKeyCode).toHaveBeenCalledWith({
+      action: AndroidKeyEventAction.Up,
+      keyCode: AndroidKeyCode.ArrowDown,
+      repeat: 0,
+      metaState: 0
+    })
+    expect(injectTouch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: AndroidMotionEventAction.Up,
+        pressure: 0,
+        videoWidth: 1080,
+        videoHeight: 2400
+      })
+    )
+    unlock()
+    await pending
+    expect(calls).toEqual(['up', 'up', 'key-up', 'lock', 'rotate'])
+    expect(rotateDevice).toHaveBeenCalledOnce()
+  })
+
+  it('锁定失败时拒绝请求，不发送会被自动旋转覆盖的命令', async () => {
+    const rotateDevice = vi.fn()
+    const injectKeyCode = vi.fn(async () => {})
+    const context: InjectContext = {
+      writer: { injectKeyCode, rotateDevice } as unknown as ScrcpyControlMessageWriter,
+      width: 1080,
+      height: 2400,
+      pressedPointers: new Set(),
+      pressedKeys: new Set([AndroidKeyCode.Backspace]),
+      clipboardPaste: vi.fn(),
+      lockRotation: vi.fn().mockRejectedValue(new Error('lock failed'))
+    }
+    await expect(injectInput(request, context)).rejects.toThrow('lock failed')
+    expect(rotateDevice).not.toHaveBeenCalled()
+    expect(context.pressedKeys.size).toBe(0)
+    expect(injectKeyCode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: AndroidKeyEventAction.Up,
+        keyCode: AndroidKeyCode.Backspace
+      })
+    )
+  })
+
+  it('登记键盘与工具条按键，release-all 释放已按下键，配对 Up 清除登记', async () => {
+    const injectKeyCode = vi.fn<(message: { action: AndroidKeyEventAction }) => Promise<void>>(
+      async () => {}
+    )
+    const context: InjectContext = {
+      writer: { injectKeyCode } as unknown as ScrcpyControlMessageWriter,
+      width: 1080,
+      height: 2400,
+      pressedPointers: new Set(),
+      pressedKeys: new Set(),
+      clipboardPaste: vi.fn(),
+      lockRotation: vi.fn()
+    }
+    await injectInput({ ...request, input: { kind: 'keycode', key: 'enter', down: true } }, context)
+    expect(context.pressedKeys).toEqual(new Set([AndroidKeyCode.Enter]))
+    await injectInput({ ...request, input: { kind: 'release-all' } }, context)
+    expect(injectKeyCode.mock.calls.map(([message]) => message.action)).toEqual([
+      AndroidKeyEventAction.Down,
+      AndroidKeyEventAction.Up
+    ])
+    expect(context.pressedKeys.size).toBe(0)
+    await injectInput({ ...request, input: { kind: 'keycode', key: 'enter', down: true } }, context)
+    await injectInput(
+      { ...request, input: { kind: 'keycode', key: 'enter', down: false } },
+      context
+    )
+    expect(context.pressedKeys.size).toBe(0)
+    injectKeyCode.mockImplementationOnce(async () => {
+      expect(context.pressedKeys).toEqual(new Set([AndroidKeyCode.AndroidHome]))
+    })
+    await injectInput({ ...request, input: { kind: 'button', button: 'home' } }, context)
+    expect(context.pressedKeys.size).toBe(0)
+  })
+})
 
 describe('chunkUtf8（injectText 300 字节预算）', () => {
   it('短文本不分段', () => {

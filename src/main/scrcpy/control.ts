@@ -2,7 +2,6 @@ import {
   AndroidKeyCode,
   AndroidKeyEventAction,
   AndroidMotionEventAction,
-  AndroidScreenPowerMode,
   type ScrcpyControlMessageWriter
 } from '@yume-chan/scrcpy'
 import type { ScreenInputRequest, ScreenKeycodeName, ScreenToolbarButton } from '@shared/types'
@@ -28,7 +27,7 @@ export const KEYCODE_MAP: Record<ScreenKeycodeName, AndroidKeyCode> = {
   escape: AndroidKeyCode.Escape
 }
 
-export const BUTTON_KEYCODE_MAP: Record<Exclude<ScreenToolbarButton, 'power'>, AndroidKeyCode> = {
+export const BUTTON_KEYCODE_MAP: Record<ScreenToolbarButton, AndroidKeyCode> = {
   back: AndroidKeyCode.AndroidBack,
   home: AndroidKeyCode.AndroidHome,
   overview: AndroidKeyCode.AndroidAppSwitch,
@@ -142,9 +141,47 @@ export interface InjectContext {
   height: number
   /** 会话登记的按下指针（0/1）——rotate/release-all 与失焦兜底释放用 */
   pressedPointers: Set<number>
-  /** 电源键切换的屏状态（会话层维护，可能与设备真实状态漂移） */
-  screenOn: boolean
+  /** 已接受的按下键；暂停时由 main 配对释放，不依赖 renderer 补发 Up */
+  pressedKeys: Set<AndroidKeyCode>
   clipboardPaste: (content: string) => Promise<void>
+  /** 手动旋转前锁定自动旋转，避免传感器立即恢复旧方向 */
+  lockRotation: () => Promise<void>
+}
+
+async function injectKey(
+  context: InjectContext,
+  keyCode: AndroidKeyCode,
+  down: boolean
+): Promise<void> {
+  // 写入前登记，旋转开始时也能看到尚在等待写入的 Down。
+  if (down) context.pressedKeys.add(keyCode)
+  else context.pressedKeys.delete(keyCode)
+  await context.writer.injectKeyCode({
+    action: down ? AndroidKeyEventAction.Down : AndroidKeyEventAction.Up,
+    keyCode,
+    repeat: 0,
+    metaState: 0
+  })
+}
+
+async function releaseInput(context: InjectContext): Promise<void> {
+  for (const pointerId of [...context.pressedPointers]) {
+    context.pressedPointers.delete(pointerId)
+    await context.writer.injectTouch({
+      action: AndroidMotionEventAction.Up,
+      pointerId: BigInt(pointerId),
+      pointerX: 0,
+      pointerY: 0,
+      videoWidth: context.width,
+      videoHeight: context.height,
+      pressure: 0,
+      actionButton: 0,
+      buttons: 0
+    })
+  }
+  for (const keyCode of [...context.pressedKeys]) {
+    await injectKey(context, keyCode, false)
+  }
 }
 
 /** 单条输入 → scrcpy 控制消息（坐标像素夹取在调用方保证域内） */
@@ -177,75 +214,27 @@ export async function injectInput(
       return
     }
     case 'button': {
-      if (input.button === 'power') {
-        // 电源键切换设备屏状态（setScreenPowerMode 语义），与关闭画布解码无关
-        await writer.setScreenPowerMode(
-          context.screenOn ? AndroidScreenPowerMode.Off : AndroidScreenPowerMode.Normal
-        )
-        context.screenOn = !context.screenOn
-        return
-      }
       const keycode = BUTTON_KEYCODE_MAP[input.button]
-      await writer.injectKeyCode({
-        action: AndroidKeyEventAction.Down,
-        keyCode: keycode,
-        repeat: 0,
-        metaState: 0
-      })
-      await writer.injectKeyCode({
-        action: AndroidKeyEventAction.Up,
-        keyCode: keycode,
-        repeat: 0,
-        metaState: 0
-      })
+      await injectKey(context, keycode, true)
+      await injectKey(context, keycode, false)
       return
     }
     case 'keycode': {
-      await writer.injectKeyCode({
-        action: input.down ? AndroidKeyEventAction.Down : AndroidKeyEventAction.Up,
-        keyCode: KEYCODE_MAP[input.key],
-        repeat: 0,
-        metaState: 0
-      })
+      await injectKey(context, KEYCODE_MAP[input.key], input.down)
       return
     }
     case 'rotate': {
-      // 旋转前释放所有触点/按键，等待新尺寸再允许输入（renderer 侧同样先清手势）
-      for (const pointerId of [...context.pressedPointers]) {
-        context.pressedPointers.delete(pointerId)
-        await writer.injectTouch({
-          action: AndroidMotionEventAction.Up,
-          pointerId: BigInt(pointerId),
-          pointerX: 0,
-          pointerY: 0,
-          videoWidth: width,
-          videoHeight: height,
-          pressure: 0,
-          actionButton: 0,
-          buttons: 0
-        })
-      }
+      // 会话已关闭外部输入入口；内部释放旧触点和按键后再锁定方向。
+      await releaseInput(context)
+      await context.lockRotation()
       await writer.rotateDevice()
       return
     }
     case 'release-all': {
-      for (const pointerId of [...context.pressedPointers]) {
-        context.pressedPointers.delete(pointerId)
-        await writer.injectTouch({
-          action: AndroidMotionEventAction.Up,
-          pointerId: BigInt(pointerId),
-          pointerX: 0,
-          pointerY: 0,
-          videoWidth: width,
-          videoHeight: height,
-          pressure: 0,
-          actionButton: 0,
-          buttons: 0
-        })
-      }
+      await releaseInput(context)
       return
     }
   }
 }
 
-// clipboardPaste 由会话层实现（setClipboard + 设备 ACK 等待）；屏状态随电源键切换
+// clipboardPaste 由会话层实现（setClipboard + 设备 ACK 等待）

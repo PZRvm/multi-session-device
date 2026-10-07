@@ -363,6 +363,8 @@ const Scroller = styled.div`
   background: var(--board-bg);
   display: grid;
   grid-template-columns: ${GRID_COLUMNS};
+  /* 行数少时（wear 推荐视图仅 3 行）阻止默认 stretch 把表头与行均匀拉高填满容器 */
+  align-content: start;
 `
 
 const HeadRow = styled.div`

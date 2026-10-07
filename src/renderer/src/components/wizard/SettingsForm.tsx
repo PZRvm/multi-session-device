@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import styled from 'styled-components'
 import type {
   DeviceAdvancedSettings,
@@ -14,7 +13,7 @@ import { NETWORK_SPEED_LABELS, NETWORK_DELAY_LABELS, GPU_LABELS } from './labels
  * 值变更走 onChange（整对象上抛）；校验错误定位到字段（红边 + 文案）。
  */
 
-/** 摄像头选择：none/emulated/virtualScene + 枚举到的宿主 webcam（带权限归属说明） */
+/** 摄像头选择：none/emulated/virtualScene + 枚举到的宿主 webcam（带权限归属说明）；尊重字段禁用态（review P1） */
 const cameraSelect = (
   key: 'frontCamera' | 'rearCamera',
   label: string,
@@ -23,24 +22,41 @@ const cameraSelect = (
   capabilities: WizardCapabilities
 ): React.JSX.Element => {
   const current = value[key]
+  const disabledReason = capabilities.fields[key]?.disabledReason ?? null
+  const disabled = disabledReason !== null
   const options: Array<{ value: string; label: string }> = [
     { value: 'none', label: '关闭' },
     { value: 'emulated', label: '模拟画面' },
     { value: 'virtualScene', label: '虚拟场景' },
-    ...capabilities.webcamDeviceIds.map((id) => ({ value: id, label: `真实摄像头 ${id}` }))
+    ...capabilities.webcamDeviceIds.map((id) => ({
+      value: id,
+      label:
+        capabilities.cameraSnapshot?.devices.find((entry) => entry.id === id)?.name ??
+        `真实摄像头 ${id}`
+    }))
   ]
   return (
-    <Field>
+    <Field disabled={disabled}>
       <Label htmlFor={`setting-${key}`}>{label}</Label>
       <Select
         id={`setting-${key}`}
+        disabled={disabled}
         value={current.mode === 'webcam' ? (current.deviceId ?? '') : current.mode}
         onChange={(event) => {
           const picked = event.target.value
           if (picked === 'none' || picked === 'emulated' || picked === 'virtualScene') {
             onChange({ ...value, [key]: { mode: picked, deviceId: null } })
           } else {
-            onChange({ ...value, [key]: { mode: 'webcam', deviceId: picked } })
+            onChange({
+              ...value,
+              [key]: {
+                mode: 'webcam',
+                deviceId: picked,
+                hostDeviceId: capabilities.cameraSnapshot?.devices.find(
+                  (entry) => entry.id === picked
+                )?.deviceLabel
+              }
+            })
           }
         }}
       >
@@ -54,9 +70,11 @@ const cameraSelect = (
           ))}
       </Select>
       <Hint>
-        {capabilities.webcamDeviceIds.length === 0
-          ? '未枚举到宿主摄像头（或枚举失败）；macOS 授权归属模拟器进程'
-          : '真实摄像头首次使用时 macOS 会向模拟器进程请求授权；同一摄像头不能同时配给两台设备'}
+        {disabled
+          ? disabledReason
+          : capabilities.webcamDeviceIds.length === 0
+            ? (capabilities.cameraSnapshot?.error ?? '未枚举到宿主摄像头，请刷新或检查权限')
+            : '同一摄像头不能同时配给两台设备；macOS 权限归属本应用'}
       </Hint>
     </Field>
   )
@@ -73,6 +91,10 @@ export interface SettingsFormProps {
   onImportSkin: () => Promise<void>
   onDownloadSkin: (skinName: string) => Promise<void>
   skinDownloading: string | null
+  skinError?: string | null
+  cameraBusy?: boolean
+  cameraError?: string | null
+  onCameraAction?: (action: 'request' | 'refresh' | 'settings') => Promise<void>
 }
 
 const SettingsForm = ({
@@ -83,9 +105,12 @@ const SettingsForm = ({
   skins,
   onImportSkin,
   onDownloadSkin,
-  skinDownloading
+  skinDownloading,
+  skinError,
+  cameraBusy,
+  cameraError,
+  onCameraAction
 }: SettingsFormProps): React.JSX.Element => {
-  const [downloadName, setDownloadName] = useState('')
   const field = (key: string): SettingFieldCapability | null => capabilities.fields[key] ?? null
   const disabledReasonOf = (key: string): string | null => field(key)?.disabledReason ?? null
   const num = (
@@ -149,7 +174,7 @@ const SettingsForm = ({
             onPick((event.target.value === '' ? null : event.target.value) as T | null)
           }}
         >
-          <option value="">跟随默认</option>
+          <option value="">{key === 'skinRef' ? '通用外框' : '跟随默认'}</option>
           {options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -169,38 +194,77 @@ const SettingsForm = ({
           'skinRef',
           '机型皮肤',
           value.skinRef,
-          skins.map((skin) => ({ value: skin.skinRef, label: `${skin.name}（${skin.source}）` })),
+          skins.map((skin) => ({
+            value: skin.skinRef,
+            label: `${skin.name}（${({ sdk: '本机 SDK', imported: '已导入', downloaded: '官方缓存' } as Record<string, string>)[skin.source] ?? skin.source}）`
+          })),
           (next) => onChange({ ...value, skinRef: next })
         )}
         <SkinActions>
-          <SkinButton type="button" onClick={() => void onImportSkin()}>
-            导入压缩包…
-          </SkinButton>
-          <SkinInput
-            type="text"
-            value={downloadName}
-            placeholder="官方皮肤名（如 pixel_7）"
-            aria-label="官方皮肤名"
-            onChange={(event) => setDownloadName(event.target.value)}
-          />
           <SkinButton
             type="button"
-            disabled={skinDownloading !== null || downloadName.trim().length === 0}
-            onClick={() => void onDownloadSkin(downloadName.trim())}
+            disabled={skinDownloading !== null}
+            onClick={() => void onImportSkin()}
           >
-            {skinDownloading !== null ? `${skinDownloading.slice(0, 12)}…下载中` : '下载官方皮肤'}
+            导入压缩包…
           </SkinButton>
+          {capabilities.recommendedSkin ? (
+            <SkinButton
+              type="button"
+              disabled={skinDownloading !== null}
+              onClick={() => void onDownloadSkin(capabilities.recommendedSkin!.name)}
+            >
+              {skinDownloading !== null
+                ? '正在获取…'
+                : `获取 ${capabilities.recommendedSkin.name} 官方皮肤`}
+            </SkinButton>
+          ) : null}
         </SkinActions>
         <Hint>
-          {disabledReasonOf('skinRef') ??
-            '未选择时使用通用外框。官方独立下载源核实中（机型皮肤当前随 SDK emulator 包分发），可导入本地压缩包或使用 SDK 自带皮肤。'}
+          {capabilities.recommendedSkin
+            ? '已缓存的对应机型皮肤默认选中；未选择时使用通用外框。'
+            : '该机型暂无已核实的官方皮肤；可使用通用外框或导入压缩包。'}
         </Hint>
+        {skinError ? <FieldError role="alert">{skinError}</FieldError> : null}
       </Group>
 
       <Group>
         <GroupTitle>摄像头</GroupTitle>
         {cameraSelect('frontCamera', '前置摄像头', value, onChange, capabilities)}
         {cameraSelect('rearCamera', '后置摄像头', value, onChange, capabilities)}
+        {onCameraAction ? (
+          <SkinActions>
+            {capabilities.cameraSnapshot?.permission === 'not-determined' ? (
+              <SkinButton
+                disabled={cameraBusy}
+                type="button"
+                onClick={() => void onCameraAction('request')}
+              >
+                允许使用摄像头
+              </SkinButton>
+            ) : null}
+            {['denied', 'restricted'].includes(capabilities.cameraSnapshot?.permission ?? '') ? (
+              <SkinButton
+                disabled={cameraBusy}
+                type="button"
+                onClick={() => void onCameraAction('settings')}
+              >
+                打开摄像头权限设置
+              </SkinButton>
+            ) : null}
+            <SkinButton
+              disabled={cameraBusy}
+              type="button"
+              onClick={() => void onCameraAction('refresh')}
+            >
+              {cameraBusy ? '正在检查…' : '刷新摄像头'}
+            </SkinButton>
+          </SkinActions>
+        ) : null}
+        {['denied', 'restricted'].includes(capabilities.cameraSnapshot?.permission ?? '') ? (
+          <Hint>系统未允许本应用使用摄像头。修改系统权限后请重启应用。</Hint>
+        ) : null}
+        {cameraError ? <FieldError role="alert">{cameraError}</FieldError> : null}
       </Group>
 
       <Group>
@@ -442,21 +506,6 @@ const SkinButton = styled.button`
     cursor: default;
     opacity: 0.6;
   }
-
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
-`
-
-const SkinInput = styled.input`
-  width: 180px;
-  padding: 5px 8px;
-  border: 1px solid var(--board-hairline);
-  border-radius: 4px;
-  background: var(--board-bg);
-  color: var(--board-ink);
-  font-size: 11px;
 
   &:focus-visible {
     outline: 2px solid var(--accent);

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { serialForPort, tcpProbe, type PortAllocator } from './ports'
 import { listAdbSerials, runAdb, scrubAdbEnv } from './adb'
+import { awaitWithAbort } from './abort'
 
 // 容错上限（非冷启动验收耗时）：PoC 实测无头冷启动 ~24s，超时裕量留给慢机器
 export const BOOT_TIMEOUT_MS = 240_000
@@ -12,6 +13,21 @@ export const KILL_GRACE_MS = 5_000
 const STDERR_TAIL_BYTES = 4096
 
 export type RunnerPhase = 'starting' | 'running' | 'stopping'
+
+type StartResult = { runId: string; serial: string }
+
+interface StartPreparation {
+  phase: 'starting' | 'stopping'
+  abort: AbortController
+  result: Promise<StartResult>
+}
+
+/** 主动取消是正常生命周期结果，devices 层无需弹启动失败。 */
+export class StartCancelledError extends Error {
+  constructor() {
+    super('启动已取消')
+  }
+}
 
 export interface UnexpectedExitInfo {
   code: number
@@ -110,6 +126,7 @@ class EarlyExitError extends Error {
 /** emulator 进程池：一次启动一个代次（runId），取消/迟到回调用它防串台 */
 export class EmulatorRunner {
   readonly #entries = new Map<string, RunnerEntry>()
+  readonly #preparing = new Map<string, StartPreparation>()
   #accepting = true
 
   constructor(private readonly deps: RunnerDeps) {}
@@ -118,43 +135,74 @@ export class EmulatorRunner {
    * 接纳一次启动：登记代次并异步 boot，返回不等待 boot 完成。
    * 已在 starting/running 时幂等返回现态；stopping 拒绝（等停止收口）。
    */
-  async start(id: string): Promise<{ runId: string; serial: string }> {
+  async start(id: string, runId = randomUUID()): Promise<StartResult> {
     if (!this.#accepting) throw new Error('应用退出清理中，暂停启动')
+    const preparing = this.#preparing.get(id)
+    if (preparing?.phase === 'starting') return preparing.result
+    if (preparing) throw new Error('上一次停止尚未完成，稍后再启动')
     const existing = this.#entries.get(id)
     if (existing && existing.phase !== 'stopping') {
       return { runId: existing.runId, serial: existing.serial }
     }
     if (existing) throw new Error('上一次停止尚未完成，稍后再启动')
 
-    await this.deps.ensureAdbServer()
-    const port = await this.deps.ports.acquire(id)
-    const serial = serialForPort(port)
-    // 残留实例显式拦截：占 AVD 锁的旧实例会让新实例静默 exit 1，事后无法排查
-    const serials = await this.deps.adbSerials()
-    if (serials.has(serial)) {
-      this.deps.ports.release(id)
-      throw new Error(`${serial} 已被占用（可能是残留的模拟器进程），请先停止该实例再启动`)
-    }
-    const runId = randomUUID()
-    const entry: RunnerEntry = {
-      id,
-      runId,
-      port,
-      serial,
-      child: null as unknown as ChildProcess,
+    const preparation: StartPreparation = {
       phase: 'starting',
       abort: new AbortController(),
-      stderrChunks: [],
-      cleanup: null,
-      closed: Promise.resolve(null)
+      result: Promise.resolve().then(() => this.#prepare(id, runId, preparation))
     }
-    this.#entries.set(id, entry)
-    void this.#runBoot(entry)
-    return { runId, serial }
+    this.#preparing.set(id, preparation)
+    return preparation.result
+  }
+
+  async #prepare(id: string, runId: string, preparation: StartPreparation): Promise<StartResult> {
+    const signal = preparation.abort.signal
+    try {
+      await awaitWithAbort(() => this.deps.ensureAdbServer(), signal)
+      const port = await this.deps.ports.acquire(id, signal)
+      const serial = serialForPort(port)
+      // 残留实例显式拦截：占 AVD 锁的旧实例会让新实例静默 exit 1，事后无法排查
+      const serials = await awaitWithAbort(() => this.deps.adbSerials(), signal)
+      signal.throwIfAborted()
+      if (serials.has(serial)) {
+        throw new Error(`${serial} 已被占用（可能是残留的模拟器进程），请先停止该实例再启动`)
+      }
+      const entry: RunnerEntry = {
+        id,
+        runId,
+        port,
+        serial,
+        child: null as unknown as ChildProcess,
+        phase: 'starting',
+        abort: preparation.abort,
+        stderrChunks: [],
+        cleanup: null,
+        closed: Promise.resolve(null)
+      }
+      this.#entries.set(id, entry)
+      this.#preparing.delete(id)
+      void this.#runBoot(entry)
+      return { runId, serial }
+    } catch (error) {
+      if (signal.aborted) throw signal.reason
+      throw error
+    } finally {
+      if (this.#preparing.get(id) === preparation) {
+        this.#preparing.delete(id)
+        this.deps.ports.release(id)
+      }
+    }
   }
 
   /** 取消启动：仅 starting 可取消；running 返回状态冲突（不能把迟到取消当停止） */
   async cancelStart(id: string): Promise<void> {
+    const preparing = this.#preparing.get(id)
+    if (preparing) {
+      preparing.phase = 'stopping'
+      preparing.abort.abort(new StartCancelledError())
+      await preparing.result.catch(() => undefined)
+      return
+    }
     const entry = this.#requireEntry(id)
     if (entry.phase === 'running') {
       throw new Error('设备已在运行，取消不再适用（可改为停止）')
@@ -168,6 +216,7 @@ export class EmulatorRunner {
 
   /** 停止运行实例；stopping 的重复/重试请求合并到同一份清理 */
   async stop(id: string): Promise<void> {
+    if (this.#preparing.has(id)) throw new Error('设备启动中：请取消启动而非停止')
     const entry = this.#requireEntry(id)
     if (entry.phase === 'starting') throw new Error('设备启动中：请取消启动而非停止')
     if (entry.phase === 'stopping' && entry.cleanup) return entry.cleanup
@@ -177,7 +226,7 @@ export class EmulatorRunner {
   }
 
   phaseOf(id: string): RunnerPhase | null {
-    return this.#entries.get(id)?.phase ?? null
+    return this.#entries.get(id)?.phase ?? this.#preparing.get(id)?.phase ?? null
   }
 
   serialOf(id: string): string | undefined {
@@ -185,20 +234,21 @@ export class EmulatorRunner {
   }
 
   activeIds(): string[] {
-    return [...this.#entries.keys()]
+    return [...this.#preparing.keys(), ...this.#entries.keys()]
   }
 
   /** 退出清理：拒绝新启动，停掉全部实例；返回仍占用的设备 id（有界，不悬挂） */
   async disposeAll(): Promise<string[]> {
     this.#accepting = false
     const entries = [...this.#entries.values()]
-    await Promise.allSettled(
-      entries.map(async (entry) => {
+    await Promise.allSettled([
+      ...[...this.#preparing.keys()].map((id) => this.cancelStart(id)),
+      ...entries.map(async (entry) => {
         entry.phase = 'stopping'
         entry.abort.abort()
         await this.#terminateEntry(entry)
       })
-    )
+    ])
     return this.activeIds()
   }
 
@@ -263,7 +313,11 @@ export class EmulatorRunner {
       })
       earlyExit.catch(() => undefined) // 竞败分支不产生 unhandled rejection
       try {
-        await Promise.race([this.#bootWait(entry), earlyExit])
+        // 接纳结果先交回 devices 登记，再探测 boot；准备 Promise 的层数不影响此顺序。
+        await Promise.race([
+          this.deps.sleep(0, entry.abort.signal).then(() => this.#bootWait(entry)),
+          earlyExit
+        ])
         if (this.#entries.get(entry.id) !== entry || entry.abort.signal.aborted) return
         entry.phase = 'running'
         this.deps.onRunning(entry.id, entry.runId, entry.serial)

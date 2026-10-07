@@ -12,7 +12,9 @@ export interface UninstallGuards {
   catalog: Pick<ImageCatalogResult, 'images'>
   /** 进行中的包操作（下载/卸载共用互斥，双向拒绝） */
   activeOp: PackageOp | null
-  /** 引用该包的设备名（含创建中事务） */
+  /** 该包是否有进行中的创建事务（review P2-2：设备行未入列期间由意向探针兜住） */
+  creating?: boolean
+  /** 引用该包的设备名（含创建中事务行） */
   referencing: string[]
 }
 
@@ -30,6 +32,9 @@ export const assertUninstallable = (packageName: string, guards: UninstallGuards
       throw new Error(`已有镜像在下载（${guards.activeOp.packageName}），下载完成后再卸载`)
     }
     throw new Error(`正在卸载镜像（${guards.activeOp.packageName}），请等待完成`)
+  }
+  if (guards.creating === true) {
+    throw new Error(`镜像正在被新建设备引用（${packageName}），创建完成后再卸载`)
   }
   if (guards.referencing.length > 0) {
     throw new Error(`镜像正被设备引用（${guards.referencing.join('、')}），删除这些设备后才可卸载`)

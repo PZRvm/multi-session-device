@@ -54,6 +54,9 @@ export const IPC_CHANNELS = {
   sdkWizardCapabilities: 'sdk:wizard-capabilities',
   /** 机型皮肤清单（SDK 已装 + 导入/下载库；主窗与向导只读） */
   sdkDeviceSkins: 'sdk:device-skins',
+  sdkDeviceSkinPresentation: 'sdk:device-skin-presentation',
+  sdkCameraAccess: 'sdk:camera-access',
+  sdkCameraSettings: 'sdk:camera-settings',
   /** 原生文件选择器选皮肤压缩包并导入（仅向导窗） */
   wizardChooseDeviceSkin: 'wizard:choose-device-skin',
   /** 受控下载官方皮肤（仅向导窗） */

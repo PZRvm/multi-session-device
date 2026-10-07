@@ -8,6 +8,9 @@ import type {
   SettingFieldCapability,
   WizardCapabilities
 } from '@shared/types'
+import { scanImportedSkins, scanSdkSkins } from './skins'
+import { listWebcams, readCameraSnapshot } from './cameras'
+import { officialSkinName } from './skinSource'
 
 /**
  * 附加设置域（plan 设计 4）：能力构建（defaults/边界/禁用原因）与 emulator
@@ -86,10 +89,13 @@ export const buildCapabilities = (input: {
   imagePackageName: string
   emulatorVersion: string | null
 }): WizardCapabilities => {
+  // RAM 地板（Android Q+ 镜像 2GB，PRD B）只约束手机/平板；wear/tv 等形态
+  // 尊重画像官方 RAM（review P3：此前所有形态一律抬 2GB），缺失时回 2048
+  const profileRam = input.profile.ramMiB
   const ramDefault =
-    input.profile.ramMiB !== null && input.profile.ramMiB >= MIN_RAM_MIB
-      ? input.profile.ramMiB
-      : Math.max(input.profile.ramMiB ?? 0, MIN_RAM_MIB)
+    input.profile.formFactor === 'phone' || input.profile.formFactor === 'tablet'
+      ? Math.max(profileRam ?? MIN_RAM_MIB, MIN_RAM_MIB)
+      : (profileRam ?? MIN_RAM_MIB)
   const defaults: DeviceAdvancedSettings = {
     skinRef: null,
     frontCamera: { mode: 'emulated', deviceId: null },
@@ -110,9 +116,11 @@ export const buildCapabilities = (input: {
     emulatorVersion: input.emulatorVersion,
     defaults,
     fields: {
-      skinRef: disabled('机型皮肤即将支持（导入与受控下载就绪后开放）'),
-      frontCamera: disabled('真实宿主摄像头即将支持；当前可选模拟或关闭'),
-      rearCamera: disabled('真实宿主摄像头即将支持；当前可选模拟或关闭'),
+      skinRef: disabled('未找到可用皮肤（SDK 未装或库为空）'),
+      // 摄像头字段开放（批次 8 已交付枚举/占用核验/启动重核验）；webcam 选项
+      // 由 buildEnrichedCapabilities 按宿主枚举注入 webcamDeviceIds
+      frontCamera: enabled(),
+      rearCamera: enabled(),
       networkSpeed: enabled(),
       networkLatency: enabled(),
       orientation:
@@ -133,4 +141,62 @@ export const buildCapabilities = (input: {
     webcamDeviceIds: [],
     skinIds: []
   }
+}
+
+export interface EnrichedCapabilityDeps {
+  scanSdkSkins?: typeof scanSdkSkins
+  scanImportedSkins?: typeof scanImportedSkins
+  listWebcams?: typeof listWebcams
+}
+
+/**
+ * 能力构建唯一入口（review P1 修复：双路径分叉）——buildCapabilities 打底，
+ * 再补齐皮肤清单与宿主摄像头枚举并解锁 skinRef 字段。向导能力查询
+ * （sdk:wizard-capabilities）与创建事务（createDevice）共用本函数，两侧
+ * 校验口径恒一致：UI 放行的 skinRef/webcam 设置，创建侧不再因枚举为空被拒。
+ * 枚举失败不禁用字段（摄像头只是没有 webcam 选项；皮肤字段保持禁用带原因）。
+ */
+export const buildEnrichedCapabilities = async (
+  input: {
+    profile: Pick<DeviceProfile, 'id' | 'ramMiB' | 'formFactor'>
+    imagePackageName: string
+    emulatorVersion: string | null
+  },
+  sdkRoot: string,
+  userData: string,
+  deps: EnrichedCapabilityDeps = {}
+): Promise<WizardCapabilities> => {
+  const capabilities = buildCapabilities(input)
+  const [sdkSkins, importedSkins] = await Promise.all([
+    (deps.scanSdkSkins ?? scanSdkSkins)(sdkRoot),
+    (deps.scanImportedSkins ?? scanImportedSkins)(userData)
+  ])
+  capabilities.skinIds = [...sdkSkins, ...importedSkins].map((record) => record.skinRef)
+  capabilities.fields.skinRef =
+    capabilities.skinIds.length > 0
+      ? { disabledReason: null, min: null, max: null, step: null }
+      : { disabledReason: '未找到可用皮肤（SDK 未装或库为空）', min: null, max: null, step: null }
+  const recommendedName = officialSkinName(input.profile.id)
+  const selectedSkin = [...sdkSkins, ...importedSkins].find(
+    (record) => record.name === recommendedName
+  )
+  capabilities.recommendedSkin =
+    recommendedName === null
+      ? null
+      : { name: recommendedName, skinRef: selectedSkin?.skinRef ?? null }
+  capabilities.defaults.skinRef = selectedSkin?.skinRef ?? null
+  try {
+    capabilities.cameraSnapshot = deps.listWebcams
+      ? { permission: 'unknown', devices: await deps.listWebcams(sdkRoot), error: null }
+      : await readCameraSnapshot(sdkRoot)
+    capabilities.webcamDeviceIds = capabilities.cameraSnapshot.devices.map((entry) => entry.id)
+  } catch (error) {
+    capabilities.webcamDeviceIds = []
+    capabilities.cameraSnapshot = {
+      permission: 'unknown',
+      devices: [],
+      error: `摄像头枚举失败：${error instanceof Error ? error.message : String(error)}`
+    }
+  }
+  return capabilities
 }

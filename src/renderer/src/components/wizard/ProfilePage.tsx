@@ -41,7 +41,6 @@ const ProfilePage = ({
   search,
   onSearchChange,
   showDeprecated,
-  onShowDeprecatedChange,
   selectedId,
   onSelect
 }: ProfilePageProps): React.JSX.Element => {
@@ -80,12 +79,15 @@ const ProfilePage = ({
             <NavCount>{counts.get(formFactor) ?? 0}</NavCount>
           </NavButton>
         ))}
-        <DeprecatedToggle>
+        {/* 官方源暂无弃用信号（types 注释在案）——开关随布局保留但禁用并说明，
+            不冒充可用功能（review P3：死 UI 处置） */}
+        <DeprecatedToggle title="官方画像源暂无弃用标记，开关待信号源接入后开放">
           <input
             id="wizard-show-deprecated"
             type="checkbox"
+            disabled
             checked={showDeprecated}
-            onChange={(event) => onShowDeprecatedChange(event.target.checked)}
+            readOnly
           />
           <label htmlFor="wizard-show-deprecated">显示弃用画像</label>
         </DeprecatedToggle>

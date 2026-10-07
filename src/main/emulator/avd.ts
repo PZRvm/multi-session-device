@@ -114,8 +114,9 @@ export interface PatchAvdDeps {
 
 /**
  * 创建后 config patch：只覆盖白名单键、保留未知键与注释行，tmp+rename 原子替换。
- * config.ini 是 Java properties 形态（key=value）；同键多行时以最后一处为准并
- * 只重写该处，避免重复键造成读取歧义。
+ * config.ini 是 Java properties 形态（key=value）；同键多行时**全部重写**——
+ * properties 末次读取优先，只改首处会被后面的旧行盖掉（review P3：原实现只改
+ * 首处，与注释宣称的「以最后一处为准」相反）。
  */
 export async function patchAvdConfig(
   avdName: string,
@@ -138,7 +139,7 @@ export async function patchAvdConfig(
     const match = line.match(/^([A-Za-z0-9._-]+)=/)
     if (match === null) return line
     const key = match[1]
-    if (!(key in patch) || seen.has(key)) return line
+    if (!(key in patch)) return line
     seen.add(key)
     return `${key}=${patch[key]}`
   })

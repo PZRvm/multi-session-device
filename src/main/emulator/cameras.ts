@@ -1,24 +1,17 @@
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
+import { systemPreferences } from 'electron'
+import type { CameraSnapshot, HostWebcam } from '@shared/types'
 
-/**
- * 宿主摄像头枚举（plan 设计 7）：`emulator -avd <dummy> -webcam-list`——
- * 所装 emulator 自己的枚举入口，不假定 webcam0 永远存在。实测（2026-10-05，
- * emulator 36.1.9）：命令 0.2s 返回 exit 0，不实际启动 AVD。
- * 权限归属：真实取流由 emulator/QEMU 进程请求 macOS TCC 授权——本应用
- * 获授权不等于 emulator 获授权（向导内据实说明）。
- */
-
-export interface WebcamEntry {
-  /** emulator 资源 id（webcam0/webcam1…，-camera-back/-camera-front 取值） */
-  id: string
-  /** 宿主设备标识（AVCapture device id，用于展示与占用核对） */
-  deviceLabel: string
-}
+/** 所装 emulator 的摄像头探针；macOS 权限由宿主应用身份与取流责任链共同决定。 */
+export type WebcamEntry = HostWebcam
 
 export interface WebcamDeps {
   runner?: (emulatorPath: string, args: string[]) => Promise<string>
 }
+
+/** 枚举探针的有界超时（review P3）：emulator 挂死不拖死能力查询的 invoke */
+const WEBCAM_LIST_TIMEOUT_MS = 10_000
 
 const defaultRunner = (emulatorPath: string, args: string[]): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -27,8 +20,16 @@ const defaultRunner = (emulatorPath: string, args: string[]): Promise<string> =>
     const err: Buffer[] = []
     child.stdout?.on('data', (chunk: Buffer) => out.push(chunk))
     child.stderr?.on('data', (chunk: Buffer) => err.push(chunk))
-    child.on('error', reject)
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM')
+      reject(new Error(`摄像头枚举超时（${WEBCAM_LIST_TIMEOUT_MS / 1000} 秒），进程已终止`))
+    }, WEBCAM_LIST_TIMEOUT_MS)
+    child.on('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
     child.on('close', (code) => {
+      clearTimeout(timer)
       // 枚举不依赖 AVD 存在：即使提示找不到 AVD，摄像头清单仍有效
       const text = Buffer.concat(out).toString('utf8')
       if (code === 0 || text.includes("Camera '")) resolve(text)
@@ -44,11 +45,53 @@ const defaultRunner = (emulatorPath: string, args: string[]): Promise<string> =>
 
 /** 解析 -webcam-list 输出（"Camera 'webcam0' is connected to device '<uuid>' …"） */
 export const parseWebcamList = (output: string): WebcamEntry[] => {
-  const entries: WebcamEntry[] = []
-  for (const match of output.matchAll(/Camera '(webcam\d+)' is connected to device '([^']+)'/g)) {
-    entries.push({ id: match[1], deviceLabel: match[2] })
+  const entries = new Map<string, WebcamEntry>()
+  for (const line of output.split('\n')) {
+    const modern = line.match(
+      /Camera '(.+)' can be specified by label as '(webcam\d+)' or by id as '([^']+)'/
+    )
+    const legacy = line.match(/Camera '(webcam\d+)' is connected to device '([^']+)'/)
+    if (modern) entries.set(modern[2], { id: modern[2], deviceLabel: modern[3], name: modern[1] })
+    else if (legacy) entries.set(legacy[1], { id: legacy[1], deviceLabel: legacy[2] })
   }
-  return entries
+  return [...entries.values()]
+}
+
+export const cameraPermission = (): CameraSnapshot['permission'] => {
+  if (process.platform !== 'darwin') return 'granted'
+  return systemPreferences?.getMediaAccessStatus?.('camera') ?? 'unknown'
+}
+let permissionRequest: Promise<boolean> | null = null
+export const requestCameraPermission = async (): Promise<boolean> => {
+  if (process.platform !== 'darwin') return true
+  if (permissionRequest !== null) return permissionRequest
+  permissionRequest = systemPreferences.askForMediaAccess('camera')
+  try {
+    return await permissionRequest
+  } finally {
+    permissionRequest = null
+  }
+}
+export const readCameraSnapshot = async (sdkRoot: string): Promise<CameraSnapshot> => {
+  const permission = cameraPermission()
+  try {
+    const devices = await listWebcams(sdkRoot)
+    const error =
+      devices.length > 0
+        ? null
+        : permission === 'not-determined'
+          ? '需要允许本应用访问摄像头'
+          : permission === 'denied' || permission === 'restricted'
+            ? '摄像头权限未开放，请在系统设置中允许访问并重启应用'
+            : '未枚举到摄像头；请检查连接及本应用的系统权限，刷新后重试'
+    return { permission, devices, error }
+  } catch (error) {
+    return {
+      permission,
+      devices: [],
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
 }
 
 export const listWebcams = async (
@@ -57,5 +100,9 @@ export const listWebcams = async (
 ): Promise<WebcamEntry[]> => {
   const emulatorPath = join(sdkRoot, 'emulator', 'emulator')
   const run = deps.runner ?? defaultRunner
-  return parseWebcamList(await run(emulatorPath, ['-avd', '__webcam_probe__', '-webcam-list']))
+  const output = await run(emulatorPath, ['-avd', '__webcam_probe__', '-webcam-list'])
+  const entries = parseWebcamList(output)
+  if (entries.length === 0 && /Camera '/.test(output))
+    throw new Error('摄像头输出格式无法识别，请检查 emulator 版本')
+  return entries
 }

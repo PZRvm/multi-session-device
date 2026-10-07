@@ -54,6 +54,7 @@ export function useDeviceInput(params: DeviceInputParams): void {
   )
   const moveRafRef = useRef(0)
   const composingRef = useRef(false)
+  const discardCompositionRef = useRef(false)
   const errorNotifiedRef = useRef(false)
   const enabledRef = useRef(enabled)
   // ref 更新放 effect：渲染期写 ref 会触发级联纪律告警（事件都在 commit 后，时序等价）
@@ -89,6 +90,10 @@ export function useDeviceInput(params: DeviceInputParams): void {
     pointersRef.current.clear()
     pressedKeysRef.current.clear()
     modeRef.current = 'none'
+    if (moveRafRef.current !== 0) cancelAnimationFrame(moveRafRef.current)
+    moveRafRef.current = 0
+    pendingMovesRef.current.clear()
+    if (composingRef.current) discardCompositionRef.current = true
   }, [send])
 
   // 坐标换算统一走 geometry（与布局同源）：屏幕矩形之外（外框/留白）不发 down，
@@ -306,11 +311,14 @@ export function useDeviceInput(params: DeviceInputParams): void {
 
     const onCompositionStart = (): void => {
       composingRef.current = true
+      discardCompositionRef.current = !enabledRef.current
     }
 
     const onCompositionEnd = (event: CompositionEvent): void => {
+      const discard = discardCompositionRef.current || !enabledRef.current
       composingRef.current = false
-      if (!enabledRef.current || !event.data) return
+      discardCompositionRef.current = false
+      if (discard || !event.data) return
       send({ kind: 'text', text: event.data, ime: true })
     }
 
@@ -328,7 +336,7 @@ export function useDeviceInput(params: DeviceInputParams): void {
     }
   }, [inputProxyRef, send])
 
-  // 失焦/隐藏/禁用/卸载：释放所有手指与按键（main 兜底再清一次）
+  // 禁用时只清本地状态，旧按下输入由 main 释放；失焦/隐藏/卸载仍请求释放。
   useEffect(() => {
     if (!enabled) releaseAll()
   }, [enabled, releaseAll])
@@ -344,7 +352,6 @@ export function useDeviceInput(params: DeviceInputParams): void {
       window.removeEventListener('blur', onBlur)
       document.removeEventListener('visibilitychange', onVisibility)
       releaseAll()
-      if (moveRafRef.current !== 0) cancelAnimationFrame(moveRafRef.current)
     }
   }, [releaseAll])
 }

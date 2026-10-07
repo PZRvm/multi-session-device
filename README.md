@@ -1,15 +1,18 @@
 # multi-session-device
 
-多会话模拟器：面向软件测试人员的 Electron 桌面工具。左侧管理多个完全隔离的模拟器实例（Android AVD / iOS Simulator），右侧以 tab 方式切换当前实例的嵌入画面并直接操控——每台设备登录态、应用数据互不影响。
+面向软件测试人员的 Electron 桌面工具。每台 Android 设备使用独立 AVD，左侧列表管理与切换设备，右侧显示当前设备画面并直接操控。
 
-> 当前处于骨架阶段：仓库内是 electron-vite 脚手架，模拟器管理、画面嵌入等模块按计划逐步落地，进度见 `book/stage/`。
+阶段 4 已完成基础 Android 链路，当前验收平台为 macOS Apple Silicon + arm64 镜像。阶段 5 的日志、截屏/录屏、APK 安装、剪贴板、断网和设置窗仍待实施；iOS 属二期。
 
-## 功能（规划）
+## 当前能力
 
-- **多实例隔离**：新建会话即创建一台全新模拟器实例，每会话独立 AVD（克隆产生）或独立 Simulator 设备，数据互不污染
-- **画面嵌入**：安卓走 scrcpy 协议视频流 + WebCodecs 解码；iOS 无公开帧流 API，走 ScreenCaptureKit 窗口采集
-- **直接操控**：点击嵌入画面即操作设备，触摸/指针事件反向注入
-- **多台并行**：Android 官方 emulator 支持最多 64 台并发（控制台端口 5554–5682）；iOS Simulator 实测 Apple Silicon 16GB 每台约 1.3GB 内存，10 台最优、14 台可达（需调系统 fd 上限）
+- 应用内引导 SDK、选择画像与精确系统镜像、下载镜像、配置并新建独立 AVD。
+- 启动、准备期取消、停止、删除与重命名；运行状态实时推送，运行中的 serial 可复制。
+- scrcpy 视频流与 WebCodecs 画布；触控、滑动、双指操作、键盘/IME、返回/主页/概览、音量和手动旋转。
+- 电源按钮停止设备并显示停止占位，重新运行从左侧启动；旋转期间的新输入直接丢弃，已有按键和触点释放。
+- 具体机型皮肤导入、固定官方源获取、缓存与投屏几何；宿主摄像头枚举、配置和权限入口。
+
+Quick Boot 稳定性、Android 摄像头取景和六类设备的完整验收仍待完成；Quick 选择器保持禁用。验收范围和遗留见 [阶段 4](book/stage/04-模拟器对接.md) 与 [当前运行说明](book/docs/architecture/2026-10-08-android-runtime.md)。
 
 ## 技术栈
 
@@ -17,36 +20,41 @@ Electron 39 + electron-vite 5 + React 19 + TypeScript 5.9，只用 npm。
 
 三进程结构，数据流单向，主进程是唯一事实源：
 
-| 进程 | 目录 | 职责 |
-|------|------|------|
-| 主进程 | `src/main/` | 窗口创建、模拟器实例生命周期、画面流编排、IPC handler |
-| 预加载桥 | `src/preload/` | contextBridge 暴露白名单 `window.api`，不暴露原始 ipcRenderer |
-| 渲染进程 | `src/renderer/` | React 纯 UI，禁止直接访问 Node/Electron API |
+| 进程     | 目录            | 职责                                                          |
+| -------- | --------------- | ------------------------------------------------------------- |
+| 主进程   | `src/main/`     | 窗口创建、模拟器实例生命周期、画面流编排、IPC handler         |
+| 预加载桥 | `src/preload/`  | contextBridge 暴露白名单 `window.api`，不暴露原始 ipcRenderer |
+| 渲染进程 | `src/renderer/` | React 纯 UI，禁止直接访问 Node/Electron API                   |
 
-跨进程共用的类型与通道名单源在 `src/shared/`（规划中）。
+跨进程共用的类型与通道名单源在 `src/shared/`。
 
 ## 平台依赖
 
-- **Android**：SDK 四件套（cmdline-tools、emulator、system image、platform-tools），应用内引导安装，不需要 Android Studio；已有 `ANDROID_HOME` 可直接复用
-- **iOS**：仅 macOS，依赖本机 Xcode（Simulator runtime 不可随 App 分发，只能检测/引导安装）；画面采集需「屏幕录制」授权，触控注入需「辅助功能」授权
+- SDK 与 AVD 默认放在应用 `userData` 下的 `AndroidSDK/`、`avd-home/`；新建不依赖 Android Studio，当前没有设置窗供用户更换 SDK 根。
+- 运行设备使用本机共享 adb server（127.0.0.1:5037），已有 adb 可执行文件优先；协议不相容时拒绝启动，不自动重启共享服务。
+- 宿主摄像头需要本应用的 macOS 权限，Android 内取景与正式签名版仍待人工验收。
 
 ## 本地开发
 
 ```bash
 # 安装依赖
-$ npm install
+npm install
 
 # 开发模式
-$ npm run dev
+npm run dev
 
 # 类型检查 + lint（提交前必过）
-$ npm run typecheck
-$ npm run lint
+npm run typecheck
+npm run lint
+npm test
 
-# 打包
-$ npm run build:win     # Windows
-$ npm run build:mac     # macOS
-$ npm run build:linux   # Linux
+# 三进程构建（含类型检查）与 macOS 打包
+npm run build
+npm run build:mac
+
+# 文档索引与卫生检查
+npm run book:index
+npm run book:release-check
 ```
 
 ## 仓库结构
@@ -55,21 +63,22 @@ $ npm run build:linux   # Linux
 multi-session-device/
 ├── src/         # 源码：main / preload / renderer 三进程
 ├── book/        # 文档与知识库：规则、阶段、笔记、架构快照、施工图
-├── skills-zh/   # BoCode 工作流的四个 agent skill（bocode / boscope / book-writeback / bowrite）
-├── resources/   # 随包静态资源
-└── build/       # electron-builder 图标
+├── scripts/     # book 索引、卫生与提交主题校验
+├── .codex/skills/ # BoCode 工作流 skills
+├── resources/   # scrcpy-server 与随包静态资源
+└── build/       # electron-builder 图标与权限配置
 ```
 
 ## 文档
 
 代码回答"它现在怎么跑"，`book/` 回答"它为什么长这样、做过什么决定、踩过什么坑"：
 
-| 想知道 | 去看 |
-|--------|------|
-| 目录结构与模块落点 | `book/docs/architecture/项目骨架.md` |
-| 技术可行性与选型依据 | `book/notes/think-report/` |
-| 项目走到哪、下一步做什么 | `book/stage/` |
-| 这个仓库怎么干活（六阶段关卡） | `book/guidelines/workflow.md` |
+| 想知道                         | 去看                                                                       |
+| ------------------------------ | -------------------------------------------------------------------------- |
+| 当前模块、状态机与排查入口     | [Android 运行说明](book/docs/architecture/2026-10-08-android-runtime.md)   |
+| 技术可行性与选型依据           | [book 总索引](book/README.md) 的 think-report 分类                         |
+| 本次交付、遗留与下一阶段       | [阶段 4](book/stage/04-模拟器对接.md)、[阶段 5](book/stage/05-功能完善.md) |
+| 这个仓库怎么干活（六阶段关卡） | [工作流](book/guidelines/workflow.md)                                      |
 
 AI agent 从根目录 `AGENTS.md` 进入。
 

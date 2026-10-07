@@ -2,6 +2,8 @@ import { ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type {
   DeviceProfile,
+  CameraSnapshot,
+  DeviceSkinPresentation,
   DeviceSkinSummary,
   ImageCatalogResult,
   SdkImageProgress,
@@ -63,12 +65,17 @@ export const sdkApi = {
     }
   },
   /** 机型皮肤清单（SDK 已装 + 导入/下载库） */
+  deviceSkinPresentation: (deviceId: string): Promise<DeviceSkinPresentation | null> =>
+    ipcRenderer.invoke(IPC_CHANNELS.sdkDeviceSkinPresentation, { deviceId }),
+  cameraAccess: (request: boolean): Promise<CameraSnapshot> =>
+    ipcRenderer.invoke(IPC_CHANNELS.sdkCameraAccess, { request }),
+  cameraSettings: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.sdkCameraSettings),
   deviceSkins: (): Promise<DeviceSkinSummary[]> => ipcRenderer.invoke(IPC_CHANNELS.sdkDeviceSkins),
-  /** 原生选择器导入皮肤压缩包（向导窗专用通道） */
-  chooseDeviceSkin: (): Promise<DeviceSkinSummary> =>
+  /** 原生选择器导入皮肤压缩包（向导窗专用通道）；null = 用户取消 */
+  chooseDeviceSkin: (): Promise<DeviceSkinSummary | null> =>
     ipcRenderer.invoke(IPC_CHANNELS.wizardChooseDeviceSkin),
-  /** 受控下载官方皮肤（向导窗专用通道；进度经 onSkinProgress 推送） */
-  downloadDeviceSkin: (skinName: string): Promise<DeviceSkinSummary> =>
+  /** 受控下载官方皮肤（向导窗专用通道；进度经 onSkinProgress 推送）；null = 同意框取消 */
+  downloadDeviceSkin: (skinName: string): Promise<DeviceSkinSummary | null> =>
     ipcRenderer.invoke(IPC_CHANNELS.sdkDownloadDeviceSkin, { skinName }),
   onSkinProgress: (callback: (progress: SdkSkinProgress) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, progress: SdkSkinProgress): void => {

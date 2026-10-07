@@ -40,6 +40,7 @@ tags: [wizard, uninstall, review, race-condition, mutex]
 P1/P2 与全部 P3 已修（并发安全结论先行：下载+卸载并发不崩溃——两个独立 sdkmanager 子进程、各自 try/catch，最坏是文件锁竞争报英文 stderr，故按用户决定修复）：
 
 - **P1/P2-TOCTOU**：新增 `emulator/packageOps.ts` 统一互斥（`beginPackageOp/endPackageOp/activePackageOp`），下载与卸载双向拒绝；创建事务按包名检查进行中操作（同包下载/卸载中拒绝创建），TOCTOU 窗口关闭。单测：守卫双向互斥 2 例、packageOps 状态机 1 例、devices 创建拦截 2 例。
+  - **记载更正（2026-10-06，[向导分支总体 review](2026-10-06-wizard-category-settings-review-findings.md) P2-2）**：上述「窗口关闭」实为收窄——createDevice 入口检查之后的秒级 await 间隙（本地扫描 + Java 画像重查）内发起的卸载，仍看不到尚未入列的 creating 行。同日已修：packageOps 增创建意向探针（`beginPackageCreation`/`isPackageCreating`），创建事务全程持有，`beginPackageOp` 与 `assertUninstallable` 均按包名拒绝（单测 2 例 + devices 接线锚 1 例）。
 - **P2-残留复核**：改为直接探测 `system-images/<平台>/<tag>/<abi>` 目录存在性；真机冒烟验证标准卸载判干净、人工构造的无 package.xml 空壳残留被捕获（旧实现漏）。
 - **P3**：确认框措辞改「下载体积约…（解压后磁盘占用更大）」；`assertUninstallable` 改 void；卸载 executor 收集 stdout+stderr 并加 180s 有界超时（超时 SIGTERM + 中文错误）；删除/下载 icon 补 tabIndex + Enter/Space（Enter 触发卸载有单测）、DownloadButton 补 focus-visible；卸载/下载错误区挪到 TabBar 下方跨标签可见；`registerSdkIpc` 改依赖注入引用查询（emulator 域不再 import devices）；补 env 断言。
 

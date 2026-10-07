@@ -3,6 +3,7 @@ import { connect as netConnect, createServer, type Server, type Socket } from 'n
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   candidateAdbPaths,
@@ -19,12 +20,16 @@ import {
 
 /** 起一个一次性 smart-socket 假 server，把 probeServer 的连接定向到它 */
 const withFakeServer = async (
-  reply: Buffer | null,
+  reply: Buffer | null | ((socket: Socket) => void),
   handler: (deps: ProbeDeps, port: number) => Promise<void>
 ): Promise<void> => {
+  const clients = new Set<Socket>()
   const server: Server = createServer((socket) => {
+    clients.add(socket)
+    socket.once('close', () => clients.delete(socket))
     socket.once('data', () => {
-      if (reply) socket.write(reply)
+      if (typeof reply === 'function') reply(socket)
+      else if (reply) socket.write(reply)
       // 不回也不关：由客户端超时收口
     })
   })
@@ -38,6 +43,7 @@ const withFakeServer = async (
   try {
     await handler(deps, port)
   } finally {
+    for (const socket of clients) socket.destroy()
     await new Promise<void>((resolve) => server.close(() => resolve()))
   }
 }
@@ -61,6 +67,74 @@ describe('adb 帧编解码', () => {
 })
 
 describe('probeServer（只读探测）', () => {
+  const promptly = async (deps: ProbeDeps): Promise<unknown> => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      return await Promise.race([
+        probeServer(deps),
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve('still pending'), 200)
+        })
+      ])
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  it('状态、长度、载荷分段后关闭：拼完一帧返回协议版本', async () => {
+    await withFakeServer(
+      (socket) => {
+        socket.write('OK')
+        setTimeout(() => socket.write('AY00'), 10)
+        setTimeout(() => socket.write('0400'), 20)
+        setTimeout(() => socket.end('29'), 30)
+      },
+      async (deps) => {
+        expect(await promptly(deps)).toEqual({ running: true, protocolVersion: 41 })
+      }
+    )
+  })
+
+  it.each(['', 'OKAY', 'OKAY000400'])('未完整应答就关闭（%s）：立即结束探测', async (reply) => {
+    await withFakeServer(
+      (socket) => socket.end(reply),
+      async (deps) => {
+        expect(await promptly(deps)).toEqual({ running: false })
+      }
+    )
+  })
+
+  it.each(['connecting', 'fragments'])('总期限覆盖 %s，持续收到片段也不延长', async (mode) => {
+    vi.useFakeTimers()
+    const socket = new EventEmitter() as EventEmitter & {
+      write: ReturnType<typeof vi.fn>
+      destroy: ReturnType<typeof vi.fn>
+      setTimeout: ReturnType<typeof vi.fn>
+    }
+    socket.write = vi.fn()
+    socket.destroy = vi.fn()
+    socket.setTimeout = vi.fn()
+    try {
+      const result = probeServer({ connect: (() => socket) as unknown as ProbeDeps['connect'] })
+      if (mode === 'fragments') {
+        socket.emit('connect')
+        await vi.advanceTimersByTimeAsync(0)
+        socket.emit('data', Buffer.from('OKAYffff'))
+        for (let i = 0; i < 5; i += 1) {
+          await vi.advanceTimersByTimeAsync(500)
+          socket.emit('data', Buffer.from('0'))
+        }
+      }
+      await vi.advanceTimersByTimeAsync(mode === 'connecting' ? 3_000 : 500)
+      expect(await Promise.race([result, Promise.resolve('still pending')])).toEqual({
+        running: false
+      })
+      expect(socket.destroy).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('server 在跑：解析协议版本', async () => {
     await withFakeServer(OKAY_41, async (deps) => {
       expect(await probeServer(deps)).toEqual({ running: true, protocolVersion: 41 })

@@ -14,6 +14,31 @@ const makeDeps = ({
 })
 
 describe('PortAllocator', () => {
+  it('探测在途取消释放预留，迟到探测不影响同设备的新预留', async () => {
+    let ready: (occupied: boolean) => void = () => {}
+    const deps = makeDeps()
+    vi.mocked(deps.probeTcp).mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          ready = resolve
+        })
+    )
+    const allocator = new PortAllocator(deps)
+    const abort = new AbortController()
+    const first = allocator.acquire('d1', abort.signal)
+    const rejected = expect(first).rejects.toThrow()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(allocator.reservedOf('d1')).toBe(5554)
+    abort.abort()
+    await rejected
+    expect(allocator.reservedOf('d1')).toBeUndefined()
+    expect(await allocator.acquire('d1')).toBe(5554)
+    ready(true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(allocator.reservedOf('d1')).toBe(5554)
+    expect(deps.probeTcp).toHaveBeenCalledTimes(3)
+  })
+
   it('首台分配 5554，serial 规则 emulator-<偶数端口>', async () => {
     const deps = makeDeps()
     const allocator = new PortAllocator(deps)

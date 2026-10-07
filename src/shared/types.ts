@@ -65,6 +65,8 @@ export interface CameraConfig {
   mode: 'none' | 'emulated' | 'virtualScene' | 'webcam'
   /** webcam 模式下的宿主摄像头 id（webcam0…，能力接口枚举） */
   deviceId: string | null
+  /** 稳定宿主身份；旧记录缺省保持 webcamN 兼容 */
+  hostDeviceId?: string
 }
 
 /** -netspeed / -netdelay 的预设枚举（emulator 36.1.9 -help 实测，fixtures README） */
@@ -212,6 +214,8 @@ export interface WizardCapabilities {
   quickBootDisabledReason: string | null
   /** 本地摄像头枚举（批次 8 真实取景链路；本批次仅 emulated/none 可选） */
   webcamDeviceIds: string[]
+  cameraSnapshot?: CameraSnapshot
+  recommendedSkin?: { name: string; skinRef: string | null } | null
   /** 可选皮肤 id（批次 7 接入；空 = 暂无） */
   skinIds: string[]
 }
@@ -227,7 +231,8 @@ export interface DeviceSkinSummary {
     frameHeight: number
     screenWidth: number
     screenHeight: number
-  }
+  } | null
+  landscape?: DeviceSkinSummary['portrait']
 }
 
 /** 皮肤下载进度推送 */
@@ -281,8 +286,7 @@ export interface ScreenAckMessage {
 }
 
 /** 工具条物理键（main 白名单映射 Android keycode，成对 Down/Up） */
-export type ScreenToolbarButton =
-  'back' | 'home' | 'overview' | 'power' | 'volume-up' | 'volume-down'
+export type ScreenToolbarButton = 'back' | 'home' | 'overview' | 'volume-up' | 'volume-down'
 
 /** 画布键盘白名单（renderer 传逻辑名，main 映射 keycode） */
 export type ScreenKeycodeName =
@@ -476,4 +480,40 @@ export interface DeviceProfile {
   ramMiB: number | null
   /** avdmanager 当前可按此画像创建（id 出现在其输出中） */
   creatable: boolean
+}
+
+/** 宿主摄像头枚举与权限诊断（不打开取景） */
+export interface HostWebcam {
+  id: string
+  deviceLabel: string
+  name?: string
+}
+export interface CameraSnapshot {
+  permission: 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown'
+  devices: HostWebcam[]
+  error: string | null
+}
+export interface SkinImagePart {
+  file: string
+  x: number
+  y: number
+  rotation: number
+}
+export interface DeviceSkinOrientation {
+  frameWidth: number
+  frameHeight: number
+  screenX: number | null
+  screenY: number | null
+  screenWidth: number
+  screenHeight: number
+  rotation: number | null
+  backgrounds?: SkinImagePart[]
+  /** 屏幕大小的透明前景，可遮住圆角及摄像头挖孔 */
+  foregroundMask?: string
+}
+export interface DeviceSkinPresentation {
+  name: string
+  portrait: DeviceSkinOrientation | null
+  landscape: DeviceSkinOrientation | null
+  images: Array<{ file: string; url: string }>
 }

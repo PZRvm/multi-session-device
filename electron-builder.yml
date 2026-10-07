@@ -26,7 +26,7 @@ mac:
   icon: build/icon.icns
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
-    - NSCameraUsageDescription: Application requests access to the device's camera.
+    - NSCameraUsageDescription: 用于让 Android 模拟器使用本机摄像头进行测试。
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.

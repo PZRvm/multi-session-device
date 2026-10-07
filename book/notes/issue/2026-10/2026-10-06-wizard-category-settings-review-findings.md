@@ -60,3 +60,20 @@ Phase 5 检查单八项过了一遍，一项 P3：
 **跟进（同日）**：P3 已修——两表合并为 `DEVICE_XML_SOURCES` 单表（name + impliedFormTag 一体登记，通用文件显式 null），读取清单与隐含 tag 同表派生；`withImpliedFormTag` 对未登记名原样返回（新增防御）。定向测试 62 过、typecheck/lint 0 错。
 
 复核确认无问题项：ai-glasses 画像与 xr 同在 xr.xml（fixture 实证），补 android-xr 后索引判 unknown→generic——同类误判一并消除，无残留；`withImpliedFormTag` 纯函数不改入参、未知文件名原样返回、重复 tag 不叠加均有断言；测试 fixture `jarMetas` 为生产组合的镜像（parseDeviceXml ＋ withImpliedFormTag）已注明；无重复代码/竞态/越范围改动；修复后全套 362 过、typecheck/lint 0 错。
+
+## 全量修复轮（2026-10-06，b602f09..e66f9d6 五个提交）
+
+除 [验收遗留 issue](2026-10-06-wizard-plan-remaining-acceptance.md)（皮肤下载源/显示接线/Quick 门槛/六类真机）外，本档案 P1、P2×4、P3×12 全部修复：
+
+- **P1（b602f09）**：能力构建收敛唯一入口 `buildEnrichedCapabilities`（buildCapabilities 打底 ＋ 皮肤/摄像头枚举富化）——sdk:wizard-capabilities 与 createDevice 共用，UI 放行的 skinRef/webcam 创建侧同源放行；cameraSelect 尊重字段禁用态（摄像头字段随批次 8 交付解锁，过时的「即将支持」禁用理由撤下）；新增 P1 回归锚（富化能力下过归一化 / 裸能力下被拒的双口径测试 ＋ devices 接线锚）。
+- **P2-1（b602f09）**：导入/下载皮肤成功后 `absorbSkinIntoCapabilities` 本地并入 skinIds 并解锁字段——不重拉能力、不重置已编辑设置。
+- **P2-2（18c7f73）**：packageOps 增创建意向探针（`beginPackageCreation`/`isPackageCreating`），createDevice 事务全程持有（失败也释放）；`beginPackageOp` 与 `assertUninstallable` 按包名双向拒绝；[image-uninstall 跟进段](2026-10-06-image-uninstall-review-findings.md)的「TOCTOU 窗口关闭」记载同步更正为收窄＋本轮收口。
+- **P2-3（5577f29）**：sdk:wizard-capabilities 复用 `profilesCached`（5min ＋ JAR 指纹键）；创建事务仍走直查保新鲜（拒绝陈旧选择的设计不变）。
+- **P2-4（2eae0ba）**：downloadSkin 落库 PROVENANCE 增 `name:` 行；scanImportedSkins 按 PROVENANCE 溯源恢复 `downloaded:<id>` 身份与皮肤名（PROVENANCE 损坏/缺失按 imported 兜底，不误判）。
+- **P3×12**：①存储换算死检查删除（b602f09）；②webcam 缺 deviceId 兜底 emulated——不假定 webcam0（b602f09）；③netspeed/netdelay 逐字段校验 ＋ orientation 禁用态 main 复核（b602f09）；④patchAvdConfig 同键多行全部重写——properties 末次优先不被旧行盖掉（e66f9d6）；⑤installImageZip 回滚失败不吞——主错误 ＋ 残留路径，对齐设备创建事务标准（e66f9d6）；⑥RAM 地板只约束手机/平板，wear 等形态尊重画像 RAM、缺失回 2048（b602f09）；⑦「显示弃用画像」开关禁用带因——不冒充可用功能（e66f9d6）；⑧lastActive* 模块级可变量下沉为实例 ref，lint 6 警告清零（当前 0 错 0 警）（e66f9d6）；⑨listWebcams 10 秒有界超时——emulator 挂死不拖死能力查询（e66f9d6）；⑩皮肤导入资源限额（≤200 文件 / ≤256 MB）＋ 逃逸核验注释与词法实现措辞对齐（2eae0ba）；⑪下载完成路径双拉去重——统一由 100% 广播触发，与卸载终态订阅同口径（e66f9d6）；⑫skinDirectoryFor 死分支清理（2eae0ba）。
+
+验证：全量 **377 测试过**（较修复前 +15 条回归锚）、typecheck 0 错、lint 0 错 0 警告、改动文件 prettier 全过。handler 层（sdk:wizard-capabilities 的缓存复用、创建意向的 main 侧时序）无测试基建，正确性由代码顺序保证——与前几轮口径一致。
+
+### 真机冒烟发现（2026-10-06，用户实测）
+
+- **wear 类表头被拉高（已修 52d7bca）**：选手表画像后镜像表格的表头与行被均匀拉高（~85px/行）。根因是 ImageTable 的 Scroller 为 subgrid 表头用了 grid 布局，未设 `align-content`——默认 stretch 把自动行拉伸填满 `flex: 1` 的容器；手机类行多（内容超容器）不触发，wear 推荐视图仅 3 行即现形。修复：`align-content: start`（jsdom 无布局计算，测不出此类 CSS，与 download-cancel review P1-2 空态挤轨同族——grid 行为类缺陷需真机/截图验收兜底）。

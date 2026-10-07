@@ -91,20 +91,6 @@ const fetchProfiles = async (): Promise<DeviceProfile[]> => {
   return window.api.sdk.profiles()
 }
 
-/** 最近一次清单响应携带的下载/卸载任务（向导重开恢复用；ref 避免绕过请求代次守卫） */
-let lastActiveDownload: { packageName: string; percent: number } | null = null
-let lastActiveUninstall: { packageName: string } | null = null
-
-const fetchImages = async (): Promise<ImageEntry[]> => {
-  if (typeof window === 'undefined' || !window.api?.sdk) {
-    throw new Error('sdk api 不可用')
-  }
-  const catalog = await window.api.sdk.images()
-  lastActiveDownload = catalog.activeDownload
-  lastActiveUninstall = catalog.activeUninstall
-  return catalog.images
-}
-
 type WizardTab = 'device' | 'settings'
 
 type DeviceWizardProps = {
@@ -164,8 +150,25 @@ const DeviceWizard = ({
     fetchProfiles,
     data?.profiles
   )
+  // 重开恢复暂存（review P3：模块级可变量下沉为实例 ref；仍不入 state——
+  // 绕过请求代次守卫的口径不变）
+  const lastActiveRef = useRef<{
+    download: { packageName: string; percent: number } | null
+    uninstall: { packageName: string } | null
+  }>({ download: null, uninstall: null })
+  const fetchImagesViaApi = useCallback(async (): Promise<ImageEntry[]> => {
+    if (typeof window === 'undefined' || !window.api?.sdk) {
+      throw new Error('sdk api 不可用')
+    }
+    const catalog = await window.api.sdk.images()
+    lastActiveRef.current = {
+      download: catalog.activeDownload,
+      uninstall: catalog.activeUninstall
+    }
+    return catalog.images
+  }, [])
   const { resource: images, reload: reloadImages } = useCatalogResource<ImageEntry>(
-    fetchImages,
+    fetchImagesViaApi,
     data?.images
   )
 
@@ -185,12 +188,11 @@ const DeviceWizard = ({
   // activeDownload 恢复后台任务进度。恢复即消费——不清 ref 会在失败事件清空
   // 状态后依赖重跑，把旧快照设回去（乒乓）；后续进度继续走事件订阅
   useEffect(() => {
-    if (images.phase === 'ready' && downloading === null && lastActiveDownload !== null) {
-      const restore = lastActiveDownload
-      lastActiveDownload = null
+    const pending = lastActiveRef.current.download
+    if (images.phase === 'ready' && downloading === null && pending !== null) {
+      lastActiveRef.current = { ...lastActiveRef.current, download: null }
       // 一次性恢复（记录已消费）——不构成级联渲染
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setDownloading({ ...restore })
+      setDownloading({ ...pending })
     }
   }, [images.phase, downloading])
 
@@ -202,22 +204,26 @@ const DeviceWizard = ({
   }>({ phase: 'idle', data: null, error: null })
   const [advancedSettings, setAdvancedSettings] = useState<DeviceAdvancedSettings | null>(null)
   const capabilityGenerationRef = useRef(0)
+  const skinChoicesRef = useRef(new Map<string, string | null>())
   // 镜像卸载（plan 2026-10-06-image-uninstall）：进行中的包名（该行 spinner、
   // 其余行禁用）+ 中文错误（main 守卫文案直接展示）
   const [uninstallingPackage, setUninstallingPackage] = useState<string | null>(null)
   const [uninstallError, setUninstallError] = useState<string | null>(null)
   // 卸载重开恢复（与下载恢复同口径）：main 同一时刻只有一个包操作，两个恢复互斥
   useEffect(() => {
-    if (images.phase === 'ready' && uninstallingPackage === null && lastActiveUninstall !== null) {
-      const restore = lastActiveUninstall
-      lastActiveUninstall = null
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setUninstallingPackage(restore.packageName)
+    const pending = lastActiveRef.current.uninstall
+    if (images.phase === 'ready' && uninstallingPackage === null && pending !== null) {
+      lastActiveRef.current = { ...lastActiveRef.current, uninstall: null }
+      setUninstallingPackage(pending.packageName)
     }
   }, [images.phase, uninstallingPackage])
 
   // 皮肤域：清单（导入/下载后刷新）、下载互斥与进度
   const [skins, setSkins] = useState<Array<{ skinRef: string; name: string; source: string }>>([])
+  const [skinError, setSkinError] = useState<string | null>(null)
+  const [cameraBusy, setCameraBusy] = useState(false)
+  const [cameraError, setCameraError] = useState<string | null>(null)
+  const skinBusyRef = useRef(false)
   const [skinDownloading, setSkinDownloading] = useState<string | null>(null)
 
   // 首载：无注入数据时两份清单并发发起，成功失败各自接住，互不拖住
@@ -254,7 +260,7 @@ const DeviceWizard = ({
     })
   }, [data, reloadImages])
 
-  const reloadSkins = async (): Promise<void> => {
+  const reloadSkins = useCallback(async (): Promise<void> => {
     try {
       const list = data
         ? [] // 注入场景（测试）不拉真实皮肤清单
@@ -265,7 +271,7 @@ const DeviceWizard = ({
     } catch {
       setSkins([])
     }
-  }
+  }, [data])
 
   useEffect(() => {
     // 装载动作走 async——列表落位在 promise 回调，不在 effect 内同步 setState
@@ -274,7 +280,7 @@ const DeviceWizard = ({
         await reloadSkins()
       })()
     }
-  }, [data, page])
+  }, [data, page, reloadSkins])
 
   // 卸载已装镜像：原生确认框列后果 → main 守卫链（引用/互斥拒绝文案直接展示）
   // → 成功后重拉清单（选中镜像若被删，选择核验派生自动清空）
@@ -304,27 +310,102 @@ const DeviceWizard = ({
     }
   }
 
+  // 导入/下载成功后把新皮肤并入已加载能力（review P2-1：能力 effect 只随画像/
+  // 镜像重拉，陈旧 skinIds 会把本地校验卡死在「皮肤不在可用清单中」）——
+  // capabilityContextId 不变（画像×镜像×emulator 未变，仅运行时枚举扩容）
+  const absorbSkinIntoCapabilities = (skinRef: string): void => {
+    setCapabilities((prev) => {
+      if (prev.phase !== 'ready' || prev.data === null || prev.data.skinIds.includes(skinRef)) {
+        return prev
+      }
+      return {
+        ...prev,
+        data: {
+          ...prev.data,
+          skinIds: [...prev.data.skinIds, skinRef],
+          fields: {
+            ...prev.data.fields,
+            skinRef: { disabledReason: null, min: null, max: null, step: null }
+          }
+        }
+      }
+    })
+  }
+
   const importSkin = async (): Promise<void> => {
+    if (skinBusyRef.current) return
+    skinBusyRef.current = true
+    const generation = capabilityGenerationRef.current
+    setSkinDownloading('导入')
+    setSkinError(null)
     try {
       const added = await window.api.sdk.chooseDeviceSkin()
+      // 用户取消选择器：null 哨兵静默早退，不当失败呈现
+      if (added === null) return
       await reloadSkins()
+      if (generation !== capabilityGenerationRef.current) return
+      absorbSkinIntoCapabilities(added.skinRef)
+      if (profile !== null) skinChoicesRef.current.set(profile.id, added.skinRef)
       setAdvancedSettings((prev) => (prev === null ? prev : { ...prev, skinRef: added.skinRef }))
-    } catch {
-      // 取消选择器或导入失败：清单保持，错误由对话框域呈现
+    } catch (error) {
+      if (generation === capabilityGenerationRef.current) setSkinError(messageOf(error))
+    } finally {
+      skinBusyRef.current = false
+      setSkinDownloading(null)
     }
   }
 
   const downloadSkinByName = async (skinName: string): Promise<void> => {
-    if (skinDownloading !== null) return
+    if (skinBusyRef.current) return
+    skinBusyRef.current = true
+    const generation = capabilityGenerationRef.current
     setSkinDownloading(skinName)
+    setSkinError(null)
     try {
       const added = await window.api.sdk.downloadDeviceSkin(skinName)
+      // 同意框取消：null 哨兵静默早退，不当失败呈现
+      if (added === null) return
       await reloadSkins()
+      if (generation !== capabilityGenerationRef.current) return
+      absorbSkinIntoCapabilities(added.skinRef)
+      if (profile !== null) skinChoicesRef.current.set(profile.id, added.skinRef)
       setAdvancedSettings((prev) => (prev === null ? prev : { ...prev, skinRef: added.skinRef }))
-    } catch {
-      // 下载失败：保持现状（进度通道已结束）
+    } catch (error) {
+      if (generation === capabilityGenerationRef.current) setSkinError(messageOf(error))
     } finally {
+      skinBusyRef.current = false
       setSkinDownloading(null)
+    }
+  }
+
+  const cameraAction = async (action: 'request' | 'refresh' | 'settings'): Promise<void> => {
+    if (cameraBusy) return
+    const generation = capabilityGenerationRef.current
+    setCameraBusy(true)
+    setCameraError(null)
+    try {
+      if (action === 'settings') {
+        await window.api.sdk.cameraSettings()
+        return
+      }
+      const snapshot = await window.api.sdk.cameraAccess(action === 'request')
+      if (generation !== capabilityGenerationRef.current) return
+      setCapabilities((prev) =>
+        prev.data === null
+          ? prev
+          : {
+              ...prev,
+              data: {
+                ...prev.data,
+                cameraSnapshot: snapshot,
+                webcamDeviceIds: snapshot.devices.map((camera) => camera.id)
+              }
+            }
+      )
+    } catch (error) {
+      if (generation === capabilityGenerationRef.current) setCameraError(messageOf(error))
+    } finally {
+      setCameraBusy(false)
     }
   }
 
@@ -351,8 +432,8 @@ const DeviceWizard = ({
     try {
       if (onDownloadImage) await onDownloadImage(entry.packageName)
       else await window.api.sdk.downloadImage(entry.packageName)
-      // 注入场景（测试）无进度可等，也不做真实重拉
-      if (!data) await reloadImages()
+      // 完成后的重拉统一由 100% 进度广播触发（与卸载侧终态订阅同口径，
+      // review P3 双拉去重——invoke resolve 路径不再重复拉清单）
     } catch (error) {
       setDownloadError({ message: messageOf(error), packageName: entry.packageName })
     } finally {
@@ -393,16 +474,14 @@ const DeviceWizard = ({
   useEffect(() => {
     // 装载状态机的同步重置/置 loading 与 useCatalogResource 同模式：状态由
     // effect 依赖驱动，重置不会级联（下一 render 依赖不再变化）
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    const generation = ++capabilityGenerationRef.current
     if (selectedProfile === null || selectedImage === null) {
+      // 依赖驱动的同步重置：下一 render 依赖不再变化，不构成级联渲染
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setCapabilities({ phase: 'idle', data: null, error: null })
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAdvancedSettings(null)
       return
     }
-    const generation = ++capabilityGenerationRef.current
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCapabilities((prev) => ({ ...prev, phase: 'loading', error: null }))
     const fetchCapabilities = async (): Promise<void> => {
       try {
@@ -411,7 +490,12 @@ const DeviceWizard = ({
           : await window.api.sdk.wizardCapabilities(selectedProfile.id, selectedImage.packageName)
         if (generation !== capabilityGenerationRef.current) return
         setCapabilities({ phase: 'ready', data: result, error: null })
-        setAdvancedSettings(result.defaults)
+        setAdvancedSettings({
+          ...result.defaults,
+          skinRef: skinChoicesRef.current.has(selectedProfile.id)
+            ? skinChoicesRef.current.get(selectedProfile.id)!
+            : result.defaults.skinRef
+        })
       } catch (error) {
         if (generation !== capabilityGenerationRef.current) return
         setCapabilities({ phase: 'error', data: null, error: messageOf(error) })
@@ -419,6 +503,7 @@ const DeviceWizard = ({
     }
     void fetchCapabilities()
     // selectedProfile/selectedImage 为渲染期派生的核验值，身份随清单刷新自动失效
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 依赖收敛到 id/packageName：整对象入依赖会在清单刷新时把未变化的选择误判重拉
   }, [selectedProfile?.id, selectedImage?.packageName, onWizardCapabilities])
 
   // 逐镜像兼容性（画像未选时不判——verdict 显示为空）。创建守卫在 main，此处仅展示
@@ -464,12 +549,21 @@ const DeviceWizard = ({
     selectedVerdict?.status === 'supported' &&
     images.phase === 'ready' &&
     downloading === null &&
+    skinDownloading === null &&
+    !cameraBusy &&
     capabilities.phase === 'ready' &&
     Object.keys(settingsCheck.errors).length === 0
 
   // 防连击三层：ref 守卫（同 tick 连点）+ 按钮 disabled + state（跨 tick 视觉/语义）
   const create = async (): Promise<void> => {
-    if (!selectedProfile || !selectedImage || !canCreate || creatingRef.current) return
+    if (
+      !selectedProfile ||
+      !selectedImage ||
+      !canCreate ||
+      creatingRef.current ||
+      skinBusyRef.current
+    )
+      return
     creatingRef.current = true
     setCreating(true)
     try {
@@ -643,11 +737,19 @@ const DeviceWizard = ({
                   capabilities={capabilities.data}
                   value={advancedSettings}
                   errors={settingsCheck.errors}
-                  onChange={setAdvancedSettings}
+                  onChange={(next) => {
+                    if (selectedProfile !== null && next.skinRef !== advancedSettings.skinRef)
+                      skinChoicesRef.current.set(selectedProfile.id, next.skinRef)
+                    setAdvancedSettings(next)
+                  }}
                   skins={skins}
                   onImportSkin={importSkin}
                   onDownloadSkin={downloadSkinByName}
                   skinDownloading={skinDownloading}
+                  skinError={skinError}
+                  cameraBusy={cameraBusy}
+                  cameraError={cameraError}
+                  onCameraAction={cameraAction}
                 />
               ) : null}
             </SettingsPane>

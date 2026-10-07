@@ -1,6 +1,6 @@
-import { BrowserWindow, app, dialog, ipcMain } from 'electron'
+import { BrowserWindow, app, dialog, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
-import { stat } from 'node:fs/promises'
+import { stat, readFile, writeFile } from 'node:fs/promises'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { SdkImageProgress, SdkProgress, SdkSnapshot } from '@shared/types'
 import { appIcon } from '../app-icon'
@@ -9,18 +9,15 @@ import { avdmanagerPathFor, listDeviceProfiles } from './profiles'
 import { jarFingerprint, sdklibJarPathFor } from './profileMetadata'
 import { listImagesWithState, scanLocalImages, splitPackageName } from './catalog'
 import { downloadImagePackage } from './downloader'
-import { buildCapabilities, readEmulatorVersion } from './settings'
-import {
-  downloadSkin,
-  importSkinArchive,
-  scanImportedSkins,
-  scanSdkSkins,
-  type SkinRecord
-} from './skins'
+import { buildEnrichedCapabilities, readEmulatorVersion } from './settings'
+import { importSkinArchive, scanImportedSkins, scanSdkSkins, type SkinRecord } from './skins'
+import { downloadSkin, officialSkinName, SKIN_SOURCE_URL } from './skinSource'
+import { readSkinPresentation } from './skinPresentation'
+import { readCameraSnapshot, requestCameraPermission } from './cameras'
+import { getMainWindow } from '../window'
 import { wizardOwns } from '../window/wizard'
 import { assertUninstallable } from './uninstall'
-import { activePackageOp, beginPackageOp, endPackageOp } from './packageOps'
-import { listWebcams } from './cameras'
+import { activePackageOp, beginPackageOp, endPackageOp, isPackageCreating } from './packageOps'
 import type {
   DeviceProfile,
   DeviceSkinSummary,
@@ -74,6 +71,25 @@ const confirmLicenses = async (): Promise<void> => {
 let profilesCache: { at: number; key: string; profiles: DeviceProfile[] } | null = null
 const PROFILES_CACHE_MS = 300_000
 
+/**
+ * 画像清单（带缓存）：sdk:profiles 与 sdk:wizard-capabilities 共用——能力查询
+ * 随画像/镜像切换高频触发，直跑 avdmanager 每次秒级 Java 太重（review P2-3）。
+ * 创建事务仍走 listDeviceProfiles 直查保新鲜（拒绝陈旧选择的设计不变）。
+ */
+const profilesCached = async (root: string): Promise<DeviceProfile[]> => {
+  const key = `${root}|${await jarFingerprint(sdklibJarPathFor(root))}`
+  const now = Date.now()
+  if (profilesCache && profilesCache.key === key && now - profilesCache.at < PROFILES_CACHE_MS) {
+    return profilesCache.profiles
+  }
+  const profiles = await listDeviceProfiles({
+    avdmanagerPath: avdmanagerPathFor(root),
+    jarPath: sdklibJarPathFor(root)
+  })
+  profilesCache = { at: now, key, profiles }
+  return profiles
+}
+
 // 镜像清单缓存（60s）：向导内反复进出不打 manifest
 let imagesCache: { at: number; root: string; result: ImageCatalogResult } | null = null
 const IMAGES_CACHE_MS = 60_000
@@ -93,21 +109,24 @@ let skinsCache: SkinRecord[] | null = null
 let skinDownloading: string | null = null
 
 const toSkinSummary = (record: SkinRecord): DeviceSkinSummary => {
-  const portrait = record.layout.portrait
-  if (portrait === null) {
-    throw new Error(`皮肤 ${record.id} 缺 portrait 布局，不应入库`)
-  }
+  const summarize = (
+    orientation: SkinRecord['layout']['portrait']
+  ): DeviceSkinSummary['portrait'] =>
+    orientation
+      ? {
+          frameWidth: orientation.frameWidth,
+          frameHeight: orientation.frameHeight,
+          screenWidth: orientation.screenWidth,
+          screenHeight: orientation.screenHeight
+        }
+      : null
   return {
     id: record.id,
     name: record.name,
     skinRef: record.skinRef,
     source: record.source,
-    portrait: {
-      frameWidth: portrait.frameWidth,
-      frameHeight: portrait.frameHeight,
-      screenWidth: portrait.screenWidth,
-      screenHeight: portrait.screenHeight
-    }
+    portrait: summarize(record.layout.portrait),
+    landscape: summarize(record.layout.landscape)
   }
 }
 
@@ -127,6 +146,7 @@ const requireSdkReady = async (root: string): Promise<void> => {
 
 /** registerSdkIpc 可选依赖（默认空实现）：镜像删除守卫的设备引用查询 */
 export interface SdkIpcDeps {
+  savedDeviceSkinRef?: (id: string) => Promise<string | null>
   referencingDeviceNames?: (packageName: string) => string[]
 }
 
@@ -146,17 +166,7 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
   ipcMain.handle(IPC_CHANNELS.sdkProfiles, async (): Promise<DeviceProfile[]> => {
     const root = resolveRoot(undefined)
     await requireSdkReady(root)
-    const key = `${root}|${await jarFingerprint(sdklibJarPathFor(root))}`
-    const now = Date.now()
-    if (profilesCache && profilesCache.key === key && now - profilesCache.at < PROFILES_CACHE_MS) {
-      return profilesCache.profiles
-    }
-    const profiles = await listDeviceProfiles({
-      avdmanagerPath: avdmanagerPathFor(root),
-      jarPath: sdklibJarPathFor(root)
-    })
-    profilesCache = { at: now, key, profiles }
-    return profiles
+    return profilesCached(root)
   })
 
   ipcMain.handle(
@@ -202,10 +212,8 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
       }
       const root = resolveRoot(undefined)
       await requireSdkReady(root)
-      const profiles = await listDeviceProfiles({
-        avdmanagerPath: avdmanagerPathFor(root),
-        jarPath: sdklibJarPathFor(root)
-      })
+      // 画像走缓存（review P2-3）：高频路径不再每次秒级 Java；镜像安装仍实时扫描
+      const profiles = await profilesCached(root)
       const profile = profiles.find((entry) => entry.id === input.profileId)
       if (profile === undefined) {
         throw new Error(`${IPC_CHANNELS.sdkWizardCapabilities}: 画像不存在或不可创建`)
@@ -215,37 +223,51 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
       if (imageRecord === undefined) {
         throw new Error(`${IPC_CHANNELS.sdkWizardCapabilities}: 镜像未安装，能力不可用`)
       }
-      const capabilities = buildCapabilities({
-        profile,
-        imagePackageName: input.imagePackageName,
-        emulatorVersion: await readEmulatorVersion(root)
-      })
-      // 皮肤能力：SDK 已装 + 导入库的 skinRef（皮肤域开放，字段解锁）
-      const [sdkSkins, importedSkins] = await Promise.all([
-        scanSdkSkins(root),
-        scanImportedSkins(app.getPath('userData'))
-      ])
-      capabilities.skinIds = [...sdkSkins, ...importedSkins].map((record) => record.skinRef)
-      capabilities.fields.skinRef =
-        capabilities.skinIds.length > 0
-          ? { disabledReason: null, min: null, max: null, step: null }
-          : {
-              disabledReason: '未找到可用皮肤（SDK 未装或库为空）',
-              min: null,
-              max: null,
-              step: null
-            }
-      // 摄像头能力：宿主枚举（失败不禁用字段，只是没有 webcam 选项）
-      try {
-        capabilities.webcamDeviceIds = (await listWebcams(root)).map((entry) => entry.id)
-      } catch {
-        capabilities.webcamDeviceIds = []
-      }
+      const capabilities = await buildEnrichedCapabilities(
+        {
+          profile,
+          imagePackageName: input.imagePackageName,
+          emulatorVersion: await readEmulatorVersion(root)
+        },
+        root,
+        app.getPath('userData')
+      )
       return capabilities
     }
   )
 
   // ---- 机型皮肤域（plan 设计 6/9）：清单只读（主窗+向导）；导入与下载仅向导窗 ----
+
+  ipcMain.handle(IPC_CHANNELS.sdkDeviceSkinPresentation, async (event, raw: unknown) => {
+    if (event.sender !== getMainWindow()?.webContents) throw new Error('皮肤资源仅主窗可读')
+    if (
+      typeof raw !== 'object' ||
+      raw === null ||
+      typeof (raw as Record<string, unknown>).deviceId !== 'string'
+    )
+      throw new Error('非法设备标识')
+    if (!deps.savedDeviceSkinRef) throw new Error('设备皮肤查询未接入')
+    const ref = await deps.savedDeviceSkinRef((raw as { deviceId: string }).deviceId)
+    return readSkinPresentation(ref, defaultSdkRoot(), app.getPath('userData'))
+  })
+  ipcMain.handle(IPC_CHANNELS.sdkCameraAccess, async (event, raw: unknown) => {
+    requireWizardSender(IPC_CHANNELS.sdkCameraAccess, event)
+    if (
+      typeof raw !== 'object' ||
+      raw === null ||
+      typeof (raw as Record<string, unknown>).request !== 'boolean'
+    )
+      throw new Error('非法摄像头操作')
+    if ((raw as { request: boolean }).request) await requestCameraPermission()
+    return readCameraSnapshot(defaultSdkRoot())
+  })
+  ipcMain.handle(IPC_CHANNELS.sdkCameraSettings, async (event) => {
+    requireWizardSender(IPC_CHANNELS.sdkCameraSettings, event)
+    if (process.platform === 'darwin')
+      await shell.openExternal(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera'
+      )
+  })
 
   ipcMain.handle(IPC_CHANNELS.sdkDeviceSkins, async (): Promise<DeviceSkinSummary[]> => {
     if (skinsCache !== null) return skinsCache.map(toSkinSummary)
@@ -258,34 +280,38 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     return skinsCache.map(toSkinSummary)
   })
 
-  ipcMain.handle(IPC_CHANNELS.wizardChooseDeviceSkin, async (event): Promise<DeviceSkinSummary> => {
-    requireWizardSender(IPC_CHANNELS.wizardChooseDeviceSkin, event)
-    const wizard = BrowserWindow.fromWebContents(event.sender)
-    if (wizard === null) {
-      throw new Error(`${IPC_CHANNELS.wizardChooseDeviceSkin}: 向导窗已不可用`)
+  // null = 用户取消（选择器/同意框）：契约上不走错误通道，renderer 静默早退
+  ipcMain.handle(
+    IPC_CHANNELS.wizardChooseDeviceSkin,
+    async (event): Promise<DeviceSkinSummary | null> => {
+      requireWizardSender(IPC_CHANNELS.wizardChooseDeviceSkin, event)
+      const wizard = BrowserWindow.fromWebContents(event.sender)
+      if (wizard === null) {
+        throw new Error(`${IPC_CHANNELS.wizardChooseDeviceSkin}: 向导窗已不可用`)
+      }
+      const picked = await dialog.showOpenDialog(wizard, {
+        title: '导入机型皮肤压缩包',
+        filters: [{ name: '皮肤压缩包', extensions: ['zip'] }],
+        properties: ['openFile']
+      })
+      if (picked.canceled || picked.filePaths.length === 0) {
+        return null
+      }
+      const record = await importSkinArchive(picked.filePaths[0], app.getPath('userData'))
+      skinsCache = null
+      return toSkinSummary(record)
     }
-    const picked = await dialog.showOpenDialog(wizard, {
-      title: '导入机型皮肤压缩包',
-      filters: [{ name: '皮肤压缩包', extensions: ['zip'] }],
-      properties: ['openFile']
-    })
-    if (picked.canceled || picked.filePaths.length === 0) {
-      throw new Error('未选择皮肤压缩包')
-    }
-    const record = await importSkinArchive(picked.filePaths[0], app.getPath('userData'))
-    skinsCache = null
-    return toSkinSummary(record)
-  })
+  )
 
   ipcMain.handle(
     IPC_CHANNELS.sdkDownloadDeviceSkin,
-    async (event, raw: unknown): Promise<DeviceSkinSummary> => {
+    async (event, raw: unknown): Promise<DeviceSkinSummary | null> => {
       requireWizardSender(IPC_CHANNELS.sdkDownloadDeviceSkin, event)
       if (typeof raw !== 'object' || raw === null) {
         throw new Error(`${IPC_CHANNELS.sdkDownloadDeviceSkin}: 非法的入参`)
       }
       const skinName = (raw as Record<string, unknown>).skinName
-      if (typeof skinName !== 'string' || !/^[A-Za-z0-9_.-]+$/.test(skinName)) {
+      if (typeof skinName !== 'string' || officialSkinName(skinName) === null) {
         throw new Error(`${IPC_CHANNELS.sdkDownloadDeviceSkin}: 非法的皮肤名`)
       }
       if (skinDownloading) {
@@ -293,6 +319,24 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
       }
       skinDownloading = skinName
       try {
+        const consentPath = join(app.getPath('userData'), 'official-skin-consent.txt')
+        const accepted = await readFile(consentPath, 'utf8').then(
+          (value) => value === 'android-studio-device-art',
+          () => false
+        )
+        if (!accepted) {
+          const wizard = BrowserWindow.fromWebContents(event.sender)
+          if (!wizard) throw new Error('向导窗已关闭')
+          const result = await dialog.showMessageBox(wizard, {
+            title: '获取官方机型皮肤',
+            message: '从 Android Studio 官方资源库获取皮肤并缓存在本机。',
+            detail: `来源：${SKIN_SOURCE_URL}\n素材适用上游资源库条款。本应用只按需获取，后续同机型复用缓存；本机 Studio 有相同版本文件时直接复用。`,
+            buttons: ['继续获取', '取消'],
+            cancelId: 1
+          })
+          if (result.response !== 0) return null
+          await writeFile(consentPath, 'android-studio-device-art')
+        }
         const record = await downloadSkin(skinName, app.getPath('userData'), (percent) => {
           const progress: SdkSkinProgress = { skinName, percent }
           pushToAllWindows(IPC_CHANNELS.sdkSkinProgress, progress)
@@ -325,6 +369,7 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     assertUninstallable(packageName, {
       catalog,
       activeOp: activePackageOp(),
+      creating: isPackageCreating(packageName),
       referencing: deps.referencingDeviceNames?.(packageName) ?? []
     })
     beginPackageOp({ kind: 'uninstall', packageName })

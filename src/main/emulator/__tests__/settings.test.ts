@@ -4,12 +4,14 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   buildCapabilities,
+  buildEnrichedCapabilities,
   readEmulatorVersion,
   normalizeAdvancedSettings,
   settingsToConfigPatch,
   settingsToRunnerArgs
 } from '../settings'
 import type { DeviceAdvancedSettings, WizardCapabilities } from '@shared/types'
+import type { SkinRecord } from '../skins'
 
 const fixtureDir = join(__dirname, 'fixtures')
 
@@ -70,7 +72,7 @@ describe('buildCapabilities', () => {
     )
   })
 
-  it('画像 RAM 缺失或低于镜像最低要求时抬到 2048；wear/tv 朝向禁用', () => {
+  it('RAM 地板只约束手机/平板；wear 尊重画像 RAM（缺失回 2048）；wear/tv 朝向禁用', () => {
     const weak = buildCapabilities({
       profile: { id: 'old', ramMiB: 1024, formFactor: 'phone' },
       imagePackageName: 'pkg',
@@ -78,11 +80,75 @@ describe('buildCapabilities', () => {
     })
     expect(weak.defaults.ramMiB).toBe(2048)
     const wear = buildCapabilities({
-      profile: { id: 'wear', ramMiB: 1024, formFactor: 'wear' },
+      profile: { id: 'wear', ramMiB: 768, formFactor: 'wear' },
       imagePackageName: 'pkg',
       emulatorVersion: null
     })
     expect(wear.fields.orientation.disabledReason).not.toBeNull()
+    expect(wear.defaults.ramMiB).toBe(768)
+    const wearNoRam = buildCapabilities({
+      profile: { id: 'wear2', ramMiB: null, formFactor: 'wear' },
+      imagePackageName: 'pkg',
+      emulatorVersion: null
+    })
+    expect(wearNoRam.defaults.ramMiB).toBe(2048)
+  })
+})
+
+describe('buildEnrichedCapabilities（唯一入口：review P1 双路径分叉修复）', () => {
+  const baseInput = {
+    profile: { id: 'pixel_8', ramMiB: 8192, formFactor: 'phone' as const },
+    imagePackageName: 'system-images;android-36;google_apis_playstore;arm64-v8a',
+    emulatorVersion: '36.1.9' as string | null
+  }
+  const skinRecord = (skinRef: string): SkinRecord => ({
+    id: skinRef,
+    name: skinRef,
+    skinRef,
+    directory: `/skins/${skinRef}`,
+    layout: { portrait: null, landscape: null, imageAssets: [] },
+    source: 'sdk' as const
+  })
+
+  it('补齐皮肤与摄像头枚举并解锁 skinRef；摄像头枚举失败不禁用字段、皮肤无源保持禁用带原因', async () => {
+    const caps = await buildEnrichedCapabilities(baseInput, '/sdk', '/user', {
+      scanSdkSkins: async () => [skinRecord('sdk:pixel_7')],
+      scanImportedSkins: async () => [],
+      listWebcams: async () => [
+        { id: 'webcam0', deviceLabel: 'FaceTime' },
+        { id: 'webcam1', deviceLabel: '外接' }
+      ]
+    })
+    expect(caps.skinIds).toEqual(['sdk:pixel_7'])
+    expect(caps.fields.skinRef.disabledReason).toBeNull()
+    expect(caps.webcamDeviceIds).toEqual(['webcam0', 'webcam1'])
+
+    const degraded = await buildEnrichedCapabilities(baseInput, '/sdk', '/user', {
+      scanSdkSkins: async () => [],
+      scanImportedSkins: async () => [],
+      listWebcams: async () => {
+        throw new Error('emulator 挂死')
+      }
+    })
+    expect(degraded.webcamDeviceIds).toEqual([])
+    expect(degraded.fields.skinRef.disabledReason).toContain('未找到可用皮肤')
+  })
+
+  it('P1 回归锚：webcam/皮肤设置在富化能力下过归一化，在裸能力下被拒（两侧口径不再分叉）', async () => {
+    const settings: DeviceAdvancedSettings = {
+      ...capabilitiesOf().defaults,
+      skinRef: 'sdk:pixel_7',
+      frontCamera: { mode: 'webcam', deviceId: 'webcam0' }
+    }
+    const enriched = await buildEnrichedCapabilities(baseInput, '/sdk', '/user', {
+      scanSdkSkins: async () => [skinRecord('sdk:pixel_7')],
+      scanImportedSkins: async () => [],
+      listWebcams: async () => [{ id: 'webcam0', deviceLabel: 'FaceTime' }]
+    })
+    expect(normalizeAdvancedSettings(settings, enriched).errors).toEqual({})
+    const bare = normalizeAdvancedSettings(settings, buildCapabilities(baseInput))
+    expect(bare.errors.skinRef).toBeDefined()
+    expect(bare.errors.frontCamera).toBeDefined()
   })
 })
 
@@ -149,6 +215,35 @@ describe('normalizeAdvancedSettings', () => {
     expect(bad.errors.frontCamera).toBeDefined()
     expect(bad.settings?.graphics).toBe('auto')
   })
+
+  it('网络预设逐字段校验：-netspeed none 与 -netdelay full 报错，不再共享并集（review P3）', () => {
+    const badSpeed = normalizeAdvancedSettings({ ...valid, networkSpeed: 'none' }, caps)
+    expect(badSpeed.errors.networkSpeed).toBeDefined()
+    const badDelay = normalizeAdvancedSettings({ ...valid, networkLatency: 'full' }, caps)
+    expect(badDelay.errors.networkLatency).toBeDefined()
+    expect(
+      normalizeAdvancedSettings({ ...valid, networkLatency: 'none' }, caps).errors.networkLatency
+    ).toBeUndefined()
+    expect(
+      normalizeAdvancedSettings({ ...valid, networkSpeed: 'full' }, caps).errors.networkSpeed
+    ).toBeUndefined()
+  })
+
+  it('字段禁用态 main 侧复核：不支持朝向的形态提交 orientation 被拒（review P3）', () => {
+    const tvCaps = capabilitiesOf({
+      fields: {
+        ...capabilitiesOf().fields,
+        orientation: {
+          disabledReason: '该形态不支持固定初始朝向',
+          min: null,
+          max: null,
+          step: null
+        }
+      }
+    })
+    const result = normalizeAdvancedSettings({ ...valid, orientation: 'landscape' }, tvCaps)
+    expect(result.errors.orientation).toContain('不支持')
+  })
 })
 
 describe('settingsToConfigPatch / settingsToRunnerArgs（白名单映射）', () => {
@@ -171,6 +266,12 @@ describe('settingsToConfigPatch / settingsToRunnerArgs（白名单映射）', ()
       orientation: 'landscape'
     })
     expect(oriented['hw.initialOrientation']).toBe('landscape')
+    // webcam 缺 deviceId 兜底 emulated——不假定 webcam0 永远存在（review P3）
+    const webcamless = settingsToConfigPatch({
+      ...capabilitiesOf().defaults,
+      frontCamera: { mode: 'webcam', deviceId: null }
+    })
+    expect(webcamless['hw.camera.front']).toBe('emulated')
   })
 
   it('runner argv：显式 GPU/网络/非模拟摄像头/Cold 逐项入参；auto 与 emulated 不产生参数', () => {
@@ -193,5 +294,50 @@ describe('settingsToConfigPatch / settingsToRunnerArgs（白名单映射）', ()
       '-camera-back',
       'none'
     ])
+  })
+})
+
+describe('宿主绑定与精确皮肤预选', () => {
+  const input = {
+    profile: { id: 'pixel_7', ramMiB: 8192, formFactor: 'phone' as const },
+    imagePackageName: 'system-images;android-36;google_apis;arm64-v8a',
+    emulatorVersion: '37.2.12'
+  }
+  it('精确对应缓存预选，用户通用外框仍合法，排序变化拒绝旧宿主绑定', async () => {
+    const caps = await buildEnrichedCapabilities(input, '/sdk', '/user', {
+      scanSdkSkins: async () => [],
+      scanImportedSkins: async () => [
+        {
+          id: 'u1',
+          name: 'pixel_7',
+          skinRef: 'downloaded:u1',
+          directory: '/skins/u1',
+          source: 'downloaded',
+          layout: { portrait: null, landscape: null, imageAssets: [] }
+        }
+      ],
+      listWebcams: async () => [{ id: 'webcam0', deviceLabel: 'host-a', name: 'MacBook' }]
+    })
+    expect(caps.defaults.skinRef).toBe('downloaded:u1')
+    expect(caps.recommendedSkin?.name).toBe('pixel_7')
+    const chosen = normalizeAdvancedSettings(
+      { ...caps.defaults, skinRef: null, frontCamera: { mode: 'webcam', deviceId: 'webcam0' } },
+      caps
+    )
+    expect(chosen.settings?.frontCamera).toEqual({
+      mode: 'webcam',
+      deviceId: 'webcam0',
+      hostDeviceId: 'host-a'
+    })
+    expect(chosen.settings?.skinRef).toBeNull()
+    const reordered = {
+      ...caps,
+      cameraSnapshot: {
+        permission: 'granted' as const,
+        devices: [{ id: 'webcam0', deviceLabel: 'host-b' }],
+        error: null
+      }
+    }
+    expect(normalizeAdvancedSettings(chosen.settings, reordered).errors.frontCamera).toBeDefined()
   })
 })

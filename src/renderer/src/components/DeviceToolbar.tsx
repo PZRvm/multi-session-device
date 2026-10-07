@@ -4,17 +4,29 @@ import type { ScreenToolbarButton } from '@shared/types'
 
 type DeviceToolbarProps = {
   disabled: boolean
+  powerDisabled: boolean
   onButton: (button: ScreenToolbarButton) => void
+  onPower: () => void
   onRotate: () => void
 }
 
 /** 物理键工具条：返回/主页/概览/电源/音量加减 + 旋转；中文可访问名 + 焦点样式 + 禁用态 */
-const DeviceToolbar = ({ disabled, onButton, onRotate }: DeviceToolbarProps): React.JSX.Element => {
-  const buttons: Array<{ button: ScreenToolbarButton; label: string; icon: React.JSX.Element }> = [
+const DeviceToolbar = ({
+  disabled,
+  powerDisabled,
+  onButton,
+  onPower,
+  onRotate
+}: DeviceToolbarProps): React.JSX.Element => {
+  const buttons: Array<{
+    button: ScreenToolbarButton | 'power'
+    label: string
+    icon: React.JSX.Element
+  }> = [
     { button: 'back', label: '返回', icon: <ChevronLeft size={16} /> },
     { button: 'home', label: '主页', icon: <Home size={16} /> },
     { button: 'overview', label: '概览', icon: <SquareStack size={16} /> },
-    { button: 'power', label: '电源', icon: <Power size={16} /> },
+    { button: 'power', label: '关闭设备', icon: <Power size={16} /> },
     { button: 'volume-up', label: '音量加', icon: <Volume2 size={16} /> },
     { button: 'volume-down', label: '音量减', icon: <Volume1 size={16} /> }
   ]
@@ -26,8 +38,8 @@ const DeviceToolbar = ({ disabled, onButton, onRotate }: DeviceToolbarProps): Re
           type="button"
           aria-label={entry.label}
           title={entry.label}
-          disabled={disabled}
-          onClick={() => onButton(entry.button)}
+          disabled={entry.button === 'power' ? powerDisabled : disabled}
+          onClick={() => (entry.button === 'power' ? onPower() : onButton(entry.button))}
         >
           {entry.icon}
         </ToolButton>

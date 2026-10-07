@@ -125,7 +125,11 @@ const App = (): React.JSX.Element => {
       <ResizeHandle width={listWidth} onResize={setListWidth} />
       <CanvasArea>
         {selected && selected.status === 'running' ? (
-          <DeviceCanvas device={selected} />
+          <DeviceCanvas
+            key={`${selected.id}:${selected.runId}`}
+            device={selected}
+            onStop={() => handleStop(selected.id)}
+          />
         ) : (
           <CanvasPlaceholder device={selected} onCreate={openWizard} />
         )}

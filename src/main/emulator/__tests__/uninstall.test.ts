@@ -92,6 +92,17 @@ describe('assertUninstallable（守卫链，顺序与文案）', () => {
       })
     ).toThrow('测试机 A、测试机 B')
   })
+
+  it('创建事务进行中（意向探针）→ 拒绝（review P2-2：设备行未入列期间的兜底）', () => {
+    expect(() =>
+      assertUninstallable(PKG, {
+        catalog: { images: [image()] },
+        activeOp: null,
+        creating: true,
+        referencing: []
+      })
+    ).toThrow('新建设备引用')
+  })
 })
 
 describe('uninstallSdkManagerPackage（注入接缝）', () => {
@@ -143,5 +154,28 @@ describe('packageOps（统一互斥）', () => {
     )
     endPackageOp()
     expect(activePackageOp()).toBeNull()
+  })
+
+  it('创建意向：持有期间同包包操作双向被拒、他包不受限；释放后放行（P2-2）', async () => {
+    const {
+      beginPackageOp,
+      endPackageOp,
+      beginPackageCreation,
+      endPackageCreation,
+      isPackageCreating
+    } = await import('../packageOps')
+    beginPackageCreation('pkg-a')
+    expect(isPackageCreating('pkg-a')).toBe(true)
+    expect(() => beginPackageOp({ kind: 'download', packageName: 'pkg-a' })).toThrow('新建设备引用')
+    expect(() => beginPackageOp({ kind: 'uninstall', packageName: 'pkg-a' })).toThrow(
+      '新建设备引用'
+    )
+    // 他包不受限（互斥只按包名收口）
+    beginPackageOp({ kind: 'download', packageName: 'pkg-b' })
+    endPackageOp()
+    endPackageCreation('pkg-a')
+    expect(isPackageCreating('pkg-a')).toBe(false)
+    beginPackageOp({ kind: 'uninstall', packageName: 'pkg-a' })
+    endPackageOp()
   })
 })

@@ -4,6 +4,7 @@ import {
   adbBinaryPath,
   androidToolEnv,
   listDeviceNamesReferencing,
+  savedDeviceSkinRef,
   registerDevicesIpc
 } from '../devices'
 import { registerSdkIpc } from '../emulator'
@@ -23,7 +24,7 @@ export function registerIpcHandlers(): void {
   registerDialogIpc()
   registerDevicesIpc()
   // 引用查询经注入进入 sdk 域（镜像删除守卫）——emulator 域不反向依赖 devices
-  registerSdkIpc({ referencingDeviceNames: listDeviceNamesReferencing })
+  registerSdkIpc({ referencingDeviceNames: listDeviceNamesReferencing, savedDeviceSkinRef })
   registerWizardIpc()
   registerThemeIpc()
 

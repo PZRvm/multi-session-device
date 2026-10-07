@@ -7,6 +7,7 @@ import { join } from 'node:path'
 /** 共享 adb server 锁定本机默认 endpoint——不读宿主传入的远端配置 */
 export const ADB_HOST = '127.0.0.1'
 export const ADB_SERVER_PORT = 5037
+export const ADB_PROBE_TIMEOUT_MS = 3_000
 
 /** 会改写 adb server 端点/端口的环境变量——spawn adb 前一律筛除 */
 const ADB_ENDPOINT_ENV_KEYS = [
@@ -50,35 +51,57 @@ export interface ProbeDeps {
  */
 export async function probeServer(deps: ProbeDeps = {}): Promise<ServerProbe> {
   const connect = deps.connect ?? tcpConnect
-  const socket = await new Promise<Socket>((resolve, reject) => {
-    const conn = connect({ host: ADB_HOST, port: ADB_SERVER_PORT })
-    conn.once('connect', () => resolve(conn))
-    conn.once('error', reject)
-  }).catch(() => null)
-  if (!socket) return { running: false }
-
   return new Promise<ServerProbe>((resolve) => {
+    let socket: Socket | undefined
+    let finished = false
     const finish = (probe: ServerProbe): void => {
-      socket.destroy()
+      if (finished) return
+      finished = true
+      clearTimeout(timer)
+      socket?.off('connect', onConnect)
+      socket?.off('data', onData)
+      socket?.off('end', onFailure)
+      socket?.off('close', onFailure)
+      socket?.off('error', onFailure)
+      socket?.destroy()
       resolve(probe)
     }
+    const onFailure = (): void => finish({ running: false })
+    // 总期限包含连接建立；持续到达的碎片不能像 socket inactivity timeout 一样续期。
+    const timer = setTimeout(onFailure, ADB_PROBE_TIMEOUT_MS)
     let buffer = Buffer.alloc(0)
-    socket.setTimeout(3_000)
-    socket.once('timeout', () => finish({ running: false }))
-    socket.once('error', () => finish({ running: false }))
-    socket.once('data', (chunk: Buffer) => {
+    const onData = (chunk: Buffer): void => {
       buffer = Buffer.concat([buffer, chunk])
       // 应答：OKAY/FAIL + 4 位长度 + 载荷
+      if (buffer.length >= 4 && buffer.subarray(0, 4).toString('utf8') !== 'OKAY') {
+        return onFailure()
+      }
       if (buffer.length < 8) return
-      const status = buffer.subarray(0, 4).toString('utf8')
-      const length = Number.parseInt(buffer.subarray(4, 8).toString('utf8'), 16)
-      if (!Number.isFinite(length) || buffer.length < 8 + length) return
-      if (status !== 'OKAY') return finish({ running: false })
+      const lengthText = buffer.subarray(4, 8).toString('utf8')
+      if (!/^[\da-f]{4}$/i.test(lengthText)) return onFailure()
+      const length = Number.parseInt(lengthText, 16)
+      if (buffer.length < 8 + length) return
       const payload = buffer.subarray(8, 8 + length).toString('utf8')
       const protocolVersion = parseAdbVersionPayload(payload)
       finish(protocolVersion === null ? { running: false } : { running: true, protocolVersion })
-    })
-    socket.write(encodeAdbRequest('host:version'))
+    }
+    const onConnect = (): void => {
+      try {
+        socket?.write(encodeAdbRequest('host:version'))
+      } catch {
+        onFailure()
+      }
+    }
+    try {
+      socket = connect({ host: ADB_HOST, port: ADB_SERVER_PORT })
+      socket.once('connect', onConnect)
+      socket.on('data', onData)
+      socket.once('end', onFailure)
+      socket.once('close', onFailure)
+      socket.once('error', onFailure)
+    } catch {
+      onFailure()
+    }
   })
 }
 

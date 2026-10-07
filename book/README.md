@@ -48,6 +48,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 ### docs/architecture/
 
+- [2026-10-08-android-runtime.md](docs/architecture/2026-10-08-android-runtime.md) — 阶段 4 收尾时的 Android 运行快照：模块、SDK/AVD 隔离、启停与投屏输入契约、操作和排查入口及未验边界
 - [README.md](docs/architecture/README.md) — 架构快照——带日期的文档，描述模块和数据流在当时的真实状态
 - [项目骨架.md](docs/architecture/项目骨架.md) — 多会话模拟器的项目骨架——技术栈、三进程结构、目录职责与规划模块落点（stage 01 改造后快照）
 
@@ -110,10 +111,18 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-06-download-cancel-review.md](notes/issue/2026-10/2026-10-06-download-cancel-review.md) — 下载取消分支 code review 发现——P1 两项（sha1 前取消检查点绕过清理域致 tmp 残留、空态提示被挤入第一轨）、P2 两项（互斥释放时序窗、解压取消真机缺口）、P3 两项（死代码、记录表述过强）
 - [2026-10-06-download-direct-review-findings.md](notes/issue/2026-10/2026-10-06-download-direct-review-findings.md) — 下载进度修复（fix/download-progress-zero）的 Phase 5 code review 发现——写流错误未监听可致 main 崩溃（P1）、.install-bak 可被清单扫描误读（P2）、自生成 package.xml 元素顺序与官方 XSD 不一致（P2）；按纪律只记录不修复
 - [2026-10-06-image-uninstall-review-findings.md](notes/issue/2026-10/2026-10-06-image-uninstall-review-findings.md) — 系统镜像删除功能 code review 发现——P1 卸载/下载互斥单向、P2 引用守卫 TOCTOU 与残留复核盲区，及 7 项 P3
+- [2026-10-06-real-machine-acceptance-findings.md](notes/issue/2026-10/2026-10-06-real-machine-acceptance-findings.md) — 真机验收发现——直连下载自生成 package.xml 缺 xsi:type 声明，avdmanager 拒收导致下载→创建链路断裂（P1）；摄像头枚举 TCC 归属待查（P2）
+- [2026-10-06-skin-camera-integration-findings.md](notes/issue/2026-10/2026-10-06-skin-camera-integration-findings.md) — 皮肤和摄像头后续调研发现——37.2 webcam 输出不被旧正则解析；Pixel 7 屏幕偏移取错 part；横屏首布局被拒，rotation 单位测试也偏离官方格式
 - [2026-10-06-theme-no-cross-window-sync.md](notes/issue/2026-10/2026-10-06-theme-no-cross-window-sync.md) — 主窗切换主题不广播，已打开的向导窗页面外观不跟随——两窗各自只在 preload 时取一次初值（存量问题）
 - [2026-10-06-theme-persist-concurrent-tmp-clash.md](notes/issue/2026-10/2026-10-06-theme-persist-concurrent-tmp-clash.md) — theme.json 落盘的 tmp 文件名固定，两次快速切换的 persist 交错会互相覆盖 tmp——假失败日志且写入顺序无保证
 - [2026-10-06-wizard-category-settings-review-findings.md](notes/issue/2026-10/2026-10-06-wizard-category-settings-review-findings.md) — 向导分类与附加设置分支合并结果（feature/wizard-category-settings @220f298，含 image-uninstall 与独立窗两支并入）的总体 code review 发现——P1 能力构建双路径分叉致皮肤/摄像头选择创建必拒、P2 四项、P3 十二项
-- [2026-10-06-wizard-plan-remaining-acceptance.md](notes/issue/2026-10/2026-10-06-wizard-plan-remaining-acceptance.md) — 模拟器向导 plan（2026-10-05-emulator-wizard）批次 1-9 交付后的遗留清单——皮肤独立下载源核实无果、投屏显示挂通用外框几何、Quick 门槛与六类真机验收未跑
+- [2026-10-06-wizard-plan-remaining-acceptance.md](notes/issue/2026-10/2026-10-06-wizard-plan-remaining-acceptance.md) — 向导扩展验收遗留：官方皮肤获取与投屏已接通，Quick 稳定性、摄像头取景、六类设备及部分真机验证仍未完成
+- [2026-10-07-api32-start-repro-procedure.md](notes/issue/2026-10/2026-10-07-api32-start-repro-procedure.md) — 启动挂起报告的可执行复现附录：临时 ADB 分段应答注入、完整应答对照与生产探测函数验证
+- [2026-10-07-api32-start-smoke-blocked.md](notes/issue/2026-10/2026-10-07-api32-start-smoke-blocked.md) — 已修复 P2 启动挂起：ADB 分段/断开有界收口，启动准备可取消；受控窗口及回归验证通过
+- [2026-10-07-fixture-readme-format-baseline.md](notes/issue/2026-10/2026-10-07-fixture-readme-format-baseline.md) — 全仓 src 格式检查被既有 emulator 测试资料 README 阻断，本次旋转修复的四个代码文件格式通过
+- [2026-10-07-manual-rotation-code-review.md](notes/issue/2026-10/2026-10-07-manual-rotation-code-review.md) — 旋转 review 的两项 P2 已修复；电源按用户要求改为停止模拟器并只从左侧启动
+- [2026-10-07-rotation-input-pause-review.md](notes/issue/2026-10/2026-10-07-rotation-input-pause-review.md) — 旋转暂停丢失 KeyUp 的 P2 已修复：main 释放旧键，暂停期间新输入直接丢弃
+- [2026-10-07-skin-camera-code-review-findings.md](notes/issue/2026-10/2026-10-07-skin-camera-code-review-findings.md) — 皮肤/摄像头集成（feature/wizard-category-settings 未提交轮）的 Phase 5 code review——无阻塞项；P3 三项（主动取消被当失败警示、无背景图皮肤可入库但投屏必报错、启动核验文案叠加），另含门禁复核与安全/几何核对结论
 
 ### notes/learn/
 
@@ -153,7 +162,16 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-06-abort-dual-error-shapes.md](notes/learn/2026-10/2026-10-06-abort-dual-error-shapes.md) — AbortController 取消会以两种错误形态到达——自检点的 CancelledError 与 fetch/execFile 的原生 AbortError；分流只认一种会让取消穿成失败
 - [2026-10-06-async-ipc-handler-test-rejects.md](notes/learn/2026-10/2026-10-06-async-ipc-handler-test-rejects.md) — ipcMain.handle 的 handler 改 async 后，非法入参不再同步抛错而是 reject——测试断言要从 toThrow 换 rejects.toThrow
 - [2026-10-06-book-index-is-generated-no-prettier.md](notes/learn/2026-10/2026-10-06-book-index-is-generated-no-prettier.md) — book/README.md 是索引生成物——对它跑 prettier 会让 release-check 判「索引过期」，收口只跑 book:index 直接提交
+- [2026-10-06-commit-scope-must-be-lowercase.md](notes/learn/2026-10/2026-10-06-commit-scope-must-be-lowercase.md) — commit-msg 钩子要求 scope 全小写——驼峰命名（packageOps）会被主题校验拒两次且报错信息不直观
+- [2026-10-06-injection-masks-dual-path-divergence.md](notes/learn/2026-10/2026-10-06-injection-masks-dual-path-divergence.md) — 测试注入让两侧共用同一份对象会抹平"双路径分叉"——单测全绿的双口径，集成后一边必拒；回归锚要断言"两侧消费同源产物"
 - [2026-10-06-sysimg-zip-2gb-limit-and-package-xml.md](notes/learn/2026-10/2026-10-06-sysimg-zip-2gb-limit-and-package-xml.md) — 系统镜像 zip 两个实测坑——adm-zip 单条目 Buffer 撞 2^31 上限（userdata.img 恰 2147483648 字节）必须走系统 unzip；zip 不带 package.xml 且首层是 <abi>/，直连安装要自生成身份文件
+- [2026-10-07-adb-fragmented-reply-hangs-ipc.md](notes/learn/2026-10/2026-10-07-adb-fragmented-reply-hangs-ipc.md) — ADB 探测只读首段且漏掉 close 会让启动 Promise 挂起；Electron 的丢回复错误需沿等待链追踪
+- [2026-10-07-cancel-vs-failure-channel.md](notes/learn/2026-10/2026-10-07-cancel-vs-failure-channel.md) — 用户主动取消要走可空返回值契约，不走错误通道——字符串匹配取消文案会碎，catch-all 会把取消当失败警示
+- [2026-10-07-discard-rotation-input-and-release-keys.md](notes/learn/2026-10/2026-10-07-discard-rotation-input-and-release-keys.md) — 丢弃旋转期间的新输入时，main 必须释放旧键；renderer 清掉移动 RAF 和跨暂停 IME
+- [2026-10-07-rotation-await-input-guard.md](notes/learn/2026-10/2026-10-07-rotation-await-input-guard.md) — 异步旋转须在首次 await 前阻止新触点；失败提示须按信封副本核对当前归属
+- [2026-10-07-scrcpy-manual-rotation-auto-revert.md](notes/learn/2026-10/2026-10-07-scrcpy-manual-rotation-auto-revert.md) — scrcpy 手动旋转会恢复自动旋转；模拟器须先同步锁定方向，避免传感器立即转回竖屏
+- [2026-10-07-start-preparation-cancel-and-probe-deadline.md](notes/learn/2026-10/2026-10-07-start-preparation-cancel-and-probe-deadline.md) — ADB smart-socket 应按完整帧和总期限结束；启动准备需先登记，并在取消时丢弃迟到结果、释放预留
+- [2026-10-07-studio-skin-camera-runtime-contracts.md](notes/learn/2026-10/2026-10-07-studio-skin-camera-runtime-contracts.md) — 摄像头空清单先核对真实 CLI 格式；Studio 皮肤按固定提交获取，display part 和 quarter-turn 决定渲染及输入几何
 
 ### plans/
 
@@ -185,8 +203,17 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-06-download-cancel.md](plans/2026-10-06-download-cancel.md) — 镜像下载的显式取消——向导行内取消入口、AbortController 中断直连下载、临时文件与半解压目录清理、取消广播与互斥释放；依赖 manifest 直连线路先行
 - [2026-10-06-download-progress-zero.md](plans/2026-10-06-download-progress-zero.md) — 修复镜像下载进度恒 0%——实测确认官方 CLI 两代都无可读进度流（管道全缓冲 + 新版无进度行），改为 manifest 直连流式下载自算真实进度
 - [2026-10-06-image-uninstall.md](plans/2026-10-06-image-uninstall.md) — 已装系统镜像的应用内删除——向导镜像行入口、设备引用守卫、官方卸载路径与清单缓存联动
+- [2026-10-06-real-machine-verification.md](plans/2026-10-06-real-machine-verification.md) — 修复轮真机验证三件（皮肤/摄像头创建链路、能力加载时延、解压取消）与六类画像真机验收的前三阶段设计——Step 0 简报、Phase 1 影响图与风险、Phase 2 验证矩阵与证据契约
 - [2026-10-06-theme-persistence.md](plans/2026-10-06-theme-persistence.md) — 主题状态迁主进程持久化——theme.json 单一事实源，重启保留亮暗模式与主题色，建窗零白闪
 - [2026-10-06-wizard-independent-window.md](plans/2026-10-06-wizard-independent-window.md) — 新建设备向导从模态子窗改为可移动的独立窗口——非模态不阻塞主窗、创建成功后主窗列表刷新、向导生命周期与父窗解耦收口
+- [2026-10-07-adb-probe-and-start-cancel.md](plans/2026-10-07-adb-probe-and-start-cancel.md) — 修复已复现的 ADB 分段应答挂起与启动准备无法取消，覆盖迟到结果和端口清理
+- [2026-10-07-discard-input-during-rotation.md](plans/2026-10-07-discard-input-during-rotation.md) — 旋转期间丢弃新输入、不排队补发，main 释放旧按键和触点，修复暂停后丢失 KeyUp
+- [2026-10-07-manual-screen-rotation.md](plans/2026-10-07-manual-screen-rotation.md) — 修复 Android 设置页手动横屏后被自动旋转立即恢复竖屏的问题
+- [2026-10-07-review-p3-fixes.md](plans/2026-10-07-review-p3-fixes.md) — 修复皮肤/摄像头集成 review 的三项 P3——取消不再冒充失败、零背景皮肤入库口径统一、启动核验文案不再叠加建议从句
+- [2026-10-07-rotation-review-and-power-stop.md](plans/2026-10-07-rotation-review-and-power-stop.md) — 修复旋转等待期间触点竞态与失败提示，将工具条电源接入设备停止链路
+- [2026-10-07-skin-camera-integration.md](plans/2026-10-07-skin-camera-integration.md) — 接通真实皮肤投屏、兼容新版摄像头枚举与权限反馈，并按画像精确获取固定版本官方皮肤后缓存复用
+- [2026-10-07-skin-foreground-occlusion.md](plans/2026-10-07-skin-foreground-occlusion.md) — 按用户最新决定启用真实皮肤前景遮罩，让圆角和摄像头挖孔可以遮住视频
+- [2026-10-07-wizard-skin-choice-preservation.md](plans/2026-10-07-wizard-skin-choice-preservation.md) — 保留向导中明确的机型皮肤选择，避免切换镜像后的能力默认值覆盖通用外框或手选皮肤
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### stage/
@@ -202,6 +229,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [20260929011713-安卓与iOS多实例模拟器工具.md](think-report/20260929011713-安卓与iOS多实例模拟器工具.md) — 多模拟器桌面工具可行性结论：安卓走 AVD+scrcpy 嵌入画面，iOS 走 Simulator+idb，官方并发上限与许可证均已核实可行
 - [20261005221831-模拟器向导分类与附加设置.md](think-report/20261005221831-模拟器向导分类与附加设置.md) — 已确认的向导范围：画像分类、API镜像与附加设置，含机型皮肤和真实摄像头；SD卡暂缓，跨架构二期
+- [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 122 documents -->
+<!-- 150 documents -->

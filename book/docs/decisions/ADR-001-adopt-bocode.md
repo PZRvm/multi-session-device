@@ -8,6 +8,8 @@ description: 本仓库运行在 BoCode 工作流上——book 驱动 code，code
 
 Accepted——模板随本决定一同发布。只有当项目长大到容不下它时才重议。
 
+当前落地约定以 [AGENTS.md](../../../AGENTS.md) 与 [工作流](../../guidelines/workflow.md) 为准：源码在 src/，stage 替代 summary，changelog 未启用；Phase 2 的缺口制关卡见 [ADR-003](ADR-003-intent-gates-vs-distrust-gates.md)。下文保留模板采用时的决定。
+
 ## Context
 
 本项目的大部分实现由 AI coding agent 完成。agent 快，现在也有记忆——但那记忆只归 agent 自己：人读不懂、难管理、不可靠地检索。人失去全局观——落了什么、咬了什么、什么等着修。项目需要一个人和 agent 共读的地方：一本操作手册、组织过的经验、一份持续维护的问题清单；只有存储，这些一个都给不了。在把一切都存在聊天记录和记忆里的项目里，同样的问题被反复回答，同样的坑被反复踩，人再也说不清代码为什么长这样。

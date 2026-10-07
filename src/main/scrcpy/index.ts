@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { connect as tcpConnect, type Socket } from 'node:net'
 import { app, ipcMain, type BrowserWindow, type WebContents } from 'electron'
 import { Consumable, WritableStream } from '@yume-chan/stream-extra'
-import type { ScrcpyMediaStreamPacket } from '@yume-chan/scrcpy'
+import type { AndroidKeyCode, ScrcpyMediaStreamPacket } from '@yume-chan/scrcpy'
 import { h264ParseConfiguration, ScrcpyControlMessageWriter } from '@yume-chan/scrcpy'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { ScreenAckMessage, ScreenFormat, ScreenStateMessage } from '@shared/types'
@@ -33,6 +33,8 @@ export interface ScrcpyManagerDeps {
   isMainSender: (sender: Electron.WebContents) => boolean
   /** 传输建立接缝（单测注入 fake transport） */
   establish?: typeof establishTransport
+  /** 手动旋转的 adb 命令接缝 */
+  runAdb?: typeof runAdb
 }
 
 type SessionState = 'connecting' | 'ready' | 'error' | 'closed'
@@ -61,9 +63,12 @@ interface StreamSession {
   /** 重同步时缓存无关键帧的连续次数（≥2 才升级 resetVideo） */
   nullReplayStalls: number
   lastAckAt: number
-  /** 按下指针与屏状态（兜底释放与电源键切换） */
+  /** 按下指针（兜底释放） */
   pressedPointers: Set<number>
-  screenOn: boolean
+  /** 已接受的按下键（暂停前由 main 释放） */
+  pressedKeys: Set<AndroidKeyCode>
+  /** 方向锁定与旋转期间丢弃所有新输入 */
+  rotating: boolean
   clipboardSequence: number
   clipboardAcks: Map<number, (ok: boolean) => void>
   /** 唯一清理 Promise（幂等） */
@@ -442,7 +447,8 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
       nullReplayStalls: 0,
       lastAckAt: Date.now(),
       pressedPointers: new Set(),
-      screenOn: true,
+      pressedKeys: new Set(),
+      rotating: false,
       clipboardSequence: 0,
       clipboardAcks: new Map(),
       cleanup: null
@@ -548,13 +554,34 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
       }
       const writer = session.writer
       if (!writer) throw new Error('screen:input: 控制通道不可用')
+      if (session.rotating) return
       const context: InjectContext = {
         writer,
         width: session.format.width,
         height: session.format.height,
         pressedPointers: session.pressedPointers,
-        screenOn: session.screenOn,
-        clipboardPaste: (content) => clipboardPaste(session, content)
+        pressedKeys: session.pressedKeys,
+        clipboardPaste: (content) => clipboardPaste(session, content),
+        lockRotation: async () => {
+          // scrcpy 会恢复原先的自动旋转；先同步冻结当前方向，手动切换才会保持。
+          const result = await (deps.runAdb ?? runAdb)(
+            deps.adbPath(),
+            ['-s', session.serial, 'shell', 'wm', 'user-rotation', 'lock'],
+            10_000
+          )
+          if (result.code !== 0) {
+            throw new Error(`锁定屏幕旋转失败：${result.stderr || result.stdout || result.code}`)
+          }
+          if (
+            session.abort.signal.aborted ||
+            sessions.get(session.deviceId) !== session ||
+            active?.deviceId !== session.deviceId ||
+            active.viewToken !== request.viewToken ||
+            session.generation !== request.generation
+          ) {
+            throw new Error('screen:input: 归属过期（旋转锁定期间视图/代次已变化）')
+          }
+        }
       }
       if (request.input.kind === 'text') {
         if (request.input.ime) {
@@ -567,8 +594,17 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
         }
         return
       }
-      await injectInput(request, context)
-      session.screenOn = context.screenOn
+      if (request.input.kind === 'rotate') {
+        // 在第一个 await 前封住新手势，成功、失败或会话取消都解除守卫。
+        session.rotating = true
+        try {
+          await injectInput(request, context)
+        } finally {
+          session.rotating = false
+        }
+      } else {
+        await injectInput(request, context)
+      }
     })
   }
 

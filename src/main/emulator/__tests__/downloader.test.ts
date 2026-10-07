@@ -230,6 +230,31 @@ describe('installImageZip（落位/核验/回滚）', () => {
     // 本次落位被回滚
     expect(state.removed.includes(dest)).toBe(true)
   })
+
+  it('回滚失败不吞：主错误之上叠加残留路径（review P3，对齐设备创建事务标准）', async () => {
+    const { deps, state } = makeEnv()
+    const dest = '/sdk/system-images/android-36.1/google_apis_playstore/arm64-v8a'
+    // 预置已存在目标目录 → 走备份路径；核验失败（缺 source.properties）
+    state.dirs.add(dest)
+    state.files.forEach((f) => {
+      if (f.endsWith('source.properties')) state.files.delete(f)
+    })
+    const fsLike = {
+      ...deps,
+      pathExists: async (path: string) => {
+        if (path.endsWith('source.properties') && path.includes(dest)) return false
+        return state.dirs.has(path) || state.files.has(path)
+      },
+      // 落位/恢复涉及 destDir 的移动全部失败（模拟磁盘/权限异常）
+      moveDir: async (from: string, to: string) => {
+        if (to === dest) throw new Error('move boom')
+        await (deps.moveDir as (from: string, to: string) => Promise<void>)(from, to)
+      }
+    }
+    await expect(
+      installImageZip('/sdk', TARGET, zipPathOf(TARGET.packageName), fsLike)
+    ).rejects.toThrow('回滚未完全成功')
+  })
 })
 
 describe('review 修复回归（P1 写错误 / P2b 顺序）', () => {

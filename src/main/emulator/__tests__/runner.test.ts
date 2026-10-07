@@ -130,6 +130,39 @@ afterEach(() => {
 })
 
 describe('EmulatorRunner 启动', () => {
+  it('准备阶段立即登记，重复 start 共用准备及同一代次', async () => {
+    let ready = (): void => {}
+    const ensureAdbServer = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          ready = resolve
+        })
+    )
+    const { runner, children } = makeRunner({ ensureAdbServer })
+    const first = runner.start('d1')
+    const second = runner.start('d1')
+    expect(runner.phaseOf('d1')).toBe('starting')
+    expect(runner.activeIds()).toEqual(['d1'])
+    await tick()
+    expect(ensureAdbServer).toHaveBeenCalledTimes(1)
+    ready()
+    expect(await second).toEqual(await first)
+    expect(children).toHaveLength(1)
+  })
+
+  it('准备失败清掉登记及端口，允许重新启动', async () => {
+    const adbSerials = vi
+      .fn<RunnerDeps['adbSerials']>()
+      .mockRejectedValueOnce(new Error('adb failed'))
+      .mockResolvedValue(new Set())
+    const { runner, deps, children } = makeRunner({ adbSerials })
+    await expect(runner.start('d1')).rejects.toThrow('adb failed')
+    expect(runner.activeIds()).toEqual([])
+    expect(deps.ports.reservedOf('d1')).toBeUndefined()
+    expect((await runner.start('d1')).serial).toBe('emulator-5554')
+    expect(children).toHaveLength(1)
+  })
+
   it('start 接纳即返回（不等 boot）：spawn 参数/env/进程组就位', async () => {
     const { runner, children } = makeRunner({ bootProbe: async () => true })
     const accepted = await runner.start('d1')
@@ -177,6 +210,71 @@ describe('EmulatorRunner 启动', () => {
 })
 
 describe('EmulatorRunner 取消', () => {
+  it('ADB 准备等待中可立即取消，迟到拒绝不再 spawn，新启动可用', async () => {
+    let fail: (error: Error) => void = () => {}
+    const ensureAdbServer = vi
+      .fn<RunnerDeps['ensureAdbServer']>()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            fail = reject
+          })
+      )
+      .mockResolvedValue(undefined)
+    const { runner, children, events } = makeRunner({ ensureAdbServer })
+    const result = runner.start('d1')
+    const rejected = expect(result).rejects.toThrow('启动已取消')
+    await tick()
+    await runner.cancelStart('d1')
+    await rejected
+    expect(runner.activeIds()).toEqual([])
+    await runner.start('d1')
+    fail(new Error('late adb failure'))
+    await tick()
+    expect(children).toHaveLength(1)
+    expect(events.unexpectedExit).not.toHaveBeenCalled()
+  })
+
+  it('已预留端口、serial 复核等待中取消：释放预留，迟到成功不启动', async () => {
+    let ready: (serials: Set<string>) => void = () => {}
+    const { runner, deps, children } = makeRunner({
+      adbSerials: () =>
+        new Promise<Set<string>>((resolve) => {
+          ready = resolve
+        })
+    })
+    const result = runner.start('d1')
+    const rejected = expect(result).rejects.toThrow('启动已取消')
+    await tick()
+    expect(deps.ports.reservedOf('d1')).toBe(5554)
+    await runner.cancelStart('d1')
+    await rejected
+    expect(deps.ports.reservedOf('d1')).toBeUndefined()
+    ready(new Set())
+    await tick()
+    expect(children).toHaveLength(0)
+    expect(runner.phaseOf('d1')).toBeNull()
+  })
+
+  it('退出清理也中止尚未完成的准备，迟到结果无实例', async () => {
+    let ready = (): void => {}
+    const { runner, children } = makeRunner({
+      ensureAdbServer: () =>
+        new Promise<void>((resolve) => {
+          ready = resolve
+        })
+    })
+    const result = runner.start('d1')
+    const rejected = expect(result).rejects.toThrow('启动已取消')
+    await tick()
+    expect(await runner.disposeAll()).toEqual([])
+    await rejected
+    ready()
+    await tick()
+    expect(children).toHaveLength(0)
+    await expect(runner.start('d2')).rejects.toThrow('暂停启动')
+  })
+
   it('启动中取消：撤销启动并整组终止；迟到的 boot 成功不回写', async () => {
     let probeCalls = 0
     const { runner, children, events } = makeRunner({

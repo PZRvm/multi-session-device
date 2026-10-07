@@ -1,28 +1,17 @@
-import { execFileSync } from 'node:child_process'
-import { readFile, readdir, mkdir, cp, rm, stat, writeFile } from 'node:fs/promises'
+import { readFile, readdir, mkdir, cp, rm, stat } from 'node:fs/promises'
 import { join, resolve, dirname } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import type { DeviceSkinOrientation, SkinImagePart } from '@shared/types'
 import AdmZip from 'adm-zip'
 
 /**
  * 机型皮肤域（plan 设计 6）：SDK 已装皮肤扫描、layout 解析、本地导入与
- * 受控下载（源与许可见 fixtures README 的批次 7 记录）。
- * 投屏几何（frameRect/screenRect 渲染与输入）依赖通用外框计划的几何基础，
- * 此处解析并保存完整结构，显示接入随姊妹计划落地。
+ * 官方资源获取在 skinSource；受控读取在 skinPresentation。
+ * renderer geometry 使用此处的屏幕矩形作为渲染与输入的单一依据。
  */
 
 /** 单方向的屏幕矩形与整框尺寸（CSS 无关的原始像素） */
-export interface SkinOrientation {
-  frameWidth: number
-  frameHeight: number
-  /** 屏幕在整框内的偏移（portrait 无旋转的可靠情形；landscape 旋转待显示接入换算） */
-  screenX: number | null
-  screenY: number | null
-  screenWidth: number
-  screenHeight: number
-  /** 部件旋转（landscape 常见 rotation 90） */
-  rotation: number | null
-}
+export type SkinOrientation = DeviceSkinOrientation
 
 export interface SkinLayout {
   portrait: SkinOrientation | null
@@ -140,26 +129,72 @@ export const parseSkinLayout = (text: string): SkinLayout | null => {
   const displayX = intOf(display, 'x') ?? 0
   const displayY = intOf(display, 'y') ?? 0
 
-  // 整框尺寸以 layouts 方向块为准；屏幕偏移取第一个 part 摆位 + display 偏移
+  // 通过 part.name 定位 display，而非把装饰 part1 当成屏幕。
   const buildOrientation = (name: string): SkinOrientation | null => {
     const base = orientationFrom(layouts, name)
-    if (base === null) return null
-    const partNode = layouts.children
-      .filter((child) => child.name === name)[0]
-      ?.children.filter((child) => /^part/.test(child.name))[0]
-    const partX = intOf(partNode, 'x') ?? 0
-    const partY = intOf(partNode, 'y') ?? 0
+    if (base === null || base.frameWidth <= 0 || base.frameHeight <= 0) return null
+    const orientation = findChild(layouts, name)!
+    const references = orientation.children.filter((child) => /^part\d+$/.test(child.name))
+    const deviceRef = references.find((part) => part.values.name === 'device')
+    const displayRef = deviceRef
+    if (displayRef === undefined) return null
+    const rotation = intOf(displayRef, 'rotation') ?? 0
+    if (![0, 1, 2, 3].includes(rotation)) return null
+    const backgrounds: SkinImagePart[] = []
+    let foregroundMask: string | undefined
+    for (const part of references) {
+      const definition = parts.children.find((entry) => entry.name === part.values.name)
+      const background = definition ? findChild(definition, 'background') : undefined
+      const mask = definition ? findChild(definition, 'foreground')?.values.mask : undefined
+      if (mask !== undefined) foregroundMask = mask
+      if (background?.values.image) {
+        const turn = intOf(part, 'rotation') ?? 0
+        if (![0, 1, 2, 3].includes(turn)) return null
+        const bx = intOf(background, 'x') ?? 0
+        const by = intOf(background, 'y') ?? 0
+        backgrounds.push({
+          file: background.values.image,
+          x: (intOf(part, 'x') ?? 0) + (turn === 1 ? -by : turn === 2 ? -bx : turn === 3 ? by : bx),
+          y: (intOf(part, 'y') ?? 0) + (turn === 1 ? bx : turn === 2 ? -by : turn === 3 ? -bx : by),
+          rotation: turn
+        })
+      }
+    }
+    const width = rotation % 2 ? displayHeight : displayWidth
+    const height = rotation % 2 ? displayWidth : displayHeight
+    const rotatedX =
+      rotation === 1
+        ? -displayY - displayHeight
+        : rotation === 2
+          ? -displayX - displayWidth
+          : rotation === 3
+            ? displayY
+            : displayX
+    const rotatedY =
+      rotation === 1
+        ? displayX
+        : rotation === 2
+          ? -displayY - displayHeight
+          : rotation === 3
+            ? -displayX - displayWidth
+            : displayY
+    const x = (intOf(displayRef, 'x') ?? 0) + rotatedX
+    const y = (intOf(displayRef, 'y') ?? 0) + rotatedY
+    if (x < 0 || y < 0 || x + width > base.frameWidth || y + height > base.frameHeight) return null
     return {
       ...base,
-      screenX: partX + displayX,
-      screenY: partY + displayY,
-      screenWidth: displayWidth,
-      screenHeight: displayHeight
+      screenX: x,
+      screenY: y,
+      screenWidth: width,
+      screenHeight: height,
+      rotation,
+      backgrounds,
+      ...(foregroundMask === undefined ? {} : { foregroundMask })
     }
   }
   const portrait = buildOrientation('portrait')
-  if (portrait === null) return null
   const landscape = buildOrientation('landscape')
+  if (portrait === null && landscape === null) return null
 
   const imageAssets: string[] = []
   for (const assetNode of parts.children.flatMap((group) =>
@@ -174,6 +209,20 @@ export const parseSkinLayout = (text: string): SkinLayout | null => {
   }
   return { portrait, landscape, imageAssets }
 }
+
+/**
+ * 可渲染素材清单（单一来源）：两方向 backgrounds + 前景遮罩去重。
+ * skinPresentation 的受控读取与导入/扫描的可渲染性校验共用本口径——
+ * 零清单的皮肤不进入可选清单（review P3：可入库≠可渲染的分叉）。
+ */
+export const renderableArtFiles = (layout: SkinLayout): string[] => [
+  ...new Set(
+    [layout.portrait, layout.landscape].flatMap((orientation) => [
+      ...(orientation?.backgrounds?.map((image) => image.file) ?? []),
+      ...(orientation?.foregroundMask ? [orientation.foregroundMask] : [])
+    ])
+  )
+]
 
 /** 扫描 SDK skins 目录：合法 layout 的皮肤入库，坏目录跳过不拖垮 */
 export const scanSdkSkins = async (
@@ -194,7 +243,8 @@ export const scanSdkSkins = async (
     try {
       if (!(await d.stat(dir)).isDirectory()) continue
       const layout = parseSkinLayout(await d.readFile(join(dir, 'layout')))
-      if (layout === null) continue
+      // 零可渲染素材（无 background/foreground 引用）跳过：入库必被投屏拒绝
+      if (layout === null || renderableArtFiles(layout).length === 0) continue
       records.push({
         id: name,
         name,
@@ -239,6 +289,41 @@ const defaultImportDeps: Required<ImportedSkinDeps> = {
   }
 }
 
+/** 资源限额（plan 设计 6「限制资源数量/体积」，review P3 补齐） */
+const MAX_SKIN_FILES = 200
+const MAX_SKIN_BYTES = 256 * 1024 * 1024
+const MAX_SKIN_WALK_DEPTH = 4
+
+/** 入库前核验文件数与总体积——超限中文拒绝，防止恶意/损坏压缩包撑爆磁盘 */
+const assertSkinResourceLimits = async (
+  dir: string,
+  d: Required<ImportedSkinDeps>
+): Promise<void> => {
+  let files = 0
+  let bytes = 0
+  const walk = async (current: string, depth: number): Promise<void> => {
+    if (depth > MAX_SKIN_WALK_DEPTH) return
+    for (const entry of await d.readdir(current)) {
+      const full = join(current, entry)
+      const info = await d.stat(full)
+      if (info.isDirectory()) {
+        await walk(full, depth + 1)
+      } else {
+        files += 1
+        const size = (info as { size?: number }).size
+        if (typeof size === 'number') bytes += size
+        if (files > MAX_SKIN_FILES) {
+          throw new Error(`压缩包资源数超限（> ${MAX_SKIN_FILES} 个文件），导入拒绝`)
+        }
+        if (bytes > MAX_SKIN_BYTES) {
+          throw new Error('压缩包体积超限（> 256 MB），导入拒绝')
+        }
+      }
+    }
+  }
+  await walk(dir, 0)
+}
+
 /**
  * 从 zip 压缩包导入皮肤：解包到临时目录 → layout 解析核验 → 素材引用与
  * 路径逃逸核验（realpath 必须落在解包目录内）→ 原子复制进应用皮肤库。
@@ -273,7 +358,12 @@ export const importSkinArchive = async (
     if (layout === null) {
       throw new Error('皮肤 layout 不完整（缺 parts/layouts 或屏幕尺寸），导入拒绝')
     }
-    // 素材引用核验 + 路径逃逸核验（引用不得越出皮肤目录）
+    // 可渲染性前置校验（review P3）：零素材皮肤入库必被投屏拒绝，导入即拒
+    if (renderableArtFiles(layout).length === 0) {
+      throw new Error('皮肤没有可渲染的背景图片（layout 未引用背景/前景素材），导入拒绝')
+    }
+    // 素材引用核验 + 路径逃逸核验（词法 resolve + 禁 `..`/绝对引用 + 条目存在性；
+    // adm-zip 解包不产符号链接，词法与 realpath 等效——review P3 措辞对齐）
     const skinRootResolved = resolve(skinDir)
     const entries = await d.readdir(skinDir)
     for (const asset of layout.imageAssets) {
@@ -288,6 +378,7 @@ export const importSkinArchive = async (
         throw new Error(`素材路径逃逸（${asset}），导入拒绝`)
       }
     }
+    await assertSkinResourceLimits(skinDir, d)
     const id = randomUUID()
     const name = `imported-${id.slice(0, 8)}`
     const target = join(importedSkinsRoot(userData), id)
@@ -309,104 +400,7 @@ export const importSkinArchive = async (
   }
 }
 
-/**
- * 受控下载源（plan 设计 6：至少一种实际可用的官方或明确许可来源）。
- * 2026-10-05 核实结论：AOSP platform/sdk 的 emulator/skins 只有 assets/dynamic
- * 两个子目录（具体机型皮肤不存在）；机型皮肤的唯一官方分发渠道是 emulator
- * SDK 包内的 skins/ 目录（用户 SDK 已随包装载）；Samsung OEM 页面为动态
- * 页面、无固定包 URL 与校验值。因此当前无已核实的独立下载源——数组保持
- * 空配置，核实到固定源后登记 { id, label, license, ref, archiveUrl }。
- */
-export const SKIN_DOWNLOAD_SOURCES: Array<{
-  id: string
-  label: string
-  license: string
-  ref: string
-  archiveUrl: (skinName: string) => string
-}> = []
-
-export interface DownloadSkinDeps extends ImportedSkinDeps {
-  fetcher?: (url: string) => Promise<ArrayBuffer>
-  extractTarGz?: (archivePath: Buffer, targetDir: string) => void
-  writeFile?: (path: string, data: string) => Promise<void>
-}
-
-/**
- * 下载 AOSP 单皮肤 tar.gz → 解包核验 → 入库。progress 回调按字节流转发。
- * （tar.gz 解包在 Electron 主进程走系统 tar；注入接缝供单测。）
- */
-export const downloadSkin = async (
-  skinName: string,
-  userData: string,
-  onProgress: (percent: number) => void,
-  deps: DownloadSkinDeps = {}
-): Promise<SkinRecord> => {
-  const source = SKIN_DOWNLOAD_SOURCES[0]
-  if (source === undefined) {
-    throw new Error('暂无已核实的官方皮肤下载源（详见 skins.ts 核实记录），导入本地压缩包可用')
-  }
-  const fetcher =
-    deps.fetcher ??
-    (async (url: string): Promise<ArrayBuffer> => {
-      const response = await fetch(url)
-      if (!response.ok) throw new Error(`皮肤源响应 HTTP ${response.status}`)
-      return response.arrayBuffer()
-    })
-  onProgress(5)
-  const archive = Buffer.from(await fetcher(source.archiveUrl(skinName)))
-  onProgress(60)
-  const staging = join(userData, 'device-skins-staging', randomUUID())
-  await (deps.mkdir ?? mkdir)(staging, { recursive: true })
-  try {
-    const extract =
-      deps.extractTarGz ??
-      ((archivePath: Buffer, targetDir: string): void => {
-        // macOS/Linux 系统 tar（-z 自动识别 gzip）
-        execFileSync('tar', ['-xzf', '-', '-C', targetDir], {
-          input: archivePath,
-          stdio: ['pipe', 'ignore', 'pipe']
-        })
-      })
-    extract(archive, staging)
-    onProgress(80)
-    const layout = parseSkinLayout(
-      await (deps.readFile ?? defaultImportDeps.readFile)(join(staging, 'layout'))
-    )
-    if (layout === null) {
-      throw new Error(`下载的皮肤 ${skinName} layout 不完整，来源核验失败`)
-    }
-    const entries = await (deps.readdir ?? defaultImportDeps.readdir)(staging)
-    for (const asset of layout.imageAssets) {
-      if (asset.includes('..') || asset.startsWith('/') || !entries.includes(asset)) {
-        throw new Error(`下载的皮肤素材核验失败（${asset}）`)
-      }
-    }
-    const id = randomUUID()
-    const target = join(importedSkinsRoot(userData), id)
-    await (deps.mkdir ?? mkdir)(target, { recursive: true })
-    await (deps.cp ?? defaultImportDeps.cp)(staging, target, { recursive: true })
-    // 来源与许可记录（plan：记录来源、版本、许可）
-    await (deps.writeFile ?? ((path: string, data: string) => writeFile(path, data, 'utf8')))(
-      join(target, 'PROVENANCE.txt'),
-      `source: ${source.id}\nurl: ${source.archiveUrl(skinName)}\nref: ${source.ref}\nlicense: ${source.license}\nimportedAt: ${new Date().toISOString()}\n`
-    )
-    onProgress(100)
-    return {
-      id,
-      name: skinName,
-      skinRef: `downloaded:${id}`,
-      directory: target,
-      layout,
-      source: 'downloaded'
-    }
-  } finally {
-    await (deps.rm ?? defaultImportDeps.rm)(staging, { recursive: true, force: true }).catch(
-      () => undefined
-    )
-  }
-}
-
-/** 应用皮肤库扫描（导入/下载入库的皮肤） */
+/** 应用皮肤库扫描（导入/下载入库的皮肤）。PROVENANCE 溯源（review P2-4）：带来源记录的条目恢复 downloaded:<id> 身份与皮肤名，否则 imported:<id> */
 export const scanImportedSkins = async (
   userData: string,
   deps: SkinCatalogDeps = {}
@@ -419,20 +413,33 @@ export const scanImportedSkins = async (
   } catch {
     return []
   }
+  const readProvenance = async (dir: string): Promise<{ name: string | null } | null> => {
+    let text: string
+    try {
+      text = await d.readFile(join(dir, 'PROVENANCE.txt'))
+    } catch {
+      return null
+    }
+    // 只认真实 PROVENANCE 形态（source: 行）——空串/损坏文件按 imported 处理
+    if (!/^source: /m.test(text)) return null
+    return { name: text.match(/^name: (.+)$/m)?.[1] ?? null }
+  }
   const records: SkinRecord[] = []
   for (const id of ids) {
     const dir = join(root, id)
     try {
       if (!(await d.stat(dir)).isDirectory()) continue
       const layout = parseSkinLayout(await d.readFile(join(dir, 'layout')))
-      if (layout === null) continue
+      // 零可渲染素材跳过：与 SDK 扫描/导入同口径，不进可选清单
+      if (layout === null || renderableArtFiles(layout).length === 0) continue
+      const provenance = await readProvenance(dir)
       records.push({
         id,
-        name: id.slice(0, 8),
-        skinRef: `imported:${id}`,
+        name: provenance?.name ?? id.slice(0, 8),
+        skinRef: provenance !== null ? `downloaded:${id}` : `imported:${id}`,
         directory: dir,
         layout,
-        source: 'imported'
+        source: provenance !== null ? 'downloaded' : 'imported'
       })
     } catch {
       // 单个库条目损坏不影响其余

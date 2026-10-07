@@ -27,14 +27,14 @@
 
 ## skins/ — 皮肤布局语法
 
-`pixel_7-layout`：Android Emulator 皮肤 layout 的嵌套块语法。`parts.device.display` 定义屏幕（width/height/x/y），`parts.portrait.background/foreground` 定义外框素材与 cutout；`layouts.portrait` 给出整框尺寸与部件摆位。SDK `skins/` 目录自带 30+ 皮肤（pixel 全系、nexus 全系、automotive 三种），即「SDK 已安装皮肤」来源；独立可下载源的许可核实推迟到皮肤批次。
+`pixel_7-layout`：Android Emulator 皮肤 layout 的嵌套块语法。`parts.device.display` 定义屏幕（width/height/x/y），`parts.portrait.background/foreground` 定义外框素材与 cutout；`layouts.portrait` 给出整框尺寸与部件摆位。该样本来源目录的早期归属记录不可靠；2026-10-07 实测本应用 SDK 没有 `skins/`，完整机型资源在 Android Studio 的 `plugins/android/resources/device-art-resources/`。扫描仍兼容用户 SDK 自有 skins，官方获取走固定版本 Studio 源码资源库。
 
 ## 本机能力枚举（emulator 36.1.9 `-help-*` 实测）
 
 - `-gpu`：`auto` / `auto-no-window` / `host` / `swiftshader_indirect` / `angle_indirect` / `guest`（无 `host_indirect`）。
 - `-netspeed`：`gsm` / `hscsd` / `gprs` / `umts` / `edge` / `hsdpa` / `lte` / `evdo` / `5g` / `full` + `<num>` / `<up>:<down>`。
 - `-netdelay`：`gsm` / `hscsd` / `gprs` / `umts` / `edge` / `hsdpa` / `lte` / `evdo` / `5g` / `none` + `<num>` / `<min>:<max>`。
-- 摄像头枚举入口：`emulator -avd <任意名> -webcam-list`，输出 `webcam0/webcam1…` 及设备 UUID；实际取流权限归 emulator/QEMU 进程（macOS TCC）。
+- 摄像头枚举入口：`emulator -avd <任意名> -webcam-list`，输出 `webcam0/webcam1…` 及设备 UUID；2026-10-07 Electron 身份探针已列出 MacBook Pro 相机，权限状态仍为 not-determined；取流权限涉及宿主责任链，不能仅凭 CLI 枚举或 emulator 进程名判断。
 - config 键白名单（hw.cpu.ncore / hw.ramSize / vm.heapSize / hw.gpu.mode / hw.initialOrientation / hw.camera.front|back / disk.dataPartition.size / skin.*）以所装 emulator schema 为准，接入前在 settings 模块锁成可测常量。
 
 ## 系统镜像 zip 布局（2026-10-06 真机实证，arm64-v8a-21_r04.zip）
@@ -43,3 +43,12 @@
 - zip **不含 package.xml**（sdkmanager 从 repo 元数据生成）；含 source.properties。
 - `userdata.img` 解压后恰为 2147483648 字节（2^31）——adm-zip 单条目 Buffer 分配撞 Node 上限直接崩，镜像解压必须走系统 `unzip`（zip64 支持）。
 - manifest `archives.complete` 含 size/sha1/相对 url（基址 `sys-img/<源>/`）；绝对 URL 实测 200 且 `accept-ranges: bytes`。
+
+
+## 皮肤布局补充（2026-10-07）
+
+从本机 `/Applications/Android Studio.app/Contents/plugins/android/resources/device-art-resources/` 提取 `pixel_tablet-layout` 与 `nexus_5-layout`，只保存文本用于解析回归，不包含位图。
+
+- Tablet 只有 landscape：整框 2798×1837，屏幕 `(119,117,2560,1600)`。
+- Nexus 5 landscape 的 device part 是 `(261,1145)`、rotation 3；旋转后屏幕 `(261,65,1920,1080)`。
+- 官方来源固定提交及每文件 Git blob 校验见 `skinSource.ts`；图片按需获取，不在测试仓库重打包。

@@ -4,7 +4,11 @@ status: in-progress
 created: 2026-10-05
 ---
 
+> **当前状态（2026-10-08，阶段 4 基础交付收尾）**：实现经 feature/stage04-emulator-integration 合入 dev；官方固定源皮肤获取、真实位图投屏和输入几何已由后续 completed plan 接通。Quick 稳定性、Android 摄像头取景/签名版及完整分类验收仍未完成，本 plan 保持 in-progress。当前遗留以 [验收清单](../notes/issue/2026-10/2026-10-06-wizard-plan-remaining-acceptance.md) 和 [运行快照](../docs/architecture/2026-10-08-android-runtime.md) 为准；下面各进度段与设计保留为原始记录。
+
 > **进度（2026-10-06，feature/wizard-category-settings）**：批次 1–9 已实现——真实 fixture 与 PRD 同步、六类画像元数据（本机 96 画像分布验证）、六源精确镜像目录（276 条目实测）、store v2 与写保护、两页向导、设置契约/能力 IPC/config patch/runner argv、皮肤解析+导入+SDK 扫描、webcam 枚举与占用核验、Quick 实现路径。全部单测绿（272 过）、typecheck/lint 0 错；AVD 创建+config patch+回滚真机冒烟通过。**未完成**：皮肤独立下载源（核实无果，源清单为空）、皮肤投屏显示（挂通用外框几何依赖）、Quick 稳定性门槛（选择器保持禁用）、六类真机验收——详见 issue 2026-10-06-wizard-plan-remaining-acceptance；plan 不翻 completed。设计 3/9 的「重开可查询状态」当日补齐：sdk:images 附带进行中任务快照（activeDownload），向导重开自动恢复进度，后台下载失败经进度通道广播错误与重试入口。
+>
+> **修复轮（2026-10-06 晚）**：集成分支并入（外框/主题随迁，profileMetadata 按向导版融合）+ 总体 review 全量修复——P1 能力构建单一入口、P2×4、P3×12+2 全闭环（五提交 b602f09..e66f9d6，详见 [review-findings 全量修复轮段](../notes/issue/2026-10/2026-10-06-wizard-category-settings-review-findings.md)）；377 测试过、typecheck/lint 0 错 0 警。真机冒烟未跑——下个真机窗口验证：选皮肤/真实摄像头后创建可过（P1）、能力加载不再秒级卡顿（P2-3）、解压瞬间取消（download-cancel 尾巴）。
 
 # 模拟器向导分类与附加设置 — plan
 
@@ -44,23 +48,23 @@ created: 2026-10-05
 
 数据流：应用 SDK 画像资源 + avdmanager 列表 → 结构化画像；官方 manifest + 本地 package.xml/source.properties → 精确镜像目录；main 生成兼容性与设置能力 → preload → 两页向导 → main 再校验 → 官方创建/配置与资源准备 → 元数据提交 → runner → scrcpy 画面/输入。
 
-| 文件或模块                                                                                                                        | 改动                                                              |
-| --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `src/shared/types.ts`、`src/shared/ipc-channels.ts`                                                                               | 画像、镜像、兼容性、设置/能力、皮肤/摄像头契约及受控通道          |
-| `src/main/emulator/profiles.ts`、新增 `profileMetadata.ts`                                                                        | 保留分类标签，读取官方元数据，按 id/厂商关联                      |
-| `src/main/emulator/catalog.ts`、新增 `compatibility.ts`                                                                           | 完整包目录、本地核验、版本/筛选语义与兼容判定                     |
-| 新增 `src/main/emulator/settings.ts`                                                                                              | 默认值、字段能力、归一化、config/argv 白名单映射                  |
-| 新增 `src/main/emulator/skins.ts`、`cameras.ts`                                                                                   | 皮肤目录/导入/下载/布局解析；摄像头能力与枚举                     |
-| `src/main/emulator/index.ts`、`avd.ts`、`runner.ts`                                                                               | SDK 能力 IPC、下载守卫、创建后 patch、实际启动参数                |
-| `src/main/devices/index.ts`、`src/main/store.ts`                                                                                  | 创建事务、精确身份/设置落盘、旧版本兼容与回滚错误                 |
+| 文件或模块                                                                                                                        | 改动                                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `src/shared/types.ts`、`src/shared/ipc-channels.ts`                                                                               | 画像、镜像、兼容性、设置/能力、皮肤/摄像头契约及受控通道                |
+| `src/main/emulator/profiles.ts`、新增 `profileMetadata.ts`                                                                        | 保留分类标签，读取官方元数据，按 id/厂商关联                            |
+| `src/main/emulator/catalog.ts`、新增 `compatibility.ts`                                                                           | 完整包目录、本地核验、版本/筛选语义与兼容判定                           |
+| 新增 `src/main/emulator/settings.ts`                                                                                              | 默认值、字段能力、归一化、config/argv 白名单映射                        |
+| 新增 `src/main/emulator/skins.ts`、`cameras.ts`                                                                                   | 皮肤目录/导入/下载/布局解析；摄像头能力与枚举                           |
+| `src/main/emulator/index.ts`、`avd.ts`、`runner.ts`                                                                               | SDK 能力 IPC、下载守卫、创建后 patch、实际启动参数                      |
+| `src/main/devices/index.ts`、`src/main/store.ts`                                                                                  | 创建事务、精确身份/设置落盘、旧版本兼容与回滚错误                       |
 | `src/main/window/wizard.ts`                                                                                                       | 可缩放独立非模态窗口（2026-10-06 修订）、原生皮肤选择、向导 sender 守卫 |
-| `src/preload/api/sdk.ts`、`src/preload/api/wizard.ts`、`src/preload/index.d.ts`                                                   | 严格类型 API、进度订阅、资源句柄                                  |
-| `src/renderer/src/components/DeviceWizard.tsx`                                                                                    | 两页流程与完整创建状态，按职责拆出向导子组件                      |
-| 新增 `src/renderer/src/components/wizard/`                                                                                        | 画像表格、镜像选择、设置表单、固定摘要                            |
-| `src/renderer/src/components/DeviceCanvas.tsx`、`src/renderer/src/screen/geometry.ts`、`src/renderer/src/hooks/useDeviceInput.ts` | 机型外观与同一 screenRect 的渲染/输入                             |
-| `src/shared/types.ts`、`src/main/scrcpy/` 的输入映射                                                                              | 按新类别实际需要补 D-pad/确认键等；不把手机触控当作全部类别的验证 |
-| 相应模块的 `__tests__/`                                                                                                           | 解析、守卫、配置生效、事务、布局/输入和回归                       |
-| `book/docs/PRD.md` 及受影响契约/快照                                                                                              | 实施时同步两页流程、非 SD 设置、本期 Quick Boot 与二期边界        |
+| `src/preload/api/sdk.ts`、`src/preload/api/wizard.ts`、`src/preload/index.d.ts`                                                   | 严格类型 API、进度订阅、资源句柄                                        |
+| `src/renderer/src/components/DeviceWizard.tsx`                                                                                    | 两页流程与完整创建状态，按职责拆出向导子组件                            |
+| 新增 `src/renderer/src/components/wizard/`                                                                                        | 画像表格、镜像选择、设置表单、固定摘要                                  |
+| `src/renderer/src/components/DeviceCanvas.tsx`、`src/renderer/src/screen/geometry.ts`、`src/renderer/src/hooks/useDeviceInput.ts` | 机型外观与同一 screenRect 的渲染/输入                                   |
+| `src/shared/types.ts`、`src/main/scrcpy/` 的输入映射                                                                              | 按新类别实际需要补 D-pad/确认键等；不把手机触控当作全部类别的验证       |
+| 相应模块的 `__tests__/`                                                                                                           | 解析、守卫、配置生效、事务、布局/输入和回归                             |
+| `book/docs/PRD.md` 及受影响契约/快照                                                                                              | 实施时同步两页流程、非 SD 设置、本期 Quick Boot 与二期边界              |
 
 新增模块以这份职责划分为准，不重构无关代码。`wizard/` 若只作为源码组件目录，不新增 book 分类。
 

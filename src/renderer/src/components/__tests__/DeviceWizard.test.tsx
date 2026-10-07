@@ -401,6 +401,43 @@ describe('DeviceWizard', () => {
     const payload = onCreate.mock.calls[0][0] as { advancedSettings: { cpuCores: number } }
     expect(payload.advancedSettings.cpuCores).toBe(6)
   })
+
+  it('导入皮肤后能力本地并入：字段解锁、无「皮肤不在可用清单」错误、创建不被卡死（P2-1）', async () => {
+    const added = {
+      id: 'u1',
+      name: 'imported-u1',
+      skinRef: 'imported:u1',
+      source: 'imported',
+      portrait: { frameWidth: 100, frameHeight: 200, screenWidth: 80, screenHeight: 160 }
+    }
+    ;(window as { api?: unknown }).api = {
+      sdk: {
+        chooseDeviceSkin: vi.fn(async () => added),
+        deviceSkins: vi.fn(async () => [])
+      }
+    }
+    try {
+      setup()
+      gotoConfigure()
+      fireEvent.click(screen.getByText('API 36'))
+      fireEvent.click(screen.getByRole('tab', { name: '附加设置' }))
+      const skinSelect = (await screen.findByLabelText('机型皮肤')) as HTMLSelectElement
+      // 注入能力样本 skinIds 为空 → 导入前字段禁用
+      expect(skinSelect.disabled).toBe(true)
+      fireEvent.click(screen.getByRole('button', { name: '导入压缩包…' }))
+      // absorb：skinIds 并入新皮肤、字段解锁——不重拉能力（画像×镜像未变）
+      await waitFor(() => expect(skinSelect.disabled).toBe(false))
+      expect(screen.queryByText(/皮肤不在可用清单中/)).toBeNull()
+      fireEvent.click(screen.getByRole('tab', { name: '设备' }))
+      await waitFor(() =>
+        expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(
+          false
+        )
+      )
+    } finally {
+      delete (window as { api?: unknown }).api
+    }
+  })
 })
 
 interface Deferred<T> {
@@ -702,7 +739,6 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     expect(screen.queryByRole('button', { name: '重试下载' })).toBeNull()
   })
 
-
   it('取消广播（重开窗场景）：清下载态且不显示错误横幅', async () => {
     const handle = installSdkStub({
       images: vi.fn(async () => catalogOf(IMAGES, { packageName: PKG_MISSING, percent: 55 }))
@@ -904,5 +940,171 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     fireEvent.click(button)
     fireEvent.click(button) // 同 tick 连点：downloadingRef 拦住第二次
     await waitFor(() => expect(downloadImage).toHaveBeenCalledTimes(1))
+  })
+})
+
+describe('官方皮肤与摄像头新入口', () => {
+  it('获取失败可重试，同 tick 连点只有一次请求，期间禁止创建', async () => {
+    const pending = deferred<never>()
+    const download = vi.fn(() => pending.promise)
+    ;(window as { api?: unknown }).api = { sdk: { downloadDeviceSkin: download } }
+    render(
+      <DeviceWizard
+        onCreate={vi.fn()}
+        onCancel={vi.fn()}
+        data={{ profiles: PROFILES, images: IMAGES }}
+        onWizardCapabilities={async () => ({
+          ...CAPABILITIES,
+          recommendedSkin: { name: 'pixel_8', skinRef: null }
+        })}
+      />
+    )
+    gotoConfigure()
+    fireEvent.click(screen.getByText('API 36'))
+    fireEvent.click(screen.getByRole('tab', { name: '附加设置' }))
+    const button = await screen.findByRole('button', { name: /获取 pixel_8/ })
+    fireEvent.click(button)
+    fireEvent.click(button)
+    expect(download).toHaveBeenCalledTimes(1)
+    expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(true)
+    await act(async () => {
+      pending.reject(new Error('官方源连接失败'))
+      await pending.promise.catch(() => {})
+    })
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', '官方源连接失败')
+    expect(
+      (screen.getByRole('button', { name: /获取 pixel_8/ }) as HTMLButtonElement).disabled
+    ).toBe(false)
+  })
+  it('摄像头刷新保留用户 CPU 设置，选择友好名称回传稳定宿主 id', async () => {
+    const onCreate = vi.fn<(input: unknown) => Promise<void>>(async () => {})
+    const snapshot = {
+      permission: 'granted' as const,
+      devices: [{ id: 'webcam0', name: 'MacBook Pro 相机', deviceLabel: 'host-a' }],
+      error: null
+    }
+    ;(window as { api?: unknown }).api = { sdk: { cameraAccess: vi.fn(async () => snapshot) } }
+    render(
+      <DeviceWizard
+        onCreate={onCreate}
+        onCancel={vi.fn()}
+        data={{ profiles: PROFILES, images: IMAGES }}
+        onWizardCapabilities={async () => ({
+          ...CAPABILITIES,
+          cameraSnapshot: snapshot,
+          webcamDeviceIds: ['webcam0']
+        })}
+      />
+    )
+    gotoConfigure()
+    fireEvent.click(screen.getByText('API 36'))
+    fireEvent.click(screen.getByRole('tab', { name: '附加设置' }))
+    const cpu = await screen.findByLabelText('CPU 核数', { exact: false })
+    fireEvent.change(cpu, { target: { value: '6' } })
+    fireEvent.click(screen.getByRole('button', { name: '刷新摄像头' }))
+    await screen.findByRole('button', { name: '刷新摄像头' })
+    expect((cpu as HTMLInputElement).value).toBe('6')
+    fireEvent.change(screen.getByLabelText('前置摄像头'), { target: { value: 'webcam0' } })
+    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+    await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(1))
+    expect(onCreate.mock.calls[0][0]).toMatchObject({
+      advancedSettings: {
+        cpuCores: 6,
+        frontCamera: { deviceId: 'webcam0', hostDeviceId: 'host-a' }
+      }
+    })
+  })
+})
+
+it('缓存默认皮肤不覆盖同机型换镜像前明确选择的通用外框', async () => {
+  const onCreate = vi.fn<(input: unknown) => Promise<void>>(async () => {})
+  const capabilities = {
+    ...CAPABILITIES,
+    defaults: { ...CAPABILITIES.defaults, skinRef: 'downloaded:cache' },
+    skinIds: ['downloaded:cache'],
+    fields: {
+      ...CAPABILITIES.fields,
+      skinRef: { disabledReason: null, min: null, max: null, step: null }
+    }
+  }
+  render(
+    <DeviceWizard
+      onCreate={onCreate}
+      onCancel={vi.fn()}
+      data={{ profiles: PROFILES, images: IMAGES }}
+      onWizardCapabilities={async () => capabilities}
+    />
+  )
+  gotoConfigure()
+  fireEvent.click(screen.getByText('API 36'))
+  fireEvent.click(screen.getByRole('tab', { name: '附加设置' }))
+  fireEvent.change(await screen.findByLabelText('机型皮肤'), { target: { value: '' } })
+  fireEvent.click(screen.getByRole('tab', { name: '设备' }))
+  fireEvent.click(screen.getByText('API 34'))
+  await waitFor(() =>
+    expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(false)
+  )
+  fireEvent.click(screen.getByRole('button', { name: '创建' }))
+  await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(1))
+  expect(onCreate.mock.calls[0][0]).toMatchObject({ advancedSettings: { skinRef: null } })
+})
+
+describe('取消皮肤操作不是失败（review P3：null 哨兵静默早退）', () => {
+  const openAdvanced = async (): Promise<HTMLSelectElement> => {
+    gotoConfigure()
+    fireEvent.click(screen.getByText('API 36'))
+    fireEvent.click(screen.getByRole('tab', { name: '附加设置' }))
+    return (await screen.findByLabelText('机型皮肤')) as HTMLSelectElement
+  }
+
+  it('获取官方皮肤时同意框取消（resolve null）：无失败警示、字段不解锁、创建不受阻', async () => {
+    const download = vi.fn(async () => null)
+    ;(window as { api?: unknown }).api = { sdk: { downloadDeviceSkin: download } }
+    render(
+      <DeviceWizard
+        onCreate={vi.fn()}
+        onCancel={vi.fn()}
+        data={{ profiles: PROFILES, images: IMAGES }}
+        onWizardCapabilities={async () => ({
+          ...CAPABILITIES,
+          recommendedSkin: { name: 'pixel_8', skinRef: null }
+        })}
+      />
+    )
+    const skinSelect = await openAdvanced()
+    expect(skinSelect.disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: /获取 pixel_8/ }))
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1))
+    await act(async () => {})
+    expect(screen.queryByRole('alert')).toBeNull()
+    // 取消不是入库成功：不 absorb、不解锁字段
+    expect(skinSelect.disabled).toBe(true)
+    expect(
+      (screen.getByRole('button', { name: /获取 pixel_8/ }) as HTMLButtonElement).disabled
+    ).toBe(false)
+    expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('导入压缩包时取消选择器（resolve null）：无失败警示、字段不解锁', async () => {
+    const choose = vi.fn(async () => null)
+    ;(window as { api?: unknown }).api = { sdk: { chooseDeviceSkin: choose } }
+    render(
+      <DeviceWizard
+        onCreate={vi.fn()}
+        onCancel={vi.fn()}
+        data={{ profiles: PROFILES, images: IMAGES }}
+        onWizardCapabilities={async () => CAPABILITIES}
+      />
+    )
+    const skinSelect = await openAdvanced()
+    expect(skinSelect.disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: '导入压缩包…' }))
+    await waitFor(() => expect(choose).toHaveBeenCalledTimes(1))
+    await act(async () => {})
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(skinSelect.disabled).toBe(true)
+    expect(
+      (screen.getByRole('button', { name: '导入压缩包…' }) as HTMLButtonElement).disabled
+    ).toBe(false)
   })
 })

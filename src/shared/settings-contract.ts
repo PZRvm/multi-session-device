@@ -57,11 +57,14 @@ export interface NormalizedSettings {
 const isGpuMode = (value: unknown): value is GpuMode =>
   typeof value === 'string' && (GPU_MODES as string[]).includes(value)
 
-const isNetworkPreset = (value: unknown): value is NetworkPreset =>
-  typeof value === 'string' &&
-  ([...NETWORK_SPEED_PRESETS, ...NETWORK_DELAY_PRESETS] as string[]).includes(value)
+/** -netspeed 与 -netdelay 的合法值不同（speed 无 none、delay 无 full）——逐字段校验（review P3：并集放行了 -netspeed none） */
+const isNetworkSpeed = (value: unknown): value is NetworkPreset =>
+  typeof value === 'string' && (NETWORK_SPEED_PRESETS as string[]).includes(value)
 
-const normalizeCamera = (value: unknown, webcamIds: string[]): CameraConfig | null => {
+const isNetworkDelay = (value: unknown): value is NetworkPreset =>
+  typeof value === 'string' && (NETWORK_DELAY_PRESETS as string[]).includes(value)
+
+const normalizeCamera = (value: unknown, capabilities: WizardCapabilities): CameraConfig | null => {
   if (typeof value !== 'object' || value === null) return null
   const config = value as Record<string, unknown>
   if (config.mode === 'none' || config.mode === 'emulated' || config.mode === 'virtualScene') {
@@ -70,8 +73,12 @@ const normalizeCamera = (value: unknown, webcamIds: string[]): CameraConfig | nu
   // webcam：deviceId 必须是能力接口枚举到的宿主摄像头 id
   if (config.mode === 'webcam') {
     const deviceId = config.deviceId
-    if (typeof deviceId === 'string' && webcamIds.includes(deviceId)) {
-      return { mode: 'webcam', deviceId }
+    if (typeof deviceId === 'string' && capabilities.webcamDeviceIds.includes(deviceId)) {
+      const host = capabilities.cameraSnapshot?.devices.find(
+        (entry) => entry.id === deviceId
+      )?.deviceLabel
+      if (config.hostDeviceId !== undefined && config.hostDeviceId !== host) return null
+      return { mode: 'webcam', deviceId, ...(host ? { hostDeviceId: host } : {}) }
     }
   }
   return null
@@ -107,11 +114,6 @@ export const normalizeAdvancedSettings = (
     capabilities.fields.internalStorageMiB.max ?? Number.MAX_SAFE_INTEGER,
     '内部存储（MiB）'
   )
-  // 存储换算可表示性：MiB 必须能被 1024 整除到 KB 级（sdkmanager 接受 6G/512M 形式，
-  // 这里按 1024 换算后除不尽的 MiB 值明确报错，不静默截断）
-  if (errors.internalStorageMiB === undefined && storage % 1 !== 0) {
-    errors.internalStorageMiB = '内部存储无法按 1024 精确换算，请调整 MiB 值'
-  }
 
   const ram = intIn(
     'ramMiB',
@@ -138,27 +140,29 @@ export const normalizeAdvancedSettings = (
     'CPU 核数'
   )
 
-  const frontCamera = normalizeCamera(raw.frontCamera, capabilities.webcamDeviceIds)
+  const frontCamera = normalizeCamera(raw.frontCamera, capabilities)
   if (frontCamera === null) {
     errors.frontCamera = '前摄像头取值不合法（none/emulated/virtualScene/webcam<枚举 id>）'
   }
-  const rearCamera = normalizeCamera(raw.rearCamera, capabilities.webcamDeviceIds)
+  const rearCamera = normalizeCamera(raw.rearCamera, capabilities)
   if (rearCamera === null) {
     errors.rearCamera = '后摄像头取值不合法（none/emulated/virtualScene/webcam<枚举 id>）'
   }
 
   if (!isGpuMode(raw.graphics)) errors.graphics = 'GPU 模式取值不合法'
-  if (
-    raw.orientation !== null &&
-    raw.orientation !== 'portrait' &&
-    raw.orientation !== 'landscape'
-  ) {
-    errors.orientation = '初始朝向取值不合法'
+  if (raw.orientation !== null) {
+    if (raw.orientation !== 'portrait' && raw.orientation !== 'landscape') {
+      errors.orientation = '初始朝向取值不合法'
+    } else if (capabilities.fields.orientation?.disabledReason != null) {
+      // main 复核字段禁用态（review P3）：wear/tv 等不支持固定朝向的形态，
+      // 伪造入参不写进 config
+      errors.orientation = capabilities.fields.orientation.disabledReason
+    }
   }
-  if (raw.networkSpeed !== null && !isNetworkPreset(raw.networkSpeed)) {
+  if (raw.networkSpeed !== null && !isNetworkSpeed(raw.networkSpeed)) {
     errors.networkSpeed = '网络速度取值不合法'
   }
-  if (raw.networkLatency !== null && !isNetworkPreset(raw.networkLatency)) {
+  if (raw.networkLatency !== null && !isNetworkDelay(raw.networkLatency)) {
     errors.networkLatency = '网络延迟取值不合法'
   }
   if (raw.preferredAbi !== 'optimal' && raw.preferredAbi !== 'arm64-v8a') {
@@ -206,11 +210,11 @@ export const settingsToConfigPatch = (settings: DeviceAdvancedSettings): Record<
     'disk.dataPartition.size': `${settings.internalStorageMiB}M`,
     'hw.camera.front':
       settings.frontCamera.mode === 'webcam'
-        ? (settings.frontCamera.deviceId ?? 'webcam0')
+        ? (settings.frontCamera.deviceId ?? 'emulated')
         : settings.frontCamera.mode,
     'hw.camera.back':
       settings.rearCamera.mode === 'webcam'
-        ? (settings.rearCamera.deviceId ?? 'webcam0')
+        ? (settings.rearCamera.deviceId ?? 'emulated')
         : settings.rearCamera.mode
   }
   if (settings.orientation !== null) {

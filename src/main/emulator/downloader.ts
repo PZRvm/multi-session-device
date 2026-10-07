@@ -412,9 +412,23 @@ export const installImageZip = async (
       // 成功：清备份与临时物
       if (backedUp) await d.removePath(backupDir).catch(() => undefined)
     } catch (error) {
-      // 回滚本次落位并恢复备份
-      await d.removePath(destDir).catch(() => undefined)
-      if (backedUp) await d.moveDir(backupDir, destDir).catch(() => undefined)
+      // 回滚本次落位并恢复备份；回滚失败不吞（review P3，对齐设备创建事务的
+      // 「主错误 + 残留路径」标准）——不虚报「已回滚」
+      const rollbackErrors: string[] = []
+      await d.removePath(destDir).catch((rollback: unknown) => {
+        rollbackErrors.push(rollback instanceof Error ? rollback.message : String(rollback))
+      })
+      if (backedUp) {
+        await d.moveDir(backupDir, destDir).catch((rollback: unknown) => {
+          rollbackErrors.push(rollback instanceof Error ? rollback.message : String(rollback))
+        })
+      }
+      if (rollbackErrors.length > 0) {
+        const main = error instanceof Error ? error.message : String(error)
+        throw new Error(
+          `${main}；且回滚未完全成功（${rollbackErrors.join('；')}），残留待清理：${destDir} 与 ${backupDir}`
+        )
+      }
       throw error
     }
   } finally {

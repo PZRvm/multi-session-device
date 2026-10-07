@@ -1,10 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, RotateCcw } from 'lucide-react'
 import styled from 'styled-components'
-import type { Device, DeviceFrameKind, ScreenFormat, ScreenInput } from '@shared/types'
-import { computeLayout, type FrameRect, type ScreenLayout } from '../screen/geometry'
+import type {
+  Device,
+  DeviceFrameKind,
+  DeviceSkinPresentation,
+  ScreenFormat,
+  ScreenInput
+} from '@shared/types'
+import {
+  computeLayout,
+  computeSkinLayout,
+  skinMaskStyle,
+  type FrameRect,
+  type ScreenLayout
+} from '../screen/geometry'
 import { useDeviceInput } from '../hooks/useDeviceInput'
 import { useDeviceScreen, type ScreenViewStatus } from '../hooks/useDeviceScreen'
+import { toApiResult } from '../api'
 import DeviceToolbar from './DeviceToolbar'
 
 const STATUS_TEXT: Record<Exclude<ScreenViewStatus, 'idle'>, string> = {
@@ -16,10 +29,11 @@ const STATUS_TEXT: Record<Exclude<ScreenViewStatus, 'idle'>, string> = {
 
 type DeviceCanvasProps = {
   device: Device
+  onStop: () => Promise<void>
 }
 
 /** 右栏画面区：主题工作台 + 设备外框 + 等比居中 canvas + 状态覆盖层 + 物理键工具条 */
-const DeviceCanvas = ({ device }: DeviceCanvasProps): React.JSX.Element => {
+const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element => {
   const { canvasRef, status, format, error, onGenerationChange, screenRef, retry, paintsRef } =
     useDeviceScreen(device)
   const proxyRef = useRef<HTMLInputElement | null>(null)
@@ -27,10 +41,64 @@ const DeviceCanvas = ({ device }: DeviceCanvasProps): React.JSX.Element => {
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
   const [inputError, setInputError] = useState<string | null>(null)
   const inputErrorTimerRef = useRef(0)
+  const mountedRef = useRef(false)
+  const rotatingRef = useRef(false)
+  const stoppingRef = useRef(false)
+  const [rotating, setRotating] = useState(false)
+  const [stopping, setStopping] = useState(false)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      window.clearTimeout(inputErrorTimerRef.current)
+    }
+  }, [])
   // 布局是容器尺寸 × 视频格式 × 设备类别的纯派生，不再用 state + effect 级联
+  const [skin, setSkin] = useState<DeviceSkinPresentation | null>(null)
+  const [skinError, setSkinError] = useState<string | null>(null)
+  useEffect(() => {
+    let active = true
+    void (async () => {
+      setSkin(null)
+      setSkinError(null)
+      if (!device.advancedSettings?.skinRef) return
+      try {
+        const result = await window.api.sdk.deviceSkinPresentation(device.id)
+        if (!result) throw new Error('已选皮肤不可用')
+        await Promise.all(
+          result.images.map(
+            (asset) =>
+              new Promise<void>((resolve, reject) => {
+                const image = new Image()
+                image.onload = () =>
+                  image.naturalWidth > 0 ? resolve() : reject(new Error('皮肤图片尺寸无效'))
+                image.onerror = () => reject(new Error(`皮肤图片损坏：${asset.file}`))
+                image.src = asset.url
+              })
+          )
+        )
+        if (active) setSkin(result)
+      } catch (error) {
+        if (active) setSkinError(error instanceof Error ? error.message : String(error))
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [device.id, device.advancedSettings?.skinRef])
   const frameKind: DeviceFrameKind = device.frameKind ?? 'generic'
   const layout = useMemo<ScreenLayout | null>(() => {
     if (!format || containerSize.width <= 0 || containerSize.height <= 0) return null
+    if (skin) {
+      const skinLayout = computeSkinLayout(
+        containerSize.width,
+        containerSize.height,
+        format.width,
+        format.height,
+        skin
+      )
+      if (skinLayout) return skinLayout
+    }
     return computeLayout(
       containerSize.width,
       containerSize.height,
@@ -38,7 +106,7 @@ const DeviceCanvas = ({ device }: DeviceCanvasProps): React.JSX.Element => {
       format.height,
       frameKind
     )
-  }, [format, containerSize, frameKind])
+  }, [format, containerSize, frameKind, skin])
   const layoutRef = useRef<ScreenLayout | null>(null)
   // 事件回调读最新布局：ref 更新放 effect，渲染期不写 ref
   useEffect(() => {
@@ -61,29 +129,72 @@ const DeviceCanvas = ({ device }: DeviceCanvasProps): React.JSX.Element => {
     proxyRef.current?.focus()
   }, [])
 
-  const sendInput = useCallback(
-    (input: ScreenInput): void => {
-      const view = screenRef.current
-      if (!view.envelope) return
-      void window.api.screen
-        .input({ ...view.envelope, width: view.width, height: view.height, input })
-        .catch(() => undefined)
-    },
-    [screenRef]
-  )
-
   const showInputError = useCallback((message: string): void => {
     setInputError(message)
     window.clearTimeout(inputErrorTimerRef.current)
     inputErrorTimerRef.current = window.setTimeout(() => setInputError(null), 4_000)
   }, [])
 
+  const sendInput = useCallback(
+    async (input: ScreenInput): Promise<void> => {
+      const view = screenRef.current
+      if (!view.envelope) return
+      // hook 会原地更新 generation；等待前捕获副本才能识别旧请求。
+      const envelope = { ...view.envelope }
+      const result = await toApiResult(
+        window.api.screen.input({
+          ...envelope,
+          width: view.width,
+          height: view.height,
+          input
+        })
+      )
+      const current = screenRef.current.envelope
+      if (
+        !result.ok &&
+        input.kind !== 'release-all' &&
+        mountedRef.current &&
+        current?.deviceId === envelope.deviceId &&
+        current.runId === envelope.runId &&
+        current.streamId === envelope.streamId &&
+        current.generation === envelope.generation &&
+        current.viewToken === envelope.viewToken
+      )
+        showInputError(result.error)
+    },
+    [screenRef, showInputError]
+  )
+
+  const rotate = async (): Promise<void> => {
+    if (rotatingRef.current || stoppingRef.current) return
+    rotatingRef.current = true
+    setRotating(true)
+    try {
+      await sendInput({ kind: 'rotate' })
+    } finally {
+      rotatingRef.current = false
+      if (mountedRef.current) setRotating(false)
+    }
+  }
+
+  const stop = async (): Promise<void> => {
+    if (stoppingRef.current) return
+    stoppingRef.current = true
+    setStopping(true)
+    const result = await toApiResult(onStop())
+    stoppingRef.current = false
+    if (mountedRef.current) {
+      setStopping(false)
+      if (!result.ok) showInputError(result.error)
+    }
+  }
+
   useDeviceInput({
     canvasContainerRef: stageRef,
     inputProxyRef: proxyRef,
     screenRef,
     layoutRef,
-    enabled: status === 'ready',
+    enabled: status === 'ready' && !rotating && !stopping,
     onInputError: showInputError
   })
 
@@ -91,7 +202,7 @@ const DeviceCanvas = ({ device }: DeviceCanvasProps): React.JSX.Element => {
   useEffect(
     () =>
       onGenerationChange(() => {
-        sendInput({ kind: 'release-all' })
+        void sendInput({ kind: 'release-all' })
       }),
     [onGenerationChange, sendInput]
   )
@@ -121,21 +232,68 @@ const DeviceCanvas = ({ device }: DeviceCanvasProps): React.JSX.Element => {
     <Wrapper>
       <Stage ref={stageRef} onClick={focusProxy}>
         {layout ? (
-          /* 装饰外壳：只占屏幕之外的空间，不挂输入不参与命中 */
-          <FrameShell $frame={layout.frame} aria-hidden="true">
-            {layout.frame.kind === 'phone' ? (
-              <>
-                <EarPiece $top={layout.frame.metrics.top / 2} />
-                <FrontCamera $top={layout.frame.metrics.top / 2} />
-              </>
-            ) : null}
-            {layout.frame.kind === 'tablet' ? (
-              <TabletCamera $top={layout.frame.metrics.top / 2} />
-            ) : null}
-          </FrameShell>
+          /* 装饰位于视频之下；真实皮肤前景在 CanvasSlot 内遮住对应像素。 */
+          layout.skin && skin ? (
+            <SkinShell
+              style={{
+                left: layout.frame.x,
+                top: layout.frame.y,
+                width: layout.frame.width,
+                height: layout.frame.height
+              }}
+              aria-hidden="true"
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  transformOrigin: '0 0',
+                  transform: `${layout.skin.rotated ? `translateX(${layout.frame.width}px) rotate(90deg) ` : ''}scale(${layout.skin.artScale})`
+                }}
+              >
+                {layout.skin.orientation.backgrounds?.map((part, index) => (
+                  <img
+                    key={`${part.file}-${index}`}
+                    src={skin.images.find((asset) => asset.file === part.file)?.url}
+                    alt=""
+                    style={{
+                      position: 'absolute',
+                      left: part.x,
+                      top: part.y,
+                      maxWidth: 'none',
+                      transformOrigin: '0 0',
+                      transform: `rotate(${part.rotation * 90}deg)`
+                    }}
+                  />
+                ))}
+              </div>
+            </SkinShell>
+          ) : (
+            <FrameShell $frame={layout.frame} aria-hidden="true">
+              {layout.frame.kind === 'phone' ? (
+                <>
+                  <EarPiece $top={layout.frame.metrics.top / 2} />
+                  <FrontCamera $top={layout.frame.metrics.top / 2} />
+                </>
+              ) : null}
+              {layout.frame.kind === 'tablet' ? (
+                <TabletCamera $top={layout.frame.metrics.top / 2} />
+              ) : null}
+            </FrameShell>
+          )
         ) : null}
         <CanvasSlot $layout={layout}>
           <canvas ref={canvasRef} aria-label={`${device.name} 画面`} />
+          {layout?.skin?.orientation.foregroundMask && skin ? (
+            <SkinMask
+              src={
+                skin.images.find((asset) => asset.file === layout.skin!.orientation.foregroundMask)
+                  ?.url
+              }
+              alt=""
+              aria-hidden="true"
+              style={skinMaskStyle(layout)}
+            />
+          ) : null}
         </CanvasSlot>
         {!ready ? (
           <Overlay>
@@ -158,15 +316,28 @@ const DeviceCanvas = ({ device }: DeviceCanvasProps): React.JSX.Element => {
             ) : null}
           </Overlay>
         ) : null}
-        {inputError ? <InputError>{inputError}</InputError> : null}
+        {skinError || (skin && layout && !layout.skin) ? (
+          <SkinNotice role="status">
+            {skinError ?? '皮肤与当前视频尺寸不匹配'}；暂用通用外框
+          </SkinNotice>
+        ) : null}
+        {inputError ? <InputError role="alert">{inputError}</InputError> : null}
         {/* 文本/键盘代理：画布聚焦时持有焦点，IME 组合在此发生 */}
         <ProxyInput ref={proxyRef} aria-label={`${device.name} 输入`} tabIndex={-1} />
       </Stage>
       <ToolbarRow>
         <DeviceToolbar
-          disabled={!ready}
-          onButton={(button) => sendInput({ kind: 'button', button })}
-          onRotate={() => sendInput({ kind: 'rotate' })}
+          disabled={!ready || rotating || stopping}
+          powerDisabled={stopping}
+          onButton={(button) => {
+            void sendInput({ kind: 'button', button })
+          }}
+          onPower={() => {
+            void stop()
+          }}
+          onRotate={() => {
+            void rotate()
+          }}
         />
       </ToolbarRow>
     </Wrapper>
@@ -201,6 +372,19 @@ const Stage = styled.div`
 `
 
 /* 设备外壳：外圆角只作用于屏幕之外；overflow 裁掉装饰越界，屏幕是兄弟节点不受影响 */
+const SkinShell = styled.div`
+  position: absolute;
+  pointer-events: none;
+`
+const SkinNotice = styled.p`
+  position: absolute;
+  top: 8px;
+  margin: 0;
+  max-width: 90%;
+  color: var(--board-ink-dim);
+  font-size: 11px;
+  background: var(--board-bg);
+`
 const FrameShell = styled.div<{ $frame: FrameRect }>`
   position: absolute;
   left: ${({ $frame }) => `${$frame.x}px`};
@@ -250,6 +434,16 @@ const TabletCamera = styled.div<{ $top: number }>`
   border-radius: 50%;
   background: var(--device-bezel-ink);
   opacity: 0.7;
+`
+
+const SkinMask = styled.img`
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  max-width: none;
+  transform-origin: 0 0;
+  pointer-events: none;
 `
 
 const CanvasSlot = styled.div<{ $layout: ScreenLayout | null }>`
