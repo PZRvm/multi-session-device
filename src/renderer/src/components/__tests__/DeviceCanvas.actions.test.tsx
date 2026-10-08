@@ -90,9 +90,25 @@ beforeEach(() => {
     screen: { input },
     dialog: { show: dialog },
     devices: {
-      list: async () => ({ devices: [device], revision: 1 }),
+      list: async () => ({
+        devices: [device],
+        revision: 1,
+        storeHealth: { state: 'ok', issues: [] },
+        reconciliation: {
+          signature: null,
+          unavailableCount: 0,
+          orphanCount: 0,
+          storeState: 'ok',
+          pendingNotification: false
+        }
+      }),
       stop,
       start,
+      reconcile: async () => {
+        throw new Error('本测试不触发重查')
+      },
+      reconciliationReport: async () => null,
+      acknowledgeReconciliation: async () => {},
       onChanged: () => () => {},
       onRuntimeError: () => () => {}
     }
@@ -170,7 +186,17 @@ it('切换设备时新画布不继承旋转等待，旧请求失败不显示到�
 it('电源停止当前设备，停止后显示占位，只在左侧点击启动时再次运行', async () => {
   const pending = deferred<DeviceSnapshot>()
   stop.mockReturnValueOnce(pending.promise)
-  start.mockResolvedValueOnce({ revision: 3, devices: [device] })
+  const healthExtras = {
+    storeHealth: { state: 'ok' as const, issues: [] },
+    reconciliation: {
+      signature: null,
+      unavailableCount: 0,
+      orphanCount: 0,
+      storeState: 'ok' as const,
+      pendingNotification: false
+    }
+  }
+  start.mockResolvedValueOnce({ revision: 3, devices: [device], ...healthExtras })
   render(<App />)
   const power = screen.getByRole('button', { name: '关闭设备' }) as HTMLButtonElement
   act(() => {
@@ -183,7 +209,16 @@ it('电源停止当前设备，停止后显示占位，只在左侧点击启动�
   await act(async () =>
     pending.resolve({
       revision: 2,
-      devices: [{ ...device, status: 'stopped', serial: undefined, runId: undefined }]
+      devices: [
+        {
+          ...device,
+          status: 'stopped',
+          serial: undefined,
+          runId: undefined,
+          availability: { state: 'valid', issues: [], checkedAt: 1 }
+        }
+      ],
+      ...healthExtras
     })
   )
   expect(await screen.findByText('设备已停止，从左侧列表启动它')).toBeTruthy()

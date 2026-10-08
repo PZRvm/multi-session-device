@@ -70,6 +70,12 @@ export interface RunnerDeps {
    * 缺省 = legacy 固定 Cold/host——旧设备（advancedSettings 为 null）行为不变。
    */
   extraArgsFor?: (id: string) => string[]
+  /**
+   * 启动准备前置（plan 2026-10-05-avd-reconciliation 设计 4）：共享 ADB/端口步骤
+   * 之前执行的单目标文件核验与摄像头检查；取消/退出经 signal 中止等待，迟到
+   * 结果不 spawn。失败按启动失败收口（onUnexpectedExit 由调用侧合并 lastError）。
+   */
+  beforeStart?: (id: string, runId: string, signal: AbortSignal) => Promise<void>
   /** boot 完成（serial 已随事件发布，可能因端口冲突重试与本对不同） */
   onRunning: (id: string, runId: string, serial: string) => void
   /** 非预期退出：崩溃/启动失败——写回 lastError 与后台错误通知 */
@@ -158,6 +164,9 @@ export class EmulatorRunner {
   async #prepare(id: string, runId: string, preparation: StartPreparation): Promise<StartResult> {
     const signal = preparation.abort.signal
     try {
+      if (this.deps.beforeStart !== undefined) {
+        await awaitWithAbort(() => this.deps.beforeStart!(id, runId, signal), signal)
+      }
       await awaitWithAbort(() => this.deps.ensureAdbServer(), signal)
       const port = await this.deps.ports.acquire(id, signal)
       const serial = serialForPort(port)

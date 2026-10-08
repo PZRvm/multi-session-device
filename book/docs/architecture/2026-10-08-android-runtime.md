@@ -33,7 +33,7 @@ renderer 经 preload 发命令；main 保存真实状态并推送带 revision �
 
 子进程注入应用自有 ANDROID_AVD_HOME，不纳管 Studio 的 AVD。运行总线共享本机 adb 5037；优先选择用户已有 adb，相容则复用，不相容拒绝，不 kill-server。启动前端口分配同时避让预留、TCP 占用与已登记 serial。
 
-emulator 的 console token 路径不能靠 ANDROID_EMULATOR_HOME 隔离；runner 不使用 console 停机，改为终止自己创建的进程组。技术边界见 [实测 issue](../../notes/issue/2026-10/2026-10-05-console-token-escapes-avd-isolation.md)。启动时的完整元数据/目录对账仍是 stage 的 suggested 项，当前仅启动前检查 AVD 是否存在。
+emulator 的 console token 路径不能靠 ANDROID_EMULATOR_HOME 隔离；runner 不使用 console 停机，改为终止自己创建的进程组。技术边界见 [实测 issue](../../notes/issue/2026-10/2026-10-05-console-token-escapes-avd-isolation.md)。元数据/目录对账已于 2026-10-08 落地（[plan](../../plans/2026-10-05-avd-reconciliation.md)）：首载与人工重查做只读核验，availability/storeHealth 随快照发布（missing/broken/inaccessible/unsafe 归因、坏库冻结写入、孤立组只列不清理）；真正启动前经 runner 的 beforeStart 即时核验文件与摄像头，可取消、超时不放行。
 
 ## 启停与输入契约
 
@@ -64,7 +64,7 @@ stateDiagram-v2
 4. 分段探测或取消问题可按 [受控复现附录](../../notes/issue/2026-10/2026-10-07-api32-start-repro-procedure.md) 对照；当前已修复，应正常解析或明确失败，结束诊断后移除临时注入。
 5. 自动验证使用 `npm run build`（含 typecheck）、`npm run lint`、`npm test`；book 变动后生成索引并跑 release-check。
 
-2026-10-08 合并检查：全量 443 项通过、5 项既有跳过，构建/typecheck/lint 通过。真实设备历史证据见阶段步骤、[投屏 plan](../../plans/2026-10-05-device-stream-control.md) 和 [启动修复报告](../../notes/issue/2026-10/2026-10-07-api32-start-smoke-blocked.md)；本次合并未重跑这些设备场景。全仓 src 格式仍有 [既有 fixture README 问题](../../notes/issue/2026-10/2026-10-07-fixture-readme-format-baseline.md)。
+2026-10-08 合并检查：全量 443 项通过、5 项既有跳过，构建/typecheck/lint 通过。2026-10-08 对账轮（feat/avd-reconciliation）：全量 502 项通过、5 项既有跳过，构建/typecheck/lint 通过。真实设备历史证据见阶段步骤、[投屏 plan](../../plans/2026-10-05-device-stream-control.md) 和 [启动修复报告](../../notes/issue/2026-10/2026-10-07-api32-start-smoke-blocked.md)；除合并轮外均未重跑这些设备场景。全仓 src 格式仍有 [既有 fixture README 问题](../../notes/issue/2026-10/2026-10-07-fixture-readme-format-baseline.md)。
 
 ## 未完成范围
 

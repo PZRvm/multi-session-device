@@ -64,6 +64,55 @@ const isNetworkSpeed = (value: unknown): value is NetworkPreset =>
 const isNetworkDelay = (value: unknown): value is NetworkPreset =>
   typeof value === 'string' && (NETWORK_DELAY_PRESETS as string[]).includes(value)
 
+/**
+ * 已存设置的纯形状守卫（store 读取诊断用）：只验形状与枚举闭集，不做能力归一化——
+ * 旧记录未保存 hostDeviceId、null 设置、Quick 已存值与 unknown 形态都合法；
+ * 不按今天的能力清单重新归一化，也不因 Quick 当前禁用把合法已存值判损坏。
+ */
+export const isStoredAdvancedSettings = (value: unknown): value is DeviceAdvancedSettings => {
+  if (typeof value !== 'object' || value === null) return false
+  const settings = value as Record<string, unknown>
+  const camera = (entry: unknown): boolean => {
+    if (typeof entry !== 'object' || entry === null) return false
+    const config = entry as Record<string, unknown>
+    if (
+      config.mode !== 'none' &&
+      config.mode !== 'emulated' &&
+      config.mode !== 'virtualScene' &&
+      config.mode !== 'webcam'
+    ) {
+      return false
+    }
+    if (config.deviceId !== null && typeof config.deviceId !== 'string') return false
+    if (config.hostDeviceId !== undefined && typeof config.hostDeviceId !== 'string') return false
+    // webcam 必须带字符串 deviceId（归一化产出的形状）：null/缺省会让启动核验
+    // 被跳过、argv 静默回落默认摄像头（review P3——「读不到摄像头」零诊断）
+    if (config.mode === 'webcam') {
+      return typeof config.deviceId === 'string' && config.deviceId.length > 0
+    }
+    return config.deviceId === null
+  }
+  const intAtLeast = (entry: unknown, min: number): boolean =>
+    typeof entry === 'number' && Number.isInteger(entry) && entry >= min
+  return (
+    (settings.skinRef === null || typeof settings.skinRef === 'string') &&
+    camera(settings.frontCamera) &&
+    camera(settings.rearCamera) &&
+    (settings.networkSpeed === null || isNetworkSpeed(settings.networkSpeed)) &&
+    (settings.networkLatency === null || isNetworkDelay(settings.networkLatency)) &&
+    (settings.orientation === null ||
+      settings.orientation === 'portrait' ||
+      settings.orientation === 'landscape') &&
+    (settings.bootMode === 'cold' || settings.bootMode === 'quick') &&
+    intAtLeast(settings.internalStorageMiB, 0) &&
+    intAtLeast(settings.cpuCores, 1) &&
+    isGpuMode(settings.graphics) &&
+    intAtLeast(settings.ramMiB, 1) &&
+    intAtLeast(settings.vmHeapMiB, 1) &&
+    (settings.preferredAbi === 'optimal' || settings.preferredAbi === 'arm64-v8a')
+  )
+}
+
 const normalizeCamera = (value: unknown, capabilities: WizardCapabilities): CameraConfig | null => {
   if (typeof value !== 'object' || value === null) return null
   const config = value as Record<string, unknown>

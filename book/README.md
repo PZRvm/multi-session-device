@@ -103,7 +103,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-05-baseline-lint-errors-stage04-files.md](notes/issue/2026-10/2026-10-05-baseline-lint-errors-stage04-files.md) — stage04 基线上 npm run lint 有存量 10 errors / 7 warnings（react-hooks 渲染纪律 + 显式返回类型），全部位于已提交的 scrcpy 与投屏 renderer 文件
 - [2026-10-05-canvas-ready-before-layout.md](notes/issue/2026-10/2026-10-05-canvas-ready-before-layout.md) — 投屏 status 可先于 layout 就绪（format 与 ResizeObserver 的 containerSize 双异步入参有竞态窗口），期间画布槽 0×0 画面不可见且输入被几何拒收；屏幕休眠节流下窗口可拉长到秒级以上
 - [2026-10-05-console-token-escapes-avd-isolation.md](notes/issue/2026-10/2026-10-05-console-token-escapes-avd-isolation.md) — emulator 37.2.12 的 console token 恒读写宿主 ~/.emulator_console_auth_token，ANDROID_EMULATOR_HOME 重定向不覆盖——全新机器上首次启动会向宿主 home 写入新 token
-- [2026-10-05-device-store-read-error-as-empty.md](notes/issue/2026-10/2026-10-05-device-store-read-error-as-empty.md) — readDeviceMetas 将读取错误与坏 JSON 当作空库，后续元数据写入可能覆盖原设备记录；对账草案设计了读取诊断和写保护
+- [2026-10-05-device-store-read-error-as-empty.md](notes/issue/2026-10/2026-10-05-device-store-read-error-as-empty.md) — store v2 已保护坏 JSON 和未知版本，IO 错误、坏条目过滤及副作用前守卫仍缺，后续写入可能丢失原记录
 - [2026-10-05-forward-tunnel-control-read-silent.md](notes/issue/2026-10/2026-10-05-forward-tunnel-control-read-silent.md) — adb forward 隧道下 scrcpy 控制连接的 server→client 读方向在真机上静默——设备消息（剪贴板 ACK/同步推送）收不到，控制写方向正常
 - [2026-10-05-lint-baseline-unclean.md](notes/issue/2026-10/2026-10-05-lint-baseline-unclean.md) — npm run lint 存量 17 项未清（10 errors / 7 warnings）——react-hooks/set-state-in-effect 为主，集中在 DeviceCanvas 等既有效应
 - [2026-10-05-phone-avd-rotation-refused.md](notes/issue/2026-10/2026-10-05-phone-avd-rotation-refused.md) — 手办画像（pixel_8）的 AVD 在系统层拒绝一切旋转：settings user_rotation、emu rotate、虚拟加速度计、相机应用均不改画面方向；手机横屏的真机视觉验证待强制横屏应用或日常人工使用覆盖
@@ -123,6 +123,9 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-07-manual-rotation-code-review.md](notes/issue/2026-10/2026-10-07-manual-rotation-code-review.md) — 旋转 review 的两项 P2 已修复；电源按用户要求改为停止模拟器并只从左侧启动
 - [2026-10-07-rotation-input-pause-review.md](notes/issue/2026-10/2026-10-07-rotation-input-pause-review.md) — 旋转暂停丢失 KeyUp 的 P2 已修复：main 释放旧键，暂停期间新输入直接丢弃
 - [2026-10-07-skin-camera-code-review-findings.md](notes/issue/2026-10/2026-10-07-skin-camera-code-review-findings.md) — 皮肤/摄像头集成（feature/wizard-category-settings 未提交轮）的 Phase 5 code review——无阻塞项；P3 三项（主动取消被当失败警示、无背景图皮肤可入库但投屏必报错、启动核验文案叠加），另含门禁复核与安全/几何核对结论
+- [2026-10-08-avd-reconciliation-code-review.md](notes/issue/2026-10/2026-10-08-avd-reconciliation-code-review.md) — 对账功能 code review 记录——四切片并行审查：6 项 P2（skin symlink 绕过判定、事务半成品误报弹窗、loadError 无消费、v1 id 校验不对称等）与约 18 项 P3，全部只记录不修复
+- [2026-10-08-avd-reconciliation-implementation-review.md](notes/issue/2026-10/2026-10-08-avd-reconciliation-implementation-review.md) — 持久化对账实现轮的自查记录——三项观察（重扫放弃时 availability 陈旧、root 环境下 EACCES 用例降级、弹窗前关窗会重弹一次），均按只记录不修复处理
+- [2026-10-08-device-commit-baseline-findings.md](notes/issue/2026-10/2026-10-08-device-commit-baseline-findings.md) — commitMetas 会投影其他创建中的临时行并遗漏 startedAt，可能留下无 AVD 记录及跳过 Quick 停止核验
 
 ### notes/learn/
 
@@ -172,6 +175,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-07-scrcpy-manual-rotation-auto-revert.md](notes/learn/2026-10/2026-10-07-scrcpy-manual-rotation-auto-revert.md) — scrcpy 手动旋转会恢复自动旋转；模拟器须先同步锁定方向，避免传感器立即转回竖屏
 - [2026-10-07-start-preparation-cancel-and-probe-deadline.md](notes/learn/2026-10/2026-10-07-start-preparation-cancel-and-probe-deadline.md) — ADB smart-socket 应按完整帧和总期限结束；启动准备需先登记，并在取消时丢弃迟到结果、释放预留
 - [2026-10-07-studio-skin-camera-runtime-contracts.md](notes/learn/2026-10/2026-10-07-studio-skin-camera-runtime-contracts.md) — 摄像头空清单先核对真实 CLI 格式；Studio 皮肤按固定提交获取，display part 和 quarter-turn 决定渲染及输入几何
+- [2026-10-08-avd-reconciliation-implementation-notes.md](notes/learn/2026-10/2026-10-08-avd-reconciliation-implementation-notes.md) — 持久化对账实现轮的四条硬经验——fake timers 与真实 fs 的共存法、clearAllMocks 的返回值泄漏、绝对路径段判逃逸、单飞 mock 的 resolver 时序
 
 ### plans/
 
@@ -192,7 +196,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-04-self-drawn-traffic-lights.md](plans/2026-10-04-self-drawn-traffic-lights.md) — 修复轮施工图——自绘三灯根治失焦消失（原生灯永久隐藏 + renderer 常绘圆点 + minimize/fullscreen IPC）、向导弹窗填满视口
 - [2026-10-04-shell-fix-三灯与外观两态.md](plans/2026-10-04-shell-fix-三灯与外观两态.md) — 壳体验修复轮施工图——计数文案改「设备」、失焦三灯消失治理（setWindowButtonVisibility）、外观入口两态化（窄=弹出菜单/宽≥390=三段分段）
 - [2026-10-04-shell-polish-原生向导与板头.md](plans/2026-10-04-shell-polish-原生向导与板头.md) — stage 03 优化轮施工图——新建向导改 Electron 原生模态子窗 + 主窗对齐姊妹仓库板头形态（hidden 标题条/板头三件套/底部橙底新建钮/选中行删除钮常显）
-- [2026-10-05-avd-reconciliation.md](plans/2026-10-05-avd-reconciliation.md) — stage04 对账建议步骤的需求与设计草案：元数据与 AVD 核验、失效可见、孤立目录保留及读取错误保护
+- [2026-10-05-avd-reconciliation.md](plans/2026-10-05-avd-reconciliation.md) — 基于当前 v2 元数据与真实 runner 的对账设计：补齐读取诊断、AVD/镜像核验、失效展示及安全重查
 - [2026-10-05-device-action-icon-alignment.md](plans/2026-10-05-device-action-icon-alignment.md) — 统一设备行加载图标与动作按钮的尺寸和中心，修复启动中、停止中图标错位
 - [2026-10-05-device-frame-and-canvas.md](plans/2026-10-05-device-frame-and-canvas.md) — 用主题工作台替换投屏黑色背景，为手机和平板增加不同外框并保持完整画面与触控坐标一致
 - [2026-10-05-device-store-issue-batch.md](plans/2026-10-05-device-store-issue-batch.md) — 四个设备域 issue 的收口批次——三个已在 7099076 修掉待验证回写，键盘重命名本轮实现
@@ -232,4 +236,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 150 documents -->
+<!-- 154 documents -->

@@ -1,5 +1,5 @@
 import { mkdir, readFile, rm } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { spawn } from 'node:child_process'
 
 export interface AvdDirs {
@@ -97,12 +97,21 @@ export async function createAvd(
   }
 }
 
-/** 删除 AVD 目录与 ini；文件不存在按已删成功（force 语义，容忍手动删过一半） */
+/** 删除 AVD 目录与 ini；文件不存在按已删成功（force 语义，容忍手动删过一半）。
+ * containment 守卫（plan 2026-10-05-avd-reconciliation 设计 4）：只删 avdHome 内
+ * 由 id 推导的两条路径，绝不跟随 ini 内容的外部 path。 */
 export async function deleteAvd(avdName: string, dirs: AvdDirs): Promise<void> {
   if (!/^[A-Za-z0-9._-]+$/.test(avdName)) {
     throw new Error(`非法 AVD 名（${avdName}）`)
   }
   const paths = avdPaths(avdName, dirs)
+  const root = resolve(dirs.avdHome)
+  for (const target of [paths.dir, paths.ini]) {
+    const resolved = resolve(target)
+    if (resolved !== root && !resolved.startsWith(`${root}${sep}`)) {
+      throw new Error(`删除路径越界（${target}），已拒绝`)
+    }
+  }
   await rm(paths.dir, { recursive: true, force: true })
   await rm(paths.ini, { force: true })
 }

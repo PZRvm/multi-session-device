@@ -1,6 +1,6 @@
-import { Plus } from 'lucide-react'
+import { Plus, RefreshCw } from 'lucide-react'
 import styled from 'styled-components'
-import type { Device } from '@shared/types'
+import type { Device, StoreHealthState } from '@shared/types'
 import Button from './Button'
 
 const STATE_HINTS: Record<Device['status'], string> = {
@@ -15,32 +15,88 @@ const STATE_HINTS: Record<Device['status'], string> = {
 type CanvasPlaceholderProps = {
   device: Device | null
   onCreate: () => void
+  /** 人工重查（对账）：异常停止设备与读取失败态的恢复入口 */
+  onRecheck: () => void
+  /** store error：无设备时显示「读取失败」而非普通空库 */
+  storeState: StoreHealthState
+  /** 元数据写入冻结（read-only/error）时禁用新建入口（plan 设计 5） */
+  createDisabled?: boolean
+  /** 重查进行中：重查钮转忙碌禁用（review P3——与汇总条口径一致） */
+  rechecking?: boolean
 }
 
-/** 右栏画面占位区：反映选中设备的真实状态；投屏（DeviceCanvas）在步骤 5 接入 */
-const CanvasPlaceholder = ({ device, onCreate }: CanvasPlaceholderProps): React.JSX.Element => (
-  <Wrapper>
-    {device ? (
-      <>
-        <Title>{device.name}</Title>
-        <Hint>{STATE_HINTS[device.status]}</Hint>
-        {device.serial ? <SubHint>serial：{device.serial}</SubHint> : null}
-        {device.lastError ? <ErrorHint>{device.lastError.message}</ErrorHint> : null}
-      </>
-    ) : (
-      <>
-        <Title>还没有设备</Title>
-        <Hint>三步创建一台：选画像 → 选镜像 → 命名</Hint>
-        <Button variant="primary" onClick={onCreate}>
-          <NewLabel>
-            <Plus size={14} />
-            新建设备
-          </NewLabel>
-        </Button>
-      </>
-    )}
-  </Wrapper>
-)
+/** 健康原因展示：阻断原因优先，warning 次之 */
+const healthHint = (device: Device): string | null => {
+  const availability = device.availability
+  if (availability === undefined || availability.state === 'valid') return null
+  const hint =
+    availability.issues.find((issue) => issue.severity === 'error') ?? availability.issues[0]
+  return hint !== undefined ? hint.message : null
+}
+
+/** 右栏画面占位区：反映选中设备的真实状态与文件健康；运行中画面由 DeviceCanvas 接管 */
+const CanvasPlaceholder = ({
+  device,
+  onCreate,
+  onRecheck,
+  storeState,
+  createDisabled = false,
+  rechecking = false
+}: CanvasPlaceholderProps): React.JSX.Element => {
+  const hint = device !== null && device.status === 'stopped' ? healthHint(device) : null
+  return (
+    <Wrapper>
+      {device !== null ? (
+        <>
+          <Title>{device.name}</Title>
+          <Hint>{STATE_HINTS[device.status]}</Hint>
+          {device.serial ? <SubHint>serial：{device.serial}</SubHint> : null}
+          {hint !== null ? (
+            <>
+              <ErrorHint>{hint}</ErrorHint>
+              <Button onClick={onRecheck} disabled={rechecking}>
+                <ActionLabel>
+                  <RefreshCw size={14} />
+                  重新检查
+                </ActionLabel>
+              </Button>
+            </>
+          ) : null}
+          {device.lastError ? <ErrorHint>{device.lastError.message}</ErrorHint> : null}
+        </>
+      ) : storeState === 'error' ? (
+        <>
+          <Title>设备数据读取失败</Title>
+          <Hint>devices.json 异常，应用已冻结元数据写入并保留原文件</Hint>
+          <Button onClick={onRecheck} disabled={rechecking}>
+            <ActionLabel>
+              <RefreshCw size={14} />
+              重新检查
+            </ActionLabel>
+          </Button>
+        </>
+      ) : (
+        <>
+          <Title>还没有设备</Title>
+          <Hint>三步创建一台：选画像 → 选镜像 → 命名</Hint>
+          <Button
+            variant="primary"
+            onClick={onCreate}
+            disabled={createDisabled}
+            title={
+              createDisabled ? '设备元数据写入已冻结，暂不能新建设备（详情见左侧汇总）' : undefined
+            }
+          >
+            <NewLabel>
+              <Plus size={14} />
+              新建设备
+            </NewLabel>
+          </Button>
+        </>
+      )}
+    </Wrapper>
+  )
+}
 
 const Wrapper = styled.div`
   display: flex;
@@ -80,6 +136,12 @@ const ErrorHint = styled.p`
   font-size: 11px;
   line-height: 1.5;
   color: var(--board-tile-ink);
+`
+
+const ActionLabel = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 `
 
 const NewLabel = styled.span`

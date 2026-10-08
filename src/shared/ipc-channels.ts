@@ -19,6 +19,13 @@ export const IPC_CHANNELS = {
   devicesChanged: 'devices:changed',
   /** 后台运行故障推送（main → 主窗）：spawn/崩溃/停止失败等，renderer 按 eventId 去重 */
   devicesRuntimeError: 'devices:runtime-error',
+  // ---- 持久化对账域（plan 2026-10-05-avd-reconciliation；仅登记主窗）----
+  /** 人工重查：受控重读元数据 + AVD/镜像只读核验，返回合并快照与本轮报告 */
+  devicesReconcile: 'devices:reconcile',
+  /** 拉取最近一次对账报告（不触发隐式扫描；无报告返回 null） */
+  devicesReconciliationReport: 'devices:reconciliation-report',
+  /** 确认已展示某签名的异常汇总（迟到签名不消费新异常） */
+  devicesReconciliationAck: 'devices:reconciliation-ack',
   // ---- 投屏与操控域（stage 04 步骤 5；仅登记主窗可用）----
   /** 登记活动视图（id=null 退订）；listener 先安装，早到包按预设 viewToken 识别 */
   screenActivate: 'screen:activate',

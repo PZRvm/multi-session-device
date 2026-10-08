@@ -7,15 +7,15 @@
 
 来自 `cmdline-tools/latest/lib/sdklib/sdklib.core.jar` 内 `com/android/sdklib/devices/*.xml`（`tools.sdklib.jar` 内为同一份）。avdmanager list device 的 96 个定义由这组文件 + avdmanager 自身展开构成。
 
-| 文件 | 设备数 | namespace 版本 |
-| --- | --- | --- |
-| automotive.xml | 8 | devices/8 |
-| desktop.xml | 4 | devices/1 |
-| devices.xml（通用：Resizable/Freeform/Foldable 等） | 5 | devices/7 |
-| nexus.xml（Nexus/Pixel 手机与平板） | 25 | devices/9 |
-| tv.xml | 3 | devices/1 |
-| wear.xml | 3 | devices/7 |
-| xr.xml | 4 | devices/10 |
+| 文件                                                | 设备数 | namespace 版本 |
+| --------------------------------------------------- | ------ | -------------- |
+| automotive.xml                                      | 8      | devices/8      |
+| desktop.xml                                         | 4      | devices/1      |
+| devices.xml（通用：Resizable/Freeform/Foldable 等） | 5      | devices/7      |
+| nexus.xml（Nexus/Pixel 手机与平板）                 | 25     | devices/9      |
+| tv.xml                                              | 3      | devices/1      |
+| wear.xml                                            | 3      | devices/7      |
+| xr.xml                                              | 4      | devices/10     |
 
 结论：解析必须按 localName 匹配、容忍 namespace 版本 1–10 差异；类别信息主要来自文件归属（wear/tv/desktop/automotive 文件）+ `<d:tag>`（车载 Play 标签等），手机/平板靠屏幕尺寸区分。
 
@@ -43,7 +43,6 @@
 - zip **不含 package.xml**（sdkmanager 从 repo 元数据生成）；含 source.properties。
 - `userdata.img` 解压后恰为 2147483648 字节（2^31）——adm-zip 单条目 Buffer 分配撞 Node 上限直接崩，镜像解压必须走系统 `unzip`（zip64 支持）。
 - manifest `archives.complete` 含 size/sha1/相对 url（基址 `sys-img/<源>/`）；绝对 URL 实测 200 且 `accept-ranges: bytes`。
-
 
 ## 皮肤布局补充（2026-10-07）
 

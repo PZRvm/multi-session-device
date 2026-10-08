@@ -18,12 +18,15 @@ const baseDevice: Device = {
   advancedSettings: null,
   snapshotReadyAt: null,
   createdAt: 0,
+  availability: { state: 'valid', issues: [], checkedAt: 1 },
   status: 'stopped'
 }
 
 type SetupOptions = {
   device?: Device
   selected?: boolean
+  storeTrusted?: boolean
+  metaWritable?: boolean
 }
 
 type SetupHandlers = {
@@ -36,7 +39,12 @@ type SetupHandlers = {
   onRename: Mock<(name: string) => void>
 }
 
-const setup = ({ device = baseDevice, selected = false }: SetupOptions = {}): SetupHandlers => {
+const setup = ({
+  device = baseDevice,
+  selected = false,
+  storeTrusted = true,
+  metaWritable = true
+}: SetupOptions = {}): SetupHandlers => {
   const handlers: SetupHandlers = {
     onSelect: vi.fn(),
     onStart: vi.fn(),
@@ -50,6 +58,8 @@ const setup = ({ device = baseDevice, selected = false }: SetupOptions = {}): Se
     <DeviceRow
       device={device}
       selected={selected}
+      storeTrusted={storeTrusted}
+      metaWritable={metaWritable}
       onSelect={handlers.onSelect}
       onStart={handlers.onStart}
       onStop={handlers.onStop}
@@ -140,6 +150,91 @@ describe('DeviceRow', () => {
     expect(onDelete).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByText('Pixel 8 API 34'))
     expect(onSelect).toHaveBeenCalledTimes(1)
+  })
+
+  describe('文件健康（对账）', () => {
+    it('missing：健康原因行可见；停止态启动钮禁用并说明', () => {
+      const { onStart } = setup({
+        device: {
+          ...baseDevice,
+          availability: {
+            state: 'missing',
+            issues: [
+              {
+                component: 'avd',
+                code: 'ini-missing',
+                message: '缺少 d1.ini（AVD 可能被外部删除）',
+                severity: 'error'
+              }
+            ],
+            checkedAt: 2
+          }
+        }
+      })
+      expect(screen.getByText('文件缺失：缺少 d1.ini（AVD 可能被外部删除）')).toBeTruthy()
+      const start = screen.getByRole('button', { name: '启动 Pixel 8 API 34' }) as HTMLButtonElement
+      expect(start.disabled).toBe(true)
+      expect(start.title).toContain('重新检查')
+      fireEvent.click(start)
+      expect(onStart).not.toHaveBeenCalled()
+    })
+
+    it('checking：停止态启动禁用（检查完成前不放行）', () => {
+      const { onStart } = setup({
+        device: {
+          ...baseDevice,
+          availability: { state: 'checking', issues: [], checkedAt: null }
+        }
+      })
+      const start = screen.getByRole('button', { name: '启动 Pixel 8 API 34' }) as HTMLButtonElement
+      expect(start.disabled).toBe(true)
+      fireEvent.click(start)
+      expect(onStart).not.toHaveBeenCalled()
+    })
+
+    it('运行中文件异常：停止/复制入口保留，原因行可见（不清画面）', () => {
+      const { onStop } = setup({
+        device: {
+          ...baseDevice,
+          status: 'running',
+          serial: 'emulator-5554',
+          availability: {
+            state: 'broken',
+            issues: [
+              {
+                component: 'avd',
+                code: 'config-conflict',
+                message: 'config.ini 的 hw.lcd.width 存在冲突的重复值',
+                severity: 'error'
+              }
+            ],
+            checkedAt: 3
+          }
+        }
+      })
+      expect(screen.getByText(/存在冲突的重复值/)).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: '停止 Pixel 8 API 34' }))
+      expect(onStop).toHaveBeenCalledTimes(1)
+    })
+
+    it('库不可信（store error）：停止态启动禁用', () => {
+      const { onStart } = setup({ storeTrusted: false })
+      const start = screen.getByRole('button', { name: '启动 Pixel 8 API 34' }) as HTMLButtonElement
+      expect(start.disabled).toBe(true)
+      fireEvent.click(start)
+      expect(onStart).not.toHaveBeenCalled()
+    })
+
+    it('库只读（read-only）：删除禁用并说明；双击/F2 不进重命名', () => {
+      setup({ metaWritable: false })
+      const del = screen.getByRole('button', { name: '删除 Pixel 8 API 34' }) as HTMLButtonElement
+      expect(del.disabled).toBe(true)
+      expect(del.title).toContain('冻结')
+      fireEvent.doubleClick(screen.getByText('Pixel 8 API 34'))
+      expect(screen.queryByLabelText('重命名设备')).toBeNull()
+      fireEvent.keyDown(screen.getByText('Pixel 8 API 34').parentElement!, { key: 'F2' })
+      expect(screen.queryByLabelText('重命名设备')).toBeNull()
+    })
   })
 
   it('键盘语义：Enter / 空格选中行', () => {
@@ -257,5 +352,34 @@ describe('DeviceRow', () => {
       fireEvent.blur(screen.getByLabelText('重命名设备'))
       expect(onRename).toHaveBeenCalledTimes(1)
     })
+  })
+})
+
+describe('DeviceRow（review 修复轮）', () => {
+  it('read-only 下尝试重命名：不进输入框，onRenameBlocked 反馈被调用', () => {
+    const onRename = vi.fn()
+    const onRenameBlocked = vi.fn()
+    render(
+      <DeviceRow
+        device={baseDevice}
+        selected={false}
+        storeTrusted
+        metaWritable={false}
+        onSelect={vi.fn()}
+        onStart={vi.fn()}
+        onStop={vi.fn()}
+        onCancelStart={vi.fn()}
+        onCopySerial={vi.fn()}
+        onDelete={vi.fn()}
+        onRename={onRename}
+        onRenameBlocked={onRenameBlocked}
+      />
+    )
+    fireEvent.doubleClick(screen.getByText('Pixel 8 API 34'))
+    expect(screen.queryByLabelText('重命名设备')).toBeNull()
+    fireEvent.keyDown(screen.getByText('Pixel 8 API 34').parentElement!, { key: 'F2' })
+    expect(screen.queryByLabelText('重命名设备')).toBeNull()
+    expect(onRenameBlocked).toHaveBeenCalledTimes(2)
+    expect(onRename).not.toHaveBeenCalled()
   })
 })

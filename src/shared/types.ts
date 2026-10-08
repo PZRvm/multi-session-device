@@ -141,9 +141,85 @@ export interface DeviceError {
   message: string
 }
 
+// ---- 持久化对账域（plan 2026-10-05-avd-reconciliation）----
+
+/** 设备文件健康：checking = 检查进行中（creating 行/启动前即时核验）；其余为归因后的稳定结果 */
+export type DeviceAvailabilityState =
+  'checking' | 'valid' | 'missing' | 'broken' | 'inaccessible' | 'unsafe'
+
+export type DeviceHealthComponent = 'avd' | 'image'
+
+/** 单条健康原因：severity=error 阻断启动；warning 只提示（如镜像身份与元数据不一致） */
+export interface DeviceHealthIssue {
+  component: DeviceHealthComponent
+  code: string
+  message: string
+  severity: 'error' | 'warning'
+}
+
+/** 文件健康（内存态、不入盘）：独立于 status/lastError，运行中设备异常不清画面只挂原因 */
+export interface DeviceAvailability {
+  state: DeviceAvailabilityState
+  issues: DeviceHealthIssue[]
+  checkedAt: number | null
+}
+
+/** 元数据库健康：ok = 可写；read-only = 条目级异常冻结写入（行可读可启动）；error = 无可信列表 */
+export type StoreHealthState = 'ok' | 'read-only' | 'error'
+
+export interface StoreHealthIssue {
+  code: string
+  /** 坏条目在 devices 数组中的原始下标（条目级问题携带） */
+  entryIndex?: number
+  message: string
+}
+
+export interface StoreHealth {
+  state: StoreHealthState
+  issues: StoreHealthIssue[]
+}
+
+/** avdHome 顶层的孤立/异常关联文件组：只列出与说明，不提供自动清理 */
+export interface ReconcileOrphanEntry {
+  /** 文件基名（UUID 形态；非 UUID 名只计入数量不进此表） */
+  id: string
+  kind: 'orphan' | 'metadata-linked'
+  detail: string
+}
+
+/** 一轮对账的完整报告：详情经 devices:reconciliation-report 拉取，随快照只带摘要 */
+export interface ReconcileReport {
+  /** 对应发布此报告时的列表代次 */
+  revision: number
+  /** 异常内容签名（null = 无异常）；时间戳不入签名，供提示去重 */
+  signature: string | null
+  checkedAt: number
+  storeHealth: StoreHealth
+  deviceIssues: Array<{ id: string; name: string; availability: DeviceAvailability }>
+  orphanEntries: ReconcileOrphanEntry[]
+  /** 非 UUID 命名的 .ini/.avd 形态文件数量（不拼接其路径） */
+  unrecognizedCount: number
+  /** creating/deleting/回滚中暂缓判断的设备 id */
+  pendingIds: string[]
+  scanError: string | null
+  /** 该签名异常尚待主窗提示（已确认/已展示过的不重复弹） */
+  pendingNotification: boolean
+}
+
+/** 快照内嵌的对账摘要：renderer 据此驱动汇总条与提示，不携带报告详情 */
+export interface ReconciliationSummary {
+  signature: string | null
+  unavailableCount: number
+  orphanCount: number
+  storeState: StoreHealthState
+  pendingNotification: boolean
+}
+
 export interface Device extends DeviceMeta {
   /** 外观提示（派生、可缺席）：缺省 generic，renderer 侧不落盘不迁移 */
   frameKind?: DeviceFrameKind
+  /** 文件健康（内存派生、不入盘）；load 后稳定设备必有结果，creating 行为 checking */
+  availability?: DeviceAvailability
   status: DeviceStatus
   /** 最近一次运行/命令失败；下次命令成功接纳时清除 */
   lastError?: DeviceError
@@ -159,6 +235,14 @@ export interface Device extends DeviceMeta {
 export interface DeviceSnapshot {
   revision: number
   devices: Device[]
+  storeHealth: StoreHealth
+  reconciliation: ReconciliationSummary
+}
+
+/** 人工重查（devices:reconcile）结果：合并后的快照与本轮报告 */
+export interface ReconcileResult {
+  snapshot: DeviceSnapshot
+  report: ReconcileReport
 }
 
 /** 创建命令结果：按明确 id 选中新设备，避免并发创建时取数组尾部选错 */

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile, readFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, rm, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
@@ -127,5 +127,33 @@ describe('patchAvdConfig（真实 tmp 目录读写）', () => {
     ])
     expect(patched).toContain('unknown.key=keep')
     expect(patched).toContain('# 生成注释保留')
+  })
+})
+
+describe('deleteAvd containment 守卫（review P2-6 回归锚）', () => {
+  it('合法 avdHome + 白名单名：守卫放行，正常删除', async () => {
+    const avdHome = await makeTmp()
+    await mkdir(avdHome, { recursive: true })
+    await writeFile(join(avdHome, 'guard-ok.ini'), 'path=x\n', 'utf8')
+    await mkdir(join(avdHome, 'guard-ok.avd'), { recursive: true })
+    await deleteAvd('guard-ok', dirs(avdHome))
+    const names = await readdir(avdHome)
+    expect(names.some((name) => name.startsWith('guard-ok'))).toBe(false)
+  })
+
+  it('怪形态 avdHome（含 ..）不误拒：avdPaths 的 join 先规范化，根外文件不受影响', async () => {
+    const base = await makeTmp()
+    // `sub/..` 规范化后等价于 base：目标文件在 base 下，sub 是无关目录
+    await mkdir(join(base, 'target.avd'), { recursive: true })
+    await writeFile(join(base, 'target.ini'), 'path=x\n', 'utf8')
+    await mkdir(join(base, 'sub'), { recursive: true })
+    await writeFile(join(base, 'sub', 'unrelated.txt'), 'keep', 'utf8')
+    // 守卫不误判（resolve 后 containment 成立）；拒绝分支在白名单名（无分隔符）下
+    // 不可达，属纵深防御——本用例锚定不误拒 + 只删目标两条路径
+    await expect(deleteAvd('target', dirs(join(base, 'sub', '..')))).resolves.toBeUndefined()
+    const names = await readdir(base)
+    expect(names.some((name) => name.startsWith('target'))).toBe(false)
+    expect(names).toContain('sub')
+    expect(await readFile(join(base, 'sub', 'unrelated.txt'), 'utf8')).toBe('keep')
   })
 })

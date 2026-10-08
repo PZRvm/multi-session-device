@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
-import type { DeviceMeta } from '@shared/types'
+import type { DeviceAvailability, DeviceMeta } from '@shared/types'
 
 const mocks = vi.hoisted(() => {
   type MainWindow = {
@@ -15,8 +15,35 @@ const mocks = vi.hoisted(() => {
     getMainWindow: vi.fn<() => MainWindow | null>(() => null),
     wizardOwns: vi.fn<(sender: { id: number }) => boolean>(() => false),
     clipboardWriteText: vi.fn(),
+    // store 适配层的文件态模拟（修复轮）：writeDeviceMetas 默认落盘后，readDeviceStore
+    // 改读落盘内容——写前 CAS/受控重读语义与真实 store 对齐；null = 尚未写过，读初始 mock
+    fileMetas: { current: null as DeviceMeta[] | null },
+    // store 适配层：readDeviceStore 把 metas/health 拆给可独立覆写的 mock
     readDeviceMetas: vi.fn<() => Promise<DeviceMeta[]>>(async () => []),
-    writeDeviceMetas: vi.fn<(metas: DeviceMeta[]) => Promise<void>>(async () => {}),
+    storeHealth: vi.fn<() => { state: 'ok' | 'read-only' | 'error'; issues: unknown[] }>(() => ({
+      state: 'ok',
+      issues: []
+    })),
+    storeSuspectIds: vi.fn<() => string[]>(() => []),
+    armStoreProtection: vi.fn(),
+    // 对账服务：默认全部健康（valid），异常用例按需覆写
+    runReconciliation: vi.fn(async (request: { metas: DeviceMeta[] }): Promise<unknown> => ({
+      checkedAt: 42,
+      availabilityById: new Map(
+        request.metas.map((meta) => [meta.id, { state: 'valid', issues: [], checkedAt: 42 }])
+      ),
+      orphans: [],
+      unrecognizedCount: 0,
+      scanError: null
+    })),
+    checkDeviceHealth: vi.fn<() => Promise<DeviceAvailability>>(async () => ({
+      state: 'valid',
+      issues: [],
+      checkedAt: 42
+    })),
+    writeDeviceMetas: vi.fn<(metas: DeviceMeta[]) => Promise<void>>(async (metas) => {
+      mocks.fileMetas.current = metas
+    }),
     createAvd: vi.fn(async () => '/avd'),
     patchAvdConfig: vi.fn(async () => {}),
     readEmulatorVersion: vi.fn(async () => '36.1.9'),
@@ -147,8 +174,19 @@ vi.mock('electron', () => ({
 vi.mock('../../store', () => ({
   isImageVariant: (value: unknown): boolean =>
     value === 'aosp' || value === 'google_apis' || value === 'google_play',
-  readDeviceMetas: mocks.readDeviceMetas,
-  writeDeviceMetas: mocks.writeDeviceMetas
+  readDeviceStore: async (): Promise<unknown> => ({
+    metas: mocks.fileMetas.current ?? (await mocks.readDeviceMetas()),
+    health: mocks.storeHealth(),
+    sourceVersion: 2,
+    suspectIds: mocks.storeSuspectIds()
+  }),
+  writeDeviceMetas: mocks.writeDeviceMetas,
+  armStoreProtection: mocks.armStoreProtection
+}))
+vi.mock('../../emulator/reconcile', () => ({
+  CHECK_TIMEOUT_MS: 3000,
+  runReconciliation: mocks.runReconciliation,
+  checkDeviceHealth: mocks.checkDeviceHealth
 }))
 vi.mock('../../emulator/avd', () => ({
   avdExists: mocks.avdExists,
@@ -242,6 +280,7 @@ const freshDomain = async (): Promise<{
   runner: typeof mocks.runnerInstance
 }> => {
   vi.resetModules()
+  mocks.fileMetas.current = null
   mocks.createRunner.mockImplementation(() => mocks.runnerInstance)
   const domain = await import('..')
   domain.registerDevicesIpc()
@@ -269,6 +308,19 @@ const freshDomain = async (): Promise<{
 const mainWindowEvent = (): unknown => ({ sender: { id: 7 } })
 const wizardEvent = (): unknown => ({ sender: { id: 9 } })
 
+/** 真实链路里 runner 准备会执行 beforeStart——mock start 在此同步走一遍以驱动核验 */
+const startThroughPreflight = (): void => {
+  mocks.runnerInstance.start.mockImplementation(
+    async (id: string, runId: string): Promise<{ runId: string; serial: string }> => {
+      const config = mocks.createRunner.mock.calls.at(-1)![0] as {
+        beforeStart?: (id: string, runId: string, signal: AbortSignal) => Promise<void>
+      }
+      await config.beforeStart?.(id, runId, new AbortController().signal)
+      return { runId: 'run-1', serial: 'emulator-5554' }
+    }
+  )
+}
+
 const validCreateInput = {
   profileId: 'pixel_8',
   profileLabel: 'Pixel 8',
@@ -280,7 +332,9 @@ describe('devices 域（创建/删除事务）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.readDeviceMetas.mockResolvedValue([])
-    mocks.writeDeviceMetas.mockResolvedValue(undefined)
+    mocks.writeDeviceMetas.mockImplementation(async (metas: DeviceMeta[]) => {
+      mocks.fileMetas.current = metas
+    })
     mocks.isPackageNameInstalled.mockResolvedValue(true)
     mocks.createAvd.mockResolvedValue('/avd')
     mocks.deleteAvd.mockResolvedValue(undefined)
@@ -718,7 +772,9 @@ describe('devices 域（启动/停止/取消状态机）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.readDeviceMetas.mockResolvedValue([])
-    mocks.writeDeviceMetas.mockResolvedValue(undefined)
+    mocks.writeDeviceMetas.mockImplementation(async (metas: DeviceMeta[]) => {
+      mocks.fileMetas.current = metas
+    })
     mocks.isPackageNameInstalled.mockResolvedValue(true)
     // clearAllMocks 不重置实现：上一组用例遗留的 reject 会渗进来，本组自己兜底
     mocks.createAvd.mockResolvedValue('/avd')
@@ -841,8 +897,20 @@ describe('devices 域（启动/停止/取消状态机）', () => {
     expect(snapshot.devices[0].serial).toBe('emulator-5554')
   })
 
-  it('start：AVD 缺失 → 拒绝并标 avd-missing（步骤 6 前的最小存在性校验）', async () => {
-    mocks.avdExists.mockResolvedValue(false)
+  it('start：AVD 文件核验未通过 → 拒绝并标 avd-missing（对账设计 4 的即时核验）', async () => {
+    startThroughPreflight()
+    mocks.checkDeviceHealth.mockResolvedValue({
+      state: 'missing',
+      issues: [
+        {
+          component: 'avd',
+          code: 'ini-missing',
+          message: 'AVD 不存在或已被外部删除，无法启动',
+          severity: 'error'
+        }
+      ],
+      checkedAt: 42
+    })
     const { handlerFor } = await freshDomain()
     const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(
       mainWindowEvent(),
@@ -852,9 +920,13 @@ describe('devices 域（启动/停止/取消状态机）', () => {
       handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id: created.createdId })
     ).rejects.toThrow('AVD 不存在')
     const list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
-      devices: Array<{ lastError?: { code: string } }>
+      devices: Array<{
+        lastError?: { code: string }
+        availability?: { state: string }
+      }>
     }
     expect(list.devices[0].lastError?.code).toBe('avd-missing')
+    expect(list.devices[0].availability?.state).toBe('missing')
   })
 
   it('start：runner.start 拒绝 → 回到 stopped + start-failed', async () => {
@@ -1069,8 +1141,12 @@ describe('启动前摄像头核验（review P3：文案不叠加建议从句）'
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // 状态机组遗留的 checkDeviceHealth 缺失态会先拦掉启动——回默认健康
+    mocks.checkDeviceHealth.mockResolvedValue({ state: 'valid', issues: [], checkedAt: 42 })
     mocks.readDeviceMetas.mockResolvedValue([])
-    mocks.writeDeviceMetas.mockResolvedValue(undefined)
+    mocks.writeDeviceMetas.mockImplementation(async (metas: DeviceMeta[]) => {
+      mocks.fileMetas.current = metas
+    })
     mocks.isPackageNameInstalled.mockResolvedValue(true)
     mocks.createAvd.mockResolvedValue('/avd')
     mocks.avdExists.mockResolvedValue(true)
@@ -1078,6 +1154,8 @@ describe('启动前摄像头核验（review P3：文案不叠加建议从句）'
     mocks.wizardOwns.mockImplementation((sender: { id: number }) => sender.id === 9)
     mocks.runnerInstance.start.mockResolvedValue({ runId: 'run-1', serial: 'emulator-5554' })
     mocks.listWebcams.mockResolvedValue([{ id: 'webcam0', deviceLabel: 'host-a' }])
+    // 摄像头核验移入 beforeStart（对账设计 4）：让 mock start 驱动它
+    startThroughPreflight()
   })
 
   it('枚举失败且底层错误自带建议从句：不再叠加第二条建议', async () => {
@@ -1169,5 +1247,569 @@ describe('devices 域（sender 白名单与退出清理）', () => {
     domain.resumeAfterShutdown()
     expect(mocks.runnerInstance.resumeAccepting).toHaveBeenCalledTimes(1)
     await handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id: created.createdId })
+  })
+})
+
+describe('持久化对账（plan 2026-10-05-avd-reconciliation）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // clearAllMocks 不清 mockReturnValue/mockResolvedValue：显式回默认，防上个用例泄漏
+    mocks.storeHealth.mockReturnValue({ state: 'ok', issues: [] })
+    mocks.checkDeviceHealth.mockResolvedValue({ state: 'valid', issues: [], checkedAt: 42 })
+    mocks.readDeviceMetas.mockResolvedValue([])
+    mocks.writeDeviceMetas.mockImplementation(async (metas: DeviceMeta[]) => {
+      mocks.fileMetas.current = metas
+    })
+    mocks.createAvd.mockResolvedValue('/avd')
+    mocks.deleteAvd.mockResolvedValue(undefined)
+    mocks.getMainWindow.mockReturnValue({ webContents: { id: 7, send: vi.fn() } })
+    mocks.wizardOwns.mockImplementation((sender: { id: number }) => sender.id === 9)
+    mocks.runnerInstance.start.mockResolvedValue({ runId: 'run-1', serial: 'emulator-5554' })
+    mocks.runReconciliation.mockImplementation(
+      async (request: { metas: DeviceMeta[] }): Promise<unknown> => ({
+        checkedAt: 42,
+        availabilityById: new Map(
+          request.metas.map((meta) => [meta.id, { state: 'valid', issues: [], checkedAt: 42 }])
+        ),
+        orphans: [],
+        unrecognizedCount: 0,
+        scanError: null
+      })
+    )
+    mocks.checkDeviceHealth.mockResolvedValue({ state: 'valid', issues: [], checkedAt: 42 })
+  })
+
+  it('首载合并健康结果：异常设备带原因、快照携带 storeHealth 与 reconciliation 摘要', async () => {
+    mocks.readDeviceMetas.mockResolvedValue([quickDevice({ id: 'dead-1' })] as never)
+    mocks.runReconciliation.mockResolvedValue({
+      checkedAt: 42,
+      availabilityById: new Map([
+        [
+          'dead-1',
+          {
+            state: 'missing',
+            issues: [
+              {
+                component: 'avd',
+                code: 'ini-missing',
+                message: '缺少 dead-1.ini',
+                severity: 'error'
+              }
+            ],
+            checkedAt: 42
+          }
+        ]
+      ]),
+      orphans: [{ id: 'orphan-1', kind: 'orphan', detail: '完整组（无元数据记录）' }],
+      unrecognizedCount: 1,
+      scanError: null
+    })
+    const { handlerFor } = await freshDomain()
+    const list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: Array<{ availability?: { state: string; issues: unknown[] } }>
+      storeHealth: { state: string }
+      reconciliation: Record<string, unknown>
+    }
+    expect(list.devices[0].availability?.state).toBe('missing')
+    expect(list.devices[0].availability?.issues).toHaveLength(1)
+    expect(list.storeHealth.state).toBe('ok')
+    expect(list.reconciliation).toMatchObject({
+      unavailableCount: 1,
+      orphanCount: 1,
+      storeState: 'ok',
+      pendingNotification: true
+    })
+    expect(typeof list.reconciliation.signature).toBe('string')
+  })
+
+  it('store error 首载：空列表 + error 摘要，list 正常落定（可重试）', async () => {
+    mocks.storeHealth.mockReturnValue({
+      state: 'error',
+      issues: [{ code: 'invalid-json', message: 'devices.json 不是合法 JSON' }]
+    })
+    const { handlerFor } = await freshDomain()
+    const list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: unknown[]
+      storeHealth: { state: string }
+      reconciliation: { storeState: string; pendingNotification: boolean }
+    }
+    expect(list.devices).toEqual([])
+    expect(list.storeHealth.state).toBe('error')
+    expect(list.reconciliation.storeState).toBe('error')
+    expect(list.reconciliation.pendingNotification).toBe(true)
+  })
+
+  it('副作用前守卫：read-only 冻结 create/delete/rename，不动 AVD 不写盘', async () => {
+    mocks.storeHealth.mockReturnValue({
+      state: 'read-only',
+      issues: [
+        { code: 'invalid-entry', entryIndex: 0, message: '第 1 条记录字段不合法（name），未载入' }
+      ]
+    })
+    mocks.readDeviceMetas.mockResolvedValue([quickDevice({ id: 'd1' })] as never)
+    const { handlerFor } = await freshDomain()
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), validCreateInput)
+    ).rejects.toThrow('冻结')
+    expect(mocks.createAvd).not.toHaveBeenCalled()
+    expect(mocks.writeDeviceMetas).not.toHaveBeenCalled()
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesDelete)(mainWindowEvent(), { id: 'd1' })
+    ).rejects.toThrow('冻结')
+    expect(mocks.deleteAvd).not.toHaveBeenCalled()
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesRename)(mainWindowEvent(), { id: 'd1', name: '新名' })
+    ).rejects.toThrow('冻结')
+    expect(mocks.writeDeviceMetas).not.toHaveBeenCalled()
+  })
+
+  it('人工重查单飞：并发调用共享一轮扫描；返回快照与报告', async () => {
+    mocks.readDeviceMetas.mockResolvedValue([quickDevice({ id: 'd1' })] as never)
+    let releaseScan: ((value: unknown) => void) | undefined
+    const { handlerFor } = await freshDomain()
+    await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined) // 首载一次扫描
+    mocks.runReconciliation.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseScan = resolve
+        })
+    )
+    const first = handlerFor(IPC_CHANNELS.devicesReconcile)(mainWindowEvent(), undefined)
+    const second = handlerFor(IPC_CHANNELS.devicesReconcile)(mainWindowEvent(), undefined)
+    // mock 在微任务里才被调用（releaseScan 才赋值）——等扫描真正挂起再释放
+    await vi.waitFor(() => expect(typeof releaseScan).toBe('function'))
+    releaseScan?.({
+      checkedAt: 99,
+      availabilityById: new Map(),
+      orphans: [],
+      unrecognizedCount: 0,
+      scanError: null
+    })
+    const [a, b] = (await Promise.all([first, second])) as Array<{
+      report: { checkedAt: number }
+      snapshot: { reconciliation: { pendingNotification: boolean } }
+    }>
+    expect(mocks.runReconciliation).toHaveBeenCalledTimes(2) // 首载 1 + 重查 1
+    expect(a.report.checkedAt).toBe(99)
+    expect(b.report.checkedAt).toBe(99)
+  })
+
+  it('报告通道：无报告返回 null 且不触发扫描；ack 确认只消费当前签名', async () => {
+    mocks.readDeviceMetas.mockResolvedValue([quickDevice({ id: 'd1' })] as never)
+    const { handlerFor } = await freshDomain()
+    // 未加载过：报告通道不触发隐式扫描
+    expect(
+      await handlerFor(IPC_CHANNELS.devicesReconciliationReport)(mainWindowEvent(), undefined)
+    ).toBeNull()
+    expect(mocks.runReconciliation).not.toHaveBeenCalled()
+
+    const reconcile = (await handlerFor(IPC_CHANNELS.devicesReconcile)(
+      mainWindowEvent(),
+      undefined
+    )) as { report: { signature: string | null; pendingNotification: boolean } }
+    expect(reconcile.report.signature).toBeNull() // 全 valid 无异常 → 无签名无提示
+
+    // 制造异常 → 新签名待提示 → ack 消费 → 摘要翻 false
+    mocks.runReconciliation.mockResolvedValueOnce({
+      checkedAt: 100,
+      availabilityById: new Map([
+        [
+          'd1',
+          {
+            state: 'broken',
+            issues: [
+              {
+                component: 'avd',
+                code: 'ini-path-mismatch',
+                message: 'path 不一致',
+                severity: 'error'
+              }
+            ],
+            checkedAt: 100
+          }
+        ]
+      ]),
+      orphans: [],
+      unrecognizedCount: 0,
+      scanError: null
+    })
+    const anomaly = (await handlerFor(IPC_CHANNELS.devicesReconcile)(
+      mainWindowEvent(),
+      undefined
+    )) as { report: { signature: string | null; pendingNotification: boolean } }
+    expect(anomaly.report.signature).not.toBeNull()
+    expect(anomaly.report.pendingNotification).toBe(true)
+    // 迟到的旧签名（null）不消费
+    await handlerFor(IPC_CHANNELS.devicesReconciliationAck)(mainWindowEvent(), {
+      signature: 'stale-signature'
+    })
+    let list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      reconciliation: { pendingNotification: boolean }
+    }
+    expect(list.reconciliation.pendingNotification).toBe(true)
+    await handlerFor(IPC_CHANNELS.devicesReconciliationAck)(mainWindowEvent(), {
+      signature: anomaly.report.signature
+    })
+    list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      reconciliation: { pendingNotification: boolean }
+    }
+    expect(list.reconciliation.pendingNotification).toBe(false)
+  })
+
+  it('外部元数据变化：保留内存列表与运行字段、维持冻结并提示重启；恢复一致后解除', async () => {
+    mocks.readDeviceMetas.mockResolvedValue([quickDevice({ id: 'd1', name: '本机名' })] as never)
+    const { handlerFor } = await freshDomain()
+    await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)
+
+    // 外部改名（文件内容 ≠ 最后接纳）
+    mocks.readDeviceMetas.mockResolvedValue([quickDevice({ id: 'd1', name: '外部名' })] as never)
+    await handlerFor(IPC_CHANNELS.devicesReconcile)(mainWindowEvent(), undefined)
+    let list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: Array<{ name: string }>
+      storeHealth: { state: string; issues: Array<{ code: string }> }
+    }
+    expect(list.devices[0].name).toBe('本机名') // 不按外部文件改名
+    expect(list.storeHealth.state).toBe('read-only')
+    expect(list.storeHealth.issues.map((issue) => issue.code)).toContain('metadata-changed')
+    expect(mocks.armStoreProtection).toHaveBeenCalledTimes(1)
+
+    // 文件恢复一致（外部改回）→ 解除保护
+    mocks.readDeviceMetas.mockResolvedValue([quickDevice({ id: 'd1', name: '本机名' })] as never)
+    await handlerFor(IPC_CHANNELS.devicesReconcile)(mainWindowEvent(), undefined)
+    list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: Array<{ name: string }>
+      storeHealth: { state: string; issues: Array<{ code: string }> }
+    }
+    expect(list.storeHealth.state).toBe('ok')
+  })
+
+  it('文件消失但有可信设备：同样是库变化，不当首次使用解除保护', async () => {
+    mocks.readDeviceMetas.mockResolvedValue([quickDevice({ id: 'd1' })] as never)
+    const { handlerFor } = await freshDomain()
+    await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)
+    mocks.readDeviceMetas.mockResolvedValue([] as never) // 文件没了 → metas 空 + ok
+    await handlerFor(IPC_CHANNELS.devicesReconcile)(mainWindowEvent(), undefined)
+    const list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: unknown[]
+      storeHealth: { state: string }
+    }
+    expect(list.devices).toHaveLength(1) // 保留内存设备
+    expect(list.storeHealth.state).toBe('read-only')
+  })
+
+  it('初载 error 后重查成功：首次建立可信列表', async () => {
+    mocks.storeHealth.mockReturnValue({
+      state: 'error',
+      issues: [{ code: 'invalid-json', message: 'devices.json 不是合法 JSON' }]
+    })
+    const { handlerFor } = await freshDomain()
+    await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)
+    // 用户修复文件后重查：合法库建立列表
+    mocks.storeHealth.mockReturnValue({ state: 'ok', issues: [] })
+    mocks.readDeviceMetas.mockResolvedValue([quickDevice({ id: 'd1' })] as never)
+    await handlerFor(IPC_CHANNELS.devicesReconcile)(mainWindowEvent(), undefined)
+    const list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: Array<{ id: string; availability?: { state: string } }>
+      storeHealth: { state: string }
+    }
+    expect(list.devices).toHaveLength(1)
+    expect(list.devices[0].availability?.state).toBe('valid')
+    expect(list.storeHealth.state).toBe('ok')
+  })
+
+  it('commitMetas 保留完整运行字段：运行中重命名后 startedAt/serial/availability 不丢（issue 2026-10-08 P3 回归锚）', async () => {
+    const { handlerFor, runnerEvents } = await freshDomain()
+    const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { createdId: string }
+    await handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id: created.createdId })
+    runnerEvents().onRunning(created.createdId, 'run-1', 'emulator-5554')
+    await handlerFor(IPC_CHANNELS.devicesRename)(mainWindowEvent(), {
+      id: created.createdId,
+      name: '运行中改名'
+    })
+    const list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: Array<{
+        status: string
+        serial?: string
+        startedAt?: number
+        availability?: { state: string }
+      }>
+    }
+    expect(list.devices[0]).toMatchObject({ status: 'running', serial: 'emulator-5554' })
+    expect(list.devices[0].startedAt).toBeGreaterThan(0)
+    expect(list.devices[0].availability?.state).toBe('valid')
+  })
+
+  it('avd-missing 行内错误：重查恢复 valid 后清除；其他 lastError 不被对账清除', async () => {
+    const { handlerFor } = await freshDomain()
+    const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { createdId: string }
+    // 直接制造 avd-missing 行内错误（模拟上次启动被拒）
+    startThroughPreflight()
+    mocks.checkDeviceHealth.mockResolvedValueOnce({
+      state: 'missing',
+      issues: [{ component: 'avd', code: 'ini-missing', message: '缺少 ini', severity: 'error' }],
+      checkedAt: 1
+    })
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id: created.createdId })
+    ).rejects.toThrow('启动前核验未通过')
+    // 重查 valid → avd-missing 清除
+    await handlerFor(IPC_CHANNELS.devicesReconcile)(mainWindowEvent(), undefined)
+    let list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: Array<{ lastError?: { code: string } }>
+    }
+    expect(list.devices[0].lastError).toBeUndefined()
+    // 启动失败等命令错误不被对账动
+    mocks.runnerInstance.start.mockRejectedValueOnce(new Error('端口耗尽'))
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id: created.createdId })
+    ).rejects.toThrow('端口耗尽')
+    await handlerFor(IPC_CHANNELS.devicesReconcile)(mainWindowEvent(), undefined)
+    list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: Array<{ lastError?: { code: string } }>
+    }
+    expect(list.devices[0].lastError?.code).toBe('start-failed')
+  })
+
+  it('删除成功后台重查：元数据与文件代次更新，收尾扫描反映实际状态', async () => {
+    const { handlerFor } = await freshDomain()
+    const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { createdId: string }
+    await handlerFor(IPC_CHANNELS.devicesDelete)(mainWindowEvent(), { id: created.createdId })
+    await vi.waitFor(() =>
+      expect(mocks.runReconciliation.mock.calls.length).toBeGreaterThanOrEqual(2)
+    )
+    const finalRequest = mocks.runReconciliation.mock.calls.at(-1)![0] as { metas: DeviceMeta[] }
+    expect(finalRequest.metas).toHaveLength(0)
+  })
+
+  it('sender 白名单：reconcile/report/ack 仅登记主窗可用', async () => {
+    const { handlerFor } = await freshDomain()
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesReconcile)(wizardEvent(), undefined)
+    ).rejects.toThrow('未登记的窗口')
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesReconciliationReport)(wizardEvent(), undefined)
+    ).rejects.toThrow('未登记的窗口')
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesReconciliationAck)(wizardEvent(), { signature: 's' })
+    ).rejects.toThrow('未登记的窗口')
+  })
+})
+
+describe('对账 review 修复轮（P2/P3 回归锚）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.storeHealth.mockReturnValue({ state: 'ok', issues: [] })
+    mocks.checkDeviceHealth.mockResolvedValue({ state: 'valid', issues: [], checkedAt: 42 })
+    mocks.readDeviceMetas.mockResolvedValue([])
+    mocks.writeDeviceMetas.mockImplementation(async (metas: DeviceMeta[]) => {
+      mocks.fileMetas.current = metas
+    })
+    mocks.createAvd.mockResolvedValue('/avd')
+    mocks.deleteAvd.mockResolvedValue(undefined)
+    mocks.getMainWindow.mockReturnValue({ webContents: { id: 7, send: vi.fn() } })
+    mocks.wizardOwns.mockImplementation((sender: { id: number }) => sender.id === 9)
+    mocks.runnerInstance.start.mockResolvedValue({ runId: 'run-1', serial: 'emulator-5554' })
+    mocks.runReconciliation.mockImplementation(
+      async (request: { metas: DeviceMeta[] }): Promise<unknown> => ({
+        checkedAt: 42,
+        availabilityById: new Map(
+          request.metas.map((meta) => [meta.id, { state: 'valid', issues: [], checkedAt: 42 }])
+        ),
+        orphans: [],
+        unrecognizedCount: 0,
+        scanError: null
+      })
+    )
+  })
+
+  it('P2-2：creating 行不进单目标核验——事务中重查不误报 missing、不生成异常签名', async () => {
+    // 创建挂在中途（AVD 未落盘），期间人工重查
+    let releaseCreate: (() => void) | undefined
+    mocks.createAvd.mockReturnValue(
+      new Promise<string>((resolve) => {
+        releaseCreate = () => resolve('/avd')
+      })
+    )
+    const { handlerFor } = await freshDomain()
+    const creating = handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), validCreateInput)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    // 重查的扫描请求里不该有 creating 行
+    await handlerFor(IPC_CHANNELS.devicesReconcile)(mainWindowEvent(), undefined)
+    const request = mocks.runReconciliation.mock.calls.at(-1)![0] as { metas: DeviceMeta[] }
+    expect(request.metas).toHaveLength(0)
+    const list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: Array<{ status: string; availability?: { state: string } }>
+      reconciliation: { signature: string | null; pendingNotification: boolean }
+    }
+    expect(list.devices[0].status).toBe('creating')
+    expect(list.devices[0].availability?.state).toBe('checking')
+    expect(list.reconciliation.signature).toBeNull()
+    expect(list.reconciliation.pendingNotification).toBe(false)
+    releaseCreate?.()
+    await creating
+  })
+
+  it('P3：三轮代次失配的放弃轮保留上一轮报告内容，只叠加未完成说明', async () => {
+    mocks.readDeviceMetas.mockResolvedValue([quickDevice({ id: 'd1' })] as never)
+    const { handlerFor } = await freshDomain()
+    // 首载带一个孤立组异常
+    mocks.runReconciliation.mockResolvedValueOnce({
+      checkedAt: 100,
+      availabilityById: new Map(),
+      orphans: [{ id: 'orphan-1', kind: 'orphan', detail: '完整组（无元数据记录）' }],
+      unrecognizedCount: 0,
+      scanError: null
+    })
+    await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)
+    // 三轮扫描期间各发生一次 rename（metaRevision 变化）→ 全部失配 → 放弃
+    for (let i = 0; i < 3; i += 1) {
+      mocks.runReconciliation.mockImplementationOnce(async () => {
+        await handlerFor(IPC_CHANNELS.devicesRename)(mainWindowEvent(), {
+          id: 'd1',
+          name: `改名${i}`
+        })
+        return {
+          checkedAt: 200 + i,
+          availabilityById: new Map(),
+          orphans: [],
+          unrecognizedCount: 0,
+          scanError: null
+        }
+      })
+    }
+    const result = (await handlerFor(IPC_CHANNELS.devicesReconcile)(
+      mainWindowEvent(),
+      undefined
+    )) as {
+      report: {
+        checkedAt: number
+        scanError: string | null
+        signature: string | null
+        pendingNotification: boolean
+      }
+    }
+    expect(result.report.checkedAt).toBe(100) // 不伪装刚检查过
+    expect(result.report.scanError).toContain('未完成')
+    expect(result.report.signature).toContain('orphan-1') // 上一轮孤立组保留在签名里
+  })
+
+  it('P3：写前 CAS——落盘后文件被外部改动，提交中止并冻结', async () => {
+    const { handlerFor } = await freshDomain()
+    const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { createdId: string }
+    // 模拟外部把文件改成另一份内容（直接替换文件态）
+    const external = quickDevice({
+      id: created.createdId,
+      name: '外部改的名'
+    }) as unknown as DeviceMeta
+    mocks.fileMetas.current = [external]
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesRename)(mainWindowEvent(), {
+        id: created.createdId,
+        name: '内存新名'
+      })
+    ).rejects.toThrow('外部修改')
+    expect(mocks.armStoreProtection).toHaveBeenCalled()
+    const list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: Array<{ name: string }>
+      storeHealth: { state: string }
+    }
+    expect(list.devices[0].name).toBe('测试机') // 内存不被外部内容覆盖
+    expect(list.storeHealth.state).toBe('read-only')
+  })
+
+  it('P3：异常清零复位确认记录——同内容异常复发时重新提示', async () => {
+    mocks.readDeviceMetas.mockResolvedValue([quickDevice({ id: 'd1' })] as never)
+    const anomalyOutcome = {
+      checkedAt: 100,
+      availabilityById: new Map([
+        [
+          'd1',
+          {
+            state: 'broken',
+            issues: [
+              {
+                component: 'avd',
+                code: 'ini-path-mismatch',
+                message: 'path 不一致',
+                severity: 'error'
+              }
+            ],
+            checkedAt: 100
+          }
+        ]
+      ]),
+      orphans: [],
+      unrecognizedCount: 0,
+      scanError: null
+    }
+    const { handlerFor } = await freshDomain()
+    await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)
+    // 第一次异常 → ack
+    mocks.runReconciliation.mockResolvedValueOnce(anomalyOutcome)
+    const first = (await handlerFor(IPC_CHANNELS.devicesReconcile)(
+      mainWindowEvent(),
+      undefined
+    )) as { report: { signature: string | null } }
+    await handlerFor(IPC_CHANNELS.devicesReconciliationAck)(mainWindowEvent(), {
+      signature: first.report.signature
+    })
+    // 恢复正常 → 签名清零（acknowledged 复位）
+    await handlerFor(IPC_CHANNELS.devicesReconcile)(mainWindowEvent(), undefined)
+    // 同内容异常复发 → 重新待提示
+    mocks.runReconciliation.mockResolvedValueOnce(anomalyOutcome)
+    const again = (await handlerFor(IPC_CHANNELS.devicesReconcile)(
+      mainWindowEvent(),
+      undefined
+    )) as { report: { signature: string | null; pendingNotification: boolean } }
+    expect(again.report.signature).toBe(first.report.signature)
+    expect(again.report.pendingNotification).toBe(true)
+  })
+
+  it('P3：beforeStart 跨 await 后重取列表对象——核验结果不写孤儿引用', async () => {
+    startThroughPreflight()
+    let releaseCheck: ((value: DeviceAvailability) => void) | undefined
+    mocks.checkDeviceHealth.mockImplementationOnce(
+      () =>
+        new Promise<DeviceAvailability>((resolve) => {
+          releaseCheck = resolve
+        })
+    )
+    const { handlerFor } = await freshDomain()
+    const first = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { createdId: string }
+    const second = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { createdId: string }
+    const startPromise = handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), {
+      id: first.createdId
+    })
+    await vi.waitFor(() => expect(mocks.checkDeviceHealth).toHaveBeenCalled())
+    // 核验挂起期间提交另一命令（commitMetas 重建 devices 数组）
+    await handlerFor(IPC_CHANNELS.devicesRename)(mainWindowEvent(), {
+      id: second.createdId,
+      name: '核验中改名'
+    })
+    releaseCheck?.({ state: 'valid', issues: [], checkedAt: 7 })
+    await startPromise
+    const list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: Array<{ id: string; availability?: { state: string } }>
+    }
+    const target = list.devices.find((device) => device.id === first.createdId)
+    expect(target?.availability?.state).toBe('valid') // 写到重建后的对象上，未丢失
   })
 })

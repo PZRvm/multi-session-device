@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Copy, Loader2, Play, Square, Trash2, X } from 'lucide-react'
 import styled from 'styled-components'
-import type { Device, DeviceStatus } from '@shared/types'
+import type { Device, DeviceAvailability, DeviceStatus } from '@shared/types'
 import Input from './Input'
 
 const STATUS_LABELS: Record<DeviceStatus, string> = {
@@ -13,6 +13,24 @@ const STATUS_LABELS: Record<DeviceStatus, string> = {
   deleting: '删除中'
 }
 
+const AVAILABILITY_LABELS: Record<DeviceAvailability['state'], string> = {
+  checking: '检查中',
+  valid: '正常',
+  missing: '文件缺失',
+  broken: '文件损坏',
+  inaccessible: '无法访问',
+  unsafe: '路径不安全'
+}
+
+/** 健康原因行：优先展示阻断原因；warning（如镜像身份不同）也提示 */
+const availabilityReason = (availability: DeviceAvailability): string => {
+  const blocking = availability.issues.find((issue) => issue.severity === 'error')
+  const hint = blocking ?? availability.issues[0]
+  return hint !== undefined
+    ? `${AVAILABILITY_LABELS[availability.state]}：${hint.message}`
+    : AVAILABILITY_LABELS[availability.state]
+}
+
 /** 过渡态（非停止/运行）用琥珀点提示忙碌 */
 const isTransitional = (status: DeviceStatus): boolean =>
   status !== 'stopped' && status !== 'running'
@@ -20,6 +38,10 @@ const isTransitional = (status: DeviceStatus): boolean =>
 type DeviceRowProps = {
   device: Device
   selected: boolean
+  /** 库可信（storeHealth 非 error）：不可信时元数据无法信任，禁止启动 */
+  storeTrusted: boolean
+  /** 库可写（storeHealth 为 ok）：read-only 时禁改删与重命名 */
+  metaWritable: boolean
   onSelect: () => void
   onStart: () => void
   onStop: () => void
@@ -27,26 +49,49 @@ type DeviceRowProps = {
   onCopySerial: () => void
   onDelete: () => void
   onRename: (name: string) => void
+  /** read-only 下尝试重命名（双击/F2）时的反馈入口（review P3——静默 no-op 无说明） */
+  onRenameBlocked?: () => void
 }
 
 /** 设备行：ListRow 视觉（选中整行反白）+ 状态点 + 行内启停/取消/复制/删除 + 双击/F2/选中态 Enter 行内重命名。
+ * 健康原因独立于运行态展示：stopped 且非 valid（含检查中）禁启动；运行中异常不清画面只挂原因。
  * 行内含按钮，根元素不能用 button（按钮不套按钮），键盘语义手动补。 */
 const DeviceRow = ({
   device,
   selected,
+  storeTrusted,
+  metaWritable,
   onSelect,
   onStart,
   onStop,
   onCancelStart,
   onCopySerial,
   onDelete,
-  onRename
+  onRename,
+  onRenameBlocked
 }: DeviceRowProps): React.JSX.Element => {
   const [renaming, setRenaming] = useState(false)
   const [draft, setDraft] = useState(device.name)
 
+  const availability = device.availability ?? null
+  const healthLine =
+    availability !== null && availability.state !== 'valid'
+      ? availabilityReason(availability)
+      : null
+
+  // stopped 且 checking/非 valid 禁启动；库不可信（error）同样禁——元数据无法信任
+  const startDisabled =
+    device.status === 'stopped' &&
+    (!storeTrusted || availability === null || availability.state !== 'valid')
+  const deleteDisabled =
+    !metaWritable || (device.status !== 'stopped' && device.status !== 'running')
+
   const startRename = (): void => {
     if (device.status === 'creating' || device.status === 'deleting') return
+    if (!metaWritable) {
+      onRenameBlocked?.()
+      return
+    }
     setDraft(device.name)
     setRenaming(true)
   }
@@ -67,8 +112,6 @@ const DeviceRow = ({
     device.status === 'running' && device.serial
       ? `${device.profileLabel} · API ${device.apiDisplay ?? '?'} · ${device.serial}`
       : `${device.profileLabel} · API ${device.apiDisplay ?? '?'} · ${STATUS_LABELS[device.status]}`
-
-  const deleteDisabled = device.status !== 'stopped' && device.status !== 'running'
 
   return (
     <Wrapper
@@ -119,6 +162,11 @@ const DeviceRow = ({
         <TextBlock>
           <Title>{device.name}</Title>
           <Subtitle $selected={selected}>{subtitle}</Subtitle>
+          {healthLine !== null ? (
+            <HealthLine $selected={selected} title={healthLine}>
+              {healthLine}
+            </HealthLine>
+          ) : null}
           {device.lastError ? (
             <ErrorLine $selected={selected} title={device.lastError.message}>
               {device.lastError.message}
@@ -135,7 +183,8 @@ const DeviceRow = ({
           <IconButton
             type="button"
             aria-label={`启动 ${device.name}`}
-            title="启动"
+            title={startDisabled ? '设备文件异常或仍在检查，暂不能启动（可先重新检查）' : '启动'}
+            disabled={startDisabled}
             onClick={onStart}
           >
             <Play size={14} />
@@ -195,7 +244,7 @@ const DeviceRow = ({
         <IconButton
           type="button"
           aria-label={`删除 ${device.name}`}
-          title="删除"
+          title={metaWritable ? '删除' : '元数据写入已冻结，暂不能删除（详情见列表上方汇总）'}
           disabled={deleteDisabled}
           onClick={onDelete}
         >
@@ -319,6 +368,23 @@ const ErrorLine = styled.span<{ $selected: boolean }>`
     `
       color: inherit;
       opacity: 0.85;
+    `}
+`
+
+/** 健康原因行（对账）：独立于 lastError 的文件健康提示 */
+const HealthLine = styled.span<{ $selected: boolean }>`
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--board-ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  ${({ $selected }) =>
+    $selected &&
+    `
+      color: inherit;
+      opacity: 0.78;
     `}
 `
 

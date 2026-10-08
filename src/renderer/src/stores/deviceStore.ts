@@ -1,11 +1,27 @@
 import { create } from 'zustand'
-import type { CreateDeviceInput, CreateDeviceResult, Device, DeviceSnapshot } from '@shared/types'
+import type {
+  CreateDeviceInput,
+  CreateDeviceResult,
+  Device,
+  DeviceSnapshot,
+  ReconciliationSummary,
+  StoreHealth
+} from '@shared/types'
 import { toApiResult, type ApiResult } from '../api'
 
 /** 选中态维护：选中设备消失（删除/推送覆盖）时回落到首台，列表空则清空 */
 const normalizeSelection = (devices: Device[], selectedId: string | null): string | null => {
   if (selectedId !== null && devices.some((device) => device.id === selectedId)) return selectedId
   return devices[0]?.id ?? null
+}
+
+const OK_STORE_HEALTH: StoreHealth = { state: 'ok', issues: [] }
+const EMPTY_SUMMARY: ReconciliationSummary = {
+  signature: null,
+  unavailableCount: 0,
+  orphanCount: 0,
+  storeState: 'ok',
+  pendingNotification: false
 }
 
 interface DeviceState {
@@ -15,7 +31,13 @@ interface DeviceState {
   revision: number
   /** 首次 list 拉取是否已落定（成败都算落定，避免空库时永远 loading） */
   loaded: boolean
+  /** 首次/重试 list 的失败原因；与「空库」分开（读取失败不是还没有设备） */
+  loadError: string | null
+  storeHealth: StoreHealth
+  reconciliation: ReconciliationSummary
   load: () => Promise<void>
+  /** 人工重查（重新检查）：成功时应用合并快照，失败返回错误 */
+  reconcile: () => Promise<ApiResult<DeviceSnapshot>>
   create: (input: CreateDeviceInput) => Promise<ApiResult<CreateDeviceResult>>
   rename: (id: string, name: string) => Promise<ApiResult<DeviceSnapshot>>
   remove: (id: string) => Promise<ApiResult<DeviceSnapshot>>
@@ -34,7 +56,9 @@ export const useDeviceStore = create<DeviceState>()((set, get) => {
     set((state) => ({
       devices: snapshot.devices,
       revision: snapshot.revision,
-      selectedId: normalizeSelection(snapshot.devices, state.selectedId)
+      selectedId: normalizeSelection(snapshot.devices, state.selectedId),
+      storeHealth: snapshot.storeHealth ?? state.storeHealth,
+      reconciliation: snapshot.reconciliation ?? state.reconciliation
     }))
   }
 
@@ -51,14 +75,22 @@ export const useDeviceStore = create<DeviceState>()((set, get) => {
     selectedId: null,
     revision: -1,
     loaded: false,
+    loadError: null,
+    storeHealth: OK_STORE_HEALTH,
+    reconciliation: EMPTY_SUMMARY,
     load: async () => {
       const result = await toApiResult(window.api.devices.list())
       if (result.ok) {
         apply(result.data)
-        set({ loaded: true })
+        set({ loaded: true, loadError: null })
       } else {
-        set({ loaded: true })
+        set({ loaded: true, loadError: result.error })
       }
+    },
+    reconcile: async () => {
+      const result = await toApiResult(window.api.devices.reconcile())
+      if (result.ok) apply(result.data.snapshot)
+      return result.ok ? { ok: true, data: result.data.snapshot } : result
     },
     create: async (input) => {
       const result = await toApiResult(window.api.devices.create(input))

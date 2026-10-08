@@ -349,6 +349,162 @@ export const scanLocalImages = async (
   return result
 }
 
+/** 单镜像核验的故障归因（对账用）：缺失/权限/身份矛盾分开，不降格为布尔 */
+export type LocalImageFault =
+  | 'missing-dir'
+  | 'unreadable-dir'
+  | 'missing-package-xml'
+  | 'unreadable-package-xml'
+  | 'invalid-package-xml'
+  | 'symlinked-file'
+  | 'identity-mismatch'
+  | 'missing-source-properties'
+  | 'missing-system-img'
+
+export interface LocalImageCheck {
+  /** package.xml 可解析时的实际身份；fault 为 null 时必有值 */
+  packageName: string | null
+  /** package.xml 声明的 ABI（身份段拆解；解析失败为 null） */
+  abi: string | null
+  fault: LocalImageFault | null
+  faultMessage: string | null
+}
+
+const errnoOf = (error: unknown): string | null =>
+  typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code: unknown }).code)
+    : null
+
+/** 单包核验的 package.xml 读取上限（不可信输入，防内存放大；review P3） */
+const MAX_PACKAGE_XML_BYTES = 256 * 1024
+
+/**
+ * 带诊断的单包核验（plan 2026-10-05-avd-reconciliation 设计 4）：按目录核验
+ * package.xml 身份、source.properties 与 system.img。与 scanLocalImages 的布尔
+ * verified 不同——缺失/权限/损坏分开归因，供 AVD 健康检查区分「镜像没了」和
+ * 「读不了」。只读这三个受检文件（symlink 一律按故障上报，不追随目标），
+ * 不读镜像内容、不拉远端清单。
+ */
+export const checkLocalImage = async (
+  imageDir: string,
+  dirIdentity: { platformSegment: string; tagSegment: string; abi: string } | null,
+  deps: LocalScanDeps & {
+    lstat?: (path: string) => Promise<{ isSymbolicLink(): boolean; size?: number }>
+  } = {}
+): Promise<LocalImageCheck> => {
+  const d = { ...defaultDeps, ...deps }
+  try {
+    await d.readdir(imageDir)
+  } catch (error) {
+    const errno = errnoOf(error)
+    return errno === 'ENOENT'
+      ? {
+          packageName: null,
+          abi: null,
+          fault: 'missing-dir',
+          faultMessage: `镜像目录不存在（${imageDir}）`
+        }
+      : {
+          packageName: null,
+          abi: null,
+          fault: 'unreadable-dir',
+          faultMessage: `镜像目录不可读（${errno ?? '未知错误'}）：${imageDir}`
+        }
+  }
+  // 受检文件不追随 symlink（目标可能逃出 SDK 根）
+  if (d.lstat !== undefined) {
+    for (const name of ['package.xml', 'source.properties', 'system.img']) {
+      try {
+        const info = await d.lstat(join(imageDir, name))
+        if (info.isSymbolicLink()) {
+          return {
+            packageName: null,
+            abi: null,
+            fault: 'symlinked-file',
+            faultMessage: `镜像内受检文件是符号链接（${name}），不追随读取`
+          }
+        }
+        // package.xml 是不可信输入，读取前量尺寸（review P3：无界读取 → 内存放大）
+        if (
+          name === 'package.xml' &&
+          typeof info.size === 'number' &&
+          info.size > MAX_PACKAGE_XML_BYTES
+        ) {
+          return {
+            packageName: null,
+            abi: null,
+            fault: 'invalid-package-xml',
+            faultMessage: `package.xml 超过 ${MAX_PACKAGE_XML_BYTES / 1024}KiB，视为损坏`
+          }
+        }
+      } catch {
+        // lstat 失败交给后续存在性检查归因
+      }
+    }
+  }
+  let xml: string
+  try {
+    xml = await d.readFile(join(imageDir, 'package.xml'))
+  } catch (error) {
+    const errno = errnoOf(error)
+    return {
+      packageName: null,
+      abi: null,
+      fault: errno === 'ENOENT' ? 'missing-package-xml' : 'unreadable-package-xml',
+      faultMessage:
+        errno === 'ENOENT'
+          ? `镜像缺少 package.xml（${imageDir}）`
+          : `package.xml 不可读（${errno ?? '未知错误'}）：${imageDir}`
+    }
+  }
+  // 尺寸预检后仍可能被换大（TOCTOU）：读后再核一次长度
+  if (xml.length > MAX_PACKAGE_XML_BYTES) {
+    return {
+      packageName: null,
+      abi: null,
+      fault: 'invalid-package-xml',
+      faultMessage: `package.xml 超过 ${MAX_PACKAGE_XML_BYTES / 1024}KiB，视为损坏`
+    }
+  }
+  const record = readLocalPackageXml(xml)
+  if (record === null) {
+    return {
+      packageName: null,
+      abi: null,
+      fault: 'invalid-package-xml',
+      faultMessage: `package.xml 无法解析出镜像身份（${imageDir}）`
+    }
+  }
+  if (dirIdentity !== null) {
+    const expected = `system-images;${dirIdentity.platformSegment};${dirIdentity.tagSegment};${dirIdentity.abi}`
+    if (record.packageName !== expected) {
+      return {
+        packageName: record.packageName,
+        abi: record.abi,
+        fault: 'identity-mismatch',
+        faultMessage: `镜像身份（${record.packageName}）与目录位置（${expected}）矛盾`
+      }
+    }
+  }
+  if (!(await d.exists(join(imageDir, 'source.properties')))) {
+    return {
+      packageName: record.packageName,
+      abi: record.abi,
+      fault: 'missing-source-properties',
+      faultMessage: `镜像缺少 source.properties（${imageDir}）`
+    }
+  }
+  if (!(await d.exists(join(imageDir, 'system.img')))) {
+    return {
+      packageName: record.packageName,
+      abi: record.abi,
+      fault: 'missing-system-img',
+      faultMessage: `镜像缺少 system.img（${imageDir}）`
+    }
+  }
+  return { packageName: record.packageName, abi: record.abi, fault: null, faultMessage: null }
+}
+
 const localRecordToEntry = (record: LocalImageRecord): ImageEntry => {
   const parts = splitPackageName(record.packageName)
   const platformSegment = parts?.platformSegment ?? ''

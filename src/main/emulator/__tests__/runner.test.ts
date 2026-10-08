@@ -7,6 +7,7 @@ import {
   BOOT_TIMEOUT_MS,
   EmulatorRunner,
   KILL_GRACE_MS,
+  StartCancelledError,
   TERM_GRACE_MS,
   stderrTailText,
   type RunnerDeps
@@ -475,5 +476,83 @@ describe('EmulatorRunner 退出清理', () => {
     expect(children).toHaveLength(2)
     for (const child of children) expect(child.kills).toContain('SIGTERM')
     await expect(runner.start('d3')).rejects.toThrow('暂停启动')
+  })
+})
+
+describe('beforeStart 启动前置核验（plan 2026-10-05-avd-reconciliation 设计 4）', () => {
+  it('先于共享 ADB/端口步骤执行一次；通过后正常进入准备', async () => {
+    const before = vi.fn(async () => {})
+    const ensure = vi.fn(async () => {})
+    const { runner, children } = makeRunner({ beforeStart: before, ensureAdbServer: ensure })
+    await runner.start('d1', '11111111-2222-3333-4444-555555555555')
+    await tick()
+    expect(before).toHaveBeenCalledWith(
+      'd1',
+      '11111111-2222-3333-4444-555555555555',
+      expect.any(AbortSignal)
+    )
+    expect(before.mock.invocationCallOrder[0]).toBeLessThan(ensure.mock.invocationCallOrder[0])
+    expect(children).toHaveLength(1)
+  })
+
+  it('核验失败 → 按启动失败收口，不进 ADB/端口、不 spawn', async () => {
+    const ensure = vi.fn(async () => {})
+    const { runner, children } = makeRunner({
+      ensureAdbServer: ensure,
+      beforeStart: async () => {
+        throw new Error('启动前核验未通过：缺少 d1.ini')
+      }
+    })
+    await expect(runner.start('d1', '11111111-2222-3333-4444-555555555555')).rejects.toThrow(
+      '启动前核验未通过'
+    )
+    expect(ensure).not.toHaveBeenCalled()
+    expect(children).toHaveLength(0)
+  })
+
+  it('核验等待可取消：StartCancelledError 正常收口，迟到通过不推进', async () => {
+    let release: (() => void) | undefined
+    const ensure = vi.fn(async () => {})
+    const { runner, children } = makeRunner({
+      ensureAdbServer: ensure,
+      beforeStart: () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        })
+    })
+    const start = runner.start('d1', '11111111-2222-3333-4444-555555555555')
+    await tick()
+    const cancel = runner.cancelStart('d1')
+    await expect(start).rejects.toBeInstanceOf(StartCancelledError)
+    await cancel
+    release?.() // 迟到的核验通过——不再推进任何步骤
+    await tick()
+    expect(ensure).not.toHaveBeenCalled()
+    expect(children).toHaveLength(0)
+  })
+})
+
+describe('beforeStart 与退出清理交错（review 修复轮补充）', () => {
+  it('disposeAll 打断挂起的 beforeStart：StartCancelledError 收口，不进 ADB/spawn', async () => {
+    const ensure = vi.fn(async () => {})
+    let release: (() => void) | undefined
+    const { runner, children } = makeRunner({
+      ensureAdbServer: ensure,
+      beforeStart: () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        })
+    })
+    const start = runner.start('d1', '11111111-2222-3333-4444-555555555555')
+    await tick()
+    const disposing = runner.disposeAll()
+    await tick(1)
+    await expect(start).rejects.toBeInstanceOf(StartCancelledError)
+    const leftovers = await disposing
+    expect(leftovers).toEqual([])
+    release?.()
+    await tick()
+    expect(ensure).not.toHaveBeenCalled()
+    expect(children).toHaveLength(0)
   })
 })

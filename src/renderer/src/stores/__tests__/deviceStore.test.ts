@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CreateDeviceResult, Device, DeviceSnapshot } from '@shared/types'
+import type { CreateDeviceResult, Device, DeviceSnapshot, ReconcileResult } from '@shared/types'
 import { useDeviceStore } from '../deviceStore'
 
 const device = (overrides: Partial<Device> = {}): Device => ({
@@ -18,7 +18,23 @@ const device = (overrides: Partial<Device> = {}): Device => ({
   ...overrides
 })
 
-const snapshot = (devices: Device[], revision: number): DeviceSnapshot => ({ revision, devices })
+const snapshot = (
+  devices: Device[],
+  revision: number,
+  extras: Partial<DeviceSnapshot> = {}
+): DeviceSnapshot => ({
+  revision,
+  devices,
+  storeHealth: { state: 'ok', issues: [] },
+  reconciliation: {
+    signature: null,
+    unavailableCount: 0,
+    orphanCount: 0,
+    storeState: 'ok',
+    pendingNotification: false
+  },
+  ...extras
+})
 
 const apiCalls = {
   list: vi.fn<() => Promise<DeviceSnapshot>>(),
@@ -29,6 +45,9 @@ const apiCalls = {
   stop: vi.fn<() => Promise<DeviceSnapshot>>(),
   cancelStart: vi.fn<() => Promise<DeviceSnapshot>>(),
   copySerial: vi.fn<() => Promise<void>>(),
+  reconcile: vi.fn<() => Promise<ReconcileResult>>(),
+  reconciliationReport: vi.fn<() => Promise<unknown>>(),
+  acknowledgeReconciliation: vi.fn<() => Promise<void>>(),
   onChanged: vi.fn<(callback: unknown) => () => void>(() => () => {}),
   onRuntimeError: vi.fn<(callback: unknown) => () => void>(() => () => {})
 }
@@ -37,7 +56,21 @@ describe('deviceStore（快照 + revision 守卫）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(window as unknown as { api: unknown }).api = { devices: apiCalls }
-    useDeviceStore.setState({ devices: [], selectedId: null, revision: -1, loaded: false })
+    useDeviceStore.setState({
+      devices: [],
+      selectedId: null,
+      revision: -1,
+      loaded: false,
+      loadError: null,
+      storeHealth: { state: 'ok', issues: [] },
+      reconciliation: {
+        signature: null,
+        unavailableCount: 0,
+        orphanCount: 0,
+        storeState: 'ok',
+        pendingNotification: false
+      }
+    })
   })
 
   it('load：拉取快照并选中首台，loaded 落定', async () => {
@@ -50,11 +83,69 @@ describe('deviceStore（快照 + revision 守卫）', () => {
     expect(state.loaded).toBe(true)
   })
 
-  it('load 失败：loaded 仍落定，不卡加载态', async () => {
+  it('load 失败：loaded 仍落定并保留 loadError（读取失败 ≠ 空库）', async () => {
     apiCalls.list.mockRejectedValue(new Error('boom'))
     await useDeviceStore.getState().load()
-    expect(useDeviceStore.getState().loaded).toBe(true)
-    expect(useDeviceStore.getState().devices).toHaveLength(0)
+    const state = useDeviceStore.getState()
+    expect(state.loaded).toBe(true)
+    expect(state.devices).toHaveLength(0)
+    expect(state.loadError).toBe('boom')
+    // 后续成功 load 清掉错误
+    apiCalls.list.mockResolvedValue(snapshot([device()], 1))
+    await useDeviceStore.getState().load()
+    expect(useDeviceStore.getState().loadError).toBeNull()
+  })
+
+  it('applySnapshot 消费健康字段：storeHealth 与 reconciliation 摘要进 state', () => {
+    useDeviceStore.setState({ revision: -1 })
+    useDeviceStore.getState().applySnapshot(
+      snapshot([device()], 1, {
+        storeHealth: {
+          state: 'read-only',
+          issues: [{ code: 'metadata-changed', message: '外部修改' }]
+        },
+        reconciliation: {
+          signature: 'sig-1',
+          unavailableCount: 1,
+          orphanCount: 2,
+          storeState: 'read-only',
+          pendingNotification: true
+        }
+      })
+    )
+    const state = useDeviceStore.getState()
+    expect(state.storeHealth.state).toBe('read-only')
+    expect(state.reconciliation.signature).toBe('sig-1')
+    expect(state.reconciliation.pendingNotification).toBe(true)
+  })
+
+  it('reconcile：应用合并快照，失败返回 ok:false', async () => {
+    useDeviceStore.setState({ devices: [device()], revision: 1 })
+    apiCalls.reconcile.mockResolvedValue({
+      snapshot: snapshot(
+        [device({ availability: { state: 'missing', issues: [], checkedAt: 2 } })],
+        2
+      ),
+      report: {
+        revision: 2,
+        signature: 's',
+        checkedAt: 2,
+        storeHealth: { state: 'ok', issues: [] },
+        deviceIssues: [],
+        orphanEntries: [],
+        unrecognizedCount: 0,
+        pendingIds: [],
+        scanError: null,
+        pendingNotification: false
+      }
+    })
+    const ok = await useDeviceStore.getState().reconcile()
+    expect(ok.ok).toBe(true)
+    expect(useDeviceStore.getState().devices[0].availability?.state).toBe('missing')
+
+    apiCalls.reconcile.mockRejectedValue(new Error('检查服务异常'))
+    const failed = await useDeviceStore.getState().reconcile()
+    expect(failed.ok).toBe(false)
   })
 
   it('较旧 revision 的快照被忽略（旧 invoke 结果不覆盖新推送）', async () => {
