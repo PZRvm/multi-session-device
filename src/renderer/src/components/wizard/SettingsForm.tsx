@@ -25,8 +25,8 @@ const cameraSelect = (
   const disabledReason = capabilities.fields[key]?.disabledReason ?? null
   const disabled = disabledReason !== null
   const options: Array<{ value: string; label: string }> = [
-    { value: 'none', label: '关闭' },
     { value: 'emulated', label: '模拟画面' },
+    { value: 'none', label: '关闭' },
     { value: 'virtualScene', label: '虚拟场景' },
     ...capabilities.webcamDeviceIds.map((id) => ({
       value: id,
@@ -63,14 +63,11 @@ const cameraSelect = (
           }
         }}
       >
-        <option value="emulated">模拟画面</option>
-        {options
-          .filter((option) => option.value !== 'emulated')
-          .map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
       </select>
       <p className="hint">
         {disabled
@@ -129,6 +126,11 @@ const SettingsForm = ({
   ): React.JSX.Element => {
     const capability = field(key)
     const disabled = capability?.disabledReason !== null && capability?.disabledReason !== undefined
+    const hint = disabled
+      ? disabledReasonOf(key)
+      : capability?.min !== null && capability?.min !== undefined
+        ? `范围 ${capability.min}–${capability.max}`
+        : null
     return (
       <div className="field" data-disabled={disabled || undefined}>
         <label className="label" htmlFor={`setting-${key}`}>
@@ -154,15 +156,9 @@ const SettingsForm = ({
           <p className="field-error" role="alert">
             {errors[key]}
           </p>
-        ) : (
-          <p className="hint">
-            {disabled
-              ? disabledReasonOf(key)
-              : capability?.min !== null && capability?.min !== undefined
-                ? `范围 ${capability.min}–${capability.max}`
-                : ''}
-          </p>
-        )}
+        ) : hint !== null ? (
+          <p className="hint">{hint}</p>
+        ) : null}
       </div>
     )
   }
@@ -196,7 +192,7 @@ const SettingsForm = ({
             </option>
           ))}
         </select>
-        <p className="hint">{disabled ? disabledReasonOf(key) : ''}</p>
+        {disabled ? <p className="hint">{disabledReasonOf(key)}</p> : null}
       </div>
     )
   }

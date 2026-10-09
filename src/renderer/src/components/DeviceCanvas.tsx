@@ -530,7 +530,6 @@ const Wrapper = styled.div`
     justify-content: center;
     gap: 8px;
     color: #9aa2ad;
-    pointer-events: auto;
 
     .spin {
       animation: spin 1.2s linear infinite;

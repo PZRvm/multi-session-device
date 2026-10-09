@@ -16,9 +16,13 @@ tags: [styled-components, 债务, review]
 
 ## 修复记录
 
-2026-10-10 用户裁决修复「待修（小）」全部 4 项（提交见 git log）：发丝线选择器改 `& > * + *`（按相邻子元素分隔，不再依赖 DeviceRow 根标签）；选中态状态点改 `--accent-ink` + 0.85 不透明度（与文字行同口径，原状态色在 accent 背景上对比 2.6–3:1，改后约 9:1）；action-label / new-label 合并为一条组合选择器（两个语义类名保留在 DOM 上）；status-cell 的死 `num` 钩子移除。备查 5–9 维持原状。805 测试全绿、typecheck / lint / prettier 零错。
+2026-10-10 用户裁决修复「待修（小）」全部 4 项（提交见 git log）：发丝线选择器改 `& > * + *`（按相邻子元素分隔，不再依赖 DeviceRow 根标签）；选中态状态点改 `--accent-ink` + 0.85 不透明度（与文字行同口径，原状态色在 accent 背景上对比 2.6–3:1，改后约 9:1）；action-label / new-label 合并为一条组合选择器（两个语义类名保留在 DOM 上）；status-cell 的死 `num` 钩子移除。805 测试全绿、typecheck / lint / prettier 零错。
 
-## 备查（无需行动）
+同日应用户裁决继续修复备查 5–9 项：select() 与 num() 的空 `<p class="hint">` 改为有内容才渲染（`.field` 末位零高元素，删除无视觉变化）；cameraSelect 改为 options 数组 emulated 置首直接映射，删硬编码 option 与 filter（DOM 选项顺序不变）；retry-link 补 `type="button"`；`onShowDeprecatedChange` 死 prop 从接口与 DeviceWizard 传参中移除（禁用的开关 UI 与 `showDeprecated` 筛选保留，信号源接入时按 DeviceWizard 内注释恢复 setState 接线）；`.overlay` 冗余 `pointer-events: auto` 删除（已核实祖先链无 `none`，仅兄弟 `.skin-mask` 为 none）；App.tsx 的 `loadError` 选择器上移归入 store 选择器分组。805 测试全绿、typecheck / lint / prettier 零错。至此本 issue 全部条目关闭。
+
+## 备查（无需行动）→ 已全部关闭
+
+> 5–9 项于 2026-10-10 应用户裁决修复，见下方修复记录第二段；本节标题保留原文存档。
 
 5. SettingsForm 的 `select()` helper 非禁用时也渲染空 `<p class="hint">`（margin:0 无视觉影响，DOM 有空节点）；cameraSelect 硬编码 `<option value="emulated">` 又在 options 里 filter 掉。
 6. DeviceListPane 的 retry-link 是无显式 `type` 的 button（不在 form 内，无行为影响）。

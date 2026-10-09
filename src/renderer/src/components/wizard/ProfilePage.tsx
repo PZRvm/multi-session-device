@@ -29,7 +29,6 @@ export interface ProfilePageProps {
   search: string
   onSearchChange: (value: string) => void
   showDeprecated: boolean
-  onShowDeprecatedChange: (value: boolean) => void
   selectedId: string | null
   onSelect: (profile: DeviceProfile) => void
 }

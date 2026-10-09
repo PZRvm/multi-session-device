@@ -52,7 +52,7 @@ const DeviceListPane = ({
         <p className="empty-hint">
           设备列表加载失败：{loadError}
           <br />
-          <button className="retry-link" onClick={onRetryLoad}>
+          <button type="button" className="retry-link" onClick={onRetryLoad}>
             重试加载
           </button>
         </p>

@@ -128,7 +128,8 @@ const DeviceWizard = ({
   // 画像页筛选
   const [category, setCategory] = useState<DeviceFormFactor>('phone')
   const [search, setSearch] = useState('')
-  const [showDeprecated, setShowDeprecated] = useState(false)
+  // 官方源暂无弃用信号——开关禁用中，恒为 false；信号源接入时恢复 setState 接线
+  const [showDeprecated] = useState(false)
   // 配置页
   const [tab, setTab] = useState<WizardTab>('device')
   const [imageFilters, setImageFilters] = useState<ImageFilters>({
@@ -557,7 +558,6 @@ const DeviceWizard = ({
           search={search}
           onSearchChange={setSearch}
           showDeprecated={showDeprecated}
-          onShowDeprecatedChange={setShowDeprecated}
           selectedId={selectedProfile?.id ?? null}
           onSelect={selectProfile}
         />

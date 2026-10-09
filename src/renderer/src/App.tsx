@@ -17,6 +17,7 @@ const App = (): React.JSX.Element => {
   const selectedId = useDeviceStore((state) => state.selectedId)
   const storeHealth = useDeviceStore((state) => state.storeHealth)
   const reconciliation = useDeviceStore((state) => state.reconciliation)
+  const loadError = useDeviceStore((state) => state.loadError)
   const load = useDeviceStore((state) => state.load)
   const reconcile = useDeviceStore((state) => state.reconcile)
   const applySnapshot = useDeviceStore((state) => state.applySnapshot)
@@ -213,7 +214,6 @@ const App = (): React.JSX.Element => {
     .map((device) => device.name)
   const storeTrusted = storeHealth.state !== 'error'
   const metaWritable = storeHealth.state === 'ok'
-  const loadError = useDeviceStore((state) => state.loadError)
 
   const handleRenameBlocked = (): void => {
     void showAlert(
