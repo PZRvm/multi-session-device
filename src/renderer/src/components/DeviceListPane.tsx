@@ -106,8 +106,8 @@ const Wrapper = styled.div`
     display: flex;
     flex-direction: column;
 
-    /* 行间发丝线（Hairline Rule） */
-    & > div + div {
+    /* 行间发丝线（Hairline Rule）：按相邻子元素分隔，不依赖行根标签 */
+    & > * + * {
       border-top: 1px solid var(--board-hairline);
     }
   }

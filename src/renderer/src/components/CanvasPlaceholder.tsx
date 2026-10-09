@@ -137,12 +137,8 @@ const Wrapper = styled.div`
     color: var(--board-tile-ink);
   }
 
-  .action-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-
+  /* 两个语义名共用一条规则：动作钮与主钮的内容排布相同 */
+  .action-label,
   .new-label {
     display: inline-flex;
     align-items: center;

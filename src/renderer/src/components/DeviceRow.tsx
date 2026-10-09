@@ -330,6 +330,12 @@ const Wrapper = styled.div`
     background: var(--board-tile-ink);
   }
 
+  /* 选中态反白后原状态色在 accent 背景上对比不足（灰 2.6:1、深琥珀约 3:1），与文字行同口径改用 ink */
+  &[aria-current] .status-dot {
+    background: var(--accent-ink);
+    opacity: 0.85;
+  }
+
   /* 忙态槽位：与 icon-button 同尺寸的非交互容器，加载图标与按钮图标共用同一水平中心 */
   .busy-slot {
     display: inline-flex;

@@ -14,6 +14,10 @@ tags: [styled-components, 债务, review]
 3. **重复 CSS**——CanvasPlaceholder 的 `.action-label` 与 `.new-label` 两条规则逐字节相同，可合并为一个类。
 4. **死钩子**——ImageTable 的 status-cell 挂着 `num` class，但文件内无 `.num` 规则（旧网格迁移残留）。
 
+## 修复记录
+
+2026-10-10 用户裁决修复「待修（小）」全部 4 项（提交见 git log）：发丝线选择器改 `& > * + *`（按相邻子元素分隔，不再依赖 DeviceRow 根标签）；选中态状态点改 `--accent-ink` + 0.85 不透明度（与文字行同口径，原状态色在 accent 背景上对比 2.6–3:1，改后约 9:1）；action-label / new-label 合并为一条组合选择器（两个语义类名保留在 DOM 上）；status-cell 的死 `num` 钩子移除。备查 5–9 维持原状。805 测试全绿、typecheck / lint / prettier 零错。
+
 ## 备查（无需行动）
 
 5. SettingsForm 的 `select()` helper 非禁用时也渲染空 `<p class="hint">`（margin:0 无视觉影响，DOM 有空节点）；cameraSelect 硬编码 `<option value="emulated">` 又在 options 里 filter 掉。

@@ -201,7 +201,7 @@ const ImageTable = ({
               <div className="cell">{serviceLabels(image).join(' + ')}</div>
               <div className="cell">{image.abi}</div>
               <div className="cell num">{image.installed ? '—' : formatSize(image.sizeBytes)}</div>
-              <div className="status-cell num">
+              <div className="status-cell">
                 {image.installed ? (
                   <>
                     <span
