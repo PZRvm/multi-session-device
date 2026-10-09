@@ -57,6 +57,7 @@ export function useDeviceInput(params: DeviceInputParams): void {
   const discardCompositionRef = useRef(false)
   const errorNotifiedRef = useRef(false)
   const enabledRef = useRef(enabled)
+  const lastInputViewRef = useRef<ScreenViewRef | null>(null)
   // ref 更新放 effect：渲染期写 ref 会触发级联纪律告警（事件都在 commit 后，时序等价）
   useEffect(() => {
     enabledRef.current = enabled
@@ -64,8 +65,32 @@ export function useDeviceInput(params: DeviceInputParams): void {
 
   const send = useCallback(
     (input: ScreenInput): void => {
-      const view = screenRef.current
-      if (!enabledRef.current || !view.envelope || view.width <= 0 || view.height <= 0) return
+      // 释放使用最后一次输入的归属，布局消失不阻断；旧代次仍由 main 拒绝。
+      const releasing = input.kind === 'release-all'
+      const view = releasing ? lastInputViewRef.current : screenRef.current
+      if (
+        (!releasing && !enabledRef.current) ||
+        !view?.envelope ||
+        view.width <= 0 ||
+        view.height <= 0
+      )
+        return
+      if (releasing) {
+        const current = screenRef.current
+        const live = current.envelope
+        if (
+          !live ||
+          live.deviceId !== view.envelope.deviceId ||
+          live.runId !== view.envelope.runId ||
+          live.streamId !== view.envelope.streamId ||
+          live.generation !== view.envelope.generation ||
+          live.viewToken !== view.envelope.viewToken ||
+          current.width !== view.width ||
+          current.height !== view.height
+        )
+          return
+      }
+      if (!releasing) lastInputViewRef.current = { ...view, envelope: { ...view.envelope } }
       window.api.screen
         .input({
           ...view.envelope,
@@ -93,6 +118,7 @@ export function useDeviceInput(params: DeviceInputParams): void {
     if (moveRafRef.current !== 0) cancelAnimationFrame(moveRafRef.current)
     moveRafRef.current = 0
     pendingMovesRef.current.clear()
+    lastInputViewRef.current = null
     if (composingRef.current) discardCompositionRef.current = true
   }, [send])
 
@@ -347,7 +373,7 @@ export function useDeviceInput(params: DeviceInputParams): void {
     }
   }, [inputProxyRef, send])
 
-  // 禁用时只清本地状态，旧按下输入由 main 释放；失焦/隐藏/卸载仍请求释放。
+  // 禁用时释放已发出的按下状态并清本地手势，禁用期间的新输入仍丢弃。
   useEffect(() => {
     if (!enabled) releaseAll()
   }, [enabled, releaseAll])

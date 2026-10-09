@@ -1,6 +1,6 @@
 ---
 description: 五项修复 review 新发现：布局归零漏释放已有按下状态，控制写失败后关闭 parser 触发未观察 ACK rejection
-status: open
+status: resolved
 priority: P2
 tags: [review, device-canvas, input, scrcpy, clipboard, lifecycle]
 ---
@@ -30,3 +30,7 @@ tags: [review, device-canvas, input, scrcpy, clipboard, lifecycle]
 本轮诊断目录：`/var/folders/r8/m81f7g6102x8s3fg8fjrpbv00000gn/T/msd-five-fixes-9_m7z6j9`。B3：`b3-release-evidence.test.tsx`、`b3-review-vitest.config.mjs`；B5：`b5-write-failure-evidence.mjs`，有/无 `--close-parsers` 对照。临时证据不入库；测试会创建自己的窗口或流，不操作用户 AVD。
 
 八项 review 已检查正确性、权限、竞态、边界、兼容、资源清理、测试有效性和范围。B1、B2、B4 未发现新增明确缺陷；上述两项需要独立修复后再做最终关闭判断。
+
+## 2026-10-09 后续修复
+
+两项 P2 已由 [独立计划](../../../plans/2026-10-09-remaining-code-gaps.md)关闭：输入释放绕过新输入门控但保留原归属/代次；控制 writer 同时观察 write/consumed/ACK，发送失败关闭会话。归零回归先红、旧库写失败先出现 4 个未处理错误；修复后 Node 20/22 全量均 786 项通过、6 项跳过，无未处理异常。原五项 plan 已 completed；当前追踪仍以待修清单为准。

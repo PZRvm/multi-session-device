@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { net } from 'electron'
 import catalog from './skinSources.json'
 import { inspectSkinImage, SkinImageBudget } from './skinImageLimits'
 import {
@@ -13,7 +14,24 @@ import {
 
 export const SKIN_SOURCE_URL = `https://android.googlesource.com/platform/tools/adt/idea/+/${catalog.ref}/artwork/resources/device-art-resources`
 export const officialSkinName = (profileId: string): string | null =>
-  catalog.names.includes(profileId) ? profileId : null
+  catalog.names.includes(profileId)
+    ? profileId
+    : (catalog.aliases.find((entry) => entry.profileId === profileId)?.name ?? null)
+
+/** 别名只开放经过画像与 layout 尺寸核验的目录；横竖屏交换不改变像素尺寸。 */
+const verifyAliasLayout = (name: string, layout: SkinRecord['layout']): void => {
+  const alias = catalog.aliases.find((entry) => entry.name === name)
+  if (!alias) return
+  const matches = [layout.portrait, layout.landscape].some(
+    (orientation) =>
+      orientation !== null &&
+      ((orientation.screenWidth === alias.screenWidth &&
+        orientation.screenHeight === alias.screenHeight) ||
+        (orientation.screenWidth === alias.screenHeight &&
+          orientation.screenHeight === alias.screenWidth))
+  )
+  if (!matches) throw new Error(`官方皮肤屏幕尺寸与已核验画像不符：${name}`)
+}
 
 const FILE_LIMIT = 16 * 1024 * 1024
 const TOTAL_LIMIT = 64 * 1024 * 1024
@@ -24,7 +42,20 @@ export const gitBlobId = (bytes: Buffer): string =>
 export const skinImageMime = (bytes: Buffer): string => inspectSkinImage(bytes).mime
 
 const boundedFetch = async (url: string): Promise<string> => {
-  const response = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+  const signal = AbortSignal.timeout(30_000)
+  let response: Response
+  try {
+    // Chromium 使用系统代理；Node fetch 的直连在代理网络下可能不可用。
+    response = await net.fetch(url, { signal, credentials: 'omit' })
+  } catch (cause) {
+    const timedOut = signal.aborted || (cause instanceof Error && cause.name === 'TimeoutError')
+    throw new Error(
+      timedOut
+        ? '官方皮肤请求超时（30 秒），请检查网络或系统代理后重试'
+        : `无法连接官方皮肤源 android.googlesource.com，请检查网络或系统代理后重试（${cause instanceof Error ? cause.message : String(cause)}）`,
+      { cause }
+    )
+  }
   if (!response.ok) throw new Error(`官方皮肤源响应 HTTP ${response.status}，请稍后重试`)
   if (!response.body) throw new Error('官方皮肤源返回空内容')
   const reader = response.body.getReader()
@@ -32,7 +63,9 @@ const boundedFetch = async (url: string): Promise<string> => {
   let size = 0
   try {
     for (;;) {
-      const result = await reader.read()
+      const result = await reader.read().catch((cause: unknown) => {
+        throw new Error('官方皮肤下载中断，请检查网络或系统代理后重试', { cause })
+      })
       if (result.done) break
       size += result.value.length
       if (size > FILE_LIMIT * 1.4) throw new Error('官方皮肤文件体积超限')
@@ -58,12 +91,14 @@ export const downloadSkin = (
   onProgress: (percent: number) => void,
   deps: OfficialSkinDeps = {}
 ): Promise<SkinRecord> => {
-  if (officialSkinName(name) === null)
-    return Promise.reject(new Error('该机型暂无已核实的官方皮肤'))
-  const key = `${userData}|${name}`
+  const canonicalName = officialSkinName(name)
+  if (canonicalName === null) return Promise.reject(new Error('该机型暂无已核实的官方皮肤'))
+  const key = `${userData}|${canonicalName}`
   const pending = inFlight.get(key)
   if (pending) return pending
-  const job = acquireSkin(name, userData, onProgress, deps).finally(() => inFlight.delete(key))
+  const job = acquireSkin(canonicalName, userData, onProgress, deps).finally(() =>
+    inFlight.delete(key)
+  )
   inFlight.set(key, job)
   return job
 }
@@ -79,6 +114,7 @@ const acquireSkin = async (
     const provenance = await readFile(join(record.directory, 'PROVENANCE.txt'), 'utf8')
     if (!provenance.includes(`ref: ${catalog.ref}\n`)) continue
     try {
+      verifyAliasLayout(name, record.layout)
       const blobs = JSON.parse(
         await readFile(join(record.directory, 'BLOBS.json'), 'utf8')
       ) as Record<string, string>
@@ -149,6 +185,7 @@ const acquireSkin = async (
   // 与导入/扫描/投屏同口径：零可渲染素材的官方目录直接判核验失败
   if (!layout || renderableArtFiles(layout).length === 0)
     throw new Error('官方皮肤 layout 核验失败')
+  verifyAliasLayout(name, layout)
   const id = randomUUID()
   const staging = join(userData, 'device-skins-staging', id)
   const target = join(importedSkinsRoot(userData), id)

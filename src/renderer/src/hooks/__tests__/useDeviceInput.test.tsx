@@ -38,6 +38,7 @@ interface InputHarness {
   pointer: (kind: string) => void
   flushFrames: () => void
   setEnabled: (enabled: boolean) => void
+  changeGeneration: () => void
 }
 
 const setup = (): InputHarness => {
@@ -86,7 +87,15 @@ const setup = (): InputHarness => {
       for (const callback of pending) callback(0)
     })
   }
-  return { proxy, pointer, flushFrames, setEnabled: (enabled: boolean) => rerender({ enabled }) }
+  return {
+    proxy,
+    pointer,
+    flushFrames,
+    setEnabled: (enabled: boolean) => rerender({ enabled }),
+    changeGeneration: () => {
+      screenRef.current.envelope.generation += 1
+    }
+  }
 }
 
 it('禁用期间的新触摸、按键与文本不发送，恢复后不补发，仍接受新操作', () => {
@@ -113,6 +122,35 @@ it('禁用期间的新触摸、按键与文本不发送，恢复后不补发，�
   ])
 })
 
+it.each(['key', 'pointer'])('已有 %s 按下在禁用时释放，恢复松开不重复发送', (kind) => {
+  const { proxy, pointer, setEnabled } = setup()
+  if (kind === 'key') fireEvent.keyDown(proxy, { key: 'Enter' })
+  else pointer('pointerdown')
+  setEnabled(false)
+  expect(input.mock.calls.map(([request]) => request.input.kind)).toEqual([
+    kind === 'key' ? 'keycode' : 'touch',
+    'release-all'
+  ])
+  setEnabled(true)
+  fireEvent.keyUp(proxy, { key: 'Enter' })
+  pointer('pointerup')
+  expect(input).toHaveBeenCalledTimes(2)
+})
+
+it('代次变化后不把旧手势释放发给新代次，恢复后新操作仍可用', () => {
+  const { proxy, setEnabled, changeGeneration } = setup()
+  fireEvent.keyDown(proxy, { key: 'Enter' })
+  changeGeneration()
+  setEnabled(false)
+  expect(input).toHaveBeenCalledOnce()
+  expect(input.mock.calls[0][0].generation).toBe(1)
+  setEnabled(true)
+  fireEvent.keyUp(proxy, { key: 'Enter' })
+  expect(input).toHaveBeenCalledOnce()
+  fireEvent.keyDown(proxy, { key: 'Enter' })
+  expect(input.mock.calls[1][0].generation).toBe(2)
+})
+
 it('暂停销毁等待 RAF 的移动，恢复后不会发送已取消手势的 Move', () => {
   const { pointer, setEnabled, flushFrames } = setup()
   pointer('pointerdown')
@@ -127,14 +165,14 @@ it('暂停销毁等待 RAF 的移动，恢复后不会发送已取消手势的 M
     input.mock.calls.map(([request]) =>
       request.input.kind === 'touch' ? request.input.action : request.input.kind
     )
-  ).toEqual(['down'])
+  ).toEqual(['down', 'release-all'])
   pointer('pointerdown')
   pointer('pointerup')
   expect(
     input.mock.calls.map(([request]) =>
       request.input.kind === 'touch' ? request.input.action : request.input.kind
     )
-  ).toEqual(['down', 'down', 'up'])
+  ).toEqual(['down', 'release-all', 'down', 'up'])
 })
 
 it.each(['before', 'during'])('跨暂停的 IME 组合不在恢复后提交，新组合正常发送：%s', (start) => {

@@ -119,7 +119,11 @@ it.each(['success', 'failure'])(
       expect(heldByDevice.size).toBe(0)
       fireEvent.keyDown(proxy, { key: 'Enter' })
       fireEvent.keyUp(proxy, { key: 'ArrowDown' })
-      expect(input).toHaveBeenCalledTimes(2)
+      expect(input.mock.calls.map(([request]) => request.input.kind)).toEqual([
+        'keycode',
+        'rotate',
+        'release-all'
+      ])
       await act(async () => finish())
       fireEvent.keyUp(proxy, { key: 'ArrowDown' })
       expect(heldByDevice.size).toBe(0)
@@ -132,7 +136,7 @@ it.each(['success', 'failure'])(
         expect(screen.getByRole('alert').textContent).toContain('permission denied')
       fireEvent.keyDown(proxy, { key: 'Enter' })
       fireEvent.keyUp(proxy, { key: 'Enter' })
-      expect(input).toHaveBeenCalledTimes(4)
+      expect(input).toHaveBeenCalledTimes(5)
       expect(heldByDevice.size).toBe(0)
     } finally {
       await act(async () => finish())
@@ -200,6 +204,32 @@ describe('外部纯文本粘贴', () => {
     fireEvent(proxy, event)
     return { event, getData }
   }
+
+  it.each(['key', 'pointer'])('画布归零释放已有 %s，恢复后不补发暂停期间输入', (kind) => {
+    const view = mountPaste()
+    if (kind === 'key') fireEvent.keyDown(view.proxy, { key: 'Enter' })
+    else {
+      const event = createEvent.pointerDown(view.proxy.parentElement!, {
+        button: 0,
+        clientX: 300,
+        clientY: 400,
+        bubbles: true
+      })
+      Object.defineProperty(event, 'pointerId', { value: 1 })
+      fireEvent(view.proxy.parentElement!, event)
+    }
+    expect(view.input).toHaveBeenCalledOnce()
+    act(() => resize(0, 0))
+    expect(view.input.mock.calls.map(([request]) => request.input.kind)).toEqual([
+      kind === 'key' ? 'keycode' : 'touch',
+      'release-all'
+    ])
+    fireEvent.keyDown(view.proxy, { key: 'ArrowDown' })
+    act(() => resize(600, 800))
+    fireEvent.keyUp(view.proxy, { key: 'Enter' })
+    fireEvent.keyUp(view.proxy, { key: 'ArrowDown' })
+    expect(view.input).toHaveBeenCalledTimes(2)
+  })
 
   it.each(['English text', '外部中文粘贴', '第一行\nsecond line 😀'])(
     '原生 paste 文本完整走剪贴板通道且只提交一次：%s',

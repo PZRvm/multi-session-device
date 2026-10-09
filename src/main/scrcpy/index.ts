@@ -10,7 +10,7 @@ import {
   WritableStream
 } from '@yume-chan/stream-extra'
 import type { AndroidKeyCode, ScrcpyMediaStreamPacket } from '@yume-chan/scrcpy'
-import { h264ParseConfiguration, ScrcpyControlMessageWriter } from '@yume-chan/scrcpy'
+import { h264ParseConfiguration, type ScrcpyControlMessageWriter } from '@yume-chan/scrcpy'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { ScreenAckMessage, ScreenFormat, ScreenStateMessage } from '@shared/types'
 import { scrubAdbEnv } from '../emulator/adb'
@@ -23,6 +23,7 @@ import {
   type InjectContext
 } from './control'
 import { establishTransport, SCRCPY_SERVER_VERSION, type Transport } from './transport'
+import { SafeControlMessageWriter } from './controlWriter'
 
 // ---- 预算（设计值，超限走重同步而非积压）----
 /** 未确认包数/字节上限（IPC 背压；重同步突发不受此限，由缓存上限约束） */
@@ -135,7 +136,7 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
         transport.controlSocket.destroy()
       }
     })
-    return new ScrcpyControlMessageWriter(
+    return new SafeControlMessageWriter(
       new Consumable.WrapWritableStream(controlRaw).getWriter(),
       transport.options as never
     )
@@ -279,6 +280,12 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
         (error: unknown) => {
           session.clipboardWrites -= 1
           finish(false, error)
+          if (!session.abort.signal.aborted) {
+            session.state = 'error'
+            session.error = `剪贴板控制发送失败：${error instanceof Error ? error.message : String(error)}`
+            sendState(session)
+            void destroySession(session.deviceId)
+          }
         }
       )
     })
