@@ -20,11 +20,18 @@ description: 编码基线——目录与组件结构、命名、样式与图标�
 ```tsx
 const DeviceList = (props: DeviceListProps): React.JSX.Element => {
   const { devices, onSelect, ...rest } = props
-  return <Wrapper>...</Wrapper>
+  return (
+    <Wrapper {...rest}>
+      <p className="empty-hint">暂无设备</p>
+    </Wrapper>
+  )
 }
 
 const Wrapper = styled.div`
-  /* 只建最外层一个 Wrapper；内部布局写在后代选择器里 */
+  /* 唯一的 styled；内部元素用 className，样式写在类选择器后代里 */
+  .empty-hint {
+    color: var(--board-ink-dim);
+  }
 `
 
 export default DeviceList
@@ -41,8 +48,10 @@ export default DeviceList
 
 ## 样式与图标
 
-- 样式只用 styled-components：每个组件只建最外层一个 Wrapper，内部布局用后代选择器，不建第二个 styled
-- styled 的动态 prop 用 `$` 前缀（transient props），禁止非 `$` 的 prop 流进 DOM
+- 样式只用 styled-components，每个组件文件只定义一个 styled：最外层 `Wrapper`。内部元素不建 styled——用原生标签挂 `className`（kebab-case），样式写进 Wrapper 模板的类选择器后代（`.empty-hint { ... }`；嵌套选择器自动落在 Wrapper 作用域内，跨组件重名不冲突）
+- 内部动态样式三条路：组件级状态挂 Wrapper 的 aria / `data-*` 属性，后代选择器响应（`&[aria-current] .subtitle`）；元素级开关在 TS 里拼条件 className；数值型动态值（像素、矩形）用内联 `style`，不做 CSS 字符串插值
+- `styled(其他组件)`（如 `styled(Input)`、`styled(Loader2)`）也算第二个 styled，被包装方支持 className 时改传 `className`。例外：`Button`、`Input`、`Divider` 这类叶子基础组件，唯一的 styled 定义就是组件本体，合规
+- Wrapper 自身的动态 prop 用 `$` 前缀（transient props），禁止非 `$` 的 prop 流进 DOM；内部元素是原生标签，动态样式走上面三条
 - 图标一律 lucide-react，禁止 emoji 当图标
 - 主题系统（stage 02）落地前，`color-scheme` 锁 `light`，颜色允许临时硬编码；落地后一律走 tokens
 

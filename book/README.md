@@ -269,6 +269,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-virtual-scene-camera-edit.md](plans/2026-10-09-virtual-scene-camera-edit.md) — 修复编辑页写入 virtualScene 导致 Android 摄像头为零和相机闪退，并支持保存修正历史配置
 - [2026-10-10-settings-chrome-and-appearance.md](plans/2026-10-10-settings-chrome-and-appearance.md) — 设置窗按用户参考图隐藏标题栏，左上角仅保留关闭和全屏，改为齿轮导航与图标外观控件
 - [2026-10-10-settings-reference-layout.md](plans/2026-10-10-settings-reference-layout.md) — 设置静态界面按用户参考图保留行式外观与主题色，隐藏主窗顶部外观 tab
+- [2026-10-10-styled-single-wrapper-refactor.md](plans/2026-10-10-styled-single-wrapper-refactor.md) — 渲染层 styled-components 全量重排——每文件只留一个 Wrapper，内部元素改 className 后代选择器，视觉零变化
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### stage/
@@ -288,4 +289,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 198 documents -->
+<!-- 199 documents -->
