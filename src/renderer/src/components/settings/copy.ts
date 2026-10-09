@@ -1,8 +1,6 @@
 import type { SettingsLocale } from './model'
 
 const zhCN = {
-  title: '设置',
-  preview: '静态预览',
   navigation: '设置分类',
   general: '通用',
   emulator: '模拟器',
@@ -76,8 +74,6 @@ const zhCN = {
 export type SettingsCopy = Record<keyof typeof zhCN, string>
 
 const zhTW: SettingsCopy = {
-  title: '設定',
-  preview: '靜態預覽',
   navigation: '設定分類',
   general: '一般',
   emulator: '模擬器',
@@ -149,8 +145,6 @@ const zhTW: SettingsCopy = {
 }
 
 const enUS: SettingsCopy = {
-  title: 'Settings',
-  preview: 'Static preview',
   navigation: 'Settings categories',
   general: 'General',
   emulator: 'Emulator',

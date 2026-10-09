@@ -137,7 +137,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-profiles-clean-machine-no-java.md](notes/issue/2026-10/2026-10-09-profiles-clean-machine-no-java.md) — profiles.ts 以宿主环境启动 avdmanager 未注入自带 JRE；从未装过 Java 的干净 Mac 上向导画像枚举失败，新建设备被挡在第一步，违背 PRD E 零依赖
 - [2026-10-09-remaining-fixes-review-findings.md](notes/issue/2026-10/2026-10-09-remaining-fixes-review-findings.md) — 五项修复 review 新发现：布局归零漏释放已有按下状态，控制写失败后关闭 parser 触发未观察 ACK rejection
 - [2026-10-09-sdk-image-download-system-proxy.md](notes/issue/2026-10/2026-10-09-sdk-image-download-system-proxy.md) — SDK、镜像清单与镜像字节下载仍使用 Node fetch，代理可用但直连不可用时可能失败；本轮只修官方皮肤，其他路径另立任务
-- [2026-10-10-settings-copy-dead-keys-and-learn-stale.md](notes/issue/2026-10/2026-10-10-settings-copy-dead-keys-and-learn-stale.md) — P3：设置窗三语字典残留无消费方的 title/preview 死键；learn 笔记中「open/close 桥」表述已过时。原生三灯批次 review 发现，待顺手清理
+- [2026-10-10-settings-copy-dead-keys-and-learn-stale.md](notes/issue/2026-10/2026-10-10-settings-copy-dead-keys-and-learn-stale.md) — 已修复：设置窗三语字典的 title/preview 死键已删，learn 笔记「open/close 桥」表述已更正为仅 open
 - [2026-10-10-settings-window-crash-reopen.md](notes/issue/2026-10/2026-10-10-settings-window-crash-reopen.md) — P2：设置窗就绪后 renderer 崩溃未释放单例，主窗齿轮再次打开只聚焦故障窗；静态前端 review 发现，待独立修复
 
 ### notes/learn/

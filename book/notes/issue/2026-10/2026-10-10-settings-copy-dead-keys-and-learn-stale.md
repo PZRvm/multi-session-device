@@ -1,6 +1,6 @@
 ---
-description: P3：设置窗三语字典残留无消费方的 title/preview 死键；learn 笔记中「open/close 桥」表述已过时。原生三灯批次 review 发现，待顺手清理
-status: open
+description: 已修复：设置窗三语字典的 title/preview 死键已删，learn 笔记「open/close 桥」表述已更正为仅 open
+status: resolved
 priority: P3
 tags: [settings, copy, i18n, learn-notes, review]
 created: 2026-10-10
@@ -25,3 +25,7 @@ created: 2026-10-10
 三语同步删 `title`、`preview` 两键；learn 该行改为「窗口桥仅 open，关窗与全屏归系统原生三灯」。两处均为无行为影响的清理，可与下一批设置窗改动合并处理。
 
 按 workflow Phase 5「只记录，不修复」，本 review 未动这两处。
+
+## 2026-10-10 修复
+
+用户指示随后修复：三语同步删除 `title`、`preview` 两键，字典同键校验与全量测试通过；learn 该行更正为「窗口桥现仅剩受 sender 守卫的 open，关窗与全屏归系统原生三灯」。typecheck / lint 通过。
