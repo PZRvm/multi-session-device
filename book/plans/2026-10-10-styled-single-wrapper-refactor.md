@@ -112,7 +112,7 @@ const Subtitle = styled.span<{ $selected: boolean }>`
 1. 批 A——小步热身（≤4 个定义）：SegmentedControl、DeviceToolbar、ListRow、DeviceListPane。目检：主窗列表区、外观切换。
 2. 批 B——中件：DeviceHealthNotice、CanvasPlaceholder、App.tsx。目检：主窗骨架、健康提示、空画布。
 3. 批 C——行与表单：DeviceRow（`$selected` → aria-current 后代选择器的样板文件）、SummaryPanel、SettingsForm。目检：列表行各态（默认/选中/错误行/重命名）、向导摘要与系统镜像设置。
-4. 批 D——编辑器与画布：DeviceEditor、DeviceCanvas（数值全转内联 style，重点回归 `DeviceCanvas.layout.test` 与横竖屏/皮肤遮挡）。目检：编辑器表单、投屏各分辨率。
+4. 批 D——编辑器与画布：DeviceEditor、DeviceCanvas（数值全转内联 style，重点回归 `DeviceCanvas.layout.test` 与横竖屏/皮肤遮挡）、ProfilePage（初版漏排进批次，执行时守卫 grep 抓出补入）。目检：编辑器表单、投屏各分辨率、机型选择页。
 5. 批 E——两大件：ImageTable（进度条与按钮多态）、DeviceWizard（Header/Footer/Tab 全链）。目检：向导全步骤走一遍，含下载中断与重试。
 6. 收尾：全仓 grep 守卫（见 Done criteria）、book 收尾（learn + 本 plan 状态 + 索引）。
 
@@ -128,3 +128,11 @@ const Subtitle = styled.span<{ $selected: boolean }>`
 - `npm run typecheck`、`npm run lint`、`npm run test` 全绿。
 - 目检与截图对比无视觉回归；过程中发现的视觉问题已记 `notes/issue/` 而非顺手改。
 - book 收尾完成：learn 条目（重排踩到的坑）、本 plan `status: completed`、`npm run book:index` 通过。
+
+## 执行记录（2026-10-10）
+
+用户批准并行执行后，批次从小到大的顺序改为 7 个 agent 按文件切分并行（批 A/B/C/D 各一，ImageTable、DeviceWizard 各一），每批独立提交保留，验证集中到全部完成后一次跑。初版 Build order 漏排 ProfilePage（影响表有、批次无），由 Done criteria 的守卫 grep 抓出后补一个 agent 完成、并入批 D 提交——教训见 [learn](../notes/learn/2026-10/2026-10-10-styled-single-wrapper-refactor.md)。
+
+集中验证结果：`typecheck` / `lint` 通过；vitest 805 通过 6 跳过（既有 skip）；守卫 grep——15 个违规文件每文件恰 1 个 styled 定义、`styled(` 包装 0 处；`npx prettier --check src` 通过。分批提交在 refactor/styled-single-wrapper 分支上完成后 squash 为 dev 565b61a。
+
+Done criteria 剩余一项未闭合：dev 目检与截图对比（人工项）——目检通过后由人把 `status` 翻成 `completed`。执行中发现的既有问题记在 [issue](../notes/issue/2026-10-10-styled-refactor-review.md)。

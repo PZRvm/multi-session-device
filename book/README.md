@@ -82,6 +82,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 ### notes/issue/
 
 - [2026-10-06-向导独立窗口-review.md](notes/issue/2026-10-06-向导独立窗口-review.md) — 向导独立窗口分支（5 提交）的 code review 发现——两处注释腐化、span 嵌 h3 不合法、dead CSS、非 darwin 标题双显与两条备查信息
+- [2026-10-10-styled-refactor-review.md](notes/issue/2026-10-10-styled-refactor-review.md) — styled 单 Wrapper 重排过程中发现的既有问题——发丝线隐式 DOM 契约、选中态状态点对比度、重复 CSS 与死钩子等（只记录，未修复）
 
 ### notes/issue/2026-10/
 
@@ -201,6 +202,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-input-release-control-write-and-listeners.md](notes/learn/2026-10/2026-10-09-input-release-control-write-and-listeners.md) — 输入释放要与新输入门控分开，控制发送同时观察 write/consumed/ACK，正常等待结束也要移除 abort 监听；皮肤别名以官方绑定和尺寸为证
 - [2026-10-09-remaining-issue-fixes.md](notes/learn/2026-10/2026-10-09-remaining-issue-fixes.md) — 工具环境要显式注入、画布要区分流与布局就绪、scrcpy 回包要用与 writer 一致的解析器
 - [2026-10-10-electron-settings-static-preview.md](notes/learn/2026-10/2026-10-10-electron-settings-static-preview.md) — 设置静态前端的只读边界与验收：展示模型留在 renderer，多语样例独立验证，截图需核对渲染状态和 DIP
+- [2026-10-10-styled-single-wrapper-refactor.md](notes/learn/2026-10/2026-10-10-styled-single-wrapper-refactor.md) — styled 单 Wrapper 全局重排的执行经验——影响表和施工批次必须对账、并行 agent 的集中验证纪律、后代类选择器特异性升档的前提
 
 ### notes/task/
 
@@ -289,4 +291,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 199 documents -->
+<!-- 201 documents -->
