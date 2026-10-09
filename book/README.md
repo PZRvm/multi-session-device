@@ -121,7 +121,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-06-wizard-plan-remaining-acceptance.md](notes/issue/2026-10/2026-10-06-wizard-plan-remaining-acceptance.md) — 向导扩展验收遗留：官方皮肤获取与投屏已接通，Quick 稳定性、摄像头取景、六类设备及部分真机验证仍未完成
 - [2026-10-07-api32-start-repro-procedure.md](notes/issue/2026-10/2026-10-07-api32-start-repro-procedure.md) — 启动挂起报告的可执行复现附录：临时 ADB 分段应答注入、完整应答对照与生产探测函数验证
 - [2026-10-07-api32-start-smoke-blocked.md](notes/issue/2026-10/2026-10-07-api32-start-smoke-blocked.md) — 已修复 P2 启动挂起：ADB 分段/断开有界收口，启动准备可取消；受控窗口及回归验证通过
-- [2026-10-07-fixture-readme-format-baseline.md](notes/issue/2026-10/2026-10-07-fixture-readme-format-baseline.md) — 全仓 src 格式检查被既有 emulator 测试资料 README 阻断，本次旋转修复的四个代码文件格式通过
+- [2026-10-07-fixture-readme-format-baseline.md](notes/issue/2026-10/2026-10-07-fixture-readme-format-baseline.md) — fixtures README 格式基线问题已解决——对账提交中格式化，全仓 prettier --check 复验退出码 0
 - [2026-10-07-manual-rotation-code-review.md](notes/issue/2026-10/2026-10-07-manual-rotation-code-review.md) — 旋转 review 的两项 P2 已修复；电源按用户要求改为停止模拟器并只从左侧启动
 - [2026-10-07-rotation-input-pause-review.md](notes/issue/2026-10/2026-10-07-rotation-input-pause-review.md) — 旋转暂停丢失 KeyUp 的 P2 已修复：main 释放旧键，暂停期间新输入直接丢弃
 - [2026-10-07-skin-camera-code-review-findings.md](notes/issue/2026-10/2026-10-07-skin-camera-code-review-findings.md) — 皮肤/摄像头集成（feature/wizard-category-settings 未提交轮）的 Phase 5 code review——无阻塞项；P3 三项（主动取消被当失败警示、无背景图皮肤可入库但投屏必报错、启动核验文案叠加），另含门禁复核与安全/几何核对结论
