@@ -67,6 +67,14 @@ const dialog = vi.fn(async () => ({ response: 0 }))
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    width: 600,
+    height: 800,
+    left: 0,
+    top: 0,
+    right: 600,
+    bottom: 800
+  } as DOMRect)
   mocks.status = 'ready'
   mocks.screenRef.current = {
     envelope: { deviceId: 'd1', runId: 'r1', streamId: 's1', generation: 1, viewToken: 'vt' },
@@ -116,6 +124,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
   delete (window as { api?: unknown }).api
 })

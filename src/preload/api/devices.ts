@@ -3,16 +3,24 @@ import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type {
   CreateDeviceInput,
   CreateDeviceResult,
+  DeviceEditSnapshot,
   DeviceSnapshot,
   ReconcileReport,
   ReconcileResult,
-  RuntimeErrorMessage
+  RuntimeErrorMessage,
+  UpdateDeviceInput
 } from '@shared/types'
 
 export const devicesApi = {
   list: (): Promise<DeviceSnapshot> => ipcRenderer.invoke(IPC_CHANNELS.devicesList),
   create: (input: CreateDeviceInput): Promise<CreateDeviceResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.devicesCreate, input),
+  /** 编辑窗读取配置快照（回填草稿 + 编辑能力 + 指纹；仅绑定该设备的编辑窗） */
+  readConfig: (id: string): Promise<DeviceEditSnapshot> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesReadConfig, { id }),
+  /** 编辑窗提交名称/白名单字段差异（写前指纹复验 + 跨文件事务） */
+  updateConfig: (input: UpdateDeviceInput): Promise<DeviceSnapshot> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesUpdateConfig, input),
   rename: (id: string, name: string): Promise<DeviceSnapshot> =>
     ipcRenderer.invoke(IPC_CHANNELS.devicesRename, { id, name }),
   remove: (id: string): Promise<DeviceSnapshot> =>

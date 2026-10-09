@@ -114,11 +114,26 @@ const App = (): React.JSX.Element => {
     })()
   }, [reconciliation, buildDetailText])
 
-  // 新建设备走原生模态子窗（main/window/wizard.ts）；创建结果经 devices:changed 快照回流
-  const openWizard = async (): Promise<void> => {
-    const result = await toApiResult(window.api.wizard.open())
-    if (!result.ok) await showAlert('打开向导失败', result.error)
+  // main 共用加载结果；同上下文连点也只保留一个提示，直到提示关闭才允许重试。
+  const pendingWizardOpens = useRef(new Set<string>())
+  const requestWizard = async (
+    key: string,
+    title: string,
+    request: () => Promise<void>
+  ): Promise<void> => {
+    if (pendingWizardOpens.current.has(key)) return
+    pendingWizardOpens.current.add(key)
+    try {
+      const result = await toApiResult(request())
+      if (!result.ok) await showAlert(title, result.error)
+    } finally {
+      pendingWizardOpens.current.delete(key)
+    }
   }
+
+  // 创建结果经 devices:changed 快照回流。
+  const openWizard = (): Promise<void> =>
+    requestWizard('create', '打开向导失败', () => window.api.wizard.open())
 
   const handleRecheck = async (): Promise<void> => {
     setRechecking(true)
@@ -178,6 +193,11 @@ const App = (): React.JSX.Element => {
     if (!result.ok) await showAlert('复制失败', result.error)
   }
 
+  // 打开配置编辑窗（plan 2026-10-08）：上下文在 main 侧固定；已有其他上下文
+  // 向导窗打开时 main 会聚焦旧窗并报错——这里把原因反馈给用户
+  const handleEdit = (id: string): Promise<void> =>
+    requestWizard(`edit:${id}`, '打开编辑窗口失败', () => window.api.wizard.openEditor(id))
+
   const selected = devices.find((device) => device.id === selectedId) ?? null
   // checking（创建中/暂缓判断）不算「文件异常」——与 main 侧报告口径一致（review P2-2）
   const affectedNames = devices
@@ -230,6 +250,7 @@ const App = (): React.JSX.Element => {
           onCopySerial={handleCopySerial}
           onDelete={handleDelete}
           onRename={handleRename}
+          onEdit={handleEdit}
           onRenameBlocked={handleRenameBlocked}
         />
         <Foot>

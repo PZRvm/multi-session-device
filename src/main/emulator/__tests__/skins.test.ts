@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { pngImage } from './skinImageFixture'
 import {
   importSkinArchive,
   parseSkinLayout,
@@ -167,6 +168,7 @@ describe('importSkinArchive（zip 导入核验）', () => {
     const written: Array<{ target: string }> = []
     return {
       deps: {
+        readImage: async () => pngImage(),
         mkdir: async () => {},
         rm: async () => {},
         cp: async (_src: string, target: string) => {
@@ -174,7 +176,9 @@ describe('importSkinArchive（zip 导入核验）', () => {
         },
         readFile: async (path: string) => (path.endsWith('layout') ? layoutText : ''),
         readdir: async (dir: string) => (dir.includes('staging') ? ['layout', ...files] : files),
-        stat: async () => ({ isDirectory: () => true }),
+        stat: async (path: string) => ({
+          isDirectory: () => path.includes('staging') && !path.endsWith('.webp')
+        }),
         extractZip: () => {}
       },
       written
@@ -187,6 +191,22 @@ describe('importSkinArchive（zip 导入核验）', () => {
     expect(record.skinRef).toMatch(/^imported:/)
     expect(record.source).toBe('imported')
     expect(record.directory.startsWith(importedSkinsRoot('/userdata'))).toBe(true)
+  })
+
+  it('像素超限在目标目录创建前拒绝导入，staging 清理', async () => {
+    const { deps, written } = makeDeps(PIXEL_7_LAYOUT, ['back.webp', 'mask.webp'])
+    let cleaned = false
+    await expect(
+      importSkinArchive('/archive.zip', '/userdata', {
+        ...deps,
+        readImage: async () => pngImage(8193, 1),
+        rm: async () => {
+          cleaned = true
+        }
+      })
+    ).rejects.toThrow(/back.webp.*8193/)
+    expect(written).toEqual([])
+    expect(cleaned).toBe(true)
   })
 
   it('素材缺失拒绝导入并给中文原因', async () => {

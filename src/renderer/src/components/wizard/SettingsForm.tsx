@@ -85,7 +85,7 @@ export interface SettingsFormProps {
   value: DeviceAdvancedSettings
   errors: Record<string, string>
   onChange: (next: DeviceAdvancedSettings) => void
-  /** 皮肤清单（DeviceWizard 拉取）；空 = 无可用皮肤 */
+  /** 皮肤清单（DeviceWizard/DeviceEditor 拉取）；空 = 无可用皮肤 */
   skins: Array<{ skinRef: string; name: string; source: string }>
   /** 导入/下载触发（向导窗专用通道）；完成后清单由父层刷新 */
   onImportSkin: () => Promise<void>
@@ -95,6 +95,10 @@ export interface SettingsFormProps {
   cameraBusy?: boolean
   cameraError?: string | null
   onCameraAction?: (action: 'request' | 'refresh' | 'settings') => Promise<void>
+  /** create（默认）= 创建表单；edit = 编辑已有设备（内部存储只读展示） */
+  mode?: 'create' | 'edit'
+  /** 编辑模式的内部存储展示文案（null = 容量未知） */
+  storageDisplay?: string | null
 }
 
 const SettingsForm = ({
@@ -109,7 +113,9 @@ const SettingsForm = ({
   skinError,
   cameraBusy,
   cameraError,
-  onCameraAction
+  onCameraAction,
+  mode = 'create',
+  storageDisplay = null
 }: SettingsFormProps): React.JSX.Element => {
   const field = (key: string): SettingFieldCapability | null => capabilities.fields[key] ?? null
   const disabledReasonOf = (key: string): string | null => field(key)?.disabledReason ?? null
@@ -332,8 +338,24 @@ const SettingsForm = ({
 
       <Group>
         <GroupTitle>内部存储</GroupTitle>
-        {num('internalStorageMiB', 'userdata 初始容量', 'MiB')}
-        <Hint>默认 6144 MiB（6 GB，按 1024 换算）；创建后不可扩容。</Hint>
+        {mode === 'edit' ? (
+          <Field disabled>
+            <Label htmlFor="setting-internal-storage-edit">userdata 容量</Label>
+            <NumInput
+              id="setting-internal-storage-edit"
+              disabled
+              readOnly
+              aria-readonly="true"
+              value={storageDisplay ?? String(value.internalStorageMiB)}
+            />
+            <Hint>已有模拟器不支持修改内部存储，容量保持原配置。</Hint>
+          </Field>
+        ) : (
+          num('internalStorageMiB', 'userdata 初始容量', 'MiB')
+        )}
+        {mode === 'create' ? (
+          <Hint>默认 6144 MiB（6 GB，按 1024 换算）；创建后不可扩容。</Hint>
+        ) : null}
       </Group>
 
       <Group>

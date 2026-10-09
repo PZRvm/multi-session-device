@@ -7,7 +7,13 @@ import type {
   CreateDeviceInput,
   CreateDeviceResult,
   Device,
+  DeviceAdvancedSettings,
   DeviceAvailability,
+  DeviceEditFieldNote,
+  DeviceConfigField,
+  DeviceConfigMismatch,
+  DeviceEditSnapshot,
+  DeviceEditStorageInfo,
   DeviceFrameKind,
   DeviceMeta,
   DeviceSnapshot,
@@ -15,10 +21,30 @@ import type {
   ReconcileResult,
   ReconciliationSummary,
   RuntimeErrorMessage,
-  StoreHealth
+  StoreHealth,
+  UpdateDeviceInput
 } from '@shared/types'
+import { normalizeEditedSettings, sanitizeUpdateSettings } from '@shared/settings-contract'
 import { armStoreProtection, readDeviceStore, writeDeviceMetas } from '../store'
 import { createAvd, deleteAvd, patchAvdConfig } from '../emulator/avd'
+import {
+  applyConfigPatchToText,
+  buildConfigEditPatch,
+  configFingerprintOf,
+  nativeDisplayArgs,
+  parseConfigEntries,
+  readAvdConfigRaw,
+  readHardwareSchemaDefaults,
+  storageMiBFromText,
+  writeAvdConfigRaw
+} from '../emulator/deviceConfig'
+import {
+  recoverPendingTransactions,
+  removeJournal,
+  transactionsDir,
+  writeJournal,
+  type RecoveryResult
+} from '../emulator/configTransaction'
 import {
   classifyTags,
   parseApiVersion,
@@ -58,10 +84,17 @@ import {
 import { PortAllocator, tcpProbe } from '../emulator/ports'
 import { createRunner, StartCancelledError } from '../emulator/runner'
 import { getMainWindow } from '../window'
-import { wizardOwns } from '../window/wizard'
+import { wizardContextOf } from '../window/wizard'
 import { importedSkinsRoot } from '../emulator/skins'
 import { listWebcams } from '../emulator/cameras'
+import {
+  arbitrateCameras,
+  type ArbitrationCamera,
+  type ArbitrationSide
+} from '../emulator/cameraArbitration'
 import { activePackageOp, beginPackageCreation, endPackageCreation } from '../emulator/packageOps'
+import { resetDisplayCutout } from '../emulator/displayCutout'
+import { configBaseline, configMismatchesOf } from '../emulator/configDrift'
 
 /** skinRef → 皮肤目录（sdk:* 解析 SDK skins；其余查应用库）。skinRef 已按能力
  * 枚举（skinIds 白名单）归一化校验，id 来源受信扫描（uuid/目录名），无逃逸面 */
@@ -193,6 +226,13 @@ let lastReport: ReconcileReport | null = null
 let acknowledgedSignature: string | null = null
 let reconcilePromise: Promise<ReconcileResult> | null = null
 
+// ---- 配置编辑域状态（plan 2026-10-08-device-config-edit）----
+
+/** 同设备保存互斥（覆盖全部 await）：持有期间启动/删除/独立重命名/重复保存拒绝交错 */
+const editFlights = new Map<string, Promise<DeviceSnapshot>>()
+/** 事务恢复无法裁决、冻结配置写入的目标（id → 中文原因；行内 lastError 反馈） */
+const frozenMessages = new Map<string, string>()
+
 const bumpAvdEpoch = (): void => {
   avdEpoch += 1
 }
@@ -238,13 +278,14 @@ const checkingAvailability = (): DeviceAvailability => ({
   checkedAt: null
 })
 
-/** 创建/删除/回滚中的 id：扫描时暂缓判孤立 */
+/** 创建/删除/回滚/保存中的 id：扫描时暂缓判孤立（保存中 config 半提交不是稳定目标） */
 const transientIdsNow = (): Set<string> =>
-  new Set(
-    devices
+  new Set([
+    ...devices
       .filter((device) => device.status === 'creating' || device.status === 'deleting')
-      .map((device) => device.id)
-  )
+      .map((device) => device.id),
+    ...editFlights.keys()
+  ])
 
 /**
  * 以 metas 重建 devices：同 id 保留完整运行字段（status/lastError/serial/runId/
@@ -261,6 +302,7 @@ const rebuildDevices = (metas: DeviceMeta[]): Device[] => {
           frameKind: runtime.frameKind ?? frameKindOf(meta.profileId),
           status: runtime.status,
           lastError: runtime.lastError,
+          cameraNotice: runtime.cameraNotice,
           serial: runtime.serial,
           runId: runtime.runId,
           startedAt: runtime.startedAt,
@@ -290,13 +332,46 @@ const ensureLoaded = (): Promise<void> => {
 }
 
 const loadAndScan = async (): Promise<void> => {
-  const read = await readDeviceStore()
+  let read = await readDeviceStore()
+  // 事务恢复先于文件扫描与设备启动（plan 设计 3.5）：库 error 时无可信元数据可
+  // 对照，跳过恢复（记录保留待下次启动裁决）
+  if (read.health.state !== 'error') {
+    const recovery = await runTransactionRecovery()
+    if (recovery.completed.length + recovery.rolledBack.length + recovery.frozen.length > 0) {
+      bumpAvdEpoch()
+      read = await readDeviceStore()
+    }
+  }
   await ensureFrameIndex()
   storeHealth = read.health
   suspectIds = read.suspectIds
   acceptedMetas = read.health.state === 'error' ? null : read.metas
   devices = rebuildDevices(read.metas)
+  applyFrozenTargets(devices)
   applyScan(await scanCurrent())
+}
+
+/** 首载事务恢复（内容裁决见 configTransaction）；冻结目标记录消息并落到行内 lastError */
+const runTransactionRecovery = async (): Promise<RecoveryResult> => {
+  const dir = transactionsDir(app.getPath('userData'))
+  const recovery = await recoverPendingTransactions({
+    dir,
+    readMetas: async () => (await readDeviceStore()).metas,
+    configRawOf: (id) => readAvdConfigRaw(id, avdDirs()),
+    writeConfigRaw: (id, content, expected) => writeAvdConfigRaw(id, avdDirs(), content, expected),
+    removeDeviceJournal: (id) => removeJournal(dir, id)
+  })
+  for (const target of recovery.frozen) frozenMessages.set(target.deviceId, target.message)
+  return recovery
+}
+
+/** 冻结目标行内提示（rebuildDevices 后运行字段保留，此处只补 lastError 语义） */
+const applyFrozenTargets = (list: Device[]): void => {
+  for (const device of list) {
+    const message = frozenMessages.get(device.id)
+    if (message === undefined || device.lastError?.code === 'config-transaction') continue
+    device.lastError = { code: 'config-transaction', message }
+  }
 }
 
 /** 文件扫描（长任务，writeQueue 外运行）；服务异常收敛为 scanError 不 reject。
@@ -578,6 +653,7 @@ const toMeta = (device: Device): DeviceMeta => ({
   screenSummary: device.screenSummary,
   advancedSettings: device.advancedSettings,
   snapshotReadyAt: device.snapshotReadyAt ?? null,
+  ...(device.cutoutResetPending === true ? { cutoutResetPending: true } : {}),
   createdAt: device.createdAt
 })
 
@@ -592,9 +668,24 @@ const enqueueStoreTask = <T>(task: () => Promise<T>): Promise<T> => {
 }
 
 /**
+ * 提交后重建内存列表：在途创建的临时行（creating 且不在草稿里）追加在末尾保进度。
+ * 复查 P2-1：写盘基线是已提交元数据，临时行只在内存展示，不因提交而丢失或落盘。
+ */
+const rebuildWithPendingRows = (draft: DeviceMeta[]): Device[] => {
+  const committedIds = new Set(draft.map((meta) => meta.id))
+  return [
+    ...rebuildDevices(draft),
+    ...devices.filter((device) => device.status === 'creating' && !committedIds.has(device.id))
+  ]
+}
+
+/**
  * 元数据提交全局串行；写盘成功才改内存（issue 2026-10-03 落盘分叉的修法）。
  * 写前 CAS（review P3）：现有文件与最后接纳不一致（运行中被外部修改）→ 中止并冻结，
- * 不静默覆盖；draft 是唯一写盘内容，内存按 draft 重建并保留完整运行字段。
+ * 不静默覆盖；草稿基线是 acceptedMetas（复查 P2-1：其他事务的创建临时行不进写盘
+ * 内容，每个事务只发布已提交行）；内存按草稿重建并保留完整运行字段与临时行。
+ * 残留事务门（复查 P2-2）：本次内容变化命中待清理 journal 的设备先重试清理，
+ * 失败即中止——应用不能把元数据改出记录 old/new 之外，否则重启恢复误判外部修改。
  */
 const commitMetas = (mutate: (metas: DeviceMeta[]) => DeviceMeta[]): Promise<void> =>
   enqueueStoreTask(async () => {
@@ -619,10 +710,29 @@ const commitMetas = (mutate: (metas: DeviceMeta[]) => DeviceMeta[]): Promise<voi
       }
       throw new Error('devices.json 已被外部修改，写入已中止（元数据冻结，重启后载入）')
     }
-    const draft = mutate(devices.map(toMeta))
+    if (acceptedMetas === null) {
+      // 理论不可达（error 态已被 assertMetaWritable 拦截）；防御性拒绝，不以全内存落盘
+      throw new Error('元数据无可信基线，本次写入已中止')
+    }
+    const draft = mutate([...acceptedMetas])
+    const journalDir = transactionsDir(app.getPath('userData'))
+    for (const meta of draft) {
+      const prev = acceptedMetas.find((entry) => entry.id === meta.id)
+      if (prev === undefined || deepEqual(prev, meta)) continue
+      if (!pendingJournalCleanup.has(meta.id)) continue
+      const label = devices.find((entry) => entry.id === meta.id)?.name ?? meta.id
+      try {
+        await removeJournal(journalDir, meta.id)
+        pendingJournalCleanup.delete(meta.id)
+      } catch (error) {
+        throw new Error(
+          `设备「${label}」有未清理的配置事务记录，本次修改未写入（${messageOf(error)}）；请重试，或重启应用后按恢复提示处理`
+        )
+      }
+    }
     await writeDeviceMetas(draft)
-    devices = rebuildDevices(draft)
-    acceptedMetas = devices.map(toMeta)
+    devices = rebuildWithPendingRows(draft)
+    acceptedMetas = draft
     metaRevision += 1
   })
 
@@ -680,13 +790,20 @@ const handleRunning = (id: string, runId: string, serial: string): void => {
 const handleUnexpectedExit = (
   id: string,
   runId: string,
-  info: { code: number; stderrTail: string }
+  info: { code: number; stderrTail: string; stdoutTail: string }
 ): void => {
   const device = devices.find((entry) => entry.id === id)
   if (!device || device.runId !== runId) return // 旧代次退出不覆盖新实例
-  const detail = info.stderrTail.length > 0 ? info.stderrTail : `exit ${info.code}`
+  // 致命参数错误只打在 stdout（37.2.12 实测），stderr/stdout 尾部都带上
+  const parts = [
+    info.stderrTail.length > 0 ? info.stderrTail : null,
+    info.stdoutTail.length > 0 ? `stdout：${info.stdoutTail}` : null
+  ].filter((part): part is string => part !== null)
+  const detail = parts.length > 0 ? parts.join('\n') : `exit ${info.code}`
   device.status = 'stopped'
   device.lastError = { code: 'unexpected-exit', message: `模拟器意外退出：${detail}` }
+  device.cameraNotice = undefined
+  cameraOverridesByDevice.delete(id)
   device.serial = undefined
   device.runId = undefined
   broadcastChanged()
@@ -711,46 +828,53 @@ class StartBlockedError extends Error {
   }
 }
 
-/** 真实摄像头启动重核验（plan 设计 7）：配置的 webcam 拔出/消失时拒绝启动 */
-const verifyWebcamsFor = async (device: Device): Promise<void> => {
+/**
+ * 真实摄像头启动重核验（plan 设计 7）：配置的 webcam 拔出/消失时拒绝启动。
+ * labels 为启动仲裁已枚举的宿主映射时复用（避免双跑探针）；缺省自行枚举，语义不变。
+ */
+const verifyWebcamsFor = async (
+  device: Device,
+  labels?: Map<string, string> | null
+): Promise<void> => {
   const webcams =
     device.advancedSettings?.frontCamera.mode === 'webcam' ||
     device.advancedSettings?.rearCamera.mode === 'webcam'
   if (!webcams || device.advancedSettings === null) return
-  try {
-    const available = new Map(
-      (await listWebcams(sdkRoot())).map((entry) => [entry.id, entry.deviceLabel])
-    )
-    const missing: string[] = []
-    for (const camera of [
-      device.advancedSettings.frontCamera,
-      device.advancedSettings.rearCamera
-    ]) {
-      if (
-        camera.mode === 'webcam' &&
-        camera.deviceId !== null &&
-        (!available.has(camera.deviceId) ||
-          (camera.hostDeviceId !== undefined &&
-            available.get(camera.deviceId) !== camera.hostDeviceId))
-      ) {
-        missing.push(camera.deviceId)
-      }
-    }
-    if (missing.length > 0) {
+  let available: Map<string, string>
+  if (labels !== undefined && labels !== null) {
+    available = labels
+  } else {
+    try {
+      available = new Map(
+        (await listWebcams(sdkRoot())).map((entry) => [entry.id, entry.deviceLabel])
+      )
+    } catch (error) {
+      // 底层错误自带建议从句（如「请检查 emulator 版本」）时不再叠加第二条建议
+      const cause = messageOf(error)
       throw new StartBlockedError(
         'webcam-missing',
-        `宿主摄像头（${missing.join('、')}）已不可用，请重新选择摄像头后启动`
+        cause.includes('请')
+          ? `启动前无法核验摄像头：${cause}`
+          : `启动前无法核验摄像头：${cause}，请检查权限或改用模拟画面`
       )
     }
-  } catch (error) {
-    if (error instanceof StartBlockedError) throw error
-    // 底层错误自带建议从句（如「请检查 emulator 版本」）时不再叠加第二条建议
-    const cause = messageOf(error)
+  }
+  const missing: string[] = []
+  for (const camera of [device.advancedSettings.frontCamera, device.advancedSettings.rearCamera]) {
+    if (
+      camera.mode === 'webcam' &&
+      camera.deviceId !== null &&
+      (!available.has(camera.deviceId) ||
+        (camera.hostDeviceId !== undefined &&
+          available.get(camera.deviceId) !== camera.hostDeviceId))
+    ) {
+      missing.push(camera.deviceId)
+    }
+  }
+  if (missing.length > 0) {
     throw new StartBlockedError(
       'webcam-missing',
-      cause.includes('请')
-        ? `启动前无法核验摄像头：${cause}`
-        : `启动前无法核验摄像头：${cause}，请检查权限或改用模拟画面`
+      `宿主摄像头（${missing.join('、')}）已不可用，请重新选择摄像头后启动`
     )
   }
 }
@@ -782,6 +906,71 @@ const checkTimeoutAvailability = (): DeviceAvailability => ({
   checkedAt: Date.now()
 })
 
+// 原生窗口关闭后，命名皮肤仍会覆盖 LCD 尺寸。外观由 renderer 绘制，运行画面
+// 固定使用 config.ini 的机型尺寸；按 runId 隔离，取消后的迟到结果不供新启动使用。
+const displayArgsByDevice = new Map<string, { runId: string; args: string[] }>()
+
+/** 仲裁侧绑定：config.ini 的 webcamN，托管设置同资源号时并入其稳定宿主身份 */
+const arbitrationSideOf = (
+  id: string,
+  name: string,
+  configEntries: Map<string, string>,
+  advancedSettings: DeviceAdvancedSettings | null
+): ArbitrationSide => {
+  const bindingOf = (
+    key: 'hw.camera.front' | 'hw.camera.back',
+    identitySource?: DeviceAdvancedSettings['frontCamera']
+  ): ArbitrationCamera | null => {
+    const parsed = parseLegacyCamera(configEntries.get(key))
+    if (parsed === null || parsed.mode !== 'webcam' || parsed.deviceId === null) return null
+    return {
+      deviceId: parsed.deviceId,
+      ...(identitySource?.deviceId === parsed.deviceId && identitySource.hostDeviceId !== undefined
+        ? { hostDeviceId: identitySource.hostDeviceId }
+        : {})
+    }
+  }
+  return {
+    id,
+    name,
+    front: bindingOf('hw.camera.front', advancedSettings?.frontCamera),
+    rear: bindingOf('hw.camera.back', advancedSettings?.rearCamera)
+  }
+}
+
+/** 先到先得的先后判定：startedAt 更早者保留摄像头；同毫秒按 id 字典序定序 */
+const startedBefore = (entry: Device, myStart: number, myId: string): boolean => {
+  const other = entry.startedAt ?? 0
+  return other < myStart || (other === myStart && entry.id < myId)
+}
+
+/** 枚举 webcamN → 稳定宿主身份；失败返回 null（仲裁退化为编号比较，核验自行重试） */
+const enumerateWebcamLabels = async (signal: AbortSignal): Promise<Map<string, string> | null> => {
+  try {
+    const webcams = await awaitWithAbort(() => listWebcams(sdkRoot()), signal)
+    return new Map(webcams.map((entry) => [entry.id, entry.deviceLabel]))
+  } catch (error) {
+    if (signal.aborted) throw error
+    console.warn(`[devices] 摄像头枚举失败，本次仲裁退化为编号比较：${messageOf(error)}`)
+    return null
+  }
+}
+
+/** 本次启动的摄像头回退（按 runId 隔离，仿 displayArgsByDevice）：命中槽位以
+ *  -camera-* emulated 覆盖（argv 不接受 virtualscene——37.2.12 实测 exit 1），
+ *  config.ini 不动——不产生文件级配置偏差 */
+const cameraOverridesByDevice = new Map<string, { runId: string; front: boolean; rear: boolean }>()
+
+/** argv 里的 -camera-front/-camera-back 改写为 emulated；没有则追加 */
+const applyCameraFallbackOverride = (
+  args: string[],
+  flag: '-camera-front' | '-camera-back'
+): void => {
+  const index = args.indexOf(flag)
+  if (index !== -1 && index + 1 < args.length) args[index + 1] = 'emulated'
+  else args.push(flag, 'emulated')
+}
+
 const runner = createRunner({
   sdkRoot,
   avdHome,
@@ -796,6 +985,7 @@ const runner = createRunner({
     }
   },
   beforeStart: async (id, runId, signal) => {
+    displayArgsByDevice.delete(id)
     const device = devices.find((entry) => entry.id === id)
     if (device === undefined) throw new Error(`设备不存在（${id}）`)
     // 真正启动前即时核验（对账设计 4）：不信任上次扫描结果；结果只落在相同代次上
@@ -822,24 +1012,103 @@ const runner = createRunner({
         availability
       )
     }
-    await awaitWithAbort(() => verifyWebcamsFor(device), signal)
+    // 摄像头核验与仲裁（设计决定 2026-10-09，复查 P2-3/P3-4）：以 config.ini 实际
+    // 绑定为准（托管与 legacy 统一），枚举一次供核验和仲裁共用；先到先得，后启动
+    // 方的冲突槽位回退模拟画面（argv 不接受 virtualscene）并透出行内通知
+    const raw = await awaitWithAbort(() => readAvdConfigRaw(id, avdDirs()), signal)
+    const args = nativeDisplayArgs(raw)
+    if (args.length > 0) displayArgsByDevice.set(id, { runId, args })
+    cameraOverridesByDevice.delete(id)
+    const targetSide = arbitrationSideOf(
+      id,
+      device.name,
+      parseConfigEntries(raw ?? ''),
+      device.advancedSettings
+    )
+    const usesWebcam = targetSide.front !== null || targetSide.rear !== null
+    const labels = usesWebcam ? await enumerateWebcamLabels(signal) : null
+    await awaitWithAbort(() => verifyWebcamsFor(device, labels), signal)
+    if (usesWebcam) {
+      const myStart = device.startedAt ?? 0
+      const boundOthers: ArbitrationSide[] = []
+      for (const entry of devices) {
+        if (
+          entry.id === id ||
+          (entry.status !== 'starting' && entry.status !== 'running') ||
+          !startedBefore(entry, myStart, id)
+        ) {
+          continue
+        }
+        try {
+          const otherRaw = await awaitWithAbort(() => readAvdConfigRaw(entry.id, avdDirs()), signal)
+          const side = arbitrationSideOf(
+            entry.id,
+            entry.name,
+            parseConfigEntries(otherRaw ?? ''),
+            entry.advancedSettings
+          )
+          if (side.front !== null || side.rear !== null) boundOthers.push(side)
+        } catch (error) {
+          if (signal.aborted) throw error
+          // 尽力而为：读不到配置的运行中设备跳过（macOS 摄像头本可共享），不阻断启动
+          console.warn(`[devices] 摄像头仲裁跳过设备（${entry.name}）：${messageOf(error)}`)
+        }
+      }
+      const arbitration = arbitrateCameras({ target: targetSide, others: boundOthers, labels })
+      if (arbitration.front || arbitration.rear) {
+        cameraOverridesByDevice.set(id, {
+          runId,
+          front: arbitration.front,
+          rear: arbitration.rear
+        })
+        const row = devices.find((entry) => entry.id === id)
+        if (row?.runId === runId && row.status === 'starting') {
+          row.cameraNotice = arbitration.notices.join('；')
+          broadcastChanged()
+        }
+      }
+    }
   },
   beforeKill: (id, runId) => streamBridge.beforeKill?.(id, runId) ?? Promise.resolve(),
+  afterBoot: async (id, runId, serial, signal) => {
+    const device = requireDevice(id)
+    if (device.runId !== runId || !device.cutoutResetPending) return
+    await resetDisplayCutout({ adbPath: adbBinaryPath(), serial, avdName: id, signal })
+    if (signal.aborted || requireDevice(id).runId !== runId) return
+    await commitMetas((metas) =>
+      metas.map((meta) => (meta.id === id ? { ...meta, cutoutResetPending: undefined } : meta))
+    )
+  },
   // 运行字段按设备自己的已验证设置构造 argv；legacy（无设置）沿用固定 Cold/host。
   // Quick 的首启/失效路径：从未有效快照 → -no-snapshot-load（不加载旧快照，
   // 正常停止仍保存新快照；plan 设计 8 的冷启动恢复）
   extraArgsFor: (id) => {
     const device = devices.find((entry) => entry.id === id)
+    const display = displayArgsByDevice.get(id)
+    const displayArgs = display?.runId === device?.runId ? (display?.args ?? []) : []
+    // 摄像头回退（仲裁命中时）：本次启动以 emulated 覆盖，config.ini 不动
+    const withCameraOverride = (args: string[]): string[] => {
+      const override = cameraOverridesByDevice.get(id)
+      if (override === undefined || override.runId !== device?.runId) return args
+      const next = [...args]
+      if (override.front) applyCameraFallbackOverride(next, '-camera-front')
+      if (override.rear) applyCameraFallbackOverride(next, '-camera-back')
+      return next
+    }
     if (device?.advancedSettings === undefined || device.advancedSettings === null) {
-      return ['-no-snapshot', '-gpu', 'host']
+      return withCameraOverride(['-no-snapshot', '-gpu', 'host', ...displayArgs])
     }
     const args = settingsToRunnerArgs(device.advancedSettings)
+    if (device.cutoutResetPending) {
+      if (!args.includes('-no-snapshot')) args.push('-no-snapshot')
+      return withCameraOverride([...args, ...displayArgs])
+    }
     if (device.advancedSettings.bootMode === 'quick' && (device.snapshotReadyAt ?? null) === null) {
       const coldLoad = args.indexOf('-no-snapshot')
       if (coldLoad !== -1) args.splice(coldLoad, 1)
       args.push('-no-snapshot-load')
     }
-    return args
+    return withCameraOverride([...args, ...displayArgs])
   },
   onRunning: handleRunning,
   onUnexpectedExit: handleUnexpectedExit
@@ -851,6 +1120,7 @@ const startDevice = async (id: string): Promise<DeviceSnapshot> => {
   if (!acceptingCommands) throw new Error('应用退出清理中，暂停启动')
   await ensureLoaded()
   const device = requireDevice(id)
+  if (editFlights.has(id)) throw new Error('该设备正在保存配置，暂不能启动')
   if (device.status === 'starting' || device.status === 'running') return snapshotNow()
   if (device.status === 'stopping') throw new Error('设备停止中，停止完成后再启动')
   if (device.status !== 'stopped') throw new Error(`设备当前状态不允许启动（${device.status}）`)
@@ -858,6 +1128,7 @@ const startDevice = async (id: string): Promise<DeviceSnapshot> => {
   // runner 准备——可取消、迟到结果不 spawn；未知检查结果不允许启动
   device.status = 'starting'
   device.lastError = undefined
+  device.cameraNotice = undefined
   device.startedAt = Date.now()
   const attemptId = randomUUID()
   device.runId = attemptId
@@ -912,6 +1183,8 @@ const stopDevice = async (id: string): Promise<DeviceSnapshot> => {
   if (target.status === 'stopping') {
     target.status = 'stopped'
     target.serial = undefined
+    target.cameraNotice = undefined
+    cameraOverridesByDevice.delete(id)
     const startedAt = target.startedAt
     target.startedAt = undefined
     target.runId = undefined
@@ -981,6 +1254,8 @@ const cancelStartDevice = async (id: string): Promise<DeviceSnapshot> => {
     target.serial = undefined
     target.runId = undefined
     target.startedAt = undefined
+    target.cameraNotice = undefined
+    cameraOverridesByDevice.delete(id)
     broadcastChanged()
     streamBridge.stopped?.(target.id)
   }
@@ -991,6 +1266,7 @@ const deleteFlow = async (id: string): Promise<DeviceSnapshot> => {
   await ensureLoaded()
   const device = requireDevice(id)
   if (device.status === 'creating') throw new Error('设备创建中，不能删除')
+  if (editFlights.has(id)) throw new Error('该设备正在保存配置，暂不能删除')
   // 副作用前守卫（对账设计 4）：库不可写时拒绝——删了 AVD 却删不掉元数据会留幽灵记录
   assertMetaWritable('删除设备')
   if (device.status === 'starting') await cancelStartDevice(id)
@@ -1006,6 +1282,10 @@ const deleteFlow = async (id: string): Promise<DeviceSnapshot> => {
     // deleteAvd 只删 id 推导的两条路径（containment 守卫），不跟随 ini 外指
     await deleteAvd(id, avdDirs())
     await commitMetas((metas) => metas.filter((meta) => meta.id !== id))
+    displayArgsByDevice.delete(id)
+    // 目标已删：残留的配置事务记录一并清理（内容裁决不再有对照目标）
+    await removeJournal(transactionsDir(app.getPath('userData')), id).catch(() => undefined)
+    frozenMessages.delete(id)
     bumpAvdEpoch()
     broadcastChanged()
     void reconcileDevices().catch(() => undefined)
@@ -1086,6 +1366,7 @@ const createDeviceTransaction = async (
     throw new Error('系统镜像未安装或安装不完整，请先在向导中下载')
   }
   const profiles = await listDeviceProfiles({
+    sdkRoot: sdkRoot(),
     avdmanagerPath: avdmanagerPathFor(sdkRoot()),
     jarPath: sdklibJarPathFor(sdkRoot())
   })
@@ -1132,28 +1413,6 @@ const createDeviceTransaction = async (
   const advancedSettings = normalized.settings
   // 查询结束后、AVD 副作用前再次检查写保护（对账设计 4——查询窗口内库可能变坏）
   assertMetaWritable('创建设备')
-  // 真实摄像头占用核验：同一宿主摄像头不能同时配给两台设备（plan 设计 7）
-  if (advancedSettings !== null) {
-    const occupied = new Set<string>()
-    for (const existing of devices) {
-      for (const camera of [
-        existing.advancedSettings?.frontCamera,
-        existing.advancedSettings?.rearCamera
-      ]) {
-        if (camera?.mode === 'webcam' && camera.deviceId !== null) {
-          occupied.add(camera.deviceId)
-        }
-      }
-    }
-    for (const [field, camera] of [
-      ['frontCamera', advancedSettings.frontCamera],
-      ['rearCamera', advancedSettings.rearCamera]
-    ] as const) {
-      if (camera.mode === 'webcam' && camera.deviceId !== null && occupied.has(camera.deviceId)) {
-        throw new Error(`附加设置不合法（${field}）：摄像头 ${camera.deviceId} 已被其他设备占用`)
-      }
-    }
-  }
   const apiDisplay =
     major === null
       ? (splitPackageName(packageName)?.platformSegment ?? null)
@@ -1259,22 +1518,750 @@ const renameDevice = async (id: string, name: string): Promise<DeviceSnapshot> =
   if (device.status === 'creating' || device.status === 'deleting') {
     throw new Error('设备事务进行中，暂不能重命名')
   }
+  if (editFlights.has(id)) throw new Error('该设备正在保存配置，暂不能重命名')
   assertMetaWritable('重命名设备')
   await commitMetas((metas) => metas.map((meta) => (meta.id === id ? { ...meta, name } : meta)))
   broadcastChanged()
   return snapshotNow()
 }
 
-// ---- sender 白名单：启停/删除/复制/对账仅登记主窗；创建允许主窗与向导 ----
+// ---- 配置编辑域（plan 2026-10-08-device-config-edit）----
+
+/** 开编辑窗前核验（wizard 域装配用）：设备存在且不在创建/删除事务中 */
+export const assertEditorTarget = async (id: string): Promise<void> => {
+  await ensureLoaded()
+  const device = requireDevice(id)
+  if (device.status === 'creating' || device.status === 'deleting') {
+    throw new Error('设备事务进行中，稍后再编辑配置')
+  }
+}
+
+/** 保存前置阻断原因（快照与更新共用口径）；null = 可保存 */
+const editSaveBlockedReason = (device: Device, includeRuntime = true): string | null => {
+  const frozen = frozenMessages.get(device.id)
+  if (frozen !== undefined) return frozen
+  if (storeHealth.state === 'error') {
+    return `设备数据读取失败（${storeHealth.issues[0]?.message ?? '未知错误'}），暂不能保存配置`
+  }
+  if (storeHealth.state === 'read-only') {
+    return `元数据写入已冻结（${storeHealth.issues.map((issue) => issue.message).join('；')}），暂不能保存配置`
+  }
+  if (device.status === 'creating' || device.status === 'deleting') {
+    return '设备事务进行中，暂不能保存配置'
+  }
+  if (includeRuntime && (device.status === 'running' || device.status === 'starting')) {
+    return '请先停止模拟器后再保存配置'
+  }
+  if (includeRuntime && device.status === 'stopping') return '设备停止中，停止完成后再保存'
+  return null
+}
+
+/** legacy 摄像头键解析：known 模式直映射（virtualscene 接纳小写与历史 camelCase），
+ *  webcamN 保留资源 id，其余不可识别 */
+const parseLegacyCamera = (
+  text: string | undefined
+): { mode: 'none' | 'emulated' | 'virtualScene' | 'webcam'; deviceId: string | null } | null => {
+  if (text === 'none' || text === 'emulated') {
+    return { mode: text, deviceId: null }
+  }
+  if (text === 'virtualscene' || text === 'virtualScene') {
+    return { mode: 'virtualScene', deviceId: null }
+  }
+  if (text !== undefined && /^webcam\d+$/.test(text)) {
+    return { mode: 'webcam', deviceId: text }
+  }
+  return null
+}
+
+const metadataNote = (): DeviceEditFieldNote => ({ source: 'metadata', warning: null })
+const legacyNote = (): DeviceEditFieldNote => ({ source: 'legacy', warning: null })
+
+interface EditDraft {
+  mismatches?: DeviceConfigMismatch[]
+  settings: DeviceAdvancedSettings | null
+  blockedReason?: string
+  notes: Record<string, DeviceEditFieldNote>
+  storage: DeviceEditStorageInfo
+}
+
+/**
+ * 编辑回填草稿（读取快照与保存复验共用单源）：已存设置按 metadata 回填并核对
+ * config 一致性；legacy（null 设置）按实际生效语义构造（Cold/host/无网络参数），
+ * 数值缺省查 config → 所装 schema → unknown（不以新建默认值冒充已存值）。
+ */
+const buildEditDraft = (
+  meta: DeviceMeta,
+  configMap: Map<string, string>,
+  schemaDefaults: Record<string, string>,
+  capabilities: { skinIds: string[] }
+): EditDraft => {
+  const notes: Record<string, DeviceEditFieldNote> = {}
+  const stored = meta.advancedSettings
+  if (stored !== null) {
+    const mismatches = configMismatchesOf(stored, configMap, { ...capabilities, skinDirectoryFor })
+    for (const item of mismatches) {
+      notes[item.field] = {
+        source: 'metadata',
+        warning: `配置为 ${item.actualLabel}，保存将以表单值为准。${item.actualSettings === null ? '原值无法识别，不能采用。' : ''}`
+      }
+    }
+    const configStorage = storageMiBFromText(configMap.get('disk.dataPartition.size'))
+    if (configStorage !== null && configStorage !== stored.internalStorageMiB) {
+      notes.internalStorageMiB = {
+        source: 'metadata',
+        warning: `config.ini 容量与记录不一致（当前 ${configStorage} MiB），只读展示以应用记录为准且不会改写`
+      }
+    }
+    const fields: Array<keyof DeviceAdvancedSettings> = [
+      'skinRef',
+      'frontCamera',
+      'rearCamera',
+      'networkSpeed',
+      'networkLatency',
+      'orientation',
+      'bootMode',
+      'internalStorageMiB',
+      'cpuCores',
+      'graphics',
+      'ramMiB',
+      'vmHeapMiB',
+      'preferredAbi'
+    ]
+    const settings = { ...stored }
+    for (const field of fields) if (notes[field] === undefined) notes[field] = metadataNote()
+    return {
+      settings,
+      notes,
+      mismatches,
+      storage: {
+        valueMiB: stored.internalStorageMiB,
+        note: '已有模拟器不支持修改内部存储，容量保持原配置'
+      }
+    }
+  }
+
+  // legacy（无已存设置）：Cold/host 固定语义 + config/schema 回退
+  const numberFrom = (
+    key: string,
+    label: string
+  ): { value: number | null; note: DeviceEditFieldNote } => {
+    const configText = configMap.get(key)
+    const fromConfig =
+      configText !== undefined && /^\d+$/.test(configText) ? Number(configText) : NaN
+    if (Number.isFinite(fromConfig) && fromConfig > 0)
+      return { value: fromConfig, note: { source: 'config', warning: null } }
+    // 显式自动值/不可识别值不能被 schema 的默认值替代。
+    const fromSchema =
+      configText === undefined && /^\d+$/.test(schemaDefaults[key] ?? '')
+        ? Number(schemaDefaults[key])
+        : NaN
+    if (Number.isFinite(fromSchema) && fromSchema > 0) {
+      return {
+        value: fromSchema,
+        note: {
+          source: 'schema',
+          warning: `原${label}未写入 config，按所装 emulator 默认值回显；实际运行值可能被自动调整`
+        }
+      }
+    }
+    return {
+      value: null,
+      note: { source: 'unknown', warning: `原${label}为自动值或无法识别，保持原配置` }
+    }
+  }
+  const cameraFrom = (
+    key: string
+  ): { config: DeviceAdvancedSettings['frontCamera'] | null; note: DeviceEditFieldNote } => {
+    const fromConfig = parseLegacyCamera(configMap.get(key))
+    if (fromConfig !== null) {
+      return { config: fromConfig, note: { source: 'config', warning: null } }
+    }
+    const fromSchema = configMap.has(key) ? null : parseLegacyCamera(schemaDefaults[key])
+    if (fromSchema !== null) {
+      return {
+        config: fromSchema,
+        note: { source: 'schema', warning: '原摄像头未写入 config，按 emulator 默认回显' }
+      }
+    }
+    return {
+      config: null,
+      note: { source: 'unknown', warning: '原摄像头配置未识别，保持原配置' }
+    }
+  }
+  const cpu = numberFrom('hw.cpu.ncore', 'CPU 核数')
+  const ram = numberFrom('hw.ramSize', 'RAM')
+  const heap = numberFrom('vm.heapSize', 'VM heap')
+  const front = cameraFrom('hw.camera.front')
+  const rear = cameraFrom('hw.camera.back')
+  // legacy runner 显式 -gpu host 优先于 config，不能在首次编辑时改变。
+  const graphics = 'host' as const
+  const storageConfig = storageMiBFromText(configMap.get('disk.dataPartition.size'))
+  const storageSchema = storageMiBFromText(schemaDefaults['disk.dataPartition.size'])
+
+  const storageValue =
+    storageConfig ?? (configMap.has('disk.dataPartition.size') ? null : storageSchema)
+  const knownStorage = storageValue !== null && storageValue > 0 ? storageValue : null
+  const skinName = configMap.get('skin.name')
+  const skinPath = configMap.get('skin.path')
+  const hasNamedSkin = Boolean(skinPath || (skinName && !/^\d+x\d+$/.test(skinName)))
+  const skinRef = hasNamedSkin
+    ? (capabilities.skinIds.find(
+        (ref) =>
+          ref.replace(/^(sdk|imported|downloaded):/, '') === skinName ||
+          (skinPath && skinPath.endsWith(`/${ref.replace(/^(sdk|imported|downloaded):/, '')}`))
+      ) ?? null)
+    : null
+  const orientationText = configMap.get('hw.initialOrientation')
+  const orientation =
+    orientationText === 'portrait' || orientationText === 'landscape' ? orientationText : null
+  const incomplete =
+    cpu.value === null ||
+    ram.value === null ||
+    heap.value === null ||
+    front.config === null ||
+    rear.config === null ||
+    knownStorage === null ||
+    (hasNamedSkin && skinRef === null) ||
+    (orientationText !== undefined && orientation === null)
+  return {
+    settings: incomplete
+      ? null
+      : {
+          skinRef,
+          frontCamera: front.config!,
+          rearCamera: rear.config!,
+          networkSpeed: null,
+          networkLatency: null,
+          orientation,
+          bootMode: 'cold',
+          internalStorageMiB: knownStorage!,
+          cpuCores: cpu.value!,
+          graphics,
+          ramMiB: ram.value!,
+          vmHeapMiB: heap.value!,
+          preferredAbi: 'optimal'
+        },
+    ...(incomplete
+      ? {
+          blockedReason: '旧设备的附加设置包含自动值或未知值，当前仅支持修改名称；原配置保持不变。'
+        }
+      : {}),
+    notes: {
+      skinRef: {
+        source: hasNamedSkin ? 'config' : 'legacy',
+        warning: hasNamedSkin && skinRef === null ? '旧皮肤无法识别，保持原配置' : null
+      },
+      frontCamera: front.note,
+      rearCamera: rear.note,
+      networkSpeed: legacyNote(),
+      networkLatency: legacyNote(),
+      orientation: { source: orientation === null ? 'legacy' : 'config', warning: null },
+      bootMode: legacyNote(),
+      cpuCores: cpu.note,
+      graphics: legacyNote(),
+      ramMiB: ram.note,
+      vmHeapMiB: heap.note,
+      preferredAbi: legacyNote()
+    },
+    storage:
+      knownStorage === null
+        ? { valueMiB: null, note: '内部存储容量未知（保持原配置，不会改写；不以默认值补记）' }
+        : { valueMiB: knownStorage, note: '已有模拟器不支持修改内部存储，容量保持原配置' }
+  }
+}
+
+/** 编辑能力（与创建同规则）：按已存画像身份/形态构建，画像清单不可用不阻断；
+ *  原值 webcam 并入枚举——已存但未变更的摄像头不因枚举变化被形状校验拒绝，
+ *  稳定身份在保存时单独核验（stale 得到明确报错）。 */
+const buildEditCapabilities = async (meta: DeviceMeta): Promise<WizardCapabilitiesLike> => {
+  let profileRam: number | null = null
+  try {
+    const profiles = await listDeviceProfiles({
+      sdkRoot: sdkRoot(),
+      avdmanagerPath: avdmanagerPathFor(sdkRoot()),
+      jarPath: sdklibJarPathFor(sdkRoot())
+    })
+    profileRam = profiles.find((entry) => entry.id === meta.profileId)?.ramMiB ?? null
+  } catch {
+    // 画像清单不可用：按已存形态与缺省 RAM 构建（不要求重新选择画像）
+  }
+  return buildEnrichedCapabilities(
+    {
+      profile: { id: meta.profileId, ramMiB: profileRam, formFactor: meta.formFactor },
+      imagePackageName: meta.imagePackageName,
+      emulatorVersion: await readEmulatorVersion(sdkRoot())
+    },
+    sdkRoot(),
+    app.getPath('userData')
+  )
+}
+
+type WizardCapabilitiesLike = Awaited<ReturnType<typeof buildEnrichedCapabilities>>
+
+const augmentDraftWebcams = (
+  capabilities: WizardCapabilitiesLike,
+  settings: DeviceAdvancedSettings
+): void => {
+  for (const camera of [settings.frontCamera, settings.rearCamera]) {
+    if (
+      camera.mode === 'webcam' &&
+      camera.deviceId !== null &&
+      !capabilities.webcamDeviceIds.includes(camera.deviceId)
+    ) {
+      capabilities.webcamDeviceIds.push(camera.deviceId)
+    }
+  }
+}
+
+/**
+ * 共享摄像头提示（设计决定 2026-10-09，复查 P2-3）：不再阻断共绑，草稿提示其他
+ * 设备的有效绑定（托管设置或 legacy 的实际 config.ini）。非权威——启动仲裁才裁决；
+ * 枚举失败退化为编号+宿主身份比较，legacy config 读不到按无绑定（提示可漏报）。
+ */
+const sharedCameraOwnersOf = async (
+  id: string,
+  settings: DeviceAdvancedSettings
+): Promise<Partial<Record<'frontCamera' | 'rearCamera', string>>> => {
+  const slots = [
+    ['frontCamera', settings.frontCamera],
+    ['rearCamera', settings.rearCamera]
+  ] as const
+  if (!slots.some(([, camera]) => camera.mode === 'webcam')) return {}
+  const others = devices.filter(
+    (entry) => entry.id !== id && entry.status !== 'creating' && entry.status !== 'deleting'
+  )
+  const bindings: Array<{ camera: DeviceAdvancedSettings['frontCamera']; owner: string }> = []
+  for (const entry of others) {
+    if (entry.advancedSettings !== null) {
+      bindings.push(
+        { camera: entry.advancedSettings.frontCamera, owner: entry.name },
+        { camera: entry.advancedSettings.rearCamera, owner: entry.name }
+      )
+      continue
+    }
+    try {
+      const entries = parseConfigEntries((await readAvdConfigRaw(entry.id, avdDirs())) ?? '')
+      for (const key of ['hw.camera.front', 'hw.camera.back'] as const) {
+        const parsed = parseLegacyCamera(entries.get(key))
+        if (parsed !== null && parsed.mode === 'webcam') {
+          bindings.push({ camera: parsed, owner: entry.name })
+        }
+      }
+    } catch {
+      // legacy config 读不到按无绑定：启动仲裁才是权威
+    }
+  }
+  if (!bindings.some(({ camera }) => camera.mode === 'webcam')) return {}
+  let labels: Map<string, string> | null = null
+  try {
+    labels = new Map((await listWebcams(sdkRoot())).map((entry) => [entry.id, entry.deviceLabel]))
+  } catch {
+    labels = null
+  }
+  const keyOf = (camera: DeviceAdvancedSettings['frontCamera']): string | null => {
+    if (camera.mode !== 'webcam' || camera.deviceId === null) return null
+    return camera.hostDeviceId ?? labels?.get(camera.deviceId) ?? camera.deviceId
+  }
+  const result: Partial<Record<'frontCamera' | 'rearCamera', string>> = {}
+  for (const [field, camera] of slots) {
+    const mine = keyOf(camera)
+    if (mine === null) continue
+    const shared = bindings.find(({ camera: other }) => keyOf(other) === mine)
+    if (shared !== undefined) result[field] = shared.owner
+  }
+  return result
+}
+
+/** 编辑快照读取：只读，不触发启动/迁移或默认值落盘 */
+const readDeviceConfig = async (id: string): Promise<DeviceEditSnapshot> => {
+  await ensureLoaded()
+  const device = requireDevice(id)
+  if (device.status === 'creating' || device.status === 'deleting') {
+    throw new Error('设备事务进行中，暂不能编辑配置')
+  }
+  const meta = toMeta(device)
+  const blocked = editSaveBlockedReason(device, false)
+  let configRaw: string | null = null
+  let configError: string | null = null
+  try {
+    configRaw = await readAvdConfigRaw(id, avdDirs())
+  } catch (error) {
+    configError = messageOf(error)
+  }
+  const schemaDefaults = await readHardwareSchemaDefaults(sdkRoot()).catch(
+    () => ({}) as Record<string, string>
+  )
+  const capabilities = await buildEditCapabilities(meta)
+  const draft = buildEditDraft(
+    meta,
+    configRaw === null ? new Map() : parseConfigEntries(configRaw),
+    schemaDefaults,
+    capabilities
+  )
+  if (draft.settings !== null) {
+    augmentDraftWebcams(capabilities, draft.settings)
+    const shared = await sharedCameraOwnersOf(id, draft.settings)
+    for (const field of ['frontCamera', 'rearCamera'] as const) {
+      const owner = shared[field]
+      if (owner === undefined) continue
+      const note = draft.notes[field]
+      const hint = `该摄像头同时绑定在设备「${owner}」；两台同时运行时，后启动的一台会自动改用虚拟场景`
+      draft.notes[field] = {
+        ...note,
+        warning:
+          note.warning === null || note.warning === undefined ? hint : `${note.warning}${hint}`
+      }
+    }
+  }
+  const saveBlockedReason =
+    blocked ??
+    configError ??
+    (configRaw === null
+      ? 'AVD config.ini 缺失或不可读，暂不能保存配置；请先重新检查设备文件'
+      : null)
+  return {
+    deviceId: id,
+    identity: {
+      name: meta.name,
+      profileId: meta.profileId,
+      profileLabel: meta.profileLabel,
+      imagePackageName: meta.imagePackageName,
+      apiDisplay: meta.apiDisplay,
+      formFactor: meta.formFactor
+    },
+    settings: draft.settings,
+    settingsBlockedReason: draft.blockedReason ?? null,
+    status: requireDevice(id).status,
+    fieldNotes: draft.notes,
+    configMismatches: draft.mismatches ?? [],
+    internalStorage: draft.storage,
+    capabilities,
+    saveBlockedReason,
+    fingerprint: configFingerprintOf(configRaw, meta)
+  }
+}
+
+const isUpdateDeviceInput = (value: unknown): value is UpdateDeviceInput => {
+  if (typeof value !== 'object' || value === null) return false
+  const input = value as Record<string, unknown>
+  if (typeof input.id !== 'string' || input.id.length === 0) return false
+  if (typeof input.fingerprint !== 'string' || input.fingerprint.length === 0) return false
+  if (input.name !== undefined && typeof input.name !== 'string') return false
+  if (input.resetDisplayCutout !== undefined && typeof input.resetDisplayCutout !== 'boolean')
+    return false
+  if (input.advancedSettings !== undefined && typeof input.advancedSettings !== 'object') {
+    return false
+  }
+  return true
+}
+
+/** 核验本次修改或待同步的摄像头；与文件一致的旧资源不阻断无关编辑。 */
+const verifyEditableCameras = async (
+  original: DeviceAdvancedSettings,
+  settings: DeviceAdvancedSettings,
+  syncFields: readonly DeviceConfigField[] = []
+): Promise<void> => {
+  const changed = (
+    [
+      ['frontCamera', settings.frontCamera],
+      ['rearCamera', settings.rearCamera]
+    ] as const
+  ).filter(([field, camera]) => syncFields.includes(field) || !deepEqual(original[field], camera))
+  if (!changed.some(([, camera]) => camera.mode === 'webcam')) return
+  let webcams: Map<string, string>
+  try {
+    webcams = new Map((await listWebcams(sdkRoot())).map((entry) => [entry.id, entry.deviceLabel]))
+  } catch (error) {
+    throw new Error(`保存前无法核验摄像头：${messageOf(error)}`)
+  }
+  for (const [field, camera] of changed) {
+    if (camera.mode !== 'webcam' || camera.deviceId === null) continue
+    if (
+      !webcams.has(camera.deviceId) ||
+      (camera.hostDeviceId !== undefined && webcams.get(camera.deviceId) !== camera.hostDeviceId)
+    ) {
+      throw new Error(
+        `附加设置不合法（${field}）：摄像头 ${camera.deviceId} 已不可用，请重新选择后保存`
+      )
+    }
+  }
+}
+
+const pendingJournalCleanup = new Set<string>()
+const cleanupCommittedJournal = async (dir: string, id: string): Promise<void> => {
+  try {
+    await removeJournal(dir, id)
+    pendingJournalCleanup.delete(id)
+  } catch (error) {
+    pendingJournalCleanup.add(id)
+    console.warn(`[devices] 配置已提交，事务记录待清理（${id}）：${messageOf(error)}`)
+  }
+}
+
+/**
+ * config × 元数据跨文件事务（plan 设计 3.3/3.4）：在全局元数据队列内执行——
+ * 重新 CAS 元数据、复验原 config 字节、持久记录 old/new、原子写 config、
+ * store 唯一入口写元数据、成功后清理记录。元数据写失败恢复原 config；回滚失败
+ * 保留记录并冻结目标。任务体内直接操作不嵌套调用同一队列（不自等待）。
+ */
+const commitMetasWithConfig = (
+  id: string,
+  oldMeta: DeviceMeta,
+  newMeta: DeviceMeta,
+  oldConfig: string,
+  newConfig: string
+): Promise<void> =>
+  enqueueStoreTask(async () => {
+    const guard = await readDeviceStore()
+    if (
+      guard.health.state !== 'error' &&
+      acceptedMetas !== null &&
+      !metasEqual(guard.metas, acceptedMetas)
+    ) {
+      armStoreProtection(
+        'devices.json 在写入前被外部修改，与应用内存不一致：写入已中止并冻结；请核对文件后重启应用载入'
+      )
+      storeHealth = {
+        state: 'read-only',
+        issues: [
+          ...guard.health.issues,
+          {
+            code: 'metadata-changed',
+            message: '写入前检测到 devices.json 外部修改，本次写入已中止；重启后载入修复文件'
+          }
+        ]
+      }
+      throw new Error('devices.json 已被外部修改，写入已中止（元数据冻结，重启后载入）')
+    }
+    // 写 config 前复验原字节：外部工具改过 config 即中止，不覆盖
+    const currentConfig = await readAvdConfigRaw(id, avdDirs())
+    if (currentConfig !== oldConfig) {
+      throw new Error('config.ini 在写入前被外部修改，本次保存已中止；请关闭编辑窗后重新打开')
+    }
+    const dir = transactionsDir(app.getPath('userData'))
+    if (pendingJournalCleanup.has(id)) {
+      await removeJournal(dir, id)
+      pendingJournalCleanup.delete(id)
+    }
+    await writeJournal(dir, {
+      version: 1,
+      deviceId: id,
+      createdAt: Date.now(),
+      oldConfig,
+      newConfig,
+      oldMeta,
+      newMeta
+    })
+    try {
+      await writeAvdConfigRaw(id, avdDirs(), newConfig, oldConfig)
+    } catch (error) {
+      // config 未落成（tmp 写失败或 rename 失败）：清记录；元数据未动，无残留
+      await removeJournal(dir, id).catch(() => undefined)
+      throw new Error(`写入 AVD 配置失败（${messageOf(error)}），已中止保存；设备数据未改动`)
+    }
+    let metaFailure: unknown = null
+    try {
+      if (acceptedMetas === null) {
+        throw new Error('元数据无可信基线，本次写入已中止')
+      }
+      // 复查 P2-1：草稿基线是已提交元数据，其他事务的创建临时行不进写盘内容
+      const draft = acceptedMetas.map((entry) => (entry.id === id ? newMeta : entry))
+      await writeDeviceMetas(draft)
+      devices = rebuildWithPendingRows(draft)
+      acceptedMetas = draft
+      metaRevision += 1
+    } catch (error) {
+      metaFailure = error
+    }
+    if (metaFailure !== null) {
+      // 元数据未提交：恢复原 config，使两文件回到事务前的一致状态
+      try {
+        await writeAvdConfigRaw(id, avdDirs(), oldConfig, newConfig)
+        await removeJournal(dir, id)
+      } catch (rollbackError) {
+        const journalPath = join(dir, `${id}.json`)
+        const message = `上次保存未完成且回滚失败（${messageOf(rollbackError)}），本设备的配置写入已冻结；事务记录保留在 ${journalPath}`
+        frozenMessages.set(id, message)
+        const target = devices.find((entry) => entry.id === id)
+        if (target) target.lastError = { code: 'config-transaction', message }
+        throw new Error(message)
+      }
+      throw metaFailure
+    }
+    await cleanupCommittedJournal(dir, id)
+  })
+
+const updateConfigFlow = async (input: UpdateDeviceInput): Promise<DeviceSnapshot> => {
+  const device = requireDevice(input.id)
+  const blocked = editSaveBlockedReason(device)
+  if (blocked !== null) throw new Error(blocked)
+  const nextName = input.name !== undefined ? normalizeName(input.name) : null
+  if (input.name !== undefined && nextName === null) {
+    throw new Error('设备名称需要 1–50 个字符（去首尾空格）')
+  }
+  // 差异闭集守卫：存储/ABI/未知键在此拒绝（伪造载荷不进入业务）
+  const diff = sanitizeUpdateSettings(input.advancedSettings ?? {})
+  const configRaw = await readAvdConfigRaw(input.id, avdDirs())
+  const meta = toMeta(device)
+  if (configFingerprintOf(configRaw, meta) !== input.fingerprint) {
+    throw new Error(
+      '设备配置或状态已发生变化（外部修改或设备状态更新），本次保存已中止；请关闭编辑窗后重新打开'
+    )
+  }
+  const nameChanged = nextName !== null && nextName !== meta.name
+  const pendingSync = configMismatchesOf(
+    meta.advancedSettings,
+    parseConfigEntries(configRaw ?? ''),
+    { skinIds: [], skinDirectoryFor }
+  )
+  if (Object.keys(diff).length === 0 && pendingSync.length === 0) {
+    if (nameChanged || input.resetDisplayCutout === true) {
+      await commitMetas((metas) =>
+        metas.map((entry) =>
+          entry.id === input.id
+            ? {
+                ...entry,
+                ...(nameChanged ? { name: nextName! } : {}),
+                ...(input.resetDisplayCutout === true
+                  ? { cutoutResetPending: true, snapshotReadyAt: null }
+                  : {})
+              }
+            : entry
+        )
+      )
+      broadcastChanged()
+    }
+    return snapshotNow()
+  }
+  const health = await withDeadline(
+    checkDeviceHealth(meta, reconcileDirs()),
+    checkTimeoutAvailability,
+    CHECK_TIMEOUT_MS
+  )
+  if (health.state !== 'valid')
+    throw new Error(`保存前核验未通过：${health.issues[0]?.message ?? '设备文件状态异常'}`)
+  // 目标设置 = 可信原草稿 + 差异（与读取快照同一构建器，两处口径恒一致）
+  const schemaDefaults = await readHardwareSchemaDefaults(sdkRoot()).catch(
+    () => ({}) as Record<string, string>
+  )
+  const capabilities = await buildEditCapabilities(meta)
+  const draft = buildEditDraft(
+    meta,
+    configRaw === null ? new Map() : parseConfigEntries(configRaw),
+    schemaDefaults,
+    capabilities
+  )
+  const original = draft.settings
+  if (original !== null) augmentDraftWebcams(capabilities, original)
+  if (original === null) throw new Error('旧设备的附加设置无法无损识别，当前仅支持修改名称')
+  const mismatches = draft.mismatches ?? []
+  const syncFields = mismatches.map((item) => item.field)
+  const syncDiff = Object.fromEntries(syncFields.map((field) => [field, original[field]]))
+  const normalized = normalizeEditedSettings(
+    original,
+    { ...syncDiff, ...diff },
+    capabilities,
+    syncFields
+  )
+  if (Object.keys(normalized.errors).length > 0) {
+    const first = Object.entries(normalized.errors)[0] as [string, string]
+    throw new Error(`附加设置不合法（${first[0]}）：${first[1]}`)
+  }
+  const nextSettings = normalized.settings as DeviceAdvancedSettings
+  const settingsChanged = !deepEqual(original, nextSettings)
+  const patch = buildConfigEditPatch(configBaseline(original, mismatches), nextSettings, {
+    skinDirectoryFor,
+    forceFields: mismatches.filter((item) => item.actualSettings === null).map((item) => item.field)
+  })
+  const configChanged = Object.keys(patch.sets).length > 0 || patch.deletes.length > 0
+  if (!settingsChanged && !configChanged && !nameChanged && input.resetDisplayCutout !== true)
+    return snapshotNow()
+  if ((settingsChanged || configChanged) && configRaw === null) {
+    throw new Error('AVD config.ini 缺失，无法保存附加设置；请先重新检查设备文件')
+  }
+  if (!settingsChanged && !configChanged) {
+    // 只改名：走既有元数据提交，不动 config 与快照标记（独立重命名同语义）
+    await commitMetas((metas) =>
+      metas.map((entry) =>
+        entry.id === input.id
+          ? {
+              ...entry,
+              ...(nameChanged ? { name: nextName! } : {}),
+              ...(input.resetDisplayCutout === true
+                ? { cutoutResetPending: true, snapshotReadyAt: null }
+                : {})
+            }
+          : entry
+      )
+    )
+    broadcastChanged()
+    return snapshotNow()
+  }
+  await verifyEditableCameras(original, nextSettings, syncFields)
+  // 硬件/启动配置变化使快照失效（下次冷启动）；纯名称变化不动快照。
+  // 网络字段是启动参数、不改 config，也不使快照失效。
+  const snapshotAffecting = configChanged || original.bootMode !== nextSettings.bootMode
+  const newMeta: DeviceMeta = {
+    ...meta,
+    name: nextName ?? meta.name,
+    advancedSettings: nextSettings,
+    snapshotReadyAt: snapshotAffecting ? null : meta.snapshotReadyAt,
+    ...(input.resetDisplayCutout === true
+      ? { cutoutResetPending: true, snapshotReadyAt: null }
+      : {})
+  }
+  const newConfigRaw = applyConfigPatchToText(configRaw as string, patch)
+  // 事务开始/结束都动文件代次：进行中的扫描结果不覆盖事务后的状态
+  bumpAvdEpoch()
+  try {
+    await commitMetasWithConfig(input.id, meta, newMeta, configRaw as string, newConfigRaw)
+  } finally {
+    bumpAvdEpoch()
+  }
+  broadcastChanged()
+  return snapshotNow()
+}
+
+/** 保存命令：同设备互斥（重复请求合并到在途执行），退出清理期拒绝新保存 */
+const updateDeviceConfig = (input: UpdateDeviceInput): Promise<DeviceSnapshot> => {
+  const flight = editFlights.get(input.id)
+  if (flight) return flight
+  const promise = (async (): Promise<DeviceSnapshot> => {
+    if (!acceptingCommands) throw new Error('应用退出清理中，暂停保存')
+    await ensureLoaded()
+    try {
+      return await updateConfigFlow(input)
+    } finally {
+      editFlights.delete(input.id)
+    }
+  })()
+  editFlights.set(input.id, promise)
+  return promise
+}
+
+// ---- sender 白名单：启停/删除/复制/对账仅登记主窗；创建允许主窗与 create 向导；
+// 配置读写仅绑定目标设备的编辑窗（主窗不直接写附加配置）----
 
 type IpcEvent = Electron.IpcMainInvokeEvent
 
-const requireSender = (channel: string, event: IpcEvent, scope: 'main' | 'create'): void => {
-  const allowed =
-    scope === 'main'
-      ? getMainWindow()?.webContents.id === event.sender.id
-      : getMainWindow()?.webContents.id === event.sender.id || wizardOwns(event.sender)
-  if (!allowed) throw new Error(`${channel}: 未登记的窗口`)
+const requireSender = (
+  channel: string,
+  event: IpcEvent,
+  scope: 'main' | 'create' | { edit: string }
+): void => {
+  const isMain = getMainWindow()?.webContents.id === event.sender.id
+  if (scope === 'main') {
+    if (!isMain) throw new Error(`${channel}: 未登记的窗口`)
+    return
+  }
+  if (scope === 'create') {
+    // create 上下文窗口（或主窗）；编辑窗不能发起创建——create/edit 隔离
+    if (isMain || wizardContextOf(event.sender)?.kind === 'create') return
+    throw new Error(`${channel}: 未登记的窗口`)
+  }
+  const context = wizardContextOf(event.sender)
+  if (context?.kind === 'edit' && context.deviceId === scope.edit) return
+  throw new Error(`${channel}: 本窗口无权读写该设备的配置`)
 }
 
 /** 确认已展示某签名的异常汇总（对账设计 5）：只消费当前签名的待提示态 */
@@ -1292,6 +2279,9 @@ const acknowledgeReconciliation = (signature: string): void => {
 export async function prepareAppShutdown(): Promise<{ leftovers: string[] }> {
   acceptingCommands = false
   const leftovers = await runner.disposeAll()
+  // 等待在途配置事务到达可恢复边界（journal 已清理或保留待恢复）——排队空任务
+  // 即等队列尾，不在退出途中截断跨文件事务
+  await enqueueStoreTask(async () => undefined).catch(() => undefined)
   for (const device of devices) {
     if (!leftovers.includes(device.id)) {
       if (
@@ -1302,10 +2292,12 @@ export async function prepareAppShutdown(): Promise<{ leftovers: string[] }> {
         device.status = 'stopped'
         device.serial = undefined
         device.runId = undefined
+        device.cameraNotice = undefined
         streamBridge.stopped?.(device.id)
       }
     }
   }
+  cameraOverridesByDevice.clear()
   broadcastChanged()
   return { leftovers }
 }
@@ -1385,6 +2377,30 @@ export function registerDevicesIpc(): void {
         throw new Error(`${IPC_CHANNELS.devicesCancelStart}: 非法的入参`)
       }
       return cancelStartDevice(raw.id)
+    }
+  )
+
+  // ---- 配置编辑域（plan 2026-10-08-device-config-edit）----
+
+  ipcMain.handle(
+    IPC_CHANNELS.devicesReadConfig,
+    async (event, raw: unknown): Promise<DeviceEditSnapshot> => {
+      if (!isDeviceIdInput(raw)) {
+        throw new Error(`${IPC_CHANNELS.devicesReadConfig}: 非法的入参`)
+      }
+      requireSender(IPC_CHANNELS.devicesReadConfig, event, { edit: raw.id })
+      return readDeviceConfig(raw.id)
+    }
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.devicesUpdateConfig,
+    async (event, raw: unknown): Promise<DeviceSnapshot> => {
+      if (!isUpdateDeviceInput(raw)) {
+        throw new Error(`${IPC_CHANNELS.devicesUpdateConfig}: 非法的入参`)
+      }
+      requireSender(IPC_CHANNELS.devicesUpdateConfig, event, { edit: raw.id })
+      return updateDeviceConfig(raw)
     }
   )
 

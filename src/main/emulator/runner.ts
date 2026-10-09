@@ -32,6 +32,8 @@ export class StartCancelledError extends Error {
 export interface UnexpectedExitInfo {
   code: number
   stderrTail: string
+  /** 进程 stdout 尾部（参数解析等致命错误只打在 stdout——37.2.12 实测） */
+  stdoutTail: string
 }
 
 export interface RunnerEntry {
@@ -43,6 +45,7 @@ export interface RunnerEntry {
   phase: RunnerPhase
   abort: AbortController
   stderrChunks: Buffer[]
+  stdoutChunks: Buffer[]
   /** stop/cancel 共享同一份清理 Promise；失败后置空允许重试 */
   cleanup: Promise<void> | null
   closed: Promise<number | null>
@@ -76,6 +79,8 @@ export interface RunnerDeps {
    * 结果不 spawn。失败按启动失败收口（onUnexpectedExit 由调用侧合并 lastError）。
    */
   beforeStart?: (id: string, runId: string, signal: AbortSignal) => Promise<void>
+  /** boot 后的受控恢复，完成前不发布 running；取消与进程退出仍可打断。 */
+  afterBoot?: (id: string, runId: string, serial: string, signal: AbortSignal) => Promise<void>
   /** boot 完成（serial 已随事件发布，可能因端口冲突重试与本对不同） */
   onRunning: (id: string, runId: string, serial: string) => void
   /** 非预期退出：崩溃/启动失败——写回 lastError 与后台错误通知 */
@@ -87,6 +92,14 @@ export interface RunnerDeps {
 export const stderrTailText = (chunks: Buffer[]): string => {
   const text = Buffer.concat(chunks).toString('utf8').trim()
   return text.length > STDERR_TAIL_BYTES ? text.slice(-STDERR_TAIL_BYTES) : text
+}
+
+/** 追加并保留尾部（约 4×截断上限）：长会话的 emulator 输出不无限吃内存 */
+const pushTailChunk = (chunks: Buffer[], chunk: Buffer): void => {
+  chunks.push(chunk)
+  let total = chunk.length
+  for (let index = 0; index < chunks.length - 1; index += 1) total += chunks[index]!.length
+  while (total > STDERR_TAIL_BYTES * 4 && chunks.length > 1) total -= chunks.shift()!.length
 }
 
 const abortableSleep = (ms: number, signal?: AbortSignal): Promise<void> =>
@@ -185,6 +198,7 @@ export class EmulatorRunner {
         phase: 'starting',
         abort: preparation.abort,
         stderrChunks: [],
+        stdoutChunks: [],
         cleanup: null,
         closed: Promise.resolve(null)
       }
@@ -279,9 +293,10 @@ export class EmulatorRunner {
       this.deps.emulatorPath(),
       ['-avd', entry.id, '-no-window', ...extra, '-port', String(entry.port)],
       {
-        // detached 建独立进程组：真身 qemu 与启动器同组，停止按组整组终止
+        // detached 建独立进程组：真身 qemu 与启动器同组，停止按组整组终止；
+        // stdout 也要：emulator 的致命参数错误只打在 stdout（2026-10-09 实测）
         detached: true,
-        stdio: ['ignore', 'ignore', 'pipe'],
+        stdio: ['ignore', 'pipe', 'pipe'],
         env: scrubAdbEnv({
           ...process.env,
           ANDROID_SDK_ROOT: this.deps.sdkRoot(),
@@ -294,11 +309,13 @@ export class EmulatorRunner {
     )
     entry.child = child
     entry.stderrChunks = []
+    entry.stdoutChunks = []
     entry.closed = new Promise<number | null>((resolve) => {
       child.once('close', (code) => resolve(code ?? null))
     })
     child.once('close', (code) => this.#onClosed(entry, code ?? -1))
-    child.stderr?.on('data', (chunk: Buffer) => entry.stderrChunks.push(chunk))
+    child.stderr?.on('data', (chunk: Buffer) => pushTailChunk(entry.stderrChunks, chunk))
+    child.stdout?.on('data', (chunk: Buffer) => pushTailChunk(entry.stdoutChunks, chunk))
   }
 
   /** running 期间的进程退出 = 非预期崩溃；starting 期间由 #runBoot 收口（含端口冲突重试） */
@@ -309,7 +326,8 @@ export class EmulatorRunner {
     this.deps.ports.release(entry.id)
     this.deps.onUnexpectedExit(entry.id, entry.runId, {
       code,
-      stderrTail: stderrTailText(entry.stderrChunks)
+      stderrTail: stderrTailText(entry.stderrChunks),
+      stdoutTail: stderrTailText(entry.stdoutChunks)
     })
   }
 
@@ -327,6 +345,15 @@ export class EmulatorRunner {
           this.deps.sleep(0, entry.abort.signal).then(() => this.#bootWait(entry)),
           earlyExit
         ])
+        if (this.deps.afterBoot) {
+          await Promise.race([
+            awaitWithAbort(
+              () => this.deps.afterBoot!(entry.id, entry.runId, entry.serial, entry.abort.signal),
+              entry.abort.signal
+            ),
+            earlyExit
+          ])
+        }
         if (this.#entries.get(entry.id) !== entry || entry.abort.signal.aborted) return
         entry.phase = 'running'
         this.deps.onRunning(entry.id, entry.runId, entry.serial)
@@ -338,6 +365,7 @@ export class EmulatorRunner {
         // 失败收口先 abort：封住迟到的 close 与 boot 回调
         entry.abort.abort()
         const tail = stderrTailText(entry.stderrChunks)
+        const stdoutTail = stderrTailText(entry.stdoutChunks)
         // 只对确认的端口冲突换下一对端口：进程已退但端口仍被外部占着
         const portConflict = attempt === 0 && (await this.deps.confirmedPortConflict(entry.port))
         await this.#terminateEntry(entry).catch(() => undefined)
@@ -348,7 +376,8 @@ export class EmulatorRunner {
           const message = error instanceof Error ? error.message : String(error)
           this.deps.onUnexpectedExit(entry.id, entry.runId, {
             code,
-            stderrTail: tail.length > 0 ? tail : message
+            stderrTail: tail.length > 0 ? tail : message,
+            stdoutTail
           })
           return
         }
@@ -362,7 +391,8 @@ export class EmulatorRunner {
           this.#entries.delete(entry.id)
           this.deps.onUnexpectedExit(entry.id, entry.runId, {
             code: -1,
-            stderrTail: allocError instanceof Error ? allocError.message : String(allocError)
+            stderrTail: allocError instanceof Error ? allocError.message : String(allocError),
+            stdoutTail: ''
           })
           return
         }

@@ -31,3 +31,5 @@ tags: [code-review, download, cancel, grid, downloader]
 ## 跟进（2026-10-06 修复轮）
 
 P1-1/P1-2/P2-3/P3-5/P3-6 已修（plan 实现记录「review 修复轮」段）；P2-4 补真实 unzip kill 单测部分收口，完整三阶段真机取消仍开放——下次真机窗口顺带验证（下载完整镜像后在解压瞬间点取消）。本 issue 保留为 review 历史与 P2-4 待办。
+
+> P2-4 待办已并入 [待修问题清单](../../task/2026-10-09-待修问题清单.md)。

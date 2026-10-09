@@ -1,9 +1,11 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest'
-import { parseAvdDeviceEntries, listDeviceProfiles } from '../profiles'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { avdmanagerPathFor, parseAvdDeviceEntries, listDeviceProfiles } from '../profiles'
 import { type RawProfileMeta, parseDeviceXml } from '../profileMetadata'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 
 /** 节选自 avdmanager list device 真实输出（cmdline-tools 23，本机） */
 const FIXTURE = `Available devices definitions:
@@ -74,6 +76,7 @@ const PIXEL_8_META: RawProfileMeta[] = parseDeviceXml(readDeviceXml('nexus.xml')
 describe('listDeviceProfiles（avdmanager 输出 + jar 元数据关联）', () => {
   it('双方都有 → 富元数据 + creatable；仅 avdmanager → 贫元数据 creatable；仅 XML → 不可创建', async () => {
     const profiles = await listDeviceProfiles({
+      sdkRoot: '/unused-sdk',
       avdmanagerPath: '/unused',
       runner: async () => FIXTURE,
       metaSource: () => [
@@ -107,6 +110,7 @@ describe('listDeviceProfiles（avdmanager 输出 + jar 元数据关联）', () =
 
   it('metaSource 缺省时走 adm-zip 读 jar（缺 jar 降级为 avd-only）', async () => {
     const profiles = await listDeviceProfiles({
+      sdkRoot: '/unused-sdk',
       avdmanagerPath: '/unused/avdmanager',
       jarPath: join(fixtureDir, 'no-such.jar'),
       runner: async () => FIXTURE
@@ -114,5 +118,88 @@ describe('listDeviceProfiles（avdmanager 输出 + jar 元数据关联）', () =
     expect(profiles).toHaveLength(6)
     expect(profiles.every((profile) => profile.screen.widthPx === null)).toBe(true)
     expect(profiles.every((profile) => profile.creatable)).toBe(true)
+  })
+})
+
+describe('listDeviceProfiles 默认子进程（自带 Java，不依赖宿主安装）', () => {
+  const tempRoots: string[] = []
+
+  afterEach(async () => {
+    vi.unstubAllEnvs()
+    await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  })
+
+  const makeSdk = async (): Promise<{ sdkRoot: string; javaBin: string; envFile: string }> => {
+    const root = await mkdtemp(join(tmpdir(), 'msd-profile-java-'))
+    tempRoots.push(root)
+    const sdkRoot = join(root, 'SDK path with spaces')
+    const javaBin = join(sdkRoot, 'jre', 'Contents', 'Home', 'bin', 'java')
+    const envFile = join(sdkRoot, 'observed-environment.txt')
+    const avdmanager = avdmanagerPathFor(sdkRoot)
+    await mkdir(join(javaBin, '..'), { recursive: true })
+    await mkdir(join(avdmanager, '..'), { recursive: true })
+    await writeFile(
+      avdmanager,
+      '#!/bin/sh\n[ "$1" = list ] && [ "$2" = device ] || exit 23\nexec "$JAVA_HOME/bin/java"\n',
+      { mode: 0o755 }
+    )
+    await writeFile(
+      javaBin,
+      `#!/bin/sh\nprintf '%s\\n' "$JAVA_HOME" "$ANDROID_SDK_ROOT" "$ANDROID_HOME" "$ANDROID_USER_HOME" "$ANDROID_EMULATOR_HOME" "$ANDROID_AVD_HOME" > "$ANDROID_SDK_ROOT/observed-environment.txt"\nprintf '%s\\n' 'id: 43 or "pixel_8"' '    Name: Pixel 8' '    OEM : Google'\n`,
+      { mode: 0o755 }
+    )
+    return { sdkRoot, javaBin, envFile }
+  }
+
+  it.each([undefined, '/wrong/host-jdk'])(
+    'PATH 无 Java、宿主 JAVA_HOME=%s 时仍枚举，SDK 路径含空格',
+    async (hostJava) => {
+      const { sdkRoot, envFile } = await makeSdk()
+      vi.stubEnv('JAVA_HOME', hostJava)
+      vi.stubEnv('PATH', '/no-host-programs')
+      vi.stubEnv('ANDROID_USER_HOME', '/wrong/android-user')
+      vi.stubEnv('ANDROID_EMULATOR_HOME', '/wrong/emulator-home')
+      vi.stubEnv('ANDROID_AVD_HOME', '/wrong/avds')
+      const profiles = await listDeviceProfiles({
+        sdkRoot,
+        avdmanagerPath: avdmanagerPathFor(sdkRoot),
+        metaSource: () => PIXEL_8_META
+      })
+      expect(profiles).toHaveLength(1)
+      expect(profiles[0]).toMatchObject({ id: 'pixel_8', creatable: true, ramMiB: 7562 })
+      expect((await readFile(envFile, 'utf8')).trim().split('\n')).toEqual([
+        join(sdkRoot, 'jre', 'Contents', 'Home'),
+        sdkRoot,
+        sdkRoot,
+        join(sdkRoot, 'android-user'),
+        join(sdkRoot, 'android-user'),
+        join(sdkRoot, 'android-user', 'avd')
+      ])
+      expect(process.env.JAVA_HOME).toBe(hostJava)
+      expect(process.env.PATH).toBe('/no-host-programs')
+      expect(process.env.ANDROID_USER_HOME).toBe('/wrong/android-user')
+    }
+  )
+
+  it.each(['missing', 'not-executable'] as const)(
+    '自带 Java %s：明确提示修复 SDK/JRE，不能依赖宿主回退',
+    async (kind) => {
+      const { sdkRoot, javaBin, envFile } = await makeSdk()
+      if (kind === 'missing') await rm(javaBin)
+      else await chmod(javaBin, 0o644)
+      vi.stubEnv('JAVA_HOME', '/host-jdk')
+      await expect(
+        listDeviceProfiles({ sdkRoot, avdmanagerPath: avdmanagerPathFor(sdkRoot) })
+      ).rejects.toThrow(/SDK.*JRE.*修复/)
+      await expect(readFile(envFile)).rejects.toMatchObject({ code: 'ENOENT' })
+    }
+  )
+
+  it('自带 Java 执行失败：保留 stdout 中的错误原因，并提示修复 SDK/JRE', async () => {
+    const { sdkRoot, javaBin } = await makeSdk()
+    await writeFile(javaBin, '#!/bin/sh\nprintf "broken JRE runtime\\n"\nexit 17\n')
+    await expect(
+      listDeviceProfiles({ sdkRoot, avdmanagerPath: avdmanagerPathFor(sdkRoot) })
+    ).rejects.toThrow(/SDK.*JRE.*修复.*exit 17.*broken JRE runtime/)
   })
 })

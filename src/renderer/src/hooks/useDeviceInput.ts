@@ -309,6 +309,15 @@ export function useDeviceInput(params: DeviceInputParams): void {
       send({ kind: 'text', text: event.data, ime: false })
     }
 
+    const onPaste = (event: ClipboardEvent): void => {
+      // 代理只转发输入，不让浏览器把粘贴留在隐藏 input；暂停时也不排队。
+      event.preventDefault()
+      if (!enabledRef.current || composingRef.current) return
+      const text = event.clipboardData?.getData('text/plain')
+      if (!text) return
+      send({ kind: 'text', text, ime: true })
+    }
+
     const onCompositionStart = (): void => {
       composingRef.current = true
       discardCompositionRef.current = !enabledRef.current
@@ -325,12 +334,14 @@ export function useDeviceInput(params: DeviceInputParams): void {
     proxy.addEventListener('keydown', onKeyDown)
     proxy.addEventListener('keyup', onKeyUp)
     proxy.addEventListener('beforeinput', onBeforeInput)
+    proxy.addEventListener('paste', onPaste)
     proxy.addEventListener('compositionstart', onCompositionStart)
     proxy.addEventListener('compositionend', onCompositionEnd)
     return () => {
       proxy.removeEventListener('keydown', onKeyDown)
       proxy.removeEventListener('keyup', onKeyUp)
       proxy.removeEventListener('beforeinput', onBeforeInput)
+      proxy.removeEventListener('paste', onPaste)
       proxy.removeEventListener('compositionstart', onCompositionStart)
       proxy.removeEventListener('compositionend', onCompositionEnd)
     }

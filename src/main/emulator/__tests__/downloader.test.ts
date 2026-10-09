@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
+import { XMLParser } from 'fast-xml-parser'
 import {
   buildPackageXml,
   downloadImagePackage,
@@ -26,6 +27,24 @@ const TARGET = {
   abi: 'arm64-v8a',
   revision: { major: 4, minor: null, micro: null }
 }
+
+describe('直连镜像身份必须被官方工具识别', () => {
+  it('类型声明、ABI 列表和每个 tag 的显示名齐全；使用 sys-img schema', () => {
+    const xml = buildPackageXml({ ...TARGET, tagIds: ['google_apis_playstore', 'ps16k'] })
+    const parsed = new XMLParser({ ignoreAttributes: false }).parse(xml)
+    const repo = parsed['ns2:repository']
+    const details = repo.localPackage['type-details']
+    expect(repo['@_xmlns:xsi']).toBe('http://www.w3.org/2001/XMLSchema-instance')
+    expect(repo['@_xmlns:sysimg']).toBe('http://schemas.android.com/sdk/android/repo/sys-img2/05')
+    expect(details['@_xsi:type']).toBe('sysimg:sysImgDetailsType')
+    expect(details.abi).toBe(TARGET.abi)
+    expect(details.abis).toBe(TARGET.abi)
+    expect(details.tag).toEqual([
+      { id: 'google_apis_playstore', display: 'Google Play' },
+      { id: 'ps16k', display: 'ps16k' }
+    ])
+  })
+})
 
 /** 内存流 + 文件系统全注入的执行环境 */
 interface EnvState {
@@ -309,7 +328,9 @@ describe('review 修复回归（P1 写错误 / P2b 顺序）', () => {
 
   it('P2b：package.xml 的 localPackage 子元素顺序对齐官方 XSD sequence', () => {
     const xml = buildPackageXml(TARGET)
-    const order = [...xml.matchAll(/^\s+<(type-details|revision|display-name)>/gm)].map((m) => m[1])
+    const order = [...xml.matchAll(/^\s+<(type-details|revision|display-name)(?:\s[^>]*)?>/gm)].map(
+      (m) => m[1]
+    )
     expect(order).toEqual(['type-details', 'revision', 'display-name'])
     expect(xml).toContain(`path="${TARGET.packageName}"`)
   })

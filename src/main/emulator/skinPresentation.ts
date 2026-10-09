@@ -2,7 +2,7 @@ import { readFile, realpath, stat } from 'node:fs/promises'
 import { join, relative, isAbsolute } from 'node:path'
 import type { DeviceSkinPresentation } from '@shared/types'
 import { renderableArtFiles, scanImportedSkins, scanSdkSkins } from './skins'
-import { skinImageMime } from './skinSource'
+import { SkinImageBudget } from './skinImageLimits'
 
 export const readSkinPresentation = async (
   skinRef: string | null,
@@ -28,6 +28,7 @@ export const readSkinPresentation = async (
   const files = renderableArtFiles(record.layout)
   if (files.length === 0 || files.length > 32) throw new Error('皮肤没有可渲染的背景图片')
   let total = 0
+  const budget = new SkinImageBudget()
   const images: DeviceSkinPresentation['images'] = []
   for (const file of files) {
     if (!/^[\w.-]+$/.test(file)) throw new Error('皮肤素材引用越界')
@@ -42,7 +43,8 @@ export const readSkinPresentation = async (
     )
       throw new Error('皮肤素材越界或体积超限')
     const bytes = await readFile(path)
-    images.push({ file, url: `data:${skinImageMime(bytes)};base64,${bytes.toString('base64')}` })
+    const image = budget.add(file, bytes)
+    images.push({ file, url: `data:${image.mime};base64,${bytes.toString('base64')}` })
   }
   return {
     name: record.name,

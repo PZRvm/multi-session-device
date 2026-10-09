@@ -457,7 +457,8 @@ describe('EmulatorRunner 停止', () => {
     await tick()
     expect(events.unexpectedExit).toHaveBeenCalledWith('d1', expect.any(String), {
       code: 137,
-      stderrTail: ''
+      stderrTail: '',
+      stdoutTail: ''
     })
     expect(runner.phaseOf('d1')).toBeNull()
   })
@@ -545,14 +546,73 @@ describe('beforeStart 与退出清理交错（review 修复轮补充）', () => 
     })
     const start = runner.start('d1', '11111111-2222-3333-4444-555555555555')
     await tick()
+    const cancelled = expect(start).rejects.toBeInstanceOf(StartCancelledError)
     const disposing = runner.disposeAll()
     await tick(1)
-    await expect(start).rejects.toBeInstanceOf(StartCancelledError)
+    await cancelled
     const leftovers = await disposing
     expect(leftovers).toEqual([])
     release?.()
     await tick()
     expect(ensure).not.toHaveBeenCalled()
     expect(children).toHaveLength(0)
+  })
+})
+
+describe('boot 后恢复关卡', () => {
+  it('恢复完成前仍 starting，完成后才发布 running', async () => {
+    let release!: () => void
+    const afterBoot = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        })
+    )
+    const { runner, events } = makeRunner({ bootProbe: async () => true, afterBoot })
+    await runner.start('d1')
+    await tick()
+    expect(afterBoot).toHaveBeenCalledTimes(1)
+    expect(runner.phaseOf('d1')).toBe('starting')
+    expect(events.running).not.toHaveBeenCalled()
+    release()
+    await tick()
+    expect(events.running).toHaveBeenCalledTimes(1)
+  })
+  it('恢复等待期间可取消，迟到完成不发布 running', async () => {
+    let release!: () => void
+    const { runner, events } = makeRunner({
+      bootProbe: async () => true,
+      afterBoot: () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        })
+    })
+    await runner.start('d1')
+    await tick()
+    const cancelling = runner.cancelStart('d1')
+    await tick(1)
+    await cancelling
+    release()
+    await tick()
+    expect(events.running).not.toHaveBeenCalled()
+    expect(events.unexpectedExit).not.toHaveBeenCalled()
+    expect(runner.activeIds()).toEqual([])
+  })
+  it('恢复失败按启动失败收口并释放端口', async () => {
+    const { runner, events } = makeRunner({
+      bootProbe: async () => true,
+      afterBoot: async () => {
+        throw new Error('恢复失败')
+      }
+    })
+    await runner.start('d1')
+    await tick(1)
+    expect(events.running).not.toHaveBeenCalled()
+    expect(events.unexpectedExit).toHaveBeenCalledWith(
+      'd1',
+      expect.any(String),
+      expect.objectContaining({ stderrTail: '恢复失败' })
+    )
+    expect(runner.activeIds()).toEqual([])
   })
 })

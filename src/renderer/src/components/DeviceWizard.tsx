@@ -17,6 +17,7 @@ import ProfilePage from './wizard/ProfilePage'
 import ImageTable, { type ImageFilters } from './wizard/ImageTable'
 import SummaryPanel from './wizard/SummaryPanel'
 import SettingsForm from './wizard/SettingsForm'
+import { useWizardResources } from './wizard/useWizardResources'
 import { apiDisplay, formatSize, messageOf, serviceLabel } from './wizard/shared'
 
 /**
@@ -219,12 +220,21 @@ const DeviceWizard = ({
   }, [images.phase, uninstallingPackage])
 
   // 皮肤域：清单（导入/下载后刷新）、下载互斥与进度
-  const [skins, setSkins] = useState<Array<{ skinRef: string; name: string; source: string }>>([])
-  const [skinError, setSkinError] = useState<string | null>(null)
-  const [cameraBusy, setCameraBusy] = useState(false)
-  const [cameraError, setCameraError] = useState<string | null>(null)
-  const skinBusyRef = useRef(false)
-  const [skinDownloading, setSkinDownloading] = useState<string | null>(null)
+  const profileRef = useRef<DeviceProfile | null>(null)
+  // 供共用资源域回调取「当前画像」——渲染期不写 ref（react-hooks/refs），提交后同步
+  useEffect(() => {
+    profileRef.current = profile
+  }, [profile])
+  // 共用资源域（创建/编辑同源，plan 2026-10-08 设计 4）：枚举与错误在这里，
+  // 草稿仍由本组件持有；资源刷新不重置草稿
+  const resources = useWizardResources({
+    currentGeneration: () => capabilityGenerationRef.current,
+    onSkinAdded: (skinRef) => {
+      if (profileRef.current !== null) skinChoicesRef.current.set(profileRef.current.id, skinRef)
+      setAdvancedSettings((prev) => (prev === null ? prev : { ...prev, skinRef }))
+    },
+    disabled: data !== undefined
+  })
 
   // 首载：无注入数据时两份清单并发发起，成功失败各自接住，互不拖住
   useEffect(() => {
@@ -260,27 +270,17 @@ const DeviceWizard = ({
     })
   }, [data, reloadImages])
 
-  const reloadSkins = useCallback(async (): Promise<void> => {
-    try {
-      const list = data
-        ? [] // 注入场景（测试）不拉真实皮肤清单
-        : await window.api.sdk.deviceSkins()
-      setSkins(
-        list.map((skin) => ({ skinRef: skin.skinRef, name: skin.name, source: skin.source }))
-      )
-    } catch {
-      setSkins([])
-    }
-  }, [data])
-
   useEffect(() => {
-    // 装载动作走 async——列表落位在 promise 回调，不在 effect 内同步 setState
+    // 装载动作走 async——列表落位在 promise 回调，不在 effect 内同步 setState。
+    // 依赖用稳定的 reloadSkins 引用而非 resources 对象（其随 skins 状态刷新换
+    // 引用，入依赖会在 page 2 形成无限重拉循环）
     if (data === undefined && page === 2) {
       void (async () => {
-        await reloadSkins()
+        await resources.reloadSkins()
       })()
     }
-  }, [data, page, reloadSkins])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reloadSkins 是 useCallback([]) 稳定引用
+  }, [data, page, resources.reloadSkins])
 
   // 卸载已装镜像：原生确认框列后果 → main 守卫链（引用/互斥拒绝文案直接展示）
   // → 成功后重拉清单（选中镜像若被删，选择核验派生自动清空）
@@ -310,104 +310,9 @@ const DeviceWizard = ({
     }
   }
 
-  // 导入/下载成功后把新皮肤并入已加载能力（review P2-1：能力 effect 只随画像/
-  // 镜像重拉，陈旧 skinIds 会把本地校验卡死在「皮肤不在可用清单中」）——
-  // capabilityContextId 不变（画像×镜像×emulator 未变，仅运行时枚举扩容）
-  const absorbSkinIntoCapabilities = (skinRef: string): void => {
-    setCapabilities((prev) => {
-      if (prev.phase !== 'ready' || prev.data === null || prev.data.skinIds.includes(skinRef)) {
-        return prev
-      }
-      return {
-        ...prev,
-        data: {
-          ...prev.data,
-          skinIds: [...prev.data.skinIds, skinRef],
-          fields: {
-            ...prev.data.fields,
-            skinRef: { disabledReason: null, min: null, max: null, step: null }
-          }
-        }
-      }
-    })
-  }
-
-  const importSkin = async (): Promise<void> => {
-    if (skinBusyRef.current) return
-    skinBusyRef.current = true
-    const generation = capabilityGenerationRef.current
-    setSkinDownloading('导入')
-    setSkinError(null)
-    try {
-      const added = await window.api.sdk.chooseDeviceSkin()
-      // 用户取消选择器：null 哨兵静默早退，不当失败呈现
-      if (added === null) return
-      await reloadSkins()
-      if (generation !== capabilityGenerationRef.current) return
-      absorbSkinIntoCapabilities(added.skinRef)
-      if (profile !== null) skinChoicesRef.current.set(profile.id, added.skinRef)
-      setAdvancedSettings((prev) => (prev === null ? prev : { ...prev, skinRef: added.skinRef }))
-    } catch (error) {
-      if (generation === capabilityGenerationRef.current) setSkinError(messageOf(error))
-    } finally {
-      skinBusyRef.current = false
-      setSkinDownloading(null)
-    }
-  }
-
-  const downloadSkinByName = async (skinName: string): Promise<void> => {
-    if (skinBusyRef.current) return
-    skinBusyRef.current = true
-    const generation = capabilityGenerationRef.current
-    setSkinDownloading(skinName)
-    setSkinError(null)
-    try {
-      const added = await window.api.sdk.downloadDeviceSkin(skinName)
-      // 同意框取消：null 哨兵静默早退，不当失败呈现
-      if (added === null) return
-      await reloadSkins()
-      if (generation !== capabilityGenerationRef.current) return
-      absorbSkinIntoCapabilities(added.skinRef)
-      if (profile !== null) skinChoicesRef.current.set(profile.id, added.skinRef)
-      setAdvancedSettings((prev) => (prev === null ? prev : { ...prev, skinRef: added.skinRef }))
-    } catch (error) {
-      if (generation === capabilityGenerationRef.current) setSkinError(messageOf(error))
-    } finally {
-      skinBusyRef.current = false
-      setSkinDownloading(null)
-    }
-  }
-
-  const cameraAction = async (action: 'request' | 'refresh' | 'settings'): Promise<void> => {
-    if (cameraBusy) return
-    const generation = capabilityGenerationRef.current
-    setCameraBusy(true)
-    setCameraError(null)
-    try {
-      if (action === 'settings') {
-        await window.api.sdk.cameraSettings()
-        return
-      }
-      const snapshot = await window.api.sdk.cameraAccess(action === 'request')
-      if (generation !== capabilityGenerationRef.current) return
-      setCapabilities((prev) =>
-        prev.data === null
-          ? prev
-          : {
-              ...prev,
-              data: {
-                ...prev.data,
-                cameraSnapshot: snapshot,
-                webcamDeviceIds: snapshot.devices.map((camera) => camera.id)
-              }
-            }
-      )
-    } catch (error) {
-      if (generation === capabilityGenerationRef.current) setCameraError(messageOf(error))
-    } finally {
-      setCameraBusy(false)
-    }
-  }
+  // 导入/下载并入能力与摄像头刷新由共用资源域的 overlay 承担（useWizardResources）：
+  // mergeOverlay 把新增 skinIds / 最新 cameraSnapshot 并入能力——能力 effect 只随
+  // 画像×镜像重拉，资源扩容不重置草稿（review P2-1 口径不变）
 
   // 卸载终态订阅（重开向导由此解除恢复的卸载状态）：完成 → 清状态 + 重拉；
   // 失败 → 展示 main 文案。发起窗口自身也收（幂等：仅包名匹配时清理）
@@ -536,12 +441,16 @@ const DeviceWizard = ({
   const effectiveName = nameTouched ? name : defaultName
   // 完成门槛（plan 设计 3）：兼容 supported + 镜像完整安装 + 名称合法 + 清单就绪
   // + 无下载/创建事务。下载进度 100% 只是进度信号——重拉核验通过才算数
+  const effectiveCapabilities = useMemo(
+    () => resources.mergeOverlay(capabilities.data),
+    [capabilities.data, resources]
+  )
   const settingsCheck = useMemo(
     () =>
-      capabilities.data === null || advancedSettings === null
+      effectiveCapabilities === null || advancedSettings === null
         ? { settings: null, errors: {} as Record<string, string> }
-        : normalizeAdvancedSettings(advancedSettings, capabilities.data),
-    [capabilities.data, advancedSettings]
+        : normalizeAdvancedSettings(advancedSettings, effectiveCapabilities),
+    [effectiveCapabilities, advancedSettings]
   )
   const canCreate =
     effectiveName.trim().length > 0 &&
@@ -549,8 +458,8 @@ const DeviceWizard = ({
     selectedVerdict?.status === 'supported' &&
     images.phase === 'ready' &&
     downloading === null &&
-    skinDownloading === null &&
-    !cameraBusy &&
+    resources.skinDownloading === null &&
+    !resources.cameraBusy &&
     capabilities.phase === 'ready' &&
     Object.keys(settingsCheck.errors).length === 0
 
@@ -561,7 +470,7 @@ const DeviceWizard = ({
       !selectedImage ||
       !canCreate ||
       creatingRef.current ||
-      skinBusyRef.current
+      resources.skinDownloading !== null
     )
       return
     creatingRef.current = true
@@ -734,7 +643,7 @@ const DeviceWizard = ({
                 <SettingsHint>{capabilities.error}</SettingsHint>
               ) : capabilities.data !== null && advancedSettings !== null ? (
                 <SettingsForm
-                  capabilities={capabilities.data}
+                  capabilities={effectiveCapabilities ?? capabilities.data}
                   value={advancedSettings}
                   errors={settingsCheck.errors}
                   onChange={(next) => {
@@ -742,14 +651,14 @@ const DeviceWizard = ({
                       skinChoicesRef.current.set(selectedProfile.id, next.skinRef)
                     setAdvancedSettings(next)
                   }}
-                  skins={skins}
-                  onImportSkin={importSkin}
-                  onDownloadSkin={downloadSkinByName}
-                  skinDownloading={skinDownloading}
-                  skinError={skinError}
-                  cameraBusy={cameraBusy}
-                  cameraError={cameraError}
-                  onCameraAction={cameraAction}
+                  skins={resources.skins}
+                  onImportSkin={resources.importSkin}
+                  onDownloadSkin={resources.downloadSkinByName}
+                  skinDownloading={resources.skinDownloading}
+                  skinError={resources.skinError}
+                  cameraBusy={resources.cameraBusy}
+                  cameraError={resources.cameraError}
+                  onCameraAction={resources.cameraAction}
                 />
               ) : null}
             </SettingsPane>

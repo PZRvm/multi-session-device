@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { EventEmitter } from 'node:events'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import { AdbScrcpyOptionsLatest } from '@yume-chan/adb-scrcpy'
 import { ScrcpyInstanceId } from '@yume-chan/scrcpy'
@@ -65,7 +65,7 @@ const importManager = async (): Promise<Harness> => {
       scid: new ScrcpyInstanceId(1),
       audio: false,
       tunnelForward: true,
-      clipboardAutosync: false
+      clipboardAutosync: true
     })
     const transport: Transport = {
       scid: '00000001',
@@ -428,5 +428,291 @@ describe('ScrcpyManager（fake transport）', () => {
     await expect(retry({}, { id: 'd2', runId: 'stale' })).rejects.toThrow('代次过期')
     await retry({}, { id: 'd2', runId: 'r2' })
     await manager.destroyAll()
+  })
+
+  describe('设备控制回包（scrcpy 3.x 真实线格式）', () => {
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    const ackMessage = (sequence: bigint): Buffer => {
+      const message = Buffer.alloc(9)
+      message[0] = 1
+      message.writeBigUInt64BE(sequence, 1)
+      return message
+    }
+    const clipboardMessage = (text: string): Buffer => {
+      const content = Buffer.from(text, 'utf8')
+      const message = Buffer.alloc(5 + content.length)
+      message.writeUInt32BE(content.length, 1)
+      content.copy(message, 5)
+      return message
+    }
+    const flush = async (): Promise<void> => {
+      await vi.advanceTimersByTimeAsync(0)
+    }
+    const openClipboardView = async (
+      harness: Harness,
+      id: string,
+      serial: string
+    ): Promise<{
+      socket: FakeSocket
+      paste: (text?: string) => Promise<unknown>
+      sequence: () => bigint
+    }> => {
+      const runId = `${id}-run`
+      await harness.manager.ensureSession({ id, runId, serial })
+      await vi.waitFor(() => {
+        expect(
+          collect().states.some((state) => state.deviceId === id && state.status === 'ready')
+        ).toBe(true)
+      })
+      const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+      const ready = (await activate({}, { id, viewToken: `${id}-view` })) as ScreenStateMessage
+      const input = await handlerFor(IPC_CHANNELS.screenInput)
+      const socket = harness.transportOf(serial).controlSocket as unknown as FakeSocket
+      const paste = (text = '中文 😀 clipboard'): Promise<unknown> =>
+        input(
+          {},
+          {
+            deviceId: id,
+            runId,
+            streamId: ready.streamId,
+            generation: ready.generation,
+            viewToken: `${id}-view`,
+            width: 1080,
+            height: 2400,
+            input: { kind: 'text', text, ime: true }
+          }
+        )
+      const sequence = (): bigint => {
+        const packet = socket.written.findLast((message) => message[0] === 9)
+        if (!packet) throw new Error('SET_CLIPBOARD 未写入')
+        return Buffer.from(packet).readBigUInt64BE(1)
+      }
+      return { socket, paste, sequence }
+    }
+    const observe = (
+      pending: Promise<unknown>
+    ): { settled: ReturnType<typeof vi.fn>; result: Promise<unknown> } => {
+      const settled = vi.fn()
+      const result = pending.then(
+        (value) => {
+          settled()
+          return value
+        },
+        (error: Error) => {
+          settled()
+          return error
+        }
+      )
+      return { settled, result }
+    }
+
+    it('UTF-8 SET_CLIPBOARD 与逐字节 ACK 提前完成，未知/迟到 ACK 不误报', async () => {
+      const harness = await importManager()
+      try {
+        const view = await openClipboardView(harness, 'd1', 'emulator-5554')
+        view.socket.emit('data', ackMessage(99n))
+        await flush()
+        const text = '中文 😀 clipboard'
+        const pending = observe(view.paste(text))
+        await flush()
+        const packet = Buffer.from(view.socket.written.findLast((message) => message[0] === 9)!)
+        expect(packet.readUInt32BE(10)).toBe(Buffer.byteLength(text, 'utf8'))
+        expect(packet.subarray(14).toString('utf8')).toBe(text)
+        const sequence = view.sequence()
+        for (const byte of ackMessage(sequence)) {
+          view.socket.emit('data', Buffer.from([byte]))
+          await flush()
+        }
+        expect(pending.settled).toHaveBeenCalledOnce()
+        expect(await pending.result).toBeUndefined()
+        view.socket.emit('data', ackMessage(sequence))
+        await flush()
+        expect(collect().states.some((state) => state.status === 'error')).toBe(false)
+      } finally {
+        await harness.manager.destroyAll()
+      }
+    })
+
+    it('剪贴板同步与 ACK 分片/粘连正确消费，不覆盖宿主剪贴板', async () => {
+      const harness = await importManager()
+      try {
+        const view = await openClipboardView(harness, 'd1', 'emulator-5554')
+        const pending = observe(view.paste())
+        await flush()
+        const packet = Buffer.concat([
+          clipboardMessage('设备剪贴板 😀'),
+          ackMessage(view.sequence()),
+          clipboardMessage('second')
+        ])
+        view.socket.emit('data', packet.subarray(0, 3))
+        await flush()
+        expect(pending.settled).not.toHaveBeenCalled()
+        view.socket.emit('data', packet.subarray(3, 12))
+        await flush()
+        expect(pending.settled).not.toHaveBeenCalled()
+        view.socket.emit('data', packet.subarray(12))
+        await flush()
+        expect(pending.settled).toHaveBeenCalledOnce()
+        expect(await pending.result).toBeUndefined()
+        expect(collect().states.some((state) => state.status === 'error')).toBe(false)
+      } finally {
+        await harness.manager.destroyAll()
+      }
+    })
+
+    it('ACK 使用完整 64 位序列号，高 32 位碰巧相同不能匹配', async () => {
+      const harness = await importManager()
+      try {
+        const view = await openClipboardView(harness, 'd1', 'emulator-5554')
+        const pending = observe(view.paste())
+        await flush()
+        const sequence = view.sequence()
+        view.socket.emit('data', ackMessage((sequence << 32n) | 0xdeadn))
+        await flush()
+        expect(pending.settled).not.toHaveBeenCalled()
+        view.socket.emit('data', ackMessage(sequence))
+        await flush()
+        expect(pending.settled).toHaveBeenCalledOnce()
+        expect(await pending.result).toBeUndefined()
+      } finally {
+        await harness.manager.destroyAll()
+      }
+    })
+
+    it('两会话相同序列号仍隔离，切换不让另一 socket 结算旧请求', async () => {
+      const harness = await importManager()
+      try {
+        const first = await openClipboardView(harness, 'd1', 'emulator-5554')
+        const firstPending = observe(first.paste())
+        await flush()
+        const second = await openClipboardView(harness, 'd2', 'emulator-5556')
+        const secondPending = observe(second.paste())
+        await flush()
+        expect(first.sequence()).toBe(second.sequence())
+        second.socket.emit('data', ackMessage(second.sequence()))
+        await flush()
+        expect(secondPending.settled).toHaveBeenCalledOnce()
+        expect(firstPending.settled).not.toHaveBeenCalled()
+        first.socket.emit('data', ackMessage(first.sequence()))
+        await flush()
+        expect(firstPending.settled).toHaveBeenCalledOnce()
+        expect(await firstPending.result).toBeUndefined()
+        expect(await secondPending.result).toBeUndefined()
+      } finally {
+        await harness.manager.destroyAll()
+      }
+    })
+
+    it.each(['close', 'end', 'socket-error', 'stop'] as const)(
+      '%s 立即拒绝等待中的粘贴，取消宽限计时器',
+      async (mode) => {
+        const harness = await importManager()
+        try {
+          const view = await openClipboardView(harness, 'd1', 'emulator-5554')
+          const pending = observe(view.paste())
+          await flush()
+          if (mode === 'stop') await harness.manager.destroySession('d1')
+          else if (mode === 'socket-error') view.socket.emit('error', new Error('connection reset'))
+          else view.socket.emit(mode)
+          await flush()
+          expect(pending.settled).toHaveBeenCalledOnce()
+          expect(await pending.result).toBeInstanceOf(Error)
+          expect(harness.manager.activeDeviceId()).toBeNull()
+          if (mode !== 'stop')
+            expect(collect().states.some((state) => state.status === 'error')).toBe(true)
+          const count = pending.settled.mock.calls.length
+          await vi.advanceTimersByTimeAsync(2000)
+          expect(pending.settled).toHaveBeenCalledTimes(count)
+        } finally {
+          await harness.manager.destroyAll()
+        }
+      }
+    )
+
+    it.each(['unknown-type', 'oversize-message', 'oversize-buffer'] as const)(
+      '%s 失败清理并拒绝 pending，而不等待超时',
+      async (mode) => {
+        const harness = await importManager()
+        try {
+          const view = await openClipboardView(harness, 'd1', 'emulator-5554')
+          const pending = observe(view.paste())
+          await flush()
+          let payload: Buffer
+          if (mode === 'unknown-type') payload = Buffer.from([255])
+          else if (mode === 'oversize-message') {
+            payload = Buffer.alloc(5)
+            payload.writeUInt32BE(1024 * 1024 + 1, 1)
+          } else payload = Buffer.alloc(2 * 1024 * 1024 + 1)
+          view.socket.emit('data', payload)
+          await flush()
+          expect(pending.settled).toHaveBeenCalledOnce()
+          expect(await pending.result).toBeInstanceOf(Error)
+          expect(collect().states.some((state) => state.status === 'error')).toBe(true)
+          expect(harness.manager.activeDeviceId()).toBeNull()
+        } finally {
+          await harness.manager.destroyAll()
+        }
+      }
+    )
+
+    it('无 ACK 时等足 2 秒后按已派发收口，迟到 ACK 不重复结算', async () => {
+      const harness = await importManager()
+      try {
+        const view = await openClipboardView(harness, 'd1', 'emulator-5554')
+        const pending = observe(view.paste())
+        await flush()
+        await vi.advanceTimersByTimeAsync(1999)
+        expect(pending.settled).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(1)
+        expect(pending.settled).toHaveBeenCalledOnce()
+        expect(await pending.result).toBeUndefined()
+        view.socket.emit('data', ackMessage(view.sequence()))
+        await flush()
+        expect(pending.settled).toHaveBeenCalledOnce()
+        expect(collect().states.some((state) => state.status === 'error')).toBe(false)
+      } finally {
+        await harness.manager.destroyAll()
+      }
+    })
+
+    it('64 次无 ACK 已派发占满库等待预算，第 65 次拒绝；迟到 ACK 释放一个位置', async () => {
+      const harness = await importManager()
+      try {
+        const view = await openClipboardView(harness, 'd1', 'emulator-5554')
+        let firstSequence = 0n
+        for (let index = 0; index < 64; index += 1) {
+          const pending = observe(view.paste(`unacked-${index}`))
+          await flush()
+          if (index === 0) firstSequence = view.sequence()
+          await vi.advanceTimersByTimeAsync(2000)
+          expect(await pending.result).toBeUndefined()
+          expect(pending.settled).toHaveBeenCalledOnce()
+        }
+        const writesBefore = view.socket.written.filter((message) => message[0] === 9).length
+        expect(writesBefore).toBe(64)
+        const overBudget = observe(view.paste('over-budget'))
+        await flush()
+        expect(overBudget.settled).toHaveBeenCalledOnce()
+        const rejection = await overBudget.result
+        expect(rejection).toBeInstanceOf(Error)
+        expect((rejection as Error).message).toContain('剪贴板确认积压')
+        expect(view.socket.written.filter((message) => message[0] === 9)).toHaveLength(writesBefore)
+
+        view.socket.emit('data', ackMessage(firstSequence))
+        await flush()
+        const resumed = observe(view.paste('resumed'))
+        await flush()
+        expect(view.socket.written.filter((message) => message[0] === 9)).toHaveLength(65)
+        view.socket.emit('data', ackMessage(view.sequence()))
+        await flush()
+        expect(await resumed.result).toBeUndefined()
+        expect(resumed.settled).toHaveBeenCalledOnce()
+        expect(collect().states.some((state) => state.status === 'error')).toBe(false)
+      } finally {
+        await harness.manager.destroyAll()
+      }
+    })
   })
 })

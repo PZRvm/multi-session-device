@@ -38,6 +38,7 @@ const renderPane = (overrides: Partial<Parameters<typeof DeviceListPane>[0]>): v
       onCopySerial={vi.fn()}
       onDelete={vi.fn()}
       onRename={vi.fn()}
+      onEdit={vi.fn()}
       {...overrides}
     />
   )
@@ -87,6 +88,7 @@ describe('DeviceListPane 空库文案（review P2-3/P3）', () => {
         onCopySerial={vi.fn()}
         onDelete={vi.fn()}
         onRename={vi.fn()}
+        onEdit={vi.fn()}
       />
     )
     expect(screen.getByText('Pixel test')).toBeTruthy()

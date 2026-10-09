@@ -116,3 +116,5 @@ created: 2026-10-08
 | P3 测试缺口 | 补：skin/sysdir symlink、相对 ..、根 symlink、镜像去重、symlinked-file、ini-too-large、package.xml 超限、EACCES、中途 abort、transient 排除、放弃轮、CAS、ack 复位、beforeStart 重取、disposeAll 打断 beforeStart、DeviceRow/ListPane/Placeholder 用例 |
 
 计划内已知不修（维持原案）：TOCTOU 尺寸预检与读之间的换大窗口已用读后复核收窄到字节级；review 轮 3 项既有自查 P3 中「重查放弃的增量合并」随放弃轮重构缓解（保留上一轮结果），「root 环境 EACCES 降级」维持条件断言口径，「弹窗前关窗重弹一次」随 seen 后置修复消除一侧（关窗重开仍按设计重弹未确认异常）。
+
+> 维持原案与缓解残余已并入 [待修问题清单](../../task/2026-10-09-待修问题清单.md)的决策项分组。

@@ -1,5 +1,5 @@
 ---
-description: 真机验收发现——直连下载自生成 package.xml 缺 xsi:type 声明，avdmanager 拒收导致下载→创建链路断裂（P1）；摄像头枚举 TCC 归属待查（P2）
+description: 直连 package.xml 的官方创建兼容性已修复并实测；Android 相机取景与签名版权限验收仍待完成
 tags: [real-machine, downloader, package-xml, avdmanager, tcc, acceptance]
 ---
 
@@ -24,3 +24,11 @@ tags: [real-machine, downloader, package-xml, avdmanager, tcc, acceptance]
 ## 绕行与验证 plan 的关系
 
 A1 皮肤项 UI 侧已过（导入成功、字段解锁、自动选中 `b32af0f9 (imported)`，截图在案）；创建断言以官方安装的 **API 32（AOSP default）** 绕行继续——皮肤 `skin.path` 与摄像头 `hw.camera.*` 的 config 落位验证不受 37.2 包问题影响。
+
+## 2026-10-09 P1 已修复
+
+buildPackageXml 补齐 xsi/sys-img2 命名空间、xsi:type、abis 及每个 tag 的 display，结构断言覆盖五要素。隔离 SDK 使用重新生成的 XML，真实官方 avdmanager 接受 API 32 default 包和原问题的 API 37.2 多 tag 包，均正常返回并写出 ini/AVD；原镜像 XML hash 不变。回归命令见[SDK 检查记录](2026-10-08-deprecated-skin-display-args.md)。P1 关闭，历史现场绕行记录保留。
+
+P2 的解析与本应用权限入口已由后续集成实现；Android 实际取景和签名版授权仍待验收，不能因创建问题关闭而关闭整篇遗留。
+
+> 待验收项已并入 [待修问题清单](../../task/2026-10-09-待修问题清单.md)；本文保留修复与验收历史。

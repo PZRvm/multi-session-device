@@ -47,6 +47,14 @@ beforeEach(async () => {
 })
 
 describe('store v1/v2 typed 读取', () => {
+  it('显式挖孔恢复请求跨重启保留，完成后移除；错误类型拒绝', async () => {
+    await writeDeviceMetas([v2Meta({ cutoutResetPending: true })])
+    expect((await readDeviceStore()).metas[0].cutoutResetPending).toBe(true)
+    await writeDeviceMetas([v2Meta()])
+    expect((await readDeviceStore()).metas[0].cutoutResetPending).toBeUndefined()
+    await writeStore({ version: 2, devices: [v2Meta({ cutoutResetPending: 'yes' as never })] })
+    expect((await readDeviceStore()).health.state).toBe('read-only')
+  })
   it('无文件（ENOENT）= 首次空库 ok，无写保护', async () => {
     const result = await readDeviceStore()
     expect(result.metas).toEqual([])

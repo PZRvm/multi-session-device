@@ -128,6 +128,9 @@ function firstInvalidV2Field(meta: Record<string, unknown>): string | null {
   if (meta.advancedSettings !== null && !isStoredAdvancedSettings(meta.advancedSettings)) {
     return 'advancedSettings'
   }
+  if (meta.cutoutResetPending !== undefined && typeof meta.cutoutResetPending !== 'boolean') {
+    return 'cutoutResetPending'
+  }
   if (
     meta.snapshotReadyAt !== null &&
     (typeof meta.snapshotReadyAt !== 'number' ||
@@ -190,6 +193,7 @@ const projectV2Meta = (meta: DeviceMeta): DeviceMeta => ({
         },
   advancedSettings: meta.advancedSettings === null ? null : projectSettings(meta.advancedSettings),
   snapshotReadyAt: meta.snapshotReadyAt ?? null,
+  ...(meta.cutoutResetPending === true ? { cutoutResetPending: true } : {}),
   createdAt: meta.createdAt
 })
 

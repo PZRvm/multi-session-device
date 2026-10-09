@@ -31,6 +31,8 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 | `notes/learn/` | 经验与教训，写码前后按 tags 检索，按月份归档 |
 | `notes/learn/2026-09/` | 归档于 notes/learn/，按月份分组 |
 | `notes/learn/2026-10/` | 归档于 notes/learn/，按月份分组 |
+| `notes/task/` | 任务跟踪与拆解的检查清单 |
+| `notes/think-report/` | 功能可行性调研：配置能力、候选方案、落地路径与待确认边界 |
 | `plans/` | 施工图：一个功能一篇，Phase 2 设计确认后落盘，agent 照着施工 |
 | `stage/` | 开发阶段：项目接下来走哪、每步做完没；人定阶段和步骤，勾选附一行结果（替代原 summary 机制） |
 | `think-report/` | 可行性调研报告：立项前的调研结论（本仓库自定义分类） |
@@ -104,14 +106,14 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-05-canvas-ready-before-layout.md](notes/issue/2026-10/2026-10-05-canvas-ready-before-layout.md) — 投屏 status 可先于 layout 就绪（format 与 ResizeObserver 的 containerSize 双异步入参有竞态窗口），期间画布槽 0×0 画面不可见且输入被几何拒收；屏幕休眠节流下窗口可拉长到秒级以上
 - [2026-10-05-console-token-escapes-avd-isolation.md](notes/issue/2026-10/2026-10-05-console-token-escapes-avd-isolation.md) — emulator 37.2.12 的 console token 恒读写宿主 ~/.emulator_console_auth_token，ANDROID_EMULATOR_HOME 重定向不覆盖——全新机器上首次启动会向宿主 home 写入新 token
 - [2026-10-05-device-store-read-error-as-empty.md](notes/issue/2026-10/2026-10-05-device-store-read-error-as-empty.md) — store v2 已保护坏 JSON 和未知版本，IO 错误、坏条目过滤及副作用前守卫仍缺，后续写入可能丢失原记录
-- [2026-10-05-forward-tunnel-control-read-silent.md](notes/issue/2026-10/2026-10-05-forward-tunnel-control-read-silent.md) — adb forward 隧道下 scrcpy 控制连接的 server→client 读方向在真机上静默——设备消息（剪贴板 ACK/同步推送）收不到，控制写方向正常
+- [2026-10-05-forward-tunnel-control-read-silent.md](notes/issue/2026-10/2026-10-05-forward-tunnel-control-read-silent.md) — 历史控制读侧零收包观察；2026-10-09 当前链路证实收到 ACK，协议字段及库 resolver 接线错误已修复
 - [2026-10-05-lint-baseline-unclean.md](notes/issue/2026-10/2026-10-05-lint-baseline-unclean.md) — npm run lint 存量 17 项未清（10 errors / 7 warnings）——react-hooks/set-state-in-effect 为主，集中在 DeviceCanvas 等既有效应
 - [2026-10-05-phone-avd-rotation-refused.md](notes/issue/2026-10/2026-10-05-phone-avd-rotation-refused.md) — 手办画像（pixel_8）的 AVD 在系统层拒绝一切旋转：settings user_rotation、emu rotate、虚拟加速度计、相机应用均不改画面方向；手机横屏的真机视觉验证待强制横屏应用或日常人工使用覆盖
 - [2026-10-05-wizard-download-no-tick-guard.md](notes/issue/2026-10/2026-10-05-wizard-download-no-tick-guard.md) — DeviceWizard download() 跨 tick 无互斥守卫——下载按钮是 disabled 行内的 span，jsdom 与极端竞速可穿透，两次并发 download 互相覆盖进度状态
 - [2026-10-06-download-cancel-review.md](notes/issue/2026-10/2026-10-06-download-cancel-review.md) — 下载取消分支 code review 发现——P1 两项（sha1 前取消检查点绕过清理域致 tmp 残留、空态提示被挤入第一轨）、P2 两项（互斥释放时序窗、解压取消真机缺口）、P3 两项（死代码、记录表述过强）
 - [2026-10-06-download-direct-review-findings.md](notes/issue/2026-10/2026-10-06-download-direct-review-findings.md) — 下载进度修复（fix/download-progress-zero）的 Phase 5 code review 发现——写流错误未监听可致 main 崩溃（P1）、.install-bak 可被清单扫描误读（P2）、自生成 package.xml 元素顺序与官方 XSD 不一致（P2）；按纪律只记录不修复
 - [2026-10-06-image-uninstall-review-findings.md](notes/issue/2026-10/2026-10-06-image-uninstall-review-findings.md) — 系统镜像删除功能 code review 发现——P1 卸载/下载互斥单向、P2 引用守卫 TOCTOU 与残留复核盲区，及 7 项 P3
-- [2026-10-06-real-machine-acceptance-findings.md](notes/issue/2026-10/2026-10-06-real-machine-acceptance-findings.md) — 真机验收发现——直连下载自生成 package.xml 缺 xsi:type 声明，avdmanager 拒收导致下载→创建链路断裂（P1）；摄像头枚举 TCC 归属待查（P2）
+- [2026-10-06-real-machine-acceptance-findings.md](notes/issue/2026-10/2026-10-06-real-machine-acceptance-findings.md) — 直连 package.xml 的官方创建兼容性已修复并实测；Android 相机取景与签名版权限验收仍待完成
 - [2026-10-06-skin-camera-integration-findings.md](notes/issue/2026-10/2026-10-06-skin-camera-integration-findings.md) — 皮肤和摄像头后续调研发现——37.2 webcam 输出不被旧正则解析；Pixel 7 屏幕偏移取错 part；横屏首布局被拒，rotation 单位测试也偏离官方格式
 - [2026-10-06-theme-no-cross-window-sync.md](notes/issue/2026-10/2026-10-06-theme-no-cross-window-sync.md) — 主窗切换主题不广播，已打开的向导窗页面外观不跟随——两窗各自只在 preload 时取一次初值（存量问题）
 - [2026-10-06-theme-persist-concurrent-tmp-clash.md](notes/issue/2026-10/2026-10-06-theme-persist-concurrent-tmp-clash.md) — theme.json 落盘的 tmp 文件名固定，两次快速切换的 persist 交错会互相覆盖 tmp——假失败日志且写入顺序无保证
@@ -125,7 +127,15 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-07-skin-camera-code-review-findings.md](notes/issue/2026-10/2026-10-07-skin-camera-code-review-findings.md) — 皮肤/摄像头集成（feature/wizard-category-settings 未提交轮）的 Phase 5 code review——无阻塞项；P3 三项（主动取消被当失败警示、无背景图皮肤可入库但投屏必报错、启动核验文案叠加），另含门禁复核与安全/几何核对结论
 - [2026-10-08-avd-reconciliation-code-review.md](notes/issue/2026-10/2026-10-08-avd-reconciliation-code-review.md) — 对账功能 code review 记录——四切片并行审查：6 项 P2（skin symlink 绕过判定、事务半成品误报弹窗、loadError 无消费、v1 id 校验不对称等）与约 18 项 P3，全部只记录不修复
 - [2026-10-08-avd-reconciliation-implementation-review.md](notes/issue/2026-10/2026-10-08-avd-reconciliation-implementation-review.md) — 持久化对账实现轮的自查记录——三项观察（重扫放弃时 availability 陈旧、root 环境下 EACCES 用例降级、弹窗前关窗会重弹一次），均按只记录不修复处理
-- [2026-10-08-device-commit-baseline-findings.md](notes/issue/2026-10/2026-10-08-device-commit-baseline-findings.md) — commitMetas 会投影其他创建中的临时行并遗漏 startedAt，可能留下无 AVD 记录及跳过 Quick 停止核验
+- [2026-10-08-deprecated-skin-display-args.md](notes/issue/2026-10/2026-10-08-deprecated-skin-display-args.md) — 已提供隔离 SDK 升级回归并在当前版本通过；-skin 的官方弃用风险继续监测
+- [2026-10-08-device-commit-baseline-findings.md](notes/issue/2026-10/2026-10-08-device-commit-baseline-findings.md) — 创建临时行被无关提交持久化与 startedAt 遗漏均已修复，2026-10-09 关闭
+- [2026-10-08-device-config-edit-audit.md](notes/issue/2026-10/2026-10-08-device-config-edit-audit.md) — 配置编辑审查发现恢复覆盖外部配置、目录 symlink 越界、全量旧值校验及 legacy 行为变化；黑屏另已修复
+- [2026-10-08-runner-test-unhandled-cancel-rejection.md](notes/issue/2026-10/2026-10-08-runner-test-unhandled-cancel-rejection.md) — runner.test.ts「disposeAll 打断挂起的 beforeStart」用例遗留一条 unhandled rejection（启动已取消），测试仍全绿但污染全量输出
+- [2026-10-08-skin-cutout-overlay-residue.md](notes/issue/2026-10/2026-10-08-skin-cutout-overlay-residue.md) — 皮肤不再改变安卓显示尺寸；历史挖孔残留可在编辑页明确请求恢复，隔离选择移除重启回归通过
+- [2026-10-09-config-mismatch-warning.md](notes/issue/2026-10/2026-10-09-config-mismatch-warning.md) — 配置偏差提示已支持逐项采用文件值；未采用时保存按表单同步差异，等价容量单位不再误报
+- [2026-10-09-config-safety-followup-audit.md](notes/issue/2026-10/2026-10-09-config-safety-followup-audit.md) — 复查确认创建临时行落盘、残留事务后改名误冻结、旧设备摄像头漏计和相机编号重排误拦截四项缺口
+- [2026-10-09-profiles-clean-machine-no-java.md](notes/issue/2026-10/2026-10-09-profiles-clean-machine-no-java.md) — profiles.ts 以宿主环境启动 avdmanager 未注入自带 JRE；从未装过 Java 的干净 Mac 上向导画像枚举失败，新建设备被挡在第一步，违背 PRD E 零依赖
+- [2026-10-09-remaining-fixes-review-findings.md](notes/issue/2026-10/2026-10-09-remaining-fixes-review-findings.md) — 五项修复 review 新发现：布局归零漏释放已有按下状态，控制写失败后关闭 parser 触发未观察 ACK rejection
 
 ### notes/learn/
 
@@ -176,6 +186,25 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-07-start-preparation-cancel-and-probe-deadline.md](notes/learn/2026-10/2026-10-07-start-preparation-cancel-and-probe-deadline.md) — ADB smart-socket 应按完整帧和总期限结束；启动准备需先登记，并在取消时丢弃迟到结果、释放预留
 - [2026-10-07-studio-skin-camera-runtime-contracts.md](notes/learn/2026-10/2026-10-07-studio-skin-camera-runtime-contracts.md) — 摄像头空清单先核对真实 CLI 格式；Studio 皮肤按固定提交获取，display part 和 quarter-turn 决定渲染及输入几何
 - [2026-10-08-avd-reconciliation-implementation-notes.md](notes/learn/2026-10/2026-10-08-avd-reconciliation-implementation-notes.md) — 持久化对账实现轮的四条硬经验——fake timers 与真实 fs 的共存法、clearAllMocks 的返回值泄漏、绝对路径段判逃逸、单飞 mock 的 resolver 时序
+- [2026-10-08-hook-container-deps-and-runtime-status-fixtures.md](notes/learn/2026-10/2026-10-08-hook-container-deps-and-runtime-status-fixtures.md) — 自定义 hook 的返回对象不能进 effect 依赖（枚举态每次换引用 → 无限重拉 OOM）；devices 域测试里 runtime 状态必须真实驱动，store fixture 塞 status 无效
+- [2026-10-08-opaque-skin-mask-black-screen.md](notes/learn/2026-10/2026-10-08-opaque-skin-mask-black-screen.md) — 启动完成却显示整块灰色时先对比设备截图与投屏；完全不透明的皮肤前景必须回退，不能误修 AVD
+- [2026-10-08-qvga-cutout-insets.md](notes/learn/2026-10/2026-10-08-qvga-cutout-insets.md) — 分辨率恢复后仍破版，要检查安卓残留的挖孔屏 overlay 与实际窗口 inset
+- [2026-10-08-skin-overrides-display-size.md](notes/learn/2026-10/2026-10-08-skin-overrides-display-size.md) — 无头模拟器也会从皮肤读取屏幕尺寸；小图标先对比配置、实际尺寸和密度
+- [2026-10-09-config-edit-safety.md](notes/learn/2026-10/2026-10-09-config-edit-safety.md) — 已有模拟器编辑只归一化差异，恢复必须同时比较配置与元数据；官方工具与真实安卓状态需要独立验收
+- [2026-10-09-devices-test-fixture-gotchas.md](notes/learn/2026-10/2026-10-09-devices-test-fixture-gotchas.md) — devices 域测试挂具的两个坑——双 freshDomain 的 handlerFor 取首个注册、mock start 固定 runId 与按代次隔离机制的映射失配
+- [2026-10-09-emulator-camera-arg-compat.md](notes/learn/2026-10/2026-10-09-emulator-camera-arg-compat.md) — emulator 虚拟场景只认 config 小写；创建和编辑共用映射，复现先保留原配置以免掩盖相机闪退
+- [2026-10-09-external-paste-event.md](notes/learn/2026-10/2026-10-09-external-paste-event.md) — 外部粘贴不会走 insertText 或 compositionend；隐藏输入代理必须显式处理 paste 并阻止默认插入
+- [2026-10-09-remaining-issue-fixes.md](notes/learn/2026-10/2026-10-09-remaining-issue-fixes.md) — 工具环境要显式注入、画布要区分流与布局就绪、scrcpy 回包要用与 writer 一致的解析器
+
+### notes/task/
+
+- [2026-10-09-待修问题清单.md](notes/task/2026-10-09-待修问题清单.md) — issue 全量核对后的未修问题盘点：两项 P2 输入与 ACK 缺口、设备库读取诊断、摄像头占用键、快照崩溃绕开等，供检查定优先级
+
+### notes/think-report/
+
+- [20261008104140-已有模拟器配置编辑.md](notes/think-report/20261008104140-已有模拟器配置编辑.md) — 已确认编辑名称与附加设置、固定内部存储和机型/API；停机保存、下次冷启动、保留数据，RAM 扩缩复用现有校验
+- [20261008112223-安卓模拟器节省空间与共享SDK.md](notes/think-report/20261008112223-安卓模拟器节省空间与共享SDK.md) — 优先共用官方 SDK 和系统镜像、保留独立 AVD；本机两套镜像无重合，第三方省盘收益未实测且需适配设备管理
+- [20261009022552-SDK共享检测与真机投屏.md](notes/think-report/20261009022552-SDK共享检测与真机投屏.md) — 设置项检测 Android Studio/SDK 并开放共享或自选路径（stage05 增强）；真机 USB/无线接入复用既有 scrcpy 投屏栈（stage06 新阶段）
 
 ### plans/
 
@@ -218,6 +247,16 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-07-skin-camera-integration.md](plans/2026-10-07-skin-camera-integration.md) — 接通真实皮肤投屏、兼容新版摄像头枚举与权限反馈，并按画像精确获取固定版本官方皮肤后缓存复用
 - [2026-10-07-skin-foreground-occlusion.md](plans/2026-10-07-skin-foreground-occlusion.md) — 按用户最新决定启用真实皮肤前景遮罩，让圆角和摄像头挖孔可以遮住视频
 - [2026-10-07-wizard-skin-choice-preservation.md](plans/2026-10-07-wizard-skin-choice-preservation.md) — 保留向导中明确的机型皮肤选择，避免切换镜像后的能力默认值覆盖通用外框或手选皮肤
+- [2026-10-08-device-config-edit.md](plans/2026-10-08-device-config-edit.md) — 已有 AVD 停机编辑名称与附加设置，复用创建表单；存储与机型/API 固定，配置和元数据以可恢复事务保存
+- [2026-10-08-opaque-skin-black-screen.md](plans/2026-10-08-opaque-skin-black-screen.md) — 两台已有设备的黑屏来自不透明皮肤遮罩；校验前景透明度并回退通用外框，随后审查配置编辑范围
+- [2026-10-08-qvga-cutout-repair.md](plans/2026-10-08-qvga-cutout-repair.md) — QVGA 的挖孔屏模拟占用顶部 136 像素，关闭该设备的错误 overlay 并验证重启保留
+- [2026-10-08-skin-native-display.md](plans/2026-10-08-skin-native-display.md) — 皮肤不能覆盖机型分辨率；修复 QVGA 图标过小，并移除画面顶部皮肤提示
+- [2026-10-09-config-mismatch-reconcile.md](plans/2026-10-09-config-mismatch-reconcile.md) — 编辑页逐项采用 config 值或在保存时用表单同步差异，语义解析容量单位并保留只读与事务边界
+- [2026-10-09-config-safety-followup-fixes.md](plans/2026-10-09-config-safety-followup-fixes.md) — 修复补充复查四项——创建临时行落盘、改名绕过残留事务清理、摄像头占用改启动时仲裁与虚拟场景回退
+- [2026-10-09-emulator-config-safety-fixes.md](plans/2026-10-09-emulator-config-safety-fixes.md) — 修复用户指定的前十四项配置安全、下载创建、编辑差异、摄像头并发、皮肤残留及文档问题
+- [2026-10-09-external-text-paste.md](plans/2026-10-09-external-text-paste.md) — 修复投屏输入代理缺少 paste 事件处理，支持从宿主复制纯文本并粘贴到当前模拟器
+- [2026-10-09-remaining-issue-fixes.md](plans/2026-10-09-remaining-issue-fixes.md) — 分五批修复画像枚举依赖宿主 Java、向导加载失败卡住、画布过早就绪、皮肤像素预算和剪贴板控制回包
+- [2026-10-09-virtual-scene-camera-edit.md](plans/2026-10-09-virtual-scene-camera-edit.md) — 修复编辑页写入 virtualScene 导致 Android 摄像头为零和相机闪退，并支持保存修正历史配置
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### stage/
@@ -227,6 +266,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [03-会话管理壳.md](stage/03-会话管理壳.md) — 交付纯前端会话管理壳：左右分栏 + 模拟器列表全量交互（新建/删除/重命名/状态/启停按钮），数据假、不接 Android
 - [04-模拟器对接.md](stage/04-模拟器对接.md) — 交付真模拟器全链路：SDK bootstrap 全量、PoC 过验收线（≥30fps/≤150ms）、向导接真 avdmanager、启停状态机、投屏触控物理键
 - [05-功能完善.md](stage/05-功能完善.md) — 交付一期收尾：日志面板、截屏/录屏/拖拽安装/剪贴板/断网、设置窗、并行与内存水位防线
+- [06-真机接入与投屏.md](stage/06-真机接入与投屏.md) — 真机接入——USB 与无线调试（扫描/配对/连接）接入现有设备列表与投屏，复用内置 scrcpy 栈，不引入 QtScrcpy
 - [README.md](stage/README.md) — stage 目录用法——项目开发阶段的里程碑跟踪：人定阶段，勾选带结果，agent 可勾选和建议
 
 ### think-report/
@@ -236,4 +276,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 154 documents -->
+<!-- 186 documents -->

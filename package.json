@@ -12,6 +12,7 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "test": "vitest run",
+    "test:emulator-config": "node scripts/check-emulator-config.mjs",
     "book:index": "node scripts/gen-book-index.mjs",
     "book:release-check": "node scripts/check-book-clean.mjs",
     "start": "electron-vite preview",

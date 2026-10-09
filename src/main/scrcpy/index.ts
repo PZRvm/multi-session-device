@@ -3,7 +3,12 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { connect as tcpConnect, type Socket } from 'node:net'
 import { app, ipcMain, type BrowserWindow, type WebContents } from 'electron'
-import { Consumable, WritableStream } from '@yume-chan/stream-extra'
+import {
+  BufferedReadableStream,
+  Consumable,
+  ReadableStream,
+  WritableStream
+} from '@yume-chan/stream-extra'
 import type { AndroidKeyCode, ScrcpyMediaStreamPacket } from '@yume-chan/scrcpy'
 import { h264ParseConfiguration, ScrcpyControlMessageWriter } from '@yume-chan/scrcpy'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
@@ -70,6 +75,7 @@ interface StreamSession {
   /** 方向锁定与旋转期间丢弃所有新输入 */
   rotating: boolean
   clipboardSequence: number
+  clipboardWrites: number
   clipboardAcks: Map<number, (ok: boolean) => void>
   /** 唯一清理 Promise（幂等） */
   cleanup: Promise<void> | null
@@ -135,39 +141,111 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
     )
   }
 
-  // ---- 控制 socket 读侧：设备消息（1=剪贴板 ACK；0=剪贴板同步，只消费不同步宿主）----
+  // ---- 控制读侧使用与 writer 同一份协议解析器；剪贴板同步只消费，不写宿主 ----
 
   const startControlReader = (session: StreamSession): void => {
     const transport = session.transport
     if (!transport) return
-    let buffer = Buffer.alloc(0)
-    transport.controlSocket.on('data', (chunk: Buffer) => {
-      buffer = Buffer.concat([buffer, chunk])
-      for (;;) {
-        if (buffer.length < 1) return
-        const type = buffer[0]
-        if (type === 1) {
-          if (buffer.length < 5) return
-          const sequence = buffer.readUInt32BE(1)
-          buffer = buffer.subarray(5)
-          session.clipboardAcks.get(sequence)?.(true)
-          session.clipboardAcks.delete(sequence)
-          continue
-        }
-        if (type === 0) {
-          if (buffer.length < 6) return
-          const length = buffer.readUInt32BE(2)
-          if (buffer.length < 6 + length) return
-          buffer = buffer.subarray(6 + length)
-          continue
-        }
-        session.state = 'error'
-        session.error = `控制流设备消息类型未知（${type}）`
-        sendState(session)
-        void destroySession(session.deviceId)
-        return
+    const socket = transport.controlSocket
+    const parsers = transport.options.deviceMessageParsers
+    let queuedBytes = 0
+    let messageBytes = 0
+    let settled = false
+    let controller: ReadableStreamDefaultController<Uint8Array>
+    const source = new ReadableStream<Uint8Array>({
+      start: (value) => {
+        controller = value
       }
     })
+    const buffered = new BufferedReadableStream(source)
+    const exact = {
+      get position(): number {
+        return buffered.position
+      },
+      async readExactly(length: number): Promise<Uint8Array> {
+        // 在协议库按声明长度分配内存前检查；同时约束粘连包/未完成分片的积压。
+        if (!Number.isSafeInteger(length) || length < 0 || messageBytes + length > 1024 * 1024) {
+          throw new Error('控制流设备消息超过 1 MiB 预算')
+        }
+        messageBytes += length
+        const value = await buffered.readExactly(length)
+        queuedBytes -= length
+        return value
+      }
+    }
+    const onData = (chunk: Buffer): void => {
+      queuedBytes += chunk.length
+      if (queuedBytes > 2 * 1024 * 1024) {
+        controller.error(new Error('控制流缓冲超过 2 MiB 预算'))
+        unlink()
+        return
+      }
+      controller.enqueue(chunk)
+    }
+    const onEnd = (): void => {
+      unlink()
+      controller.close()
+    }
+    const onError = (error: Error): void => {
+      unlink()
+      controller.error(error)
+    }
+    const unlink = (): void => {
+      socket.off('data', onData)
+      socket.off('end', onEnd)
+      socket.off('close', onEnd)
+      socket.off('error', onError)
+    }
+    const onAbort = (): void => {
+      unlink()
+      if (!settled) {
+        settled = true
+        parsers.close()
+      }
+      void buffered.cancel().catch(() => undefined)
+    }
+    socket.on('data', onData)
+    socket.on('end', onEnd)
+    socket.on('close', onEnd)
+    socket.on('error', onError)
+    session.abort.signal.addEventListener('abort', onAbort, { once: true })
+
+    // ClipboardStream 有背压；不消费会让后续 ACK 卡在同步消息后面。
+    const clipboardReader = transport.options.clipboard?.getReader()
+    if (clipboardReader) {
+      void (async () => {
+        try {
+          while (!(await clipboardReader.read()).done) {
+            // 丢弃设备剪贴板内容，保持现有单向粘贴行为。
+          }
+        } catch {
+          // 错误由控制读循环报告。
+        } finally {
+          clipboardReader.releaseLock()
+        }
+      })()
+    }
+    void (async () => {
+      try {
+        for (;;) {
+          messageBytes = 0
+          const id = (await exact.readExactly(1))[0]
+          await parsers.parse(id, exact)
+        }
+      } catch (error) {
+        if (session.abort.signal.aborted) return
+        settled = true
+        parsers.error(error)
+        session.state = 'error'
+        session.error = `控制流读取失败：${error instanceof Error ? error.message : String(error)}`
+        sendState(session)
+        await destroySession(session.deviceId)
+      } finally {
+        unlink()
+        session.abort.signal.removeEventListener('abort', onAbort)
+        await buffered.cancel().catch(() => undefined)
+      }
+    })()
   }
 
   const clipboardPaste = (session: StreamSession, content: string): Promise<void> =>
@@ -177,26 +255,32 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
         reject(new Error('控制通道不可用'))
         return
       }
-      const sequence = session.clipboardSequence + 1
-      session.clipboardSequence = sequence
-      // ACK 是快路径；forward 隧道下设备→client 的控制读侧可能静默（issue 在案），
-      // 超宽限即视为粘贴已派发（服务端执行在 ACK 之前），不把缺 ACK 当失败
-      const timer = setTimeout(() => {
-        session.clipboardAcks.delete(sequence)
-        resolve()
-      }, CLIPBOARD_ACK_TIMEOUT_MS)
-      session.clipboardAcks.set(sequence, () => {
+      // 库保留未确认序列号，超时降级后仍需限制数量，直到 ACK 或会话关闭。
+      if (session.clipboardWrites >= 64 || session.clipboardSequence >= Number.MAX_SAFE_INTEGER) {
+        reject(new Error('剪贴板确认积压，请重新连接设备后重试'))
+        return
+      }
+      const sequence = ++session.clipboardSequence
+      session.clipboardWrites += 1
+      const finish = (ok: boolean, error?: unknown): void => {
+        if (!session.clipboardAcks.delete(sequence)) return
         clearTimeout(timer)
-        // ACK 只表示协议确认，不证明被测控件接受了粘贴
-        resolve()
-      })
-      writer
-        .setClipboard({ content, paste: true, sequence: BigInt(sequence) })
-        .catch((error: unknown) => {
-          clearTimeout(timer)
-          session.clipboardAcks.delete(sequence)
-          reject(error instanceof Error ? error : new Error(String(error)))
-        })
+        if (ok) resolve()
+        else reject(error instanceof Error ? error : new Error('剪贴板控制通道已关闭'))
+      }
+      // 缺 ACK 时保留既有派发降级；确认仅代表服务端收到，不证明控件接受粘贴。
+      const timer = setTimeout(() => finish(true), CLIPBOARD_ACK_TIMEOUT_MS)
+      session.clipboardAcks.set(sequence, (ok) => finish(ok))
+      writer.setClipboard({ content, paste: true, sequence: BigInt(sequence) }).then(
+        () => {
+          session.clipboardWrites -= 1
+          finish(true)
+        },
+        (error: unknown) => {
+          session.clipboardWrites -= 1
+          finish(false, error)
+        }
+      )
     })
 
   // ---- 发送与重同步 ----
@@ -393,7 +477,7 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
     session.abort.abort()
     if (active?.deviceId === session.deviceId) active = null
     try {
-      session.writer?.close()
+      void session.writer?.close().catch(() => undefined)
     } catch {
       // 已断
     }
@@ -450,6 +534,7 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
       pressedKeys: new Set(),
       rotating: false,
       clipboardSequence: 0,
+      clipboardWrites: 0,
       clipboardAcks: new Map(),
       cleanup: null
     }

@@ -21,6 +21,8 @@ type DeviceListPaneProps = {
   onCopySerial: (id: string) => void
   onDelete: (device: Device) => void
   onRename: (id: string, name: string) => void
+  /** 打开配置编辑窗（运行中也可查看） */
+  onEdit: (id: string) => void
   onRenameBlocked?: () => void
 }
 
@@ -40,6 +42,7 @@ const DeviceListPane = ({
   onCopySerial,
   onDelete,
   onRename,
+  onEdit,
   onRenameBlocked
 }: DeviceListPaneProps): React.JSX.Element => (
   <Wrapper>
@@ -77,6 +80,7 @@ const DeviceListPane = ({
             onCopySerial={() => onCopySerial(device.id)}
             onDelete={() => onDelete(device)}
             onRename={(name) => onRename(device.id, name)}
+            onEdit={() => onEdit(device.id)}
             onRenameBlocked={onRenameBlocked}
           />
         ))}

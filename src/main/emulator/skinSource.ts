@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import catalog from './skinSources.json'
+import { inspectSkinImage, SkinImageBudget } from './skinImageLimits'
 import {
   importedSkinsRoot,
   parseSkinLayout,
@@ -19,15 +20,8 @@ const TOTAL_LIMIT = 64 * 1024 * 1024
 export const gitBlobId = (bytes: Buffer): string =>
   createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex')
 
-/** 不以扩展名信任图片；完整解码由 renderer 完成，失败显示诊断。 */
-export const skinImageMime = (bytes: Buffer): string => {
-  if (bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])))
-    return 'image/png'
-  if (bytes.subarray(0, 3).equals(Buffer.from([255, 216, 255]))) return 'image/jpeg'
-  if (bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP')
-    return 'image/webp'
-  throw new Error('皮肤图片格式不受支持或文件损坏')
-}
+/** Header metadata and limits are verified before renderer decoding. */
+export const skinImageMime = (bytes: Buffer): string => inspectSkinImage(bytes).mime
 
 const boundedFetch = async (url: string): Promise<string> => {
   const response = await fetch(url, { signal: AbortSignal.timeout(30_000) })
@@ -89,14 +83,21 @@ const acquireSkin = async (
         await readFile(join(record.directory, 'BLOBS.json'), 'utf8')
       ) as Record<string, string>
       const needed = ['layout', ...record.layout.imageAssets]
-      if (
-        needed.every((file) => /^[\w.-]+$/.test(file)) &&
-        (await Promise.all(
-          needed.map(
-            async (file) => gitBlobId(await readFile(join(record.directory, file))) === blobs[file]
-          )
-        ).then((valid) => valid.every(Boolean)))
-      ) {
+      const budget = new SkinImageBudget()
+      let valid = needed.every((file) => /^[\w.-]+$/.test(file))
+      for (const file of needed) {
+        if (!valid || (await stat(join(record.directory, file))).size > FILE_LIMIT) {
+          valid = false
+          break
+        }
+        const bytes = await readFile(join(record.directory, file))
+        if (gitBlobId(bytes) !== blobs[file]) {
+          valid = false
+          break
+        }
+        if (file !== 'layout') budget.add(file, bytes)
+      }
+      if (valid) {
         progress(100)
         return record
       }
@@ -155,9 +156,10 @@ const acquireSkin = async (
   try {
     await writeFile(join(staging, 'layout'), layoutBytes)
     const blobs: Record<string, string> = { layout: entries.get('layout')! }
+    const budget = new SkinImageBudget()
     for (const [index, file] of layout.imageAssets.entries()) {
       const bytes = await load(file)
-      skinImageMime(bytes)
+      budget.add(file, bytes)
       await writeFile(join(staging, file), bytes)
       blobs[file] = entries.get(file)!
       progress(10 + Math.floor((80 * (index + 1)) / layout.imageAssets.length))

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, RotateCcw } from 'lucide-react'
 import styled from 'styled-components'
 import type {
@@ -32,6 +32,21 @@ type DeviceCanvasProps = {
   onStop: () => Promise<void>
 }
 
+/** 前景必须留出可见像素；不透明的测试素材会把整个视频盖住。 */
+const assertTransparentSkinMask = (image: HTMLImageElement): void => {
+  const sample = document.createElement('canvas')
+  sample.width = Math.min(image.naturalWidth, 64)
+  sample.height = Math.min(image.naturalHeight, 64)
+  const context = sample.getContext('2d')
+  if (!context) throw new Error('无法检查皮肤前景遮罩透明度')
+  context.drawImage(image, 0, 0, sample.width, sample.height)
+  const { data } = context.getImageData(0, 0, sample.width, sample.height)
+  for (let index = 3; index < data.length; index += 4) {
+    if (data[index] < 255) return
+  }
+  throw new Error('皮肤前景遮罩完全不透明，会遮住设备画面')
+}
+
 /** 右栏画面区：主题工作台 + 设备外框 + 等比居中 canvas + 状态覆盖层 + 物理键工具条 */
 const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element => {
   const { canvasRef, status, format, error, onGenerationChange, screenRef, retry, paintsRef } =
@@ -55,23 +70,31 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
   }, [])
   // 布局是容器尺寸 × 视频格式 × 设备类别的纯派生，不再用 state + effect 级联
   const [skin, setSkin] = useState<DeviceSkinPresentation | null>(null)
-  const [skinError, setSkinError] = useState<string | null>(null)
   useEffect(() => {
     let active = true
     void (async () => {
       setSkin(null)
-      setSkinError(null)
       if (!device.advancedSettings?.skinRef) return
       try {
         const result = await window.api.sdk.deviceSkinPresentation(device.id)
         if (!result) throw new Error('已选皮肤不可用')
+        const masks = new Set([result.portrait?.foregroundMask, result.landscape?.foregroundMask])
         await Promise.all(
           result.images.map(
             (asset) =>
               new Promise<void>((resolve, reject) => {
                 const image = new Image()
-                image.onload = () =>
-                  image.naturalWidth > 0 ? resolve() : reject(new Error('皮肤图片尺寸无效'))
+                image.onload = () => {
+                  try {
+                    if (image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+                      throw new Error('皮肤图片尺寸无效')
+                    }
+                    if (masks.has(asset.file)) assertTransparentSkinMask(image)
+                    resolve()
+                  } catch (error) {
+                    reject(error)
+                  }
+                }
                 image.onerror = () => reject(new Error(`皮肤图片损坏：${asset.file}`))
                 image.src = asset.url
               })
@@ -79,7 +102,7 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
         )
         if (active) setSkin(result)
       } catch (error) {
-        if (active) setSkinError(error instanceof Error ? error.message : String(error))
+        if (active) console.warn('[DeviceCanvas] 皮肤不可用，使用通用外框', error)
       }
     })()
     return () => {
@@ -113,13 +136,39 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
     layoutRef.current = layout
   }, [layout])
 
-  // 容器尺寸观测：换行/拖窄/旋转都重算布局
-  useEffect(() => {
+  // 首帧同步量内容区域，观察者只负责后续变化，避免已连接却仍是零尺寸。
+  useLayoutEffect(() => {
     const stage = stageRef.current
     if (!stage) return
+    const update = (width: number, height: number): void => {
+      setContainerSize((previous) =>
+        previous.width === width && previous.height === height ? previous : { width, height }
+      )
+    }
+    const rect = stage.getBoundingClientRect()
+    const style = window.getComputedStyle(stage)
+    const pixels = (value: string): number => Number.parseFloat(value) || 0
+    update(
+      Math.max(
+        0,
+        rect.width -
+          pixels(style.borderLeftWidth) -
+          pixels(style.borderRightWidth) -
+          pixels(style.paddingLeft) -
+          pixels(style.paddingRight)
+      ),
+      Math.max(
+        0,
+        rect.height -
+          pixels(style.borderTopWidth) -
+          pixels(style.borderBottomWidth) -
+          pixels(style.paddingTop) -
+          pixels(style.paddingBottom)
+      )
+    )
     const observer = new ResizeObserver((entries) => {
       const rect = entries[0].contentRect
-      setContainerSize({ width: rect.width, height: rect.height })
+      update(rect.width, rect.height)
     })
     observer.observe(stage)
     return () => observer.disconnect()
@@ -189,12 +238,14 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
     }
   }
 
+  const ready = status === 'ready' && layout !== null && layout.width > 0 && layout.height > 0
+
   useDeviceInput({
     canvasContainerRef: stageRef,
     inputProxyRef: proxyRef,
     screenRef,
     layoutRef,
-    enabled: status === 'ready' && !rotating && !stopping,
+    enabled: ready && !rotating && !stopping,
     onInputError: showInputError
   })
 
@@ -225,8 +276,6 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
       delete (window as unknown as Record<string, unknown>)['__msdCanvas']
     }
   }, [status, format, paintsRef])
-
-  const ready = status === 'ready' && format !== null
 
   return (
     <Wrapper>
@@ -297,7 +346,12 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
         </CanvasSlot>
         {!ready ? (
           <Overlay>
-            {status === 'connecting' ? (
+            {status === 'ready' ? (
+              <>
+                <Loader2 size={18} className="spin" />
+                <OverlayText>正在准备画面…</OverlayText>
+              </>
+            ) : status === 'connecting' ? (
               <>
                 <Loader2 size={18} className="spin" />
                 <OverlayText>{STATUS_TEXT.connecting}</OverlayText>
@@ -315,11 +369,6 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
               <OverlayText>{STATUS_TEXT.closed}</OverlayText>
             ) : null}
           </Overlay>
-        ) : null}
-        {skinError || (skin && layout && !layout.skin) ? (
-          <SkinNotice role="status">
-            {skinError ?? '皮肤与当前视频尺寸不匹配'}；暂用通用外框
-          </SkinNotice>
         ) : null}
         {inputError ? <InputError role="alert">{inputError}</InputError> : null}
         {/* 文本/键盘代理：画布聚焦时持有焦点，IME 组合在此发生 */}
@@ -375,15 +424,6 @@ const Stage = styled.div`
 const SkinShell = styled.div`
   position: absolute;
   pointer-events: none;
-`
-const SkinNotice = styled.p`
-  position: absolute;
-  top: 8px;
-  margin: 0;
-  max-width: 90%;
-  color: var(--board-ink-dim);
-  font-size: 11px;
-  background: var(--board-bg);
 `
 const FrameShell = styled.div<{ $frame: FrameRect }>`
   position: absolute;

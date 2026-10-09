@@ -83,6 +83,7 @@ const profilesCached = async (root: string): Promise<DeviceProfile[]> => {
     return profilesCache.profiles
   }
   const profiles = await listDeviceProfiles({
+    sdkRoot: root,
     avdmanagerPath: avdmanagerPathFor(root),
     jarPath: sdklibJarPathFor(root)
   })

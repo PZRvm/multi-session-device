@@ -271,6 +271,18 @@ describe('listAdbSerials', () => {
 })
 
 describe('runAdb', () => {
+  it('取消会终止宿主命令，已取消的请求不启动命令', async () => {
+    const early = new AbortController()
+    early.abort()
+    await expect(runAdb('/nonexistent/adb', [], { signal: early.signal })).rejects.toThrow('取消')
+    const controller = new AbortController()
+    const result = runAdb(process.execPath, ['-e', 'setInterval(() => {}, 10000)'], {
+      timeoutMs: 5000,
+      signal: controller.signal
+    })
+    setTimeout(() => controller.abort(), 20)
+    expect((await result).code).not.toBe(0)
+  })
   it('可执行文件不存在 → reject（不留悬挂 Promise）', async () => {
     await expect(runAdb('/nonexistent/adb', ['version'])).rejects.toThrow()
   })

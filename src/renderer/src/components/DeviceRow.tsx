@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Copy, Loader2, Play, Square, Trash2, X } from 'lucide-react'
+import { Copy, Loader2, Play, Settings2, Square, Trash2, X } from 'lucide-react'
 import styled from 'styled-components'
 import type { Device, DeviceAvailability, DeviceStatus } from '@shared/types'
 import Input from './Input'
@@ -49,6 +49,8 @@ type DeviceRowProps = {
   onCopySerial: () => void
   onDelete: () => void
   onRename: (name: string) => void
+  /** 打开配置编辑窗（运行中也可查看，保存要求停止） */
+  onEdit: () => void
   /** read-only 下尝试重命名（双击/F2）时的反馈入口（review P3——静默 no-op 无说明） */
   onRenameBlocked?: () => void
 }
@@ -68,6 +70,7 @@ const DeviceRow = ({
   onCopySerial,
   onDelete,
   onRename,
+  onEdit,
   onRenameBlocked
 }: DeviceRowProps): React.JSX.Element => {
   const [renaming, setRenaming] = useState(false)
@@ -172,6 +175,11 @@ const DeviceRow = ({
               {device.lastError.message}
             </ErrorLine>
           ) : null}
+          {device.cameraNotice ? (
+            <NoticeLine $selected={selected} title={device.cameraNotice}>
+              {device.cameraNotice}
+            </NoticeLine>
+          ) : null}
         </TextBlock>
       )}
       {/* 行尾动作区整体拦停冒泡，行点击/双击不因误触按钮触发 */}
@@ -241,6 +249,19 @@ const DeviceRow = ({
             </IconButton>
           </>
         ) : null}
+        <IconButton
+          type="button"
+          aria-label={`编辑配置 ${device.name}`}
+          title={
+            device.status === 'creating' || device.status === 'deleting'
+              ? '设备事务进行中，暂不能编辑配置'
+              : '编辑配置（保存前需停止模拟器）'
+          }
+          disabled={device.status === 'creating' || device.status === 'deleting'}
+          onClick={onEdit}
+        >
+          <Settings2 size={14} />
+        </IconButton>
         <IconButton
           type="button"
           aria-label={`删除 ${device.name}`}
@@ -373,6 +394,23 @@ const ErrorLine = styled.span<{ $selected: boolean }>`
 
 /** 健康原因行（对账）：独立于 lastError 的文件健康提示 */
 const HealthLine = styled.span<{ $selected: boolean }>`
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--board-ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  ${({ $selected }) =>
+    $selected &&
+    `
+      color: inherit;
+      opacity: 0.78;
+    `}
+`
+
+/** 摄像头回退说明（启动仲裁命中）：运行会话内提示，停止即清除 */
+const NoticeLine = styled.span<{ $selected: boolean }>`
   font-size: 11px;
   line-height: 1.4;
   color: var(--board-ink-dim);

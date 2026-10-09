@@ -6,12 +6,10 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { downloadSkin, gitBlobId, officialSkinName, skinImageMime } from '../skinSource'
 import { readSkinPresentation } from '../skinPresentation'
+import { pngImage } from './skinImageFixture'
 
 const layout = readFileSync(join(__dirname, 'fixtures/skins/pixel_7-layout'))
-const png = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aSXsAAAAASUVORK5CYII=',
-  'base64'
-)
+const png = pngImage()
 const resources = new Map([
   ['layout', layout],
   ['back.webp', png],
@@ -110,5 +108,39 @@ describe('固定官方来源获取', () => {
     await symlink(external, join(record.directory, 'back.webp'))
     await expect(readSkinPresentation(record.skinRef, '/missing', root)).rejects.toThrow('越界')
     expect(() => skinImageMime(Buffer.from('<svg/>'))).toThrow('格式')
+  })
+})
+
+describe('解码前像素预算', () => {
+  it('官方获取在入库前拒绝小文件大尺寸，清理 staging', async () => {
+    const root = await temporary()
+    const huge = pngImage(8193, 1)
+    const forgedFetch = async (url: string): Promise<string> => {
+      if (url.endsWith('format=JSON'))
+        return JSON.stringify({
+          entries: [...resources].map(([name, bytes]) => ({
+            name,
+            type: 'blob',
+            id: gitBlobId(name === 'back.webp' ? huge : bytes)
+          }))
+        })
+      return url.includes('back.webp') ? huge.toString('base64') : fetchText(url)
+    }
+    await expect(
+      downloadSkin('pixel_7', root, () => {}, { fetchText: forgedFetch, studioRoot: '/missing' })
+    ).rejects.toThrow(/back.webp.*8193/)
+    expect(await readdir(join(root, 'device-skins-staging'))).toEqual([])
+    await expect(readdir(join(root, 'device-skins'))).rejects.toThrow()
+  })
+  it('既有皮肤被外部替换为大尺寸时拒绝 presentation', async () => {
+    const root = await temporary()
+    const record = await downloadSkin('pixel_7', root, () => {}, {
+      fetchText,
+      studioRoot: '/missing'
+    })
+    await writeFile(join(record.directory, 'back.webp'), pngImage(4097, 4096))
+    await expect(readSkinPresentation(record.skinRef, '/missing', root)).rejects.toThrow(
+      /back.webp.*4097.*4096/
+    )
   })
 })

@@ -107,6 +107,8 @@ export interface DeviceMeta {
    * Quick Boot 恢复的前置条件（plan 设计 8）——设置变化后由 main 重置。
    */
   snapshotReadyAt: number | null
+  /** 用户明确请求恢复默认挖孔；下次冷启动执行，成功后移除此标记 */
+  cutoutResetPending?: boolean
   createdAt: number
 }
 
@@ -223,6 +225,11 @@ export interface Device extends DeviceMeta {
   status: DeviceStatus
   /** 最近一次运行/命令失败；下次命令成功接纳时清除 */
   lastError?: DeviceError
+  /**
+   * 本次启动的摄像头回退说明（仅内存不入盘）：启动仲裁命中冲突或死绑定时，
+   * 该槽位以虚拟场景运行；停止/取消/意外退出清除。
+   */
+  cameraNotice?: string
   /** 运行实例的 adb serial（emulator-<console 端口>）；starting/running 发布，停止清空 */
   serial?: string
   /** 本次启动代次——取消与迟到 boot/退出回调用它防串台 */
@@ -323,6 +330,100 @@ export interface DeviceSkinSummary {
 export interface SdkSkinProgress {
   skinName: string
   percent: number
+}
+
+// ---- 设备配置编辑域（plan 2026-10-08-device-config-edit）----
+
+/** 向导窗口上下文：窗口创建时固定 create/edit，不静默切换已有窗口 */
+export type WizardContext = { kind: 'create' } | { kind: 'edit'; deviceId: string }
+
+/** 编辑回填字段的取值来源：界面据此说明，不假称实际生效值 */
+export type DeviceEditFieldSource = 'metadata' | 'config' | 'schema' | 'legacy' | 'unknown'
+
+/** 单个回填字段的说明（自动值/未知值/外部不一致时的中文提示） */
+export interface DeviceEditFieldNote {
+  source: DeviceEditFieldSource
+  /** null = 无异常；有值时编辑页逐字段提示 */
+  warning: string | null
+}
+
+/** 内部存储只读展示：已有设备一律不可改，值未知时 valueMiB=null（不以默认值冒充） */
+export interface DeviceEditStorageInfo {
+  valueMiB: number | null
+  note: string
+}
+
+/** 可参与文件偏差同步的设置；存储、ABI 与仅运行参数不在此列。 */
+export type DeviceConfigField =
+  | 'cpuCores'
+  | 'ramMiB'
+  | 'vmHeapMiB'
+  | 'graphics'
+  | 'frontCamera'
+  | 'rearCamera'
+  | 'orientation'
+  | 'skinRef'
+
+export interface DeviceConfigMismatch {
+  field: DeviceConfigField
+  actualLabel: string
+  /** 单字段的类型化配置值；null 表示无法可靠识别，不能采用。 */
+  actualSettings: UpdateDeviceSettings | null
+}
+
+/** 编辑快照（devices:read-config）：回填草稿 + 固定身份 + 能力 + 指纹；只读不落盘 */
+export interface DeviceEditSnapshot {
+  deviceId: string
+  /** 固定身份（机型/API/镜像只读展示，不接受修改） */
+  identity: {
+    name: string
+    profileId: string
+    profileLabel: string
+    imagePackageName: string
+    apiDisplay: string | null
+    formFactor: DeviceFormFactor
+  }
+  /** 回填草稿（编辑表单初值）；内部存储字段是只读占位，不进入更新提交 */
+  settings: DeviceAdvancedSettings | null
+  /** 旧配置无法无损表达时仅允许改名，不生成默认附加设置 */
+  settingsBlockedReason?: string | null
+  /** 字段来源与警告（键 = DeviceAdvancedSettings 字段名） */
+  fieldNotes: Record<string, DeviceEditFieldNote>
+  configMismatches?: DeviceConfigMismatch[]
+  internalStorage: DeviceEditStorageInfo
+  /** 按已存画像×镜像×emulator 生成的编辑能力（与创建同规则） */
+  capabilities: WizardCapabilities
+  /** 文件/事务/设备库保存阻断；运行态由 status 独立表达 */
+  saveBlockedReason: string | null
+  /** 运行态独立于文件/事务阻断；设备停止后实时解除 */
+  status?: DeviceStatus
+  /** 原配置字节 + 设备持久字段指纹；保存时带回复验（写前 CAS） */
+  fingerprint: string
+}
+
+/** 可写字段差异闭集——内部存储与应用 ABI 恒不可写，伪造载荷直接拒绝 */
+export interface UpdateDeviceSettings {
+  skinRef?: string | null
+  frontCamera?: CameraConfig
+  rearCamera?: CameraConfig
+  networkSpeed?: NetworkPreset | null
+  networkLatency?: NetworkPreset | null
+  orientation?: 'portrait' | 'landscape' | null
+  bootMode?: 'cold' | 'quick'
+  cpuCores?: number
+  graphics?: GpuMode
+  ramMiB?: number
+  vmHeapMiB?: number
+}
+
+/** 配置更新命令：仅名称与白名单字段差异；画像/镜像/存储/ABI/任意 config 键不接受 */
+export interface UpdateDeviceInput {
+  id: string
+  fingerprint: string
+  name?: string
+  advancedSettings?: UpdateDeviceSettings
+  /** 显式选择恢复 Android 默认挖孔，不从换肤动作推断用户意图 */
+  resetDisplayCutout?: boolean
 }
 
 // ---- 投屏与操控域（stage 04 步骤 5；scrcpy 3.3.3 + H.264 + adb forward 裸 TCP）----

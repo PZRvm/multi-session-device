@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process'
+import { constants } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { DeviceProfile } from '@shared/types'
 import {
@@ -18,35 +20,62 @@ import {
 export interface ProfileListDeps {
   /** 执行器接缝：默认 spawn avdmanager list device；单测注入固定输出 */
   runner?: (avdmanagerPath: string) => Promise<string>
+  /** 当前应用选择的托管 SDK；Java 与 Android 用户目录不从宿主环境猜测 */
+  sdkRoot: string
   avdmanagerPath: string
-  /** sdklib.core.jar 路径；缺省按 sdklibJarPathFor(avdmanagerPath 所在 SDK) 推导 */
+  /** sdklib.core.jar 路径；缺省按 sdklibJarPathFor(sdkRoot) 推导 */
   jarPath?: string
   /** 元数据读取接缝：默认 adm-zip 解包 JAR；单测注入已解析的 XML 文本 */
   metaSource?: (jarPath: string) => RawProfileMeta[]
 }
 
-const defaultRunner = (avdmanagerPath: string): Promise<string> =>
-  new Promise((resolve, reject) => {
+const defaultRunner = async (avdmanagerPath: string, sdkRoot: string): Promise<string> => {
+  const javaHome = join(sdkRoot, 'jre', 'Contents', 'Home')
+  const javaBin = join(javaHome, 'bin', 'java')
+  const androidUserHome = join(sdkRoot, 'android-user')
+  const repairHint = `设备画像查询失败：请检查当前 SDK 的自带 JRE，并重新引导或修复 SDK/JRE（${javaBin}）`
+  try {
+    await access(javaBin, constants.X_OK)
+  } catch (cause) {
+    throw new Error(`${repairHint}：${cause instanceof Error ? cause.message : String(cause)}`, {
+      cause
+    })
+  }
+  return new Promise((resolve, reject) => {
     const child = spawn(avdmanagerPath, ['list', 'device'], {
-      env: { ...process.env },
+      env: {
+        ...process.env,
+        JAVA_HOME: javaHome,
+        ANDROID_SDK_ROOT: sdkRoot,
+        ANDROID_HOME: sdkRoot,
+        ANDROID_USER_HOME: androidUserHome,
+        ANDROID_PREFS_ROOT: androidUserHome,
+        ANDROID_EMULATOR_HOME: androidUserHome,
+        ANDROID_AVD_HOME: join(androidUserHome, 'avd')
+      },
       stdio: ['ignore', 'pipe', 'pipe']
     })
     const out: Buffer[] = []
     const err: Buffer[] = []
     child.stdout?.on('data', (chunk: Buffer) => out.push(chunk))
     child.stderr?.on('data', (chunk: Buffer) => err.push(chunk))
-    child.on('error', reject)
+    child.on('error', (cause) => reject(new Error(`${repairHint}：${cause.message}`, { cause })))
     child.on('close', (code) => {
       if (code === 0) resolve(Buffer.concat(out).toString('utf8'))
       else {
+        const tail = [Buffer.concat(err).toString('utf8'), Buffer.concat(out).toString('utf8')]
+          .map((text) => text.trim())
+          .filter(Boolean)
+          .join('\n')
         reject(
           new Error(
-            `avdmanager list device 失败（exit ${code}）：${Buffer.concat(err).toString('utf8').slice(-400)}`
+            `${repairHint}；avdmanager list device 失败（exit ${code}）：${tail.slice(-400)}`
           )
         )
       }
     })
   })
+}
 
 /**
  * 解析 list device 输出为条目列表（不过滤 Tag——带 Tag 的 wear/tv/desktop/
@@ -72,10 +101,11 @@ export const avdmanagerPathFor = (sdkRoot: string): string =>
   join(sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager')
 
 export async function listDeviceProfiles(deps: ProfileListDeps): Promise<DeviceProfile[]> {
-  const output = await (deps.runner ?? defaultRunner)(deps.avdmanagerPath)
+  const output = deps.runner
+    ? await deps.runner(deps.avdmanagerPath)
+    : await defaultRunner(deps.avdmanagerPath, deps.sdkRoot)
   const avdEntries = parseAvdDeviceEntries(output)
-  const jarPath =
-    deps.jarPath ?? sdklibJarPathFor(join(deps.avdmanagerPath, '..', '..', '..', '..'))
+  const jarPath = deps.jarPath ?? sdklibJarPathFor(deps.sdkRoot)
   const metas = deps.metaSource ? deps.metaSource(jarPath) : readJarProfileMetas(jarPath)
   return mergeProfiles(avdEntries, metas)
 }

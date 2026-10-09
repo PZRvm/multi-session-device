@@ -41,6 +41,15 @@ export const IPC_CHANNELS = {
   screenInput: 'screen:input',
   wizardOpen: 'wizard:open',
   wizardClose: 'wizard:close',
+  // ---- 设备配置编辑域（plan 2026-10-08-device-config-edit）----
+  /** 主窗调：为指定设备开/聚焦编辑窗（上下文创建时固定，不静默切换已有窗） */
+  wizardOpenEditor: 'wizard:open-editor',
+  /** 向导窗自己调：读取本窗口固定的 create/edit 上下文 */
+  wizardContext: 'wizard:context',
+  /** 编辑窗读取配置快照（回填草稿；仅绑定该设备的编辑窗，只读） */
+  devicesReadConfig: 'devices:read-config',
+  /** 编辑窗提交名称/白名单字段差异（写前指纹复验 + 跨文件事务） */
+  devicesUpdateConfig: 'devices:update-config',
   // ---- SDK 域（stage 04 步骤 2 bootstrap；步骤 3 扩展镜像/画像通道）----
   sdkStatus: 'sdk:status',
   sdkBootstrap: 'sdk:bootstrap',

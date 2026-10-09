@@ -332,21 +332,27 @@ export const buildPackageXml = (target: DownloadTarget): string => {
       ]
     : ['    <revision>', '      <major>1</major>', '    </revision>']
   const tagBlocks = target.tagIds.map((tagId) =>
-    ['    <tag>', `      <id>${xmlEscape(tagId)}</id>`, '    </tag>'].join('\n')
+    [
+      '    <tag>',
+      `      <id>${xmlEscape(tagId)}</id>`,
+      `      <display>${xmlEscape(({ default: 'Default', google_apis: 'Google APIs', google_apis_playstore: 'Google Play' } as Record<string, string>)[tagId] ?? tagId)}</display>`,
+      '    </tag>'
+    ].join('\n')
   )
   // 元素顺序对齐官方 repo XSD 的 xs:sequence（type-details → revision →
   // display-name；本仓解析不敏感，但 avdmanager/Studio 等严格工具按序读——review P2）
   const lines = [
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-    '<ns2:repository xmlns:ns2="http://schemas.android.com/repository/android/common/02">',
+    '<ns2:repository xmlns:ns2="http://schemas.android.com/repository/android/common/02" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:sysimg="http://schemas.android.com/sdk/android/repo/sys-img2/05">',
     `  <localPackage path="${xmlEscape(target.packageName)}" obsolete="false">`,
-    '    <type-details>',
+    '    <type-details xsi:type="sysimg:sysImgDetailsType">',
     `      <api-level>${xmlEscape(target.apiLevelText)}</api-level>`,
     ...(target.extensionLevel !== null
       ? [`      <extension-level>${target.extensionLevel}</extension-level>`]
       : []),
     ...tagBlocks,
     `      <abi>${xmlEscape(target.abi)}</abi>`,
+    `      <abis>${xmlEscape(target.abi)}</abis>`,
     '    </type-details>',
     ...revisionLines,
     '    <display-name>' + xmlEscape(target.displayName) + '</display-name>',

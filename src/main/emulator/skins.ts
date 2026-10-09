@@ -3,6 +3,7 @@ import { join, resolve, dirname } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { DeviceSkinOrientation, SkinImagePart } from '@shared/types'
 import AdmZip from 'adm-zip'
+import { SkinImageBudget, SKIN_IMAGE_MAX_BYTES } from './skinImageLimits'
 
 /**
  * 机型皮肤域（plan 设计 6）：SDK 已装皮肤扫描、layout 解析、本地导入与
@@ -264,6 +265,7 @@ export const scanSdkSkins = async (
 export const importedSkinsRoot = (userData: string): string => join(userData, 'device-skins')
 
 export interface ImportedSkinDeps {
+  readImage?: (path: string) => Promise<Buffer>
   readFile?: (path: string) => Promise<string>
   readdir?: (dir: string) => Promise<string[]>
   stat?: (path: string) => Promise<{ isDirectory: () => boolean }>
@@ -274,6 +276,7 @@ export interface ImportedSkinDeps {
 }
 
 const defaultImportDeps: Required<ImportedSkinDeps> = {
+  readImage: (path) => readFile(path),
   readFile: (path) => readFile(path, 'utf8'),
   readdir: (dir) => readdir(dir),
   stat: async (path) => stat(path),
@@ -379,6 +382,14 @@ export const importSkinArchive = async (
       }
     }
     await assertSkinResourceLimits(skinDir, d)
+    const budget = new SkinImageBudget()
+    for (const asset of layout.imageAssets) {
+      const path = join(skinDir, asset)
+      const info = await d.stat(path)
+      if (info.isDirectory() || (info as { size?: number }).size! > SKIN_IMAGE_MAX_BYTES)
+        throw new Error(`素材 ${asset}：不是图片文件或体积超限`)
+      budget.add(asset, await d.readImage(path))
+    }
     const id = randomUUID()
     const name = `imported-${id.slice(0, 8)}`
     const target = join(importedSkinsRoot(userData), id)

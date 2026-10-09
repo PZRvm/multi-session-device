@@ -142,13 +142,18 @@ const STDERR_TAIL_BYTES = 4096
 export async function runAdb(
   adbPath: string,
   args: string[],
-  { timeoutMs = 10_000 } = {}
+  { timeoutMs = 10_000, signal }: { timeoutMs?: number; signal?: AbortSignal } = {}
 ): Promise<AdbRunResult> {
+  if (signal?.aborted) throw new Error('ADB 操作已取消')
   return new Promise<AdbRunResult>((resolve, reject) => {
     const child = spawn(adbPath, args, { env: scrubAdbEnv(process.env) })
     const out: Buffer[] = []
     const err: Buffer[] = []
     let settled = false
+    const abort = (): void => {
+      child.kill('SIGKILL')
+    }
+    signal?.addEventListener('abort', abort, { once: true })
     const timer =
       timeoutMs > 0
         ? setTimeout(() => {
@@ -168,10 +173,12 @@ export async function runAdb(
       if (!settled) err.push(chunk)
     })
     child.on('error', (error) => {
+      signal?.removeEventListener('abort', abort)
       if (timer) clearTimeout(timer)
       reject(error)
     })
     child.on('close', (code) => {
+      signal?.removeEventListener('abort', abort)
       if (timer) clearTimeout(timer)
       if (settled) return
       const stderr = Buffer.concat(err).toString('utf8')

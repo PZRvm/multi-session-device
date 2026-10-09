@@ -54,4 +54,6 @@ tags: [review, skin, camera, wizard, geometry]
 
 ## 边界重申
 
+> 待验与排查项已并入 [待修问题清单](../../task/2026-10-09-待修问题清单.md)追踪，此处仅作证据存档。
+
 本轮 review 通过不改变以下待验状态：Android 内真实摄像头取景、正式签名版权限责任链、A2/A3/B 六类真机验收、直连下载 `buildPackageXml` schema 修复（P1 原样）。Pixel 7/API 34 卡顿的 GPU 怀疑维持只读排查结论，等用户对照结果，未授权不实施修复。

@@ -37,6 +37,7 @@ type SetupHandlers = {
   onCopySerial: Mock<() => void>
   onDelete: Mock<() => void>
   onRename: Mock<(name: string) => void>
+  onEdit: Mock<() => void>
 }
 
 const setup = ({
@@ -52,7 +53,8 @@ const setup = ({
     onCancelStart: vi.fn(),
     onCopySerial: vi.fn(),
     onDelete: vi.fn(),
-    onRename: vi.fn()
+    onRename: vi.fn(),
+    onEdit: vi.fn()
   }
   render(
     <DeviceRow
@@ -67,6 +69,7 @@ const setup = ({
       onCopySerial={handlers.onCopySerial}
       onDelete={handlers.onDelete}
       onRename={handlers.onRename}
+      onEdit={handlers.onEdit}
     />
   )
   return handlers
@@ -129,6 +132,17 @@ describe('DeviceRow', () => {
     expect(
       (screen.getByRole('button', { name: '删除 Pixel 8 API 34' }) as HTMLButtonElement).disabled
     ).toBe(true)
+  })
+
+  it('摄像头回退通知行内可见（启动仲裁命中的运行会话提示）', () => {
+    setup({
+      device: {
+        ...baseDevice,
+        status: 'running',
+        cameraNotice: '前置摄像头被设备「先启机」占用，本次以模拟画面运行'
+      }
+    })
+    expect(screen.getByText('前置摄像头被设备「先启机」占用，本次以模拟画面运行')).toBeTruthy()
   })
 
   it('创建中/删除中：无启停钮、删除禁用、双击不进重命名', () => {
@@ -372,6 +386,7 @@ describe('DeviceRow（review 修复轮）', () => {
         onCopySerial={vi.fn()}
         onDelete={vi.fn()}
         onRename={onRename}
+        onEdit={vi.fn()}
         onRenameBlocked={onRenameBlocked}
       />
     )

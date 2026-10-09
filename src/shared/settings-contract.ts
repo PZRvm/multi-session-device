@@ -3,6 +3,7 @@ import type {
   DeviceAdvancedSettings,
   GpuMode,
   NetworkPreset,
+  UpdateDeviceSettings,
   WizardCapabilities
 } from './types'
 
@@ -247,6 +248,17 @@ export const normalizeAdvancedSettings = (
 }
 
 /**
+ * 摄像头 → config.ini 值：virtualscene 仅小写被 emulator 识别（37.2.12 隔离实测，
+ * camelCase 会静默变成零摄像头）；webcam 缺资源号时回退 emulated。
+ */
+export const cameraConfigText = (camera: CameraConfig): string =>
+  camera.mode === 'webcam'
+    ? (camera.deviceId ?? 'emulated')
+    : camera.mode === 'virtualScene'
+      ? 'virtualscene'
+      : camera.mode
+
+/**
  * 设置 → AVD config.ini 白名单键值（首次启动前生效的持久字段）。
  * 网络/朝向摄像头启动参数见 settingsToRunnerArgs；未知键不在此出现。
  */
@@ -257,14 +269,8 @@ export const settingsToConfigPatch = (settings: DeviceAdvancedSettings): Record<
     'vm.heapSize': String(settings.vmHeapMiB),
     'hw.gpu.mode': settings.graphics,
     'disk.dataPartition.size': `${settings.internalStorageMiB}M`,
-    'hw.camera.front':
-      settings.frontCamera.mode === 'webcam'
-        ? (settings.frontCamera.deviceId ?? 'emulated')
-        : settings.frontCamera.mode,
-    'hw.camera.back':
-      settings.rearCamera.mode === 'webcam'
-        ? (settings.rearCamera.deviceId ?? 'emulated')
-        : settings.rearCamera.mode
+    'hw.camera.front': cameraConfigText(settings.frontCamera),
+    'hw.camera.back': cameraConfigText(settings.rearCamera)
   }
   if (settings.orientation !== null) {
     patch['hw.initialOrientation'] = settings.orientation
@@ -283,8 +289,14 @@ export const settingsToRunnerArgs = (settings: DeviceAdvancedSettings): string[]
   if (settings.networkLatency !== null) args.push('-netdelay', settings.networkLatency)
   // 用户显式选择 GPU 时不固定 host（auto 交由 emulator 自选）
   if (settings.graphics !== 'auto') args.push('-gpu', settings.graphics)
+  // -camera-* 参数不接受 virtualscene（37.2.12 实测 exit 1）：virtualScene 与
+  // emulated 都不传参，交给 config.ini 承载；none/webcamN 可传参。
   const cameraValue = (camera: CameraConfig): string | null =>
-    camera.mode === 'webcam' ? camera.deviceId : camera.mode === 'emulated' ? null : camera.mode
+    camera.mode === 'webcam'
+      ? camera.deviceId
+      : camera.mode === 'emulated' || camera.mode === 'virtualScene'
+        ? null
+        : camera.mode
   const front = cameraValue(settings.frontCamera)
   if (front !== null) args.push('-camera-front', front)
   const rear = cameraValue(settings.rearCamera)
@@ -293,4 +305,129 @@ export const settingsToRunnerArgs = (settings: DeviceAdvancedSettings): string[]
     args.push('-no-snapshot')
   }
   return args
+}
+
+// ---- 编辑差异闭集（plan 2026-10-08-device-config-edit）----
+
+/** 编辑可写字段白名单：内部存储与应用 ABI 不在其中（恒不可写） */
+export const EDITABLE_SETTING_KEYS = [
+  'skinRef',
+  'frontCamera',
+  'rearCamera',
+  'networkSpeed',
+  'networkLatency',
+  'orientation',
+  'bootMode',
+  'cpuCores',
+  'graphics',
+  'ramMiB',
+  'vmHeapMiB'
+] as const
+
+/** 编辑仅归一化真实差异；未修改的旧字段（含失效资源）逐字保留。 */
+export const normalizeEditedSettings = (
+  original: DeviceAdvancedSettings,
+  diff: UpdateDeviceSettings,
+  capabilities: WizardCapabilities,
+  syncFields: readonly (keyof UpdateDeviceSettings)[] = []
+): NormalizedSettings => {
+  const changed = EDITABLE_SETTING_KEYS.filter(
+    (key) =>
+      key in diff &&
+      (syncFields.includes(key) || JSON.stringify(original[key]) !== JSON.stringify(diff[key]))
+  )
+  if (changed.length === 0) return { settings: original, errors: {} }
+  const merged = { ...original, ...diff }
+  const normalized = normalizeAdvancedSettings(merged, capabilities)
+  const checked = new Set<string>(changed)
+  if (checked.has('ramMiB') || checked.has('vmHeapMiB')) {
+    checked.add('ramMiB')
+    checked.add('vmHeapMiB')
+  }
+  const errors = Object.fromEntries(
+    Object.entries(normalized.errors).filter(([key]) => checked.has(key))
+  )
+  const settings = { ...original }
+  for (const key of changed) {
+    const disabled = capabilities.fields[key]?.disabledReason
+    if (
+      disabled &&
+      !(key === 'skinRef' && diff.skinRef === null) &&
+      !(key === 'bootMode' && diff.bootMode === 'cold')
+    ) {
+      errors[key] = disabled
+    }
+    ;(settings as unknown as Record<string, unknown>)[key] = normalized.settings![key]
+  }
+  if (original.bootMode === 'quick') settings.bootMode = 'cold'
+  return { settings, errors }
+}
+
+const isUpdateCamera = (value: unknown): value is CameraConfig => {
+  if (typeof value !== 'object' || value === null) return false
+  const camera = value as Record<string, unknown>
+  if (
+    camera.mode !== 'none' &&
+    camera.mode !== 'emulated' &&
+    camera.mode !== 'virtualScene' &&
+    camera.mode !== 'webcam'
+  ) {
+    return false
+  }
+  if (camera.hostDeviceId !== undefined && typeof camera.hostDeviceId !== 'string') return false
+  if (camera.mode === 'webcam') return typeof camera.deviceId === 'string' && camera.deviceId !== ''
+  return camera.deviceId === null || camera.deviceId === undefined
+}
+
+/**
+ * 编辑差异载荷守卫（main 侧入口，renderer 载荷不可信）：只接纳白名单键，
+ * 形状逐键校验；存储/ABI 键出现即拒绝（即使值与原值相同——闭集不接受协商），
+ * 未知键一律拒绝。返回原样定型的差异对象。
+ */
+export const sanitizeUpdateSettings = (raw: unknown): UpdateDeviceSettings => {
+  if (typeof raw !== 'object' || raw === null) {
+    throw new Error('附加设置载荷不合法')
+  }
+  const diff: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (key === 'internalStorageMiB' || key === 'preferredAbi') {
+      throw new Error(key === 'internalStorageMiB' ? '内部存储不允许修改' : '应用 ABI 不允许修改')
+    }
+    if (!(EDITABLE_SETTING_KEYS as readonly string[]).includes(key)) {
+      throw new Error(`附加设置包含非法字段（${key}）`)
+    }
+    let valid = false
+    switch (key) {
+      case 'skinRef':
+        valid = value === null || typeof value === 'string'
+        break
+      case 'frontCamera':
+      case 'rearCamera':
+        valid = isUpdateCamera(value)
+        break
+      case 'networkSpeed':
+        valid = value === null || isNetworkSpeed(value)
+        break
+      case 'networkLatency':
+        valid = value === null || isNetworkDelay(value)
+        break
+      case 'orientation':
+        valid = value === null || value === 'portrait' || value === 'landscape'
+        break
+      case 'bootMode':
+        valid = value === 'cold' || value === 'quick'
+        break
+      case 'cpuCores':
+      case 'ramMiB':
+      case 'vmHeapMiB':
+        valid = typeof value === 'number' && Number.isInteger(value) && value > 0
+        break
+      case 'graphics':
+        valid = isGpuMode(value)
+        break
+    }
+    if (!valid) throw new Error(`附加设置字段取值不合法（${key}）`)
+    diff[key] = value
+  }
+  return diff as UpdateDeviceSettings
 }

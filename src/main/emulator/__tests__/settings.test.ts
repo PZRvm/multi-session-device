@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildCapabilities,
   buildEnrichedCapabilities,
+  effectiveRamMin,
   readEmulatorVersion,
   normalizeAdvancedSettings,
   settingsToConfigPatch,
@@ -295,6 +296,19 @@ describe('settingsToConfigPatch / settingsToRunnerArgs（白名单映射）', ()
       'none'
     ])
   })
+
+  it('virtualScene：config 写小写 virtualscene；argv 不传 camera 参数（37.2.12 实测口径）', () => {
+    const settings = {
+      ...capabilitiesOf().defaults,
+      frontCamera: { mode: 'virtualScene' as const, deviceId: null },
+      rearCamera: { mode: 'virtualScene' as const, deviceId: null }
+    }
+    const patch = settingsToConfigPatch(settings)
+    expect(patch['hw.camera.front']).toBe('virtualscene')
+    expect(patch['hw.camera.back']).toBe('virtualscene')
+    // argv 的 -camera-* 不接受 virtualscene（exit 1）——不传参，交给 config 承载
+    expect(settingsToRunnerArgs(settings)).toEqual(['-no-snapshot'])
+  })
 })
 
 describe('宿主绑定与精确皮肤预选', () => {
@@ -339,5 +353,87 @@ describe('宿主绑定与精确皮肤预选', () => {
       }
     }
     expect(normalizeAdvancedSettings(chosen.settings, reordered).errors.frontCamera).toBeDefined()
+  })
+})
+
+describe('effectiveRamMin（RAM 有效下限——创建/编辑同一规则）', () => {
+  it('默认 2048；仅已实测组合（emulator 37.2.12 × pixel_8 × android-34 default arm64）按 2560', () => {
+    const combo = {
+      profileId: 'pixel_8',
+      imagePackageName: 'system-images;android-34;default;arm64-v8a',
+      emulatorBuildId: '16428233',
+      imageRevision: 2
+    }
+    expect(effectiveRamMin({ ...combo, emulatorVersion: '37.2.12.0' })).toBe(2560)
+    // emulator 版本、画像、镜像任一不同都回落 2048（不能把一次实测推广）
+    expect(effectiveRamMin({ ...combo, emulatorVersion: '36.1.9' })).toBe(2048)
+    expect(effectiveRamMin({ ...combo, emulatorVersion: '37.2.13' })).toBe(2048)
+    expect(effectiveRamMin({ ...combo, emulatorVersion: null })).toBe(2048)
+    expect(effectiveRamMin({ ...combo, emulatorVersion: '37.2.120' })).toBe(2048)
+    expect(
+      effectiveRamMin({ ...combo, emulatorVersion: '37.2.12', emulatorBuildId: 'other' })
+    ).toBe(2048)
+    expect(effectiveRamMin({ ...combo, emulatorVersion: '37.2.12', imageRevision: 3 })).toBe(2048)
+    expect(
+      effectiveRamMin({ ...combo, emulatorVersion: '37.2.12', imageRevision: undefined })
+    ).toBe(2048)
+    expect(
+      effectiveRamMin({
+        ...combo,
+        imagePackageName: 'system-images;android-34;google_apis;arm64-v8a',
+        emulatorVersion: '37.2.12.0'
+      })
+    ).toBe(2048)
+    expect(
+      effectiveRamMin({
+        profileId: 'pixel_9',
+        imagePackageName: combo.imagePackageName,
+        emulatorVersion: '37.2.12.0'
+      })
+    ).toBe(2048)
+  })
+
+  it('buildCapabilities 的 ramMiB 下限走同一规则（已实测组合 2560）', () => {
+    const verified = buildCapabilities({
+      profile: { id: 'pixel_8', ramMiB: null, formFactor: 'phone' },
+      imagePackageName: 'system-images;android-34;default;arm64-v8a',
+      emulatorBuildId: '16428233',
+      imageRevision: 2,
+      emulatorVersion: '37.2.12.0'
+    })
+    expect(verified.fields.ramMiB.min).toBe(2560)
+    expect(verified.defaults.ramMiB).toBe(2560)
+    expect(normalizeAdvancedSettings(verified.defaults, verified).errors).toEqual({})
+    const other = buildCapabilities({
+      profile: { id: 'pixel_8', ramMiB: null, formFactor: 'phone' },
+      imagePackageName: 'system-images;android-36;google_apis;arm64-v8a',
+      emulatorVersion: '36.1.9'
+    })
+    expect(other.fields.ramMiB.min).toBe(2048)
+  })
+})
+
+describe('富化能力读取实际 build 和镜像 revision', () => {
+  it('实际文件证据匹配才提升 RAM 下限，缺失证据保持基础范围', async () => {
+    const input = {
+      profile: { id: 'pixel_8', ramMiB: 2048, formFactor: 'phone' as const },
+      imagePackageName: 'system-images;android-34;default;arm64-v8a',
+      emulatorVersion: '37.2.12'
+    }
+    const deps = {
+      scanSdkSkins: async () => [],
+      scanImportedSkins: async () => [],
+      listWebcams: async () => [],
+      readFile: async (path: string) =>
+        path.includes('/emulator/') ? 'Pkg.BuildId=16428233\n' : 'Pkg.Revision=2\n'
+    }
+    const caps = await buildEnrichedCapabilities(input, '/sdk', '/data', deps)
+    expect(caps.fields.ramMiB.min).toBe(2560)
+    expect(caps.defaults.ramMiB).toBe(2560)
+    const unknown = await buildEnrichedCapabilities(input, '/sdk', '/data', {
+      ...deps,
+      readFile: async () => ''
+    })
+    expect(unknown.fields.ramMiB.min).toBe(2048)
   })
 })

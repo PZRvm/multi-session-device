@@ -5,6 +5,8 @@ tags: [wizard, emulator, skins, quick-boot, acceptance]
 
 # 向导分类与附加设置：批次交付遗留
 
+> 延期验收项已并入 [待修问题清单](../../task/2026-10-09-待修问题清单.md)追踪；本文仅作证据存档。
+
 - **问题**: plan 2026-10-05-emulator-wizard 批次 1-9 已实现并过单测/真机局部冒烟，但四项验收未完成，plan 不能翻 completed（也不应——Done criteria 明确禁止用布局完成冒充功能完成）。
 - **现状**（2026-10-06，分支 feature/wizard-category-settings）:
   1. **皮肤独立下载源**：核实 AOSP platform/sdk 的 `emulator/skins` 只有 assets/dynamic（无具体机型皮肤）；机型皮肤唯一官方渠道是 emulator SDK 包内 `skins/`（用户已随包装载）；Samsung OEM 页面动态无固定包 URL。`SKIN_DOWNLOAD_SOURCES` 保持空数组（skins.ts 有核实记录注释），下载链路实现+单测就绪，源待核实后登记即开。
@@ -19,4 +21,8 @@ tags: [wizard, emulator, skins, quick-boot, acceptance]
 
 第 3 项 Quick 门槛、第 4 项六类完整验收仍未完成；Android 摄像头取景与签名版、能力时延六次测量、解压瞬间取消也继续按 [验收 plan](../../../plans/2026-10-06-real-machine-verification.md) 跟踪。摄像头解析与本应用权限入口已实现，不能再将旧的枚举为空结论当作当前唯一阻碍。
 
-基础阶段收尾只确认五个正式步骤和各自 completed plan。向导扩展 plan、验收 plan 保持 in-progress，不以代码合入 dev 或局部冒烟代替完整验收。直连包 package.xml P1 仍见 [验收发现](2026-10-06-real-machine-acceptance-findings.md)。
+基础阶段收尾只确认五个正式步骤和各自 completed plan。向导扩展 plan、验收 plan 保持 in-progress，不以代码合入 dev 或局部冒烟代替完整验收。直连包 package.xml P1 已于 2026-10-09 修复并经 API 32 / 37.2 的官方创建工具隔离验证，见[验收发现](2026-10-06-real-machine-acceptance-findings.md)。
+
+## 2026-10-09 用户明确延期的五项
+
+Quick Boot 稳定性、Wear/TV/Desktop/Automotive 完整验收、Android 相机取景与签名版权限、解压瞬间取消、能力加载时延测量继续待办。本轮配置安全前 14 项修复没有执行这些验收，也没有开放 Quick。

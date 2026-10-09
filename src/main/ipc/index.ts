@@ -1,5 +1,6 @@
 import { registerDialogIpc } from '../dialog'
 import {
+  assertEditorTarget,
   attachDeviceStreamBridge,
   adbBinaryPath,
   androidToolEnv,
@@ -25,7 +26,8 @@ export function registerIpcHandlers(): void {
   registerDevicesIpc()
   // 引用查询经注入进入 sdk 域（镜像删除守卫）——emulator 域不反向依赖 devices
   registerSdkIpc({ referencingDeviceNames: listDeviceNamesReferencing, savedDeviceSkinRef })
-  registerWizardIpc()
+  // 编辑窗目标核验经注入进入向导域（开窗前 devices 域裁决，避免 wizard 反向依赖）
+  registerWizardIpc({ assertEditorTarget })
   registerThemeIpc()
 
   const scrcpy = createScrcpyManager({
