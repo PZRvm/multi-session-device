@@ -16,6 +16,7 @@ vi.mock('../DeviceListPane', () => ({
 
 const open = vi.fn()
 const openEditor = vi.fn()
+const openSettings = vi.fn()
 const dialog = vi.fn()
 
 beforeEach(() => {
@@ -37,6 +38,7 @@ beforeEach(() => {
   })
   ;(window as unknown as { api: unknown }).api = {
     wizard: { open, openEditor },
+    settings: { open: openSettings },
     dialog: { show: dialog },
     devices: {
       list: vi.fn(async () => ({
@@ -57,13 +59,13 @@ afterEach(() => {
   delete (window as unknown as { api?: unknown }).api
 })
 
-describe('打开向导失败提示', () => {
-  it.each(['create', 'edit'] as const)(
+describe('打开独立窗口失败提示', () => {
+  it.each(['create', 'edit', 'settings'] as const)(
     '%s 连点与重复故障只有一次提示，关闭提示后允许重试',
     async (kind) => {
       let reject!: (error: Error) => void
       let closeAlert!: () => void
-      const request = kind === 'create' ? open : openEditor
+      const request = kind === 'create' ? open : kind === 'edit' ? openEditor : openSettings
       request
         .mockReturnValueOnce(
           new Promise((_, failed) => {
@@ -82,7 +84,7 @@ describe('打开向导失败提示', () => {
       const button =
         kind === 'create'
           ? screen.getAllByRole('button', { name: '新建设备' })[0]
-          : screen.getByRole('button', { name: 'test-edit' })
+          : screen.getByRole('button', { name: kind === 'edit' ? 'test-edit' : '设置' })
       fireEvent.click(button)
       fireEvent.click(button)
       expect(request).toHaveBeenCalledTimes(1)
@@ -91,7 +93,11 @@ describe('打开向导失败提示', () => {
       })
       expect(dialog).toHaveBeenCalledTimes(1)
       expect(dialog.mock.calls[0][0].title).toBe(
-        kind === 'create' ? '打开向导失败' : '打开编辑窗口失败'
+        kind === 'create'
+          ? '打开向导失败'
+          : kind === 'edit'
+            ? '打开编辑窗口失败'
+            : '打开设置窗口失败'
       )
       fireEvent.click(button)
       expect(request).toHaveBeenCalledTimes(1)

@@ -1,0 +1,158 @@
+import { useState } from 'react'
+import { AlertTriangle, Command, Info, Monitor, Settings } from 'lucide-react'
+import styled from 'styled-components'
+import { SETTINGS_COPY } from './settings/copy'
+import type { SettingsPaneId, SettingsViewModel } from './settings/model'
+import PaneGeneral from './settings/PaneGeneral'
+import PaneEmulator from './settings/PaneEmulator'
+import PaneShortcuts from './settings/PaneShortcuts'
+import PaneAbout from './settings/PaneAbout'
+import PaneDanger from './settings/PaneDanger'
+
+interface SettingsWindowProps {
+  model: SettingsViewModel
+  platform: string
+}
+const NAVIGATION = [
+  { id: 'general', Icon: Settings },
+  { id: 'emulator', Icon: Monitor },
+  { id: 'shortcuts', Icon: Command },
+  { id: 'about', Icon: Info },
+  { id: 'danger', Icon: AlertTriangle }
+] as const
+const PANES = {
+  general: PaneGeneral,
+  emulator: PaneEmulator,
+  shortcuts: PaneShortcuts,
+  about: PaneAbout,
+  danger: PaneDanger
+}
+
+const SettingsWindow = ({ model, platform }: SettingsWindowProps): React.JSX.Element => {
+  const [active, setActive] = useState<SettingsPaneId>('general')
+  const copy = SETTINGS_COPY[model.locale]
+  const Pane = PANES[active]
+  return (
+    <Wrapper lang={model.locale}>
+      {/* darwin 去标题条后窗口拖动与左上原生三灯都归系统；其余平台保留系统框，无需让位 */}
+      {platform === 'darwin' ? <div className="drag-region" aria-hidden="true" /> : null}
+      <div className="body">
+        <nav aria-label={copy.navigation}>
+          {NAVIGATION.map(({ id, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              className={id === 'danger' ? 'danger-nav' : undefined}
+              aria-current={active === id ? 'page' : undefined}
+              onClick={() => setActive(id)}
+            >
+              <Icon size={15} aria-hidden="true" />
+              <span>{copy[id]}</span>
+            </button>
+          ))}
+        </nav>
+        <main key={active} tabIndex={0} aria-labelledby="settings-pane-title">
+          <Pane model={model} copy={copy} />
+        </main>
+      </div>
+    </Wrapper>
+  )
+}
+
+const Wrapper = styled.div`
+  height: 100dvh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--board-bg);
+  color: var(--board-ink);
+  user-select: none;
+  ::selection {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .drag-region {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 32px;
+    -webkit-app-region: drag;
+  }
+  .body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+  nav {
+    flex: 0 0 176px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 32px 8px 10px;
+    border-right: 1px solid var(--board-hairline);
+    background: var(--board-bg-raised);
+  }
+  nav button {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 36px;
+    padding: 8px 10px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--board-ink);
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+  }
+  nav button svg {
+    flex: none;
+  }
+  nav button:hover {
+    background: var(--board-hover-veil);
+  }
+  nav .danger-nav {
+    margin-top: auto;
+    color: var(--danger);
+  }
+  nav button[aria-current='page'] {
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  nav button[aria-current='page']:focus-visible {
+    outline-color: var(--accent-ink);
+    outline-offset: -4px;
+  }
+  main {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    scrollbar-color: var(--board-scrollbar-thumb) var(--board-bg);
+    scrollbar-width: thin;
+  }
+  main::-webkit-scrollbar {
+    width: 6px;
+  }
+  main:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  main::-webkit-scrollbar-track {
+    background: var(--board-bg);
+  }
+  main::-webkit-scrollbar-thumb {
+    background: var(--board-scrollbar-thumb);
+  }
+  main::-webkit-scrollbar-thumb:hover {
+    background: var(--board-scrollbar-hover);
+  }
+`
+
+export default SettingsWindow

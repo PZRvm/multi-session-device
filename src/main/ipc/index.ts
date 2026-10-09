@@ -11,6 +11,7 @@ import {
 import { registerSdkIpc } from '../emulator'
 import { createScrcpyManager } from '../scrcpy'
 import { registerWizardIpc } from '../window/wizard'
+import { registerSettingsIpc } from '../window/settings'
 import { registerThemeIpc } from '../theme'
 import { getMainWindow } from '../window'
 
@@ -28,6 +29,7 @@ export function registerIpcHandlers(): void {
   registerSdkIpc({ referencingDeviceNames: listDeviceNamesReferencing, savedDeviceSkinRef })
   // 编辑窗目标核验经注入进入向导域（开窗前 devices 域裁决，避免 wizard 反向依赖）
   registerWizardIpc({ assertEditorTarget })
+  registerSettingsIpc()
   registerThemeIpc()
 
   const scrcpy = createScrcpyManager({

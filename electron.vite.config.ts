@@ -22,10 +22,11 @@ export default defineConfig({
     plugins: [react()],
     build: {
       rollupOptions: {
-        // 两页：index = 主窗；wizard = 新建设备模态子窗（main/window/wizard.ts 加载）
+        // 三个独立入口：主窗、设备向导、设置窗。
         input: {
           index: resolve('src/renderer/index.html'),
-          wizard: resolve('src/renderer/wizard.html')
+          wizard: resolve('src/renderer/wizard.html'),
+          settings: resolve('src/renderer/settings.html')
         }
       }
     }

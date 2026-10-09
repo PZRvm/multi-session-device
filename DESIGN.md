@@ -25,6 +25,8 @@ colors:
   accent-ink: '#221a00'
   idle: '#6b7280'
   loading: '#ffb000'
+  danger: '#b3261e'
+  danger-dark: '#ffb4ab'
 typography:
   title:
     fontFamily: "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif"
@@ -47,7 +49,10 @@ typography:
     fontWeight: 400
     letterSpacing: '0.08em'
     lineHeight: 1.5
+  mono-data:
+    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace"
 rounded:
+  segment-inner: '2px'
   xs: '3px'
   sm: '4px'
   md: '6px'
@@ -85,6 +90,45 @@ components:
   list-row-selected:
     backgroundColor: '{colors.accent}'
     textColor: '{colors.accent-ink}'
+  settings-nav-row:
+    backgroundColor: 'transparent'
+    textColor: '{colors.board-ink}'
+    rounded: '{rounded.md}'
+    padding: '8px 10px'
+  settings-nav-row-selected:
+    backgroundColor: '{colors.accent}'
+    textColor: '{colors.accent-ink}'
+  settings-appearance-option:
+    backgroundColor: 'transparent'
+    textColor: '{colors.board-ink-dim}'
+    rounded: '{rounded.segment-inner}'
+    padding: '2px'
+    width: '27px'
+    height: '26px'
+  settings-theme-swatch:
+    textColor: '{colors.accent-ink}'
+    rounded: '{rounded.sm}'
+    padding: '0'
+    width: '28px'
+    height: '28px'
+  settings-select:
+    backgroundColor: '{colors.board-bg-raised}'
+    textColor: '{colors.board-ink}'
+    rounded: '{rounded.sm}'
+    height: '28px'
+    width: '180px'
+  settings-button-danger:
+    backgroundColor: 'transparent'
+    textColor: '{colors.danger}'
+    rounded: '{rounded.sm}'
+    padding: '4px 12px'
+    height: '32px'
+  settings-keycap:
+    backgroundColor: '{colors.board-tile}'
+    textColor: '{colors.board-ink}'
+    typography: '{typography.mono-data}'
+    rounded: '{rounded.xs}'
+    padding: '1px 5px'
 ---
 
 # Design System: 多会话设备
@@ -124,6 +168,7 @@ components:
 ### Secondary
 
 - **空闲灰（Idle）**（#6b7280 / `--idle`）：空闲状态点。状态系统只有两信号：灰 = 空闲，强调色 = 运行中（`--loading` 亮态取信号深色、暗态取信号基色，随主题系统切换，与 `--accent` 同源异名）。
+- **危险墨（Danger）**（`--danger`，亮暗值见 frontmatter）：三套主题共用的危险文案与描边色，已在设置窗危险分类、危险标题、删除按钮描边和关窗错误提示启用。它不承担运行状态信号，不铺红色面板；单源为 `themeSystems.ts`，亮态缺省同步到 `global.css`。
 
 ### Neutral
 
@@ -162,11 +207,17 @@ components:
 
 ## Layout
 
-桌面窗口：900×670（现自检壳窗口尺寸，stage 03 分栏落地时随布局复核）。无响应式断点——这是桌面应用，弹性来自窗口与分栏尺寸。
+主窗口：900×670（现自检壳窗口尺寸，stage 03 分栏落地时随布局复核）。主窗口无响应式断点——这是桌面应用，弹性来自窗口与分栏尺寸。
 
 骨架（stage 03 起为左右分栏，flex 行）：左栏为会话信息板，`flex: none`；1px 发丝线分隔（发丝线即分隔条视觉）；右侧工作台画布 `flex: 1`，`min-width: 0`，底色随主题 board-bg，模拟器画面居中嵌入。
 
 间距节奏：4–14px 的紧凑值域（gap 4/6/8，padding 6/10/12/14）。没有大留白——信息板不喘气，只扫读。
+
+### 设置窗
+
+独立桌面窗初始（760×560 DIP）、最小（640×460 DIP）。macOS 无顶部标题行（hiddenInset），原生三灯落在左上（trafficLightPosition 14×12）；顶边覆盖（32px）拖拽区承担窗口拖动，其他平台保留系统标题栏、不渲染拖拽区。正文与导航填满窗体；导航固定宽（176px），内边距（32px 8px 10px）、分类间距（2px），危险区用剩余空间沉底。右侧详情单独纵向滚动，导航保持位置；详情内边距（38px 28px 28px）。
+
+窗口宽度不大于（700px）时，设置行的控件落到标签下方，目录文字与动作也改为纵向排列；导航宽度和分类顺序保持。长说明与路径允许折行，快捷键表格保持操作、键位、生效位置三列，键帽可换行。
 
 ## Elevation & Depth
 
@@ -184,6 +235,8 @@ components:
 - **圆（50%）属于信号**：状态点等圆形信号元素。
 - **控件小圆角**：按钮与输入 6px/4px；分段控件 4px。不做胶囊与大圆角卡片。
 
+设置窗延续紧凑控件：按钮、输入、主题色方块和分段外轨圆角（4px）；外轨内缩（2px），内瓣圆角（2px，`segment-inner`）；键帽圆角（3px）。设置分类导航内缩并采用（6px）圆角，这是导航控件的局部几何，会话列表行仍保持直角。
+
 ### 设备外框（2026-10-05 投屏工作台引入）——唯一的"大圆角"豁免区
 
 投屏工作台（右侧 Stage）承载模拟 Android 设备外框，是全应用唯一允许大外圆角的元素（手机 20px / 平板 16px / 未知 10px）：它模拟实体手机/平板的壳，属于"列车本身"而非信息板控件——普通控件不得效仿此圆角。外壳只包在屏幕之外（手机边距 T18/B12/L12/R12，侧边与圆角匹配避免四角收窄发撇；平板四边 12；未知四边 8），屏幕自身无圆角无开孔（不裁切视频像素），上边框内的听筒/摄像头装饰 `aria-hidden` 且不接输入。颜色三 token 入配置单源：`--device-shell`（壳面，亮 ≡ hairline / 暗 ≡ tileLine）、`--device-shell-edge`（外缘线 ≡ controlLine）、`--device-bezel-ink`（装饰 ≡ inkDim）。工作台底即 `--board-bg`，不引入第二色域；强调色仍不进画布。
@@ -198,7 +251,7 @@ components:
 
 ### 输入（Input）— 元素基线
 
-抬升层底（`--board-bg-raised`）+ 1px `--board-control-line` 描边、4px 圆角、28px 高、12px 字；focus 描边升墨级（`--board-ink-dim` → `--board-ink`），底色同步升纯抬升；placeholder 次墨。错误态预留 danger token（本阶段未启用，启用前先入配置——对齐源仓库 `--accent-ink-dim` 教训）。
+抬升层底（`--board-bg-raised`）+ 1px `--board-control-line` 描边、4px 圆角、28px 高、12px 字；focus 描边升墨级（`--board-ink-dim` → `--board-ink`），底色同步升纯抬升；placeholder 次墨。danger token 已进入配置单源并在设置窗危险文案与描边中启用；输入错误态尚未使用它。
 
 ### 列表行（List Row）— 元素基线，世界的原子
 
@@ -210,14 +263,27 @@ components:
 
 ### 分段控件（Segmented Control）— 元素基线
 
-三态并置的一步直达切换（本阶段承载亮暗模式：跟随系统/亮/暗）。轨道 = board-bg-raised、选中瓣 = `--board-segment-selected-bg`（亮 #ffffff 纯白抬升瓣 / 暗 #2a313a 抬升一档）+ 瓣上字形 `--board-tile-ink`（昼夜翻转的信号深色），未选 = 次墨，hover = board-hover-veil，4px 圆角。radiogroup 语义 + 方向键循环。
+三态并置的外观选择（跟随系统/亮/暗），分别用（16px）显示器、太阳、月亮 SVG 图标呈现。轨道 = board-bg-raised + 控件线描边、选中瓣 = `--board-segment-selected-bg` + `--board-tile-ink`（昼夜翻转的信号深色），未选 = 次墨；外轨圆角（4px）、内缩与间距（2px），内瓣宽（27px）、最小高（26px）、圆角（2px）。当前仅在设置窗静态展示，原生 disabled；按钮有三语 `aria-label` / `title` 和 `aria-pressed`，不提供切换行为。主窗板头保留设置齿轮与设备计数，不再显示外观 tab 或窄窗菜单。
+
+### 设置窗（Settings Window）— 静态呈现
+
+五个详情分类共用 `SettingsParts`；窗壳与共用详情各以单个 styled `Wrapper` 管理后代样式，状态与窄窗规则留在各自边界内。
+
+- **窗口控件：** macOS 使用原生三灯（hiddenInset，trafficLightPosition 14×12，与主窗/向导窗同度量），renderer 不自绘任何窗口控件；最小化与全屏能力禁用，黄/绿为无效按钮、红灯关闭窗口。顶部（32px）拖拽带仅 darwin 渲染；其他平台沿用系统标题栏。
+- **导航：** 通用、模拟器、快捷键、关于、危险区五类；抬升层底、1px 右侧发丝线，行高至少（36px），内边距（8px 10px）、圆角（6px）。选中使用整行 `--accent` 底 + `--accent-ink` 字和（600）字重，包括选中的危险分类；未选中的危险分类使用 `--danger`。Lucide 图标与文字并列，通用使用齿轮，图标（15px）并标为装饰。
+- **文字与行：** 详情标题（15px/600），正文（13px），引导、描述、分组标题和路径（12px）；设置行以发丝线分隔，最小行高（66px）、上下内边距（12px）。路径、数值和键帽沿用 `ui-monospace, 'SF Mono', Menlo, monospace`；这是现有系统 mono 栈的组件写法，不新增字体。键帽是标准按键文字，不能用作替代图标。
+- **控件：** 下拉宽（180px）、输入高（28px）、普通按钮最小高（32px）；背景取板面或抬升层，描边取控件线。外观分段只呈现当前三态；主题色为既有三系统 swatch 的（28×28px）方块、间距（10px），选中以（2px）主墨外框（offset 2px）和（15px）居中勾标识，勾取 `--accent-ink`。不显示重复色名，按钮保留三语 `aria-label` / `title` 和 `aria-pressed`。键帽取砖面、砖线与主墨。危险按钮透明底 + `--danger` 文字和描边。
+- **焦点与滚动：** 分类按钮和可滚动详情用（2px）焦点框；通常为 `--accent` 内框（offset -2px），选中导航为 `--accent-ink` 内框（offset -4px），避免与反白底混淆。详情可由 Tab 进入并用 End 到达末尾；滚动条取既有主题 token，无阴影。
+- **只读状态：** 当前只开放开窗（主窗齿轮）与分类切换；关窗、最小化与全屏由系统窗口控件承担，不经 renderer 桥。业务按钮、下拉、输入、单选、分段和主题色样均用原生 disabled；输入与下拉保留主墨及（1）不透明度，不靠整体淡化制造禁用态。设置六个主题态核对中，次级文字最低（4.57:1）、危险文字最低（5.26:1）。
+- **真实占位：** 当前实窗默认 `zh-CN`，外观只读现有主题镜像；`zh-CN` / `zh-TW` / `en-US` 是设置组件的同键文案字典，不代表全应用 i18n 或语言切换已完成。未知版本、运行环境、目录和内存阈值保持明确占位；SDK 样例目录标为示例，偏好保存、SDK 检测/切换和删除尚未接入。
+- **关于：** 复用 `resources/icon.png` 既有应用图标，显示尺寸（64×64px），没有新增图像资产。此段记录已实现的静态呈现，不代表完整设置功能或发布验收完成。
 
 ## Do's and Don'ts
 
 ### Do:
 
-- **Do** 新面板延续行式栅格 + 1px 发丝线分层，行保持直角。
-- **Do** 一切颜色经 CSS 变量引用 token（`var(--board-*)` / `var(--accent-*)`）；新增色值先进 `themeSystems.ts` 配置单源再消费。
+- **Do** 新面板延续行式栅格 + 1px 发丝线分层，会话列表行保持直角；设置分类导航沿用内缩的小圆角控件。
+- **Do** 业务颜色经 CSS 变量引用 token（`var(--board-*)` / `var(--accent-*)`）；新增业务色值先进 `themeSystems.ts` 配置单源再消费。
 - **Do** 选中态整行强调色反白（`--accent` 底 / `--accent-ink` 字），次级信息降不透明度 0.72。
 - **Do** 焦点统一 `:focus-visible` 2px `--accent` 外框、offset 2px。
 - **Do** 亮暗切换经主题注入链同步替换 CSS 变量与 `color-scheme`，保持布局与 0.12s 过渡不变。
@@ -226,8 +292,8 @@ components:
 ### Don't:
 
 - **Don't** 引入任何 box-shadow——深度只有发丝线、色阶、反白三种。
-- **Don't** 组件里写硬编码色值（hex/rgb 字面量）——颜色只从 token 单源派生（2026-10-01 深字深底静默事故的根治约定）。
+- **Don't** 在业务组件里写硬编码色值（hex/rgb 字面量）——业务颜色只从 token 单源派生（2026-10-01 深字深底静默事故的根治约定）。
 - **Don't** 回到类目默认：深色竖栏 + 蓝色高亮 + 圆角卡片列表是方向契约明确拒绝的形态。
 - **Don't** 让强调色进画布区或作大面积装饰底色；强调色是信号。
-- **Don't** 把列表行卡片化、圆角化或加左缘色条；选中只有反白一种语言。
+- **Don't** 把会话列表行卡片化、圆角化或加左缘色条；选中只有反白一种语言。
 - **Don't** 启用配置单源之外的色值 token（对齐源仓库 `--accent-ink-dim` 教训：先入配置再引用）。

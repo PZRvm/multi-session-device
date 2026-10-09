@@ -76,6 +76,8 @@ export interface ThemeModeTokens {
   ink: string
   /** 次墨 --board-ink-dim */
   inkDim: string
+  /** 危险操作文案 / 描边 --danger */
+  danger: string
   /** 悬停蒙版 --board-hover-veil */
   hoverVeil: string
   /** 表单控件描边 --board-control-line */
@@ -135,6 +137,7 @@ export const THEME_SYSTEMS: Record<ThemeSystemId, ThemeSystem> = {
       scrollbarHover: '#bcb4a6',
       ink: '#1e2329',
       inkDim: '#616974',
+      danger: '#b3261e',
       hoverVeil: 'rgba(30, 35, 41, 0.08)',
       controlLine: '#bcb4a6',
       segmentSelected: '#ffffff',
@@ -162,6 +165,7 @@ export const THEME_SYSTEMS: Record<ThemeSystemId, ThemeSystem> = {
       scrollbarHover: '#3a434e',
       ink: '#f5f0e8',
       inkDim: '#9aa3ad',
+      danger: '#ffb4ab',
       hoverVeil: 'rgba(255, 255, 255, 0.08)',
       controlLine: '#3a434e',
       segmentSelected: '#2a313a',
@@ -194,6 +198,7 @@ export const THEME_SYSTEMS: Record<ThemeSystemId, ThemeSystem> = {
       scrollbarHover: '#b5bfc8',
       ink: '#1c242c',
       inkDim: '#5c6875',
+      danger: '#b3261e',
       hoverVeil: 'rgba(28, 36, 44, 0.08)',
       controlLine: '#b5bfc8',
       segmentSelected: '#ffffff',
@@ -221,6 +226,7 @@ export const THEME_SYSTEMS: Record<ThemeSystemId, ThemeSystem> = {
       scrollbarHover: '#3b4754',
       ink: '#edf0f3',
       inkDim: '#909ba8',
+      danger: '#ffb4ab',
       hoverVeil: 'rgba(255, 255, 255, 0.08)',
       controlLine: '#3b4754',
       segmentSelected: '#2c3745',
@@ -255,6 +261,7 @@ export const THEME_SYSTEMS: Record<ThemeSystemId, ThemeSystem> = {
       scrollbarHover: '#b9c2a5',
       ink: '#1f2519',
       inkDim: '#616a55',
+      danger: '#b3261e',
       hoverVeil: 'rgba(31, 37, 25, 0.08)',
       controlLine: '#b9c2a5',
       segmentSelected: '#ffffff',
@@ -282,6 +289,7 @@ export const THEME_SYSTEMS: Record<ThemeSystemId, ThemeSystem> = {
       scrollbarHover: '#3a4534',
       ink: '#eef2e6',
       inkDim: '#92a289',
+      danger: '#ffb4ab',
       hoverVeil: 'rgba(255, 255, 255, 0.08)',
       controlLine: '#3a4534',
       segmentSelected: '#2a3a2c',
@@ -303,7 +311,7 @@ export const THEME_SYSTEMS: Record<ThemeSystemId, ThemeSystem> = {
 
 /**
  * 主题 token → CSS 变量映射（renderer 注入链逐条 setProperty 的唯一依据）。
- * 未收录的 CSS 变量为全局常量、不随主题系统：--idle、--danger（未启用）、
+ * 未收录的 CSS 变量为全局常量、不随主题系统：--idle、
  * chrome-* 全族（本仓库无此世界）与 color-scheme（经注入链同步设置，见 apply.ts）。
  */
 export function themeCssVariables(
@@ -322,6 +330,7 @@ export function themeCssVariables(
     '--board-scrollbar-hover': t.scrollbarHover,
     '--board-ink': t.ink,
     '--board-ink-dim': t.inkDim,
+    '--danger': t.danger,
     '--board-hover-veil': t.hoverVeil,
     '--board-control-line': t.controlLine,
     '--board-segment-selected-bg': t.segmentSelected,

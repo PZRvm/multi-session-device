@@ -41,6 +41,7 @@ export const IPC_CHANNELS = {
   screenInput: 'screen:input',
   wizardOpen: 'wizard:open',
   wizardClose: 'wizard:close',
+  settingsOpen: 'settings:open',
   // ---- 设备配置编辑域（plan 2026-10-08-device-config-edit）----
   /** 主窗调：为指定设备开/聚焦编辑窗（上下文创建时固定，不静默切换已有窗） */
   wizardOpenEditor: 'wizard:open-editor',
