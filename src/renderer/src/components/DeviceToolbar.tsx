@@ -31,10 +31,11 @@ const DeviceToolbar = ({
     { button: 'volume-down', label: '音量减', icon: <Volume1 size={16} /> }
   ]
   return (
-    <Bar role="toolbar" aria-label="设备按键工具条">
+    <Wrapper role="toolbar" aria-label="设备按键工具条">
       {buttons.map((entry) => (
-        <ToolButton
+        <button
           key={entry.button}
+          className="tool-btn"
           type="button"
           aria-label={entry.label}
           title={entry.label}
@@ -42,9 +43,10 @@ const DeviceToolbar = ({
           onClick={() => (entry.button === 'power' ? onPower() : onButton(entry.button))}
         >
           {entry.icon}
-        </ToolButton>
+        </button>
       ))}
-      <ToolButton
+      <button
+        className="tool-btn"
         type="button"
         aria-label="旋转屏幕"
         title="旋转屏幕"
@@ -52,12 +54,12 @@ const DeviceToolbar = ({
         onClick={onRotate}
       >
         <RotateCw size={16} />
-      </ToolButton>
-    </Bar>
+      </button>
+    </Wrapper>
   )
 }
 
-const Bar = styled.div`
+const Wrapper = styled.div`
   display: flex;
   align-items: center;
   gap: 4px;
@@ -65,32 +67,32 @@ const Bar = styled.div`
   border-radius: 8px;
   background: var(--board-bg-raised);
   border: 1px solid var(--board-hairline);
-`
 
-const ToolButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--board-ink);
-  cursor: pointer;
-  transition: background-color 0.12s;
+  .tool-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--board-ink);
+    cursor: pointer;
+    transition: background-color 0.12s;
+  }
 
-  &:hover:not(:disabled) {
+  .tool-btn:hover:not(:disabled) {
     background: var(--board-hover-veil);
   }
 
-  &:disabled {
+  .tool-btn:disabled {
     opacity: 0.35;
     cursor: default;
   }
 
-  &:focus-visible {
+  .tool-btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
   }

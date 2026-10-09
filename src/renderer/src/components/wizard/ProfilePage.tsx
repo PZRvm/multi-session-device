@@ -67,21 +67,22 @@ const ProfilePage = ({
 
   return (
     <Layout>
-      <Nav aria-label="画像类别">
+      <nav className="nav" aria-label="画像类别">
         {CATEGORY_ORDER.map((formFactor) => (
-          <NavButton
+          <button
             key={formFactor}
             type="button"
+            className="nav-button"
             aria-pressed={formFactor === category}
             onClick={() => onCategoryChange(formFactor)}
           >
-            <NavLabel>{FORM_FACTOR_LABELS[formFactor]}</NavLabel>
-            <NavCount>{counts.get(formFactor) ?? 0}</NavCount>
-          </NavButton>
+            <span className="nav-label">{FORM_FACTOR_LABELS[formFactor]}</span>
+            <span className="nav-count">{counts.get(formFactor) ?? 0}</span>
+          </button>
         ))}
         {/* 官方源暂无弃用信号（types 注释在案）——开关随布局保留但禁用并说明，
             不冒充可用功能（review P3：死 UI 处置） */}
-        <DeprecatedToggle title="官方画像源暂无弃用标记，开关待信号源接入后开放">
+        <div className="deprecated-toggle" title="官方画像源暂无弃用标记，开关待信号源接入后开放">
           <input
             id="wizard-show-deprecated"
             type="checkbox"
@@ -90,30 +91,31 @@ const ProfilePage = ({
             readOnly
           />
           <label htmlFor="wizard-show-deprecated">显示弃用画像</label>
-        </DeprecatedToggle>
-      </Nav>
+        </div>
+      </nav>
 
-      <ListArea>
-        <SearchRow>
-          <SearchIcon size={14} aria-hidden="true" />
-          <SearchInput
+      <div className="list-area">
+        <div className="search-row">
+          <Search size={14} aria-hidden="true" className="search-icon" />
+          <input
             type="search"
+            className="search-input"
             value={search}
             placeholder="搜索画像名称"
             aria-label="搜索画像名称"
             onChange={(event) => onSearchChange(event.target.value)}
           />
-        </SearchRow>
+        </div>
 
-        <Scroller>
-          <HeadRow role="row">
-            <HeadCell>名称</HeadCell>
-            <HeadCell className="num">Play</HeadCell>
-            <HeadCell className="num">API</HeadCell>
-            <HeadCell className="num">宽</HeadCell>
-            <HeadCell className="num">高</HeadCell>
-            <HeadCell className="num">密度</HeadCell>
-          </HeadRow>
+        <div className="scroller">
+          <div className="head-row" role="row">
+            <div className="head-cell">名称</div>
+            <div className="head-cell num">Play</div>
+            <div className="head-cell num">API</div>
+            <div className="head-cell num">宽</div>
+            <div className="head-cell num">高</div>
+            <div className="head-cell num">密度</div>
+          </div>
           <div
             role="group"
             aria-label={`${FORM_FACTOR_LABELS[category]}画像`}
@@ -128,8 +130,9 @@ const ProfilePage = ({
             }}
           >
             {rows.map((profile) => (
-              <Row
+              <div
                 key={profile.id}
+                className="row"
                 role="button"
                 tabIndex={0}
                 data-profile-id={profile.id}
@@ -142,30 +145,30 @@ const ProfilePage = ({
                   }
                 }}
               >
-                <RowName>
+                <div className="row-name">
                   {profile.name}
-                  {profile.creatable ? null : <RowTag>不可创建</RowTag>}
-                  {profile.deprecated ? <RowTag>已弃用</RowTag> : null}
-                </RowName>
-                <RowCell className="num">
+                  {profile.creatable ? null : <span className="row-tag">不可创建</span>}
+                  {profile.deprecated ? <span className="row-tag">已弃用</span> : null}
+                </div>
+                <div className="row-cell num">
                   {profile.playSupported === null ? '—' : profile.playSupported ? '✓' : '—'}
-                </RowCell>
-                <RowCell className="num">{apiRangeDisplay(profile)}</RowCell>
-                <RowCell className="num">
+                </div>
+                <div className="row-cell num">{apiRangeDisplay(profile)}</div>
+                <div className="row-cell num">
                   {profile.screen.widthPx === null ? '—' : profile.screen.widthPx}
-                </RowCell>
-                <RowCell className="num">
+                </div>
+                <div className="row-cell num">
                   {profile.screen.heightPx === null ? '—' : profile.screen.heightPx}
-                </RowCell>
-                <RowCell className="num">
+                </div>
+                <div className="row-cell num">
                   {profile.screen.logicalDpi === null ? '—' : profile.screen.logicalDpi}
-                </RowCell>
-              </Row>
+                </div>
+              </div>
             ))}
           </div>
-          {rows.length === 0 ? <EmptyHint>该类别下没有匹配的画像</EmptyHint> : null}
-        </Scroller>
-      </ListArea>
+          {rows.length === 0 ? <p className="empty-hint">该类别下没有匹配的画像</p> : null}
+        </div>
+      </div>
     </Layout>
   )
 }
@@ -174,210 +177,210 @@ const Layout = styled.div`
   display: flex;
   min-height: 0;
   flex: 1;
-`
 
-const Nav = styled.nav`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 180px;
-  flex: none;
-  padding: 12px 8px;
-  border-right: 1px solid var(--board-hairline);
-`
-
-const NavButton = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 7px 10px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--board-ink);
-  font-size: 12px;
-  cursor: pointer;
-  transition: background-color 0.12s;
-
-  &:hover {
-    background: var(--board-hover-veil);
+  .nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 180px;
+    flex: none;
+    padding: 12px 8px;
+    border-right: 1px solid var(--board-hairline);
   }
 
-  &[aria-pressed='true'] {
-    background: var(--board-segment-selected-bg);
+  .nav-button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
     color: var(--board-ink);
-    font-weight: 600;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: -2px;
-  }
-`
-
-const NavLabel = styled.span`
-  flex: 1;
-  text-align: left;
-`
-
-const NavCount = styled.span`
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--board-ink-dim);
-`
-
-const DeprecatedToggle = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 12px;
-  padding: 4px 10px;
-  font-size: 11px;
-  color: var(--board-ink-dim);
-
-  label {
+    font-size: 12px;
     cursor: pointer;
+    transition: background-color 0.12s;
+
+    &:hover {
+      background: var(--board-hover-veil);
+    }
+
+    &[aria-pressed='true'] {
+      background: var(--board-segment-selected-bg);
+      color: var(--board-ink);
+      font-weight: 600;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+    }
   }
 
-  input:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
+  .nav-label {
+    flex: 1;
+    text-align: left;
   }
-`
 
-const ListArea = styled.div`
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1;
-  padding: 12px 16px;
-`
-
-const SearchRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-  padding-bottom: 10px;
-`
-
-const SearchIcon = styled(Search)`
-  color: var(--board-ink-dim);
-`
-
-const SearchInput = styled.input`
-  width: 260px;
-  max-width: 100%;
-  padding: 6px 10px;
-  border: 1px solid var(--board-hairline);
-  border-radius: 4px;
-  background: var(--board-bg);
-  color: var(--board-ink);
-  font-size: 12px;
-
-  &::placeholder {
+  .nav-count {
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
     color: var(--board-ink-dim);
   }
 
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
+  .deprecated-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: var(--board-ink-dim);
+
+    label {
+      cursor: pointer;
+    }
+
+    input:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
   }
-`
 
-const Scroller = styled.div`
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  border: 1px solid var(--board-hairline);
-  border-radius: 4px;
-  background: var(--board-bg);
-`
+  .list-area {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+    padding: 12px 16px;
+  }
 
-const HeadRow = styled.div`
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: ${GRID_COLUMNS};
-  background: var(--board-bg-raised);
-  border-bottom: 1px solid var(--board-hairline);
-`
+  .search-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+    padding-bottom: 10px;
+  }
 
-const HeadCell = styled.div`
-  padding: 7px 10px;
-  color: var(--board-ink-dim);
-  font-size: 11px;
-  font-weight: 500;
+  .search-icon {
+    color: var(--board-ink-dim);
+  }
 
-  &.num {
-    text-align: right;
+  .search-input {
+    width: 260px;
+    max-width: 100%;
+    padding: 6px 10px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: var(--board-bg);
+    color: var(--board-ink);
+    font-size: 12px;
+
+    &::placeholder {
+      color: var(--board-ink-dim);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+  }
+
+  .scroller {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: var(--board-bg);
+  }
+
+  .head-row {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: ${GRID_COLUMNS};
+    background: var(--board-bg-raised);
+    border-bottom: 1px solid var(--board-hairline);
+  }
+
+  .head-cell {
+    padding: 7px 10px;
+    color: var(--board-ink-dim);
+    font-size: 11px;
+    font-weight: 500;
+
+    &.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: ${GRID_COLUMNS};
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.12s;
+
+    &:hover {
+      background: var(--board-hover-veil);
+    }
+
+    &[aria-pressed='true'] {
+      background: var(--board-segment-selected-bg);
+      box-shadow: inset 2px 0 0 var(--accent);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+    }
+  }
+
+  .row-name {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    min-width: 0;
+    padding: 7px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .row-tag {
+    margin-left: 6px;
+    padding: 1px 6px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--board-ink-dim);
+  }
+
+  .row-cell {
+    padding: 7px 10px;
+    font-size: 12px;
+    color: var(--board-ink);
     font-variant-numeric: tabular-nums;
-  }
-`
 
-const Row = styled.div`
-  display: grid;
-  grid-template-columns: ${GRID_COLUMNS};
-  align-items: center;
-  cursor: pointer;
-  transition: background-color 0.12s;
-
-  &:hover {
-    background: var(--board-hover-veil);
+    &.num {
+      text-align: right;
+    }
   }
 
-  &[aria-pressed='true'] {
-    background: var(--board-segment-selected-bg);
-    box-shadow: inset 2px 0 0 var(--accent);
+  .empty-hint {
+    margin: 0;
+    padding: 16px 12px;
+    font-size: 12px;
+    color: var(--board-ink-dim);
   }
-
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: -2px;
-  }
-`
-
-const RowName = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0;
-  min-width: 0;
-  padding: 7px 10px;
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`
-
-const RowTag = styled.span`
-  margin-left: 6px;
-  padding: 1px 6px;
-  border: 1px solid var(--board-hairline);
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 400;
-  color: var(--board-ink-dim);
-`
-
-const RowCell = styled.div`
-  padding: 7px 10px;
-  font-size: 12px;
-  color: var(--board-ink);
-  font-variant-numeric: tabular-nums;
-
-  &.num {
-    text-align: right;
-  }
-`
-
-const EmptyHint = styled.p`
-  margin: 0;
-  padding: 16px 12px;
-  font-size: 12px;
-  color: var(--board-ink-dim);
 `
 
 export default ProfilePage

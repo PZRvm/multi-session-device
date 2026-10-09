@@ -31,10 +31,6 @@ const availabilityReason = (availability: DeviceAvailability): string => {
     : AVAILABILITY_LABELS[availability.state]
 }
 
-/** 过渡态（非停止/运行）用琥珀点提示忙碌 */
-const isTransitional = (status: DeviceStatus): boolean =>
-  status !== 'stopped' && status !== 'running'
-
 type DeviceRowProps = {
   device: Device
   selected: boolean
@@ -140,13 +136,15 @@ const DeviceRow = ({
         }
       }}
     >
-      <StatusDot
-        $status={device.status}
+      <span
+        className="status-dot"
+        data-status={device.status}
         role="img"
         aria-label={`状态：${STATUS_LABELS[device.status]}`}
       />
       {renaming ? (
-        <RenameInput
+        <Input
+          className="rename-input"
           value={draft}
           maxLength={50}
           aria-label="重命名设备"
@@ -162,95 +160,102 @@ const DeviceRow = ({
           onBlur={commitRename}
         />
       ) : (
-        <TextBlock>
-          <Title>{device.name}</Title>
-          <Subtitle $selected={selected}>{subtitle}</Subtitle>
+        <span className="text-block">
+          <span className="title">{device.name}</span>
+          <span className="subtitle">{subtitle}</span>
           {healthLine !== null ? (
-            <HealthLine $selected={selected} title={healthLine}>
+            <span className="health-line" title={healthLine}>
               {healthLine}
-            </HealthLine>
+            </span>
           ) : null}
           {device.lastError ? (
-            <ErrorLine $selected={selected} title={device.lastError.message}>
+            <span className="error-line" title={device.lastError.message}>
               {device.lastError.message}
-            </ErrorLine>
+            </span>
           ) : null}
           {device.cameraNotice ? (
-            <NoticeLine $selected={selected} title={device.cameraNotice}>
+            <span className="notice-line" title={device.cameraNotice}>
               {device.cameraNotice}
-            </NoticeLine>
+            </span>
           ) : null}
-        </TextBlock>
+        </span>
       )}
       {/* 行尾动作区整体拦停冒泡，行点击/双击不因误触按钮触发 */}
-      <Actions
+      <span
+        className="actions"
         onClick={(event) => event.stopPropagation()}
         onDoubleClick={(event) => event.stopPropagation()}
       >
         {device.status === 'stopped' ? (
-          <IconButton
+          <button
             type="button"
+            className="icon-button"
             aria-label={`启动 ${device.name}`}
             title={startDisabled ? '设备文件异常或仍在检查，暂不能启动（可先重新检查）' : '启动'}
             disabled={startDisabled}
             onClick={onStart}
           >
             <Play size={14} />
-          </IconButton>
+          </button>
         ) : null}
         {device.status === 'starting' ? (
           <>
-            <BusySlot role="img" aria-label={`启动中 ${device.name}`}>
-              <BusyIcon aria-hidden="true" />
-            </BusySlot>
-            <IconButton
+            <span className="busy-slot" role="img" aria-label={`启动中 ${device.name}`}>
+              <Loader2 size={14} aria-hidden="true" className="busy-icon" />
+            </span>
+            <button
               type="button"
+              className="icon-button"
               aria-label={`取消启动 ${device.name}`}
               title="取消启动"
               onClick={onCancelStart}
             >
               <X size={14} />
-            </IconButton>
+            </button>
           </>
         ) : null}
         {device.status === 'running' ? (
           <>
-            <IconButton
+            <button
               type="button"
+              className="icon-button"
               aria-label={`停止 ${device.name}`}
               title="停止"
               onClick={onStop}
             >
               <Square size={14} />
-            </IconButton>
-            <IconButton
+            </button>
+            <button
               type="button"
+              className="icon-button"
               aria-label={`复制 serial（${device.serial ?? ''}）`}
               title="复制 serial"
               onClick={onCopySerial}
             >
               <Copy size={14} />
-            </IconButton>
+            </button>
           </>
         ) : null}
         {device.status === 'stopping' ? (
           <>
-            <BusySlot role="img" aria-label={`停止中 ${device.name}`}>
-              <BusyIcon aria-hidden="true" />
-            </BusySlot>
+            <span className="busy-slot" role="img" aria-label={`停止中 ${device.name}`}>
+              <Loader2 size={14} aria-hidden="true" className="busy-icon" />
+            </span>
             {/* 停止失败保留重试入口；未失败时点击无害（合并到在途清理） */}
-            <IconButton
+            <button
               type="button"
+              className="icon-button"
               aria-label={`重试停止 ${device.name}`}
               title="停止"
               onClick={onStop}
             >
               <Square size={14} />
-            </IconButton>
+            </button>
           </>
         ) : null}
-        <IconButton
+        <button
           type="button"
+          className="icon-button"
           aria-label={`编辑配置 ${device.name}`}
           title={
             device.status === 'creating' || device.status === 'deleting'
@@ -261,17 +266,18 @@ const DeviceRow = ({
           onClick={onEdit}
         >
           <Settings2 size={14} />
-        </IconButton>
-        <IconButton
+        </button>
+        <button
           type="button"
+          className="icon-button"
           aria-label={`删除 ${device.name}`}
           title={metaWritable ? '删除' : '元数据写入已冻结，暂不能删除（详情见列表上方汇总）'}
           disabled={deleteDisabled}
           onClick={onDelete}
         >
           <Trash2 size={14} />
-        </IconButton>
-      </Actions>
+        </button>
+      </span>
     </Wrapper>
   )
 }
@@ -303,34 +309,41 @@ const Wrapper = styled.div`
     outline: 2px solid var(--accent);
     outline-offset: -2px;
   }
-`
 
-const StatusDot = styled.span<{ $status: DeviceStatus }>`
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: ${({ $status }) =>
-    $status === 'running'
-      ? 'var(--loading)'
-      : isTransitional($status)
-        ? 'var(--board-tile-ink)'
-        : 'var(--idle)'};
-`
+  .status-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--idle);
+  }
 
-/** 忙态槽位：与 IconButton 同尺寸的非交互容器，加载图标与按钮图标共用同一水平中心 */
-const BusySlot = styled.span`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 24px;
-  height: 24px;
-`
+  .status-dot[data-status='running'] {
+    background: var(--loading);
+  }
 
-const BusyIcon = styled(Loader2).attrs({ size: 14 })`
-  display: block;
-  animation: spin 1.2s linear infinite;
+  /* 过渡态（非停止/运行）用琥珀点提示忙碌 */
+  .status-dot[data-status='creating'],
+  .status-dot[data-status='starting'],
+  .status-dot[data-status='stopping'],
+  .status-dot[data-status='deleting'] {
+    background: var(--board-tile-ink);
+  }
+
+  /* 忙态槽位：与 icon-button 同尺寸的非交互容器，加载图标与按钮图标共用同一水平中心 */
+  .busy-slot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 24px;
+    height: 24px;
+  }
+
+  .busy-icon {
+    display: block;
+    animation: spin 1.2s linear infinite;
+  }
 
   @keyframes spin {
     to {
@@ -339,130 +352,124 @@ const BusyIcon = styled(Loader2).attrs({ size: 14 })`
   }
 
   @media (prefers-reduced-motion: reduce) {
-    animation: none;
+    .busy-icon {
+      animation: none;
+    }
   }
-`
 
-const TextBlock = styled.span`
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-  flex: 1;
-`
+  .text-block {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
+  }
 
-const Title = styled.span`
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.5;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
+  .title {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-const Subtitle = styled.span<{ $selected: boolean }>`
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--board-ink-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  .subtitle {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--board-ink-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-  ${({ $selected }) =>
-    $selected &&
-    `
-      color: inherit;
-      opacity: 0.72;
-    `}
-`
+  &[aria-current] .subtitle {
+    color: inherit;
+    opacity: 0.72;
+  }
 
-const ErrorLine = styled.span<{ $selected: boolean }>`
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--board-tile-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  .error-line {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--board-tile-ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-  ${({ $selected }) =>
-    $selected &&
-    `
-      color: inherit;
-      opacity: 0.85;
-    `}
-`
+  &[aria-current] .error-line {
+    color: inherit;
+    opacity: 0.85;
+  }
 
-/** 健康原因行（对账）：独立于 lastError 的文件健康提示 */
-const HealthLine = styled.span<{ $selected: boolean }>`
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--board-ink-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* 健康原因行（对账）：独立于 lastError 的文件健康提示 */
+  .health-line {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--board-ink-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-  ${({ $selected }) =>
-    $selected &&
-    `
-      color: inherit;
-      opacity: 0.78;
-    `}
-`
+  &[aria-current] .health-line {
+    color: inherit;
+    opacity: 0.78;
+  }
 
-/** 摄像头回退说明（启动仲裁命中）：运行会话内提示，停止即清除 */
-const NoticeLine = styled.span<{ $selected: boolean }>`
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--board-ink-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* 摄像头回退说明（启动仲裁命中）：运行会话内提示，停止即清除 */
+  .notice-line {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--board-ink-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-  ${({ $selected }) =>
-    $selected &&
-    `
-      color: inherit;
-      opacity: 0.78;
-    `}
-`
+  &[aria-current] .notice-line {
+    color: inherit;
+    opacity: 0.78;
+  }
 
-const RenameInput = styled(Input)`
-  flex: 1;
-  min-width: 0;
-`
+  .rename-input {
+    flex: 1;
+    min-width: 0;
+  }
 
-const Actions = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex: none;
-`
+  .actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    flex: none;
+  }
 
-const IconButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  transition: background-color 0.12s;
+  .icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    transition: background-color 0.12s;
+  }
 
-  &:hover:not(:disabled) {
+  .icon-button:hover:not(:disabled) {
     background: var(--board-hover-veil);
   }
 
-  &:disabled {
+  .icon-button:disabled {
     opacity: 0.35;
     cursor: default;
   }
 
-  &:focus-visible {
+  .icon-button:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
   }

@@ -227,8 +227,8 @@ const App = (): React.JSX.Element => {
   }
 
   return (
-    <Shell>
-      <ListPane style={{ width: listWidth }}>
+    <Wrapper>
+      <div className="list-pane" style={{ width: listWidth }}>
         <BoardHead count={devices.length} onOpenSettings={() => void openSettings()} />
         <DeviceHealthNotice
           summary={reconciliation}
@@ -256,7 +256,7 @@ const App = (): React.JSX.Element => {
           onEdit={handleEdit}
           onRenameBlocked={handleRenameBlocked}
         />
-        <Foot>
+        <footer className="foot">
           <Button
             variant="primary"
             onClick={openWizard}
@@ -265,15 +265,15 @@ const App = (): React.JSX.Element => {
               metaWritable ? undefined : '设备元数据写入已冻结，暂不能新建设备（详情见上方汇总）'
             }
           >
-            <NewLabel>
+            <span className="new-label">
               <Plus size={14} />
               新建设备
-            </NewLabel>
+            </span>
           </Button>
-        </Foot>
-      </ListPane>
+        </footer>
+      </div>
       <ResizeHandle width={listWidth} onResize={setListWidth} />
-      <CanvasArea>
+      <main className="canvas-area">
         {selected && selected.status === 'running' ? (
           <DeviceCanvas
             key={`${selected.id}:${selected.runId}`}
@@ -290,47 +290,47 @@ const App = (): React.JSX.Element => {
             createDisabled={!metaWritable}
           />
         )}
-      </CanvasArea>
-    </Shell>
+      </main>
+    </Wrapper>
   )
 }
 
-const Shell = styled.div`
+const Wrapper = styled.div`
   display: flex;
   height: 100vh;
   overflow: hidden;
-`
 
-const ListPane = styled.div`
-  display: flex;
-  flex-direction: column;
-  flex: none;
-  min-width: 0;
-`
-
-const Foot = styled.footer`
-  flex: none;
-  padding: 12px;
-  border-top: 1px solid var(--board-hairline);
-
-  & > button {
-    width: 100%;
+  .list-pane {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    min-width: 0;
   }
-`
 
-const NewLabel = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-`
+  .foot {
+    flex: none;
+    padding: 12px;
+    border-top: 1px solid var(--board-hairline);
 
-const CanvasArea = styled.main`
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--board-bg);
+    & > button {
+      width: 100%;
+    }
+  }
+
+  .new-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .canvas-area {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--board-bg);
+  }
 `
 
 export default App

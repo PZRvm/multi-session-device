@@ -36,9 +36,12 @@ const cameraSelect = (
     }))
   ]
   return (
-    <Field disabled={disabled}>
-      <Label htmlFor={`setting-${key}`}>{label}</Label>
-      <Select
+    <div className="field" data-disabled={disabled || undefined}>
+      <label className="label" htmlFor={`setting-${key}`}>
+        {label}
+      </label>
+      <select
+        className="select"
         id={`setting-${key}`}
         disabled={disabled}
         value={current.mode === 'webcam' ? (current.deviceId ?? '') : current.mode}
@@ -68,15 +71,15 @@ const cameraSelect = (
               {option.label}
             </option>
           ))}
-      </Select>
-      <Hint>
+      </select>
+      <p className="hint">
         {disabled
           ? disabledReason
           : capabilities.webcamDeviceIds.length === 0
             ? (capabilities.cameraSnapshot?.error ?? '未枚举到宿主摄像头，请刷新或检查权限')
             : '同一摄像头不能同时配给两台设备；macOS 权限归属本应用'}
-      </Hint>
-    </Field>
+      </p>
+    </div>
   )
 }
 
@@ -127,12 +130,13 @@ const SettingsForm = ({
     const capability = field(key)
     const disabled = capability?.disabledReason !== null && capability?.disabledReason !== undefined
     return (
-      <Field disabled={disabled}>
-        <Label htmlFor={`setting-${key}`}>
+      <div className="field" data-disabled={disabled || undefined}>
+        <label className="label" htmlFor={`setting-${key}`}>
           {label}
-          <Unit>{unit}</Unit>
-        </Label>
-        <NumInput
+          <span className="unit">{unit}</span>
+        </label>
+        <input
+          className="num-input"
           id={`setting-${key}`}
           type="number"
           value={String(value[key])}
@@ -147,17 +151,19 @@ const SettingsForm = ({
           }}
         />
         {errors[key] !== undefined ? (
-          <FieldError role="alert">{errors[key]}</FieldError>
+          <p className="field-error" role="alert">
+            {errors[key]}
+          </p>
         ) : (
-          <Hint>
+          <p className="hint">
             {disabled
               ? disabledReasonOf(key)
               : capability?.min !== null && capability?.min !== undefined
                 ? `范围 ${capability.min}–${capability.max}`
                 : ''}
-          </Hint>
+          </p>
         )}
-      </Field>
+      </div>
     )
   }
 
@@ -170,9 +176,12 @@ const SettingsForm = ({
   ): React.JSX.Element => {
     const disabled = disabledReasonOf(key) !== null
     return (
-      <Field disabled={disabled}>
-        <Label htmlFor={`setting-${key}`}>{label}</Label>
-        <Select
+      <div className="field" data-disabled={disabled || undefined}>
+        <label className="label" htmlFor={`setting-${key}`}>
+          {label}
+        </label>
+        <select
+          className="select"
           id={`setting-${key}`}
           value={currentValue ?? ''}
           disabled={disabled}
@@ -186,16 +195,16 @@ const SettingsForm = ({
               {option.label}
             </option>
           ))}
-        </Select>
-        <Hint>{disabled ? disabledReasonOf(key) : ''}</Hint>
-      </Field>
+        </select>
+        <p className="hint">{disabled ? disabledReasonOf(key) : ''}</p>
+      </div>
     )
   }
 
   return (
-    <Form>
-      <Group>
-        <GroupTitle>皮肤</GroupTitle>
+    <Wrapper>
+      <fieldset className="group">
+        <legend className="group-title">皮肤</legend>
         {select(
           'skinRef',
           '机型皮肤',
@@ -206,75 +215,88 @@ const SettingsForm = ({
           })),
           (next) => onChange({ ...value, skinRef: next })
         )}
-        <SkinActions>
-          <SkinButton
+        <div className="skin-actions">
+          <button
             type="button"
+            className="skin-button"
             disabled={skinDownloading !== null}
             onClick={() => void onImportSkin()}
           >
             导入压缩包…
-          </SkinButton>
+          </button>
           {capabilities.recommendedSkin ? (
-            <SkinButton
+            <button
               type="button"
+              className="skin-button"
               disabled={skinDownloading !== null}
               onClick={() => void onDownloadSkin(capabilities.recommendedSkin!.name)}
             >
               {skinDownloading !== null
                 ? '正在获取…'
                 : `获取 ${capabilities.recommendedSkin.name} 官方皮肤`}
-            </SkinButton>
+            </button>
           ) : null}
-        </SkinActions>
-        <Hint>
+        </div>
+        <p className="hint">
           {capabilities.recommendedSkin
             ? '已缓存的对应机型皮肤默认选中；未选择时使用通用外框。'
             : '该机型暂无已核实的官方皮肤；可使用通用外框或导入压缩包。'}
-        </Hint>
-        {skinError ? <FieldError role="alert">{skinError}</FieldError> : null}
-      </Group>
+        </p>
+        {skinError ? (
+          <p className="field-error" role="alert">
+            {skinError}
+          </p>
+        ) : null}
+      </fieldset>
 
-      <Group>
-        <GroupTitle>摄像头</GroupTitle>
+      <fieldset className="group">
+        <legend className="group-title">摄像头</legend>
         {cameraSelect('frontCamera', '前置摄像头', value, onChange, capabilities)}
         {cameraSelect('rearCamera', '后置摄像头', value, onChange, capabilities)}
         {onCameraAction ? (
-          <SkinActions>
+          <div className="skin-actions">
             {capabilities.cameraSnapshot?.permission === 'not-determined' ? (
-              <SkinButton
+              <button
                 disabled={cameraBusy}
                 type="button"
+                className="skin-button"
                 onClick={() => void onCameraAction('request')}
               >
                 允许使用摄像头
-              </SkinButton>
+              </button>
             ) : null}
             {['denied', 'restricted'].includes(capabilities.cameraSnapshot?.permission ?? '') ? (
-              <SkinButton
+              <button
                 disabled={cameraBusy}
                 type="button"
+                className="skin-button"
                 onClick={() => void onCameraAction('settings')}
               >
                 打开摄像头权限设置
-              </SkinButton>
+              </button>
             ) : null}
-            <SkinButton
+            <button
               disabled={cameraBusy}
               type="button"
+              className="skin-button"
               onClick={() => void onCameraAction('refresh')}
             >
               {cameraBusy ? '正在检查…' : '刷新摄像头'}
-            </SkinButton>
-          </SkinActions>
+            </button>
+          </div>
         ) : null}
         {['denied', 'restricted'].includes(capabilities.cameraSnapshot?.permission ?? '') ? (
-          <Hint>系统未允许本应用使用摄像头。修改系统权限后请重启应用。</Hint>
+          <p className="hint">系统未允许本应用使用摄像头。修改系统权限后请重启应用。</p>
         ) : null}
-        {cameraError ? <FieldError role="alert">{cameraError}</FieldError> : null}
-      </Group>
+        {cameraError ? (
+          <p className="field-error" role="alert">
+            {cameraError}
+          </p>
+        ) : null}
+      </fieldset>
 
-      <Group>
-        <GroupTitle>网络</GroupTitle>
+      <fieldset className="group">
+        <legend className="group-title">网络</legend>
         {select(
           'networkSpeed',
           '网络速度',
@@ -289,14 +311,14 @@ const SettingsForm = ({
           NETWORK_DELAY_LABELS.map(([preset, label]) => ({ value: preset, label })),
           (next) => onChange({ ...value, networkLatency: next })
         )}
-      </Group>
+      </fieldset>
 
-      <Group>
-        <GroupTitle>启动</GroupTitle>
-        <Field disabled={!capabilities.quickBootAvailable}>
-          <Label>启动模式</Label>
-          <RadioRow role="radiogroup" aria-label="启动模式">
-            <RadioLabel>
+      <fieldset className="group">
+        <legend className="group-title">启动</legend>
+        <div className="field" data-disabled={!capabilities.quickBootAvailable || undefined}>
+          <label className="label">启动模式</label>
+          <div className="radio-row" role="radiogroup" aria-label="启动模式">
+            <label className="radio-label">
               <input
                 type="radio"
                 name="setting-boot-mode"
@@ -304,8 +326,8 @@ const SettingsForm = ({
                 onChange={() => onChange({ ...value, bootMode: 'cold' })}
               />
               Cold Boot（全新启动）
-            </RadioLabel>
-            <RadioLabel>
+            </label>
+            <label className="radio-label">
               <input
                 type="radio"
                 name="setting-boot-mode"
@@ -316,14 +338,14 @@ const SettingsForm = ({
                 }}
               />
               Quick Boot
-            </RadioLabel>
-          </RadioRow>
-          <Hint>
+            </label>
+          </div>
+          <p className="hint">
             {capabilities.quickBootAvailable
               ? 'Quick 恢复上次快照；配置或镜像变化后自动回冷启动'
               : capabilities.quickBootDisabledReason}
-          </Hint>
-        </Field>
+          </p>
+        </div>
         {select(
           'orientation',
           '初始朝向',
@@ -334,32 +356,35 @@ const SettingsForm = ({
           ],
           (next) => onChange({ ...value, orientation: next })
         )}
-      </Group>
+      </fieldset>
 
-      <Group>
-        <GroupTitle>内部存储</GroupTitle>
+      <fieldset className="group">
+        <legend className="group-title">内部存储</legend>
         {mode === 'edit' ? (
-          <Field disabled>
-            <Label htmlFor="setting-internal-storage-edit">userdata 容量</Label>
-            <NumInput
+          <div className="field" data-disabled>
+            <label className="label" htmlFor="setting-internal-storage-edit">
+              userdata 容量
+            </label>
+            <input
+              className="num-input"
               id="setting-internal-storage-edit"
               disabled
               readOnly
               aria-readonly="true"
               value={storageDisplay ?? String(value.internalStorageMiB)}
             />
-            <Hint>已有模拟器不支持修改内部存储，容量保持原配置。</Hint>
-          </Field>
+            <p className="hint">已有模拟器不支持修改内部存储，容量保持原配置。</p>
+          </div>
         ) : (
           num('internalStorageMiB', 'userdata 初始容量', 'MiB')
         )}
         {mode === 'create' ? (
-          <Hint>默认 6144 MiB（6 GB，按 1024 换算）；创建后不可扩容。</Hint>
+          <p className="hint">默认 6144 MiB（6 GB，按 1024 换算）；创建后不可扩容。</p>
         ) : null}
-      </Group>
+      </fieldset>
 
-      <Group>
-        <GroupTitle>模拟性能</GroupTitle>
+      <fieldset className="group">
+        <legend className="group-title">模拟性能</legend>
         {num('cpuCores', 'CPU 核数', '核')}
         {num('ramMiB', '内存（整机 RAM）', 'MiB')}
         {num('vmHeapMiB', 'VM heap', 'MiB')}
@@ -377,13 +402,13 @@ const SettingsForm = ({
           [{ value: 'arm64-v8a' as const, label: 'arm64-v8a' }],
           (next) => onChange({ ...value, preferredAbi: next ?? 'optimal' })
         )}
-        <Hint>Optimal 解析为所选镜像 ABI（本期 arm64）。软件渲染性能低于硬件加速。</Hint>
-      </Group>
-    </Form>
+        <p className="hint">Optimal 解析为所选镜像 ABI（本期 arm64）。软件渲染性能低于硬件加速。</p>
+      </fieldset>
+    </Wrapper>
   )
 }
 
-const Form = styled.div`
+const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -391,146 +416,146 @@ const Form = styled.div`
   min-height: 0;
   flex: 1;
   padding: 14px 16px;
-`
 
-const Group = styled.fieldset`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  border: none;
-`
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
 
-const GroupTitle = styled.legend`
-  padding: 0;
-  margin-bottom: 2px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--board-ink-dim);
-`
+  .group-title {
+    padding: 0;
+    margin-bottom: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--board-ink-dim);
+  }
 
-const Field = styled.div<{ disabled?: boolean }>`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
 
-  &[disabled] {
+  .field[data-disabled] {
     opacity: 0.6;
   }
-`
 
-const Label = styled.label`
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--board-ink);
-`
+  .label {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--board-ink);
+  }
 
-const Unit = styled.span`
-  font-size: 10px;
-  color: var(--board-ink-dim);
-`
+  .unit {
+    font-size: 10px;
+    color: var(--board-ink-dim);
+  }
 
-const NumInput = styled.input`
-  width: 160px;
-  padding: 5px 8px;
-  border: 1px solid var(--board-hairline);
-  border-radius: 4px;
-  background: var(--board-bg);
-  color: var(--board-ink);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
+  .num-input {
+    width: 160px;
+    padding: 5px 8px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: var(--board-bg);
+    color: var(--board-ink);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
 
-  &:disabled {
+  .num-input:disabled {
     cursor: default;
   }
 
-  &:focus-visible {
+  .num-input:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
   }
 
-  &[aria-invalid='true'] {
+  .num-input[aria-invalid='true'] {
     border-color: var(--danger, #b3261e);
   }
-`
 
-const Select = styled.select`
-  width: 200px;
-  padding: 5px 8px;
-  border: 1px solid var(--board-hairline);
-  border-radius: 4px;
-  background: var(--board-bg);
-  color: var(--board-ink);
-  font-size: 12px;
+  .select {
+    width: 200px;
+    padding: 5px 8px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: var(--board-bg);
+    color: var(--board-ink);
+    font-size: 12px;
+  }
 
-  &:disabled {
+  .select:disabled {
     cursor: default;
   }
 
-  &:focus-visible {
+  .select:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
   }
-`
 
-const RadioRow = styled.div`
-  display: flex;
-  gap: 14px;
-`
+  .radio-row {
+    display: flex;
+    gap: 14px;
+  }
 
-const RadioLabel = styled.label`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  cursor: pointer;
-`
+  .radio-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    cursor: pointer;
+  }
 
-const Hint = styled.p`
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--board-ink-dim);
-`
+  .hint {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--board-ink-dim);
+  }
 
-const FieldError = styled.p`
-  margin: 0;
-  font-size: 11px;
-  color: var(--danger, #b3261e);
-`
+  .field-error {
+    margin: 0;
+    font-size: 11px;
+    color: var(--danger, #b3261e);
+  }
 
-export default SettingsForm
+  .skin-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
 
-const SkinActions = styled.div`
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  align-items: center;
-`
+  .skin-button {
+    padding: 5px 10px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: var(--board-bg-raised);
+    color: var(--board-ink);
+    font-size: 11px;
+    cursor: pointer;
+  }
 
-const SkinButton = styled.button`
-  padding: 5px 10px;
-  border: 1px solid var(--board-hairline);
-  border-radius: 4px;
-  background: var(--board-bg-raised);
-  color: var(--board-ink);
-  font-size: 11px;
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
+  .skin-button:hover:not(:disabled) {
     background: var(--board-hover-veil);
   }
 
-  &:disabled {
+  .skin-button:disabled {
     cursor: default;
     opacity: 0.6;
   }
 
-  &:focus-visible {
+  .skin-button:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
   }
 `
+
+export default SettingsForm

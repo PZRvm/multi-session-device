@@ -513,30 +513,30 @@ const DeviceWizard = ({
     const waiting = resource.phase === 'loading' || resource.phase === 'idle'
     if (waiting && resource.data.length === 0) {
       return (
-        <LoadingBlock role="status">
-          <Spinner size={16} aria-hidden="true" />
-          <LoadingText>{loadingText}</LoadingText>
-        </LoadingBlock>
+        <div className="loading-block" role="status">
+          <Loader2 size={16} aria-hidden="true" className="spinner" />
+          <span className="loading-text">{loadingText}</span>
+        </div>
       )
     }
     return (
       <>
         {resource.error !== null ? (
-          <ErrorBlock role="alert">
-            <ErrorText>{resource.error}</ErrorText>
+          <div className="error-block" role="alert">
+            <span className="error-text">{resource.error}</span>
             <Button onClick={retry}>重试</Button>
-          </ErrorBlock>
+          </div>
         ) : null}
         {waiting ? (
-          <RefreshRow role="status">
-            <Spinner size={12} aria-hidden="true" />
+          <div className="refresh-row" role="status">
+            <Loader2 size={12} aria-hidden="true" className="spinner" />
             {refreshingText}
-          </RefreshRow>
+          </div>
         ) : null}
         {resource.data.length > 0 ? (
           content
         ) : resource.phase === 'ready' ? (
-          <EmptyHint>{emptyText}</EmptyHint>
+          <p className="empty-hint">{emptyText}</p>
         ) : null}
       </>
     )
@@ -569,45 +569,49 @@ const DeviceWizard = ({
       '正在加载系统镜像…',
       '正在刷新系统镜像…',
       '镜像清单为空',
-      <ConfigureLayout>
-        <Main>
-          <TabBar role="tablist" aria-label="配置分区">
-            <Tab
+      <div className="configure-layout">
+        <div className="main">
+          <div className="tab-bar" role="tablist" aria-label="配置分区">
+            <button
               type="button"
               role="tab"
               aria-selected={tab === 'device'}
               onClick={() => setTab('device')}
+              className="tab"
             >
               设备
-            </Tab>
-            <Tab
+            </button>
+            <button
               type="button"
               role="tab"
               aria-selected={tab === 'settings'}
               onClick={() => setTab('settings')}
+              className="tab"
             >
               附加设置
-            </Tab>
-          </TabBar>
+            </button>
+          </div>
 
           {/* 卸载/下载错误跨标签可见（review P3：切标签不丢错误视野） */}
           {downloadError !== null ? (
-            <ErrorBlock role="alert">
-              <ErrorText>{downloadError.message}</ErrorText>
+            <div className="error-block" role="alert">
+              <span className="error-text">{downloadError.message}</span>
               <Button onClick={retryDownload}>重试下载</Button>
-            </ErrorBlock>
+            </div>
           ) : null}
           {uninstallError !== null ? (
-            <ErrorBlock role="alert">
-              <ErrorText>{uninstallError}</ErrorText>
+            <div className="error-block" role="alert">
+              <span className="error-text">{uninstallError}</span>
               <Button onClick={() => setUninstallError(null)}>知道了</Button>
-            </ErrorBlock>
+            </div>
           ) : null}
 
           {tab === 'device' ? (
-            <DevicePane>
-              <NameBlock>
-                <NameLabel htmlFor="wizard-device-name">设备名称</NameLabel>
+            <div className="device-pane">
+              <div className="name-block">
+                <label className="name-label" htmlFor="wizard-device-name">
+                  设备名称
+                </label>
                 <Input
                   id="wizard-device-name"
                   value={effectiveName}
@@ -618,8 +622,10 @@ const DeviceWizard = ({
                     setNameTouched(true)
                   }}
                 />
-                <NameHint>默认「设备画像名 + API 版本」；改过后切换镜像不覆盖你的输入。</NameHint>
-              </NameBlock>
+                <p className="name-hint">
+                  默认「设备画像名 + API 版本」；改过后切换镜像不覆盖你的输入。
+                </p>
+              </div>
               <ImageTable
                 images={images.data}
                 filters={imageFilters}
@@ -634,13 +640,13 @@ const DeviceWizard = ({
                 onUninstall={(entry) => void uninstall(entry)}
                 uninstallingPackage={uninstallingPackage}
               />
-            </DevicePane>
+            </div>
           ) : (
-            <SettingsPane>
+            <div className="settings-pane">
               {capabilities.phase === 'loading' || capabilities.phase === 'idle' ? (
-                <SettingsHint>正在加载设置能力…</SettingsHint>
+                <p className="settings-hint">正在加载设置能力…</p>
               ) : capabilities.phase === 'error' ? (
-                <SettingsHint>{capabilities.error}</SettingsHint>
+                <p className="settings-hint">{capabilities.error}</p>
               ) : capabilities.data !== null && advancedSettings !== null ? (
                 <SettingsForm
                   capabilities={effectiveCapabilities ?? capabilities.data}
@@ -661,29 +667,31 @@ const DeviceWizard = ({
                   onCameraAction={resources.cameraAction}
                 />
               ) : null}
-            </SettingsPane>
+            </div>
           )}
-        </Main>
+        </div>
         <SummaryPanel profile={selectedProfile} image={selectedImage} verdict={selectedVerdict} />
-      </ConfigureLayout>
+      </div>
     )
   }
 
   return (
     <Wrapper>
-      <Header>
-        {window.api?.platform === 'darwin' ? <TrafficSpacer aria-hidden="true" /> : null}
-        <TitleGroup>
-          <Heading>新建设备</Heading>
-          <StepIndicator>
+      <header className="header">
+        {window.api?.platform === 'darwin' ? (
+          <span className="traffic-spacer" aria-hidden="true" />
+        ) : null}
+        <div className="title-group">
+          <h3 className="heading">新建设备</h3>
+          <span className="step-indicator">
             第 {page} / 2 页 · {PAGE_TITLES[page]}
-          </StepIndicator>
-        </TitleGroup>
-      </Header>
+          </span>
+        </div>
+      </header>
 
-      <Body>{renderPage()}</Body>
+      <div className="body">{renderPage()}</div>
 
-      <Footer>
+      <footer className="footer">
         <Button onClick={onCancel}>取消</Button>
         {page === 2 ? <Button onClick={() => setPage(1)}>上一步</Button> : null}
         {page === 1 ? (
@@ -699,7 +707,7 @@ const DeviceWizard = ({
             {creating ? '创建中…' : '创建'}
           </Button>
         )}
-      </Footer>
+      </footer>
     </Wrapper>
   )
 }
@@ -710,79 +718,79 @@ const Wrapper = styled.div`
   width: 100%;
   height: 100vh;
   background: var(--board-bg);
-`
 
-const Header = styled.header`
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex: none;
-  height: 40px;
-  padding-left: 14px;
-  border-bottom: 1px solid var(--board-hairline);
-  /* 板头整行是窗口拖拽带（darwin 原生标题条已去，对齐主窗 BoardHead 模式）；
-     标题组绝对定位水平居中于窗口中线（用户裁决），垂直落板头中线（与三灯 y=12 共线） */
-  -webkit-app-region: drag;
-`
+  .header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: none;
+    height: 40px;
+    padding-left: 14px;
+    border-bottom: 1px solid var(--board-hairline);
+    /* 板头整行是窗口拖拽带（darwin 原生标题条已去，对齐主窗 BoardHead 模式）；
+       标题组绝对定位水平居中于窗口中线（用户裁决），垂直落板头中线（与三灯 y=12 共线） */
+    -webkit-app-region: drag;
+  }
 
-/** darwin 原生三灯让位（60px no-drag 占位；标题组改绝对居中后，占位只负责三灯区禁拖） */
-const TrafficSpacer = styled.span`
-  flex: none;
-  width: 60px;
-  -webkit-app-region: no-drag;
-`
+  /* darwin 原生三灯让位（60px no-drag 占位；标题组改绝对居中后，占位只负责三灯区禁拖） */
+  .traffic-spacer {
+    flex: none;
+    width: 60px;
+    -webkit-app-region: no-drag;
+  }
 
-/** 标题组：两段字号不同（14/11px）在组内基线对齐；整组绝对定位——水平居中于窗口、垂直居中于板头。
- *  div 而非 span：内含 h3（flow content），span 只许 phrasing content（review 2026-10-06） */
-const TitleGroup = styled.div`
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-`
+  /* 标题组：两段字号不同（14/11px）在组内基线对齐；整组绝对定位——水平居中于窗口、垂直居中于板头。
+     div 而非 span：内含 h3（flow content），span 只许 phrasing content（review 2026-10-06） */
+  .title-group {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
 
-const Heading = styled.h3`
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-`
+  .heading {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+  }
 
-const StepIndicator = styled.span`
-  font-size: 11px;
-  color: var(--board-ink-dim);
-`
+  .step-indicator {
+    font-size: 11px;
+    color: var(--board-ink-dim);
+  }
 
-const Body = styled.div`
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-  padding: 0 0 8px;
-`
+  .body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+    padding: 0 0 8px;
+  }
 
-const LoadingBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 180px;
-  color: var(--board-ink-dim);
-`
+  .loading-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 180px;
+    color: var(--board-ink-dim);
+  }
 
-const LoadingText = styled.span`
-  font-size: 12px;
-`
+  .loading-text {
+    font-size: 12px;
+  }
 
-const Spinner = styled(Loader2)`
-  color: var(--loading);
-  animation: spin 1.2s linear infinite;
+  .spinner {
+    color: var(--loading);
+    animation: spin 1.2s linear infinite;
 
-  @media (prefers-reduced-motion: reduce) {
-    animation: none;
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   }
 
   @keyframes spin {
@@ -790,138 +798,138 @@ const Spinner = styled(Loader2)`
       transform: rotate(360deg);
     }
   }
-`
 
-const RefreshRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 16px;
-  font-size: 11px;
-  color: var(--board-ink-dim);
-`
+  .refresh-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    font-size: 11px;
+    color: var(--board-ink-dim);
+  }
 
-const EmptyHint = styled.p`
-  margin: 0;
-  padding: 16px;
-  font-size: 12px;
-  color: var(--board-ink-dim);
-`
+  .empty-hint {
+    margin: 0;
+    padding: 16px;
+    font-size: 12px;
+    color: var(--board-ink-dim);
+  }
 
-const ErrorBlock = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 8px 16px;
-  padding: 8px 10px;
-  border: 1px solid var(--board-hairline);
-  border-radius: 4px;
-  background: var(--board-bg);
-`
+  .error-block {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 16px;
+    padding: 8px 10px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: var(--board-bg);
+  }
 
-const ErrorText = styled.span`
-  flex: 1;
-  font-size: 12px;
-  color: var(--board-ink);
-`
-
-const ConfigureLayout = styled.div`
-  display: flex;
-  min-height: 0;
-  flex: 1;
-`
-
-const Main = styled.div`
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1;
-`
-
-const TabBar = styled.div`
-  display: flex;
-  gap: 4px;
-  flex: none;
-  padding: 10px 16px 0;
-  border-bottom: 1px solid var(--board-hairline);
-`
-
-const Tab = styled.button`
-  padding: 7px 14px;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--board-ink-dim);
-  font-size: 12px;
-  cursor: pointer;
-  transition: color 0.12s;
-
-  &:hover {
+  .error-text {
+    flex: 1;
+    font-size: 12px;
     color: var(--board-ink);
   }
 
-  &[aria-selected='true'] {
-    color: var(--board-ink);
-    font-weight: 600;
-    border-bottom-color: var(--accent);
+  .configure-layout {
+    display: flex;
+    min-height: 0;
+    flex: 1;
   }
 
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: -2px;
+  .main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
   }
-`
 
-const DevicePane = styled.div`
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-  gap: 10px;
-  padding: 12px 16px;
-`
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    flex: none;
+    padding: 10px 16px 0;
+    border-bottom: 1px solid var(--board-hairline);
+  }
 
-const NameBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: none;
-`
+  .tab {
+    padding: 7px 14px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--board-ink-dim);
+    font-size: 12px;
+    cursor: pointer;
+    transition: color 0.12s;
 
-const NameLabel = styled.label`
-  font-size: 12px;
-  color: var(--board-ink-dim);
-`
+    &:hover {
+      color: var(--board-ink);
+    }
 
-const NameHint = styled.p`
-  margin: 0;
-  font-size: 11px;
-  color: var(--board-ink-dim);
-`
+    &[aria-selected='true'] {
+      color: var(--board-ink);
+      font-weight: 600;
+      border-bottom-color: var(--accent);
+    }
 
-const SettingsPane = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
-  flex: 1;
-  padding: 0;
-`
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+    }
+  }
 
-const SettingsHint = styled.p`
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--board-ink-dim);
-`
+  .device-pane {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+    gap: 10px;
+    padding: 12px 16px;
+  }
 
-const Footer = styled.footer`
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  flex: none;
-  padding: 12px 16px;
-  border-top: 1px solid var(--board-hairline);
+  .name-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: none;
+  }
+
+  .name-label {
+    font-size: 12px;
+    color: var(--board-ink-dim);
+  }
+
+  .name-hint {
+    margin: 0;
+    font-size: 11px;
+    color: var(--board-ink-dim);
+  }
+
+  .settings-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    flex: 1;
+    padding: 0;
+  }
+
+  .settings-hint {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--board-ink-dim);
+  }
+
+  .footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex: none;
+    padding: 12px 16px;
+    border-top: 1px solid var(--board-hairline);
+  }
 `
 
 export default DeviceWizard

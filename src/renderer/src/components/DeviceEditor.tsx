@@ -265,41 +265,43 @@ const DeviceEditor = ({
 
   return (
     <Wrapper>
-      <Header>
-        <TrafficSpacer aria-hidden="true" />
-        <TitleGroup>
-          <Heading>编辑设备</Heading>
-          <StepIndicator>名称与附加设置 · 机型和系统 API 固定不变</StepIndicator>
-        </TitleGroup>
-      </Header>
+      <header className="header">
+        <span className="traffic-spacer" aria-hidden="true" />
+        <div className="title-group">
+          <h3 className="heading">编辑设备</h3>
+          <span className="step-indicator">名称与附加设置 · 机型和系统 API 固定不变</span>
+        </div>
+      </header>
 
-      <Body>
+      <div className="body">
         {phase === 'loading' ? (
-          <HintPane>正在读取设备配置…</HintPane>
+          <p className="hint-pane">正在读取设备配置…</p>
         ) : phase === 'error' ? (
-          <HintPane>
+          <p className="hint-pane">
             读取设备配置失败：{loadError}
             <br />
             <Button onClick={() => void load()}>重试</Button>
-          </HintPane>
+          </p>
         ) : snapshot !== null ? (
-          <SettingsPane>
-            <NameBlock>
-              <NameLabel htmlFor="editor-device-name">设备名称</NameLabel>
+          <div className="settings-pane">
+            <div className="name-block">
+              <label className="name-label" htmlFor="editor-device-name">
+                设备名称
+              </label>
               <Input
                 id="editor-device-name"
                 value={name}
                 maxLength={50}
                 onChange={(event) => setName(event.target.value)}
               />
-              <IdentityLine>{identityLine}</IdentityLine>
-              <IdentityLine small>
+              <p className="identity-line">{identityLine}</p>
+              <p className="identity-line identity-line-small">
                 内部存储{' '}
                 {snapshot.internalStorage.valueMiB === null
                   ? '未知'
                   : `${snapshot.internalStorage.valueMiB} MiB`}
                 （{snapshot.internalStorage.note}）
-              </IdentityLine>
+              </p>
               <label className="cutout-reset">
                 <input
                   type="checkbox"
@@ -308,10 +310,10 @@ const DeviceEditor = ({
                 />
                 恢复安卓默认挖孔（下次启动生效，会关闭开发者选项中的挖孔模拟）
               </label>
-            </NameBlock>
+            </div>
 
             {warnings.length > 0 || (snapshot.configMismatches?.length ?? 0) > 0 ? (
-              <NoticeBox role="status">
+              <div className="notice-box" role="status">
                 {snapshot.configMismatches?.map((item) => {
                   const adopted =
                     item.actualSettings !== null &&
@@ -323,12 +325,12 @@ const DeviceEditor = ({
                     )
                   return (
                     <div className="config-mismatch" key={item.field}>
-                      <NoticeLine>
+                      <span className="notice-line">
                         {FIELD_LABELS[item.field]}：
                         {adopted
                           ? `已采用配置值 ${item.actualLabel}，保存后同步应用记录。`
                           : `配置为 ${item.actualLabel}，保存将以表单值为准。${item.actualSettings === null ? '原值无法识别，不能采用。' : ''}`}
-                      </NoticeLine>
+                      </span>
                       {item.actualSettings !== null && settings !== null ? (
                         <Button
                           aria-label={`${FIELD_LABELS[item.field]}：采用配置值`}
@@ -346,18 +348,18 @@ const DeviceEditor = ({
                   )
                 })}
                 {warnings.map(([label, warning]) => (
-                  <NoticeLine key={`${label}:${warning}`}>
+                  <span className="notice-line" key={`${label}:${warning}`}>
                     {label}：{warning}
-                  </NoticeLine>
+                  </span>
                 ))}
-              </NoticeBox>
+              </div>
             ) : null}
 
             {settings === null ? (
-              <HintPane>
+              <p className="hint-pane">
                 {snapshot.settingsBlockedReason ??
                   '旧设备的附加设置无法无损识别，当前仅支持修改名称。'}
-              </HintPane>
+              </p>
             ) : (
               <SettingsForm
                 capabilities={effectiveCapabilities ?? snapshot.capabilities}
@@ -380,24 +382,24 @@ const DeviceEditor = ({
                 }
               />
             )}
-          </SettingsPane>
+          </div>
         ) : null}
-      </Body>
+      </div>
 
-      <Footer>
-        <FooterNote>
+      <footer className="footer">
+        <p className="footer-note">
           {blockedReason ?? '保存后下次冷启动生效；应用、登录与文件保持不变。'}
-        </FooterNote>
+        </p>
         <Button onClick={onCancel}>取消</Button>
         <Button variant="primary" disabled={!canSave} onClick={() => void save()}>
           {saving ? '保存中…' : '保存'}
         </Button>
-      </Footer>
+      </footer>
       {saveError !== null ? (
-        <ErrorBlock role="alert">
-          <ErrorText>{saveError}</ErrorText>
+        <div className="error-block" role="alert">
+          <span className="error-text">{saveError}</span>
           <Button onClick={() => setSaveError(null)}>知道了</Button>
-        </ErrorBlock>
+        </div>
       ) : null}
     </Wrapper>
   )
@@ -409,6 +411,141 @@ const Wrapper = styled.div`
   width: 100%;
   height: 100vh;
   background: var(--board-bg);
+
+  .header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: none;
+    height: 40px;
+    padding-left: 14px;
+    border-bottom: 1px solid var(--board-hairline);
+    -webkit-app-region: drag;
+  }
+
+  .traffic-spacer {
+    flex: none;
+    width: 60px;
+    -webkit-app-region: no-drag;
+  }
+
+  .title-group {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .heading {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .step-indicator {
+    font-size: 11px;
+    color: var(--board-ink-dim);
+  }
+
+  .body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+    padding: 0 0 8px;
+  }
+
+  .hint-pane {
+    margin: 24px 16px;
+    font-size: 12px;
+    line-height: 1.8;
+    color: var(--board-ink-dim);
+  }
+
+  .settings-pane {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+  }
+
+  .name-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: none;
+    padding: 12px 16px 0;
+  }
+
+  .name-label {
+    font-size: 12px;
+    color: var(--board-ink-dim);
+  }
+
+  .identity-line {
+    margin: 0;
+    font-size: 12px;
+    color: var(--board-ink-dim);
+  }
+
+  .identity-line.identity-line-small {
+    font-size: 11px;
+  }
+
+  .notice-box {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 10px 16px 0;
+    padding: 8px 10px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: var(--board-bg-raised);
+  }
+
+  .notice-line {
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--board-ink);
+  }
+
+  .footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+    padding: 12px 16px;
+    border-top: 1px solid var(--board-hairline);
+  }
+
+  .footer-note {
+    flex: 1;
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--board-ink-dim);
+  }
+
+  .error-block {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 16px 12px;
+    padding: 8px 10px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: var(--board-bg);
+  }
+
+  .error-text {
+    flex: 1;
+    font-size: 12px;
+    color: var(--board-ink);
+  }
+
   .config-mismatch {
     display: flex;
     flex-wrap: wrap;
@@ -434,136 +571,6 @@ const Wrapper = styled.div`
     font-size: 11px;
     color: var(--board-ink-dim);
   }
-`
-
-const Header = styled.header`
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex: none;
-  height: 40px;
-  padding-left: 14px;
-  border-bottom: 1px solid var(--board-hairline);
-  -webkit-app-region: drag;
-`
-
-const TrafficSpacer = styled.span`
-  flex: none;
-  width: 60px;
-  -webkit-app-region: no-drag;
-`
-
-const TitleGroup = styled.div`
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-`
-
-const Heading = styled.h3`
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-`
-
-const StepIndicator = styled.span`
-  font-size: 11px;
-  color: var(--board-ink-dim);
-`
-
-const Body = styled.div`
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-  padding: 0 0 8px;
-`
-
-const HintPane = styled.p`
-  margin: 24px 16px;
-  font-size: 12px;
-  line-height: 1.8;
-  color: var(--board-ink-dim);
-`
-
-const SettingsPane = styled.div`
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-`
-
-const NameBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: none;
-  padding: 12px 16px 0;
-`
-
-const NameLabel = styled.label`
-  font-size: 12px;
-  color: var(--board-ink-dim);
-`
-
-const IdentityLine = styled.p<{ small?: boolean }>`
-  margin: 0;
-  font-size: ${({ small }) => (small ? '11px' : '12px')};
-  color: var(--board-ink-dim);
-`
-
-const NoticeBox = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 10px 16px 0;
-  padding: 8px 10px;
-  border: 1px solid var(--board-hairline);
-  border-radius: 4px;
-  background: var(--board-bg-raised);
-`
-
-const NoticeLine = styled.span`
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--board-ink);
-`
-
-const Footer = styled.footer`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-  padding: 12px 16px;
-  border-top: 1px solid var(--board-hairline);
-`
-
-const FooterNote = styled.p`
-  flex: 1;
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--board-ink-dim);
-`
-
-const ErrorBlock = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 16px 12px;
-  padding: 8px 10px;
-  border: 1px solid var(--board-hairline);
-  border-radius: 4px;
-  background: var(--board-bg);
-`
-
-const ErrorText = styled.span`
-  flex: 1;
-  font-size: 12px;
-  color: var(--board-ink);
 `
 
 export default DeviceEditor

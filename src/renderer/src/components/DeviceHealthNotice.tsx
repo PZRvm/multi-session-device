@@ -47,16 +47,20 @@ const DeviceHealthNotice = ({
 
   return (
     <Wrapper role="status">
-      <Text>{lines.join('\n')}</Text>
-      <Actions>
+      <p className="notice-text">{lines.join('\n')}</p>
+      <span className="notice-actions">
         <Button onClick={onRecheck} disabled={rechecking}>
-          <ActionLabel>
-            {rechecking ? <BusyIcon aria-hidden="true" /> : <RefreshCw size={14} />}
+          <span className="action-label">
+            {rechecking ? (
+              <Loader2 size={14} aria-hidden="true" className="busy-icon" />
+            ) : (
+              <RefreshCw size={14} />
+            )}
             重新检查
-          </ActionLabel>
+          </span>
         </Button>
         <Button onClick={onViewDetail}>查看详情</Button>
-      </Actions>
+      </span>
     </Wrapper>
   )
 }
@@ -71,46 +75,46 @@ const Wrapper = styled.div`
   border: 1px solid var(--board-control-line);
   border-radius: 8px;
   background: var(--board-bg-raised);
-`
 
-const Text = styled.p`
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--board-ink);
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-`
-
-const Actions = styled.span`
-  display: flex;
-  gap: 8px;
-
-  & > button {
-    height: 26px;
-    font-size: 12px;
-    padding: 0 10px;
+  .notice-text {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--board-ink);
+    white-space: pre-line;
+    overflow-wrap: anywhere;
   }
-`
 
-const ActionLabel = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-`
+  .notice-actions {
+    display: flex;
+    gap: 8px;
 
-const BusyIcon = styled(Loader2).attrs({ size: 14 })`
-  display: block;
-  animation: spin 1.2s linear infinite;
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
+    & > button {
+      height: 26px;
+      font-size: 12px;
+      padding: 0 10px;
     }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    animation: none;
+  .action-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .busy-icon {
+    display: block;
+    animation: spin 1.2s linear infinite;
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   }
 `
 

@@ -12,7 +12,6 @@ import {
   computeLayout,
   computeSkinLayout,
   skinMaskStyle,
-  type FrameRect,
   type ScreenLayout
 } from '../screen/geometry'
 import { useDeviceInput } from '../hooks/useDeviceInput'
@@ -279,11 +278,12 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
 
   return (
     <Wrapper>
-      <Stage ref={stageRef} onClick={focusProxy}>
+      <div className="stage" ref={stageRef} onClick={focusProxy}>
         {layout ? (
-          /* 装饰位于视频之下；真实皮肤前景在 CanvasSlot 内遮住对应像素。 */
+          /* 装饰位于视频之下；真实皮肤前景在 canvas-slot 内遮住对应像素。 */
           layout.skin && skin ? (
-            <SkinShell
+            <div
+              className="skin-shell"
               style={{
                 left: layout.frame.x,
                 top: layout.frame.y,
@@ -315,25 +315,47 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
                   />
                 ))}
               </div>
-            </SkinShell>
+            </div>
           ) : (
-            <FrameShell $frame={layout.frame} aria-hidden="true">
+            <div
+              className="frame-shell"
+              aria-hidden="true"
+              style={{
+                left: layout.frame.x,
+                top: layout.frame.y,
+                width: layout.frame.width,
+                height: layout.frame.height,
+                borderRadius: layout.frame.radius
+              }}
+            >
               {layout.frame.kind === 'phone' ? (
                 <>
-                  <EarPiece $top={layout.frame.metrics.top / 2} />
-                  <FrontCamera $top={layout.frame.metrics.top / 2} />
+                  <div className="ear-piece" style={{ top: layout.frame.metrics.top / 2 - 2.5 }} />
+                  <div
+                    className="front-camera"
+                    style={{ top: layout.frame.metrics.top / 2 - 2.5 }}
+                  />
                 </>
               ) : null}
               {layout.frame.kind === 'tablet' ? (
-                <TabletCamera $top={layout.frame.metrics.top / 2} />
+                <div className="tablet-camera" style={{ top: layout.frame.metrics.top / 2 - 2 }} />
               ) : null}
-            </FrameShell>
+            </div>
           )
         ) : null}
-        <CanvasSlot $layout={layout}>
+        <div
+          className="canvas-slot"
+          style={{
+            left: layout ? layout.offsetX : 0,
+            top: layout ? layout.offsetY : 0,
+            width: layout ? layout.width : 0,
+            height: layout ? layout.height : 0
+          }}
+        >
           <canvas ref={canvasRef} aria-label={`${device.name} 画面`} />
           {layout?.skin?.orientation.foregroundMask && skin ? (
-            <SkinMask
+            <img
+              className="skin-mask"
               src={
                 skin.images.find((asset) => asset.file === layout.skin!.orientation.foregroundMask)
                   ?.url
@@ -343,38 +365,47 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
               style={skinMaskStyle(layout)}
             />
           ) : null}
-        </CanvasSlot>
+        </div>
         {!ready ? (
-          <Overlay>
+          <div className="overlay">
             {status === 'ready' ? (
               <>
                 <Loader2 size={18} className="spin" />
-                <OverlayText>正在准备画面…</OverlayText>
+                <p className="overlay-text">正在准备画面…</p>
               </>
             ) : status === 'connecting' ? (
               <>
                 <Loader2 size={18} className="spin" />
-                <OverlayText>{STATUS_TEXT.connecting}</OverlayText>
+                <p className="overlay-text">{STATUS_TEXT.connecting}</p>
               </>
             ) : status === 'error' ? (
               <>
-                <OverlayText>{STATUS_TEXT.error}</OverlayText>
-                {error ? <OverlayHint>{error}</OverlayHint> : null}
-                <RetryButton type="button" onClick={retry}>
+                <p className="overlay-text">{STATUS_TEXT.error}</p>
+                {error ? <p className="overlay-hint">{error}</p> : null}
+                <button type="button" className="retry-button" onClick={retry}>
                   <RotateCcw size={13} />
                   重试连接
-                </RetryButton>
+                </button>
               </>
             ) : status === 'closed' ? (
-              <OverlayText>{STATUS_TEXT.closed}</OverlayText>
+              <p className="overlay-text">{STATUS_TEXT.closed}</p>
             ) : null}
-          </Overlay>
+          </div>
         ) : null}
-        {inputError ? <InputError role="alert">{inputError}</InputError> : null}
+        {inputError ? (
+          <p className="input-error" role="alert">
+            {inputError}
+          </p>
+        ) : null}
         {/* 文本/键盘代理：画布聚焦时持有焦点，IME 组合在此发生 */}
-        <ProxyInput ref={proxyRef} aria-label={`${device.name} 输入`} tabIndex={-1} />
-      </Stage>
-      <ToolbarRow>
+        <input
+          ref={proxyRef}
+          className="proxy-input"
+          aria-label={`${device.name} 输入`}
+          tabIndex={-1}
+        />
+      </div>
+      <div className="toolbar-row">
         <DeviceToolbar
           disabled={!ready || rotating || stopping}
           powerDisabled={stopping}
@@ -388,7 +419,7 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
             void rotate()
           }}
         />
-      </ToolbarRow>
+      </div>
     </Wrapper>
   )
 }
@@ -403,194 +434,183 @@ const Wrapper = styled.div`
   min-width: 0;
   min-height: 0;
   padding: 16px 16px 12px;
-`
 
-const Stage = styled.div`
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  /* 主题工作台底（中性板面，随亮暗/主题系统切换）；canvas 黑色只留给未绘制屏幕 */
-  background: var(--board-bg);
-  overflow: hidden;
-  outline: none;
-`
-
-/* 设备外壳：外圆角只作用于屏幕之外；overflow 裁掉装饰越界，屏幕是兄弟节点不受影响 */
-const SkinShell = styled.div`
-  position: absolute;
-  pointer-events: none;
-`
-const FrameShell = styled.div<{ $frame: FrameRect }>`
-  position: absolute;
-  left: ${({ $frame }) => `${$frame.x}px`};
-  top: ${({ $frame }) => `${$frame.y}px`};
-  width: ${({ $frame }) => `${$frame.width}px`};
-  height: ${({ $frame }) => `${$frame.height}px`};
-  border-radius: ${({ $frame }) => `${$frame.radius}px`};
-  background: var(--device-shell);
-  border: 1px solid var(--device-shell-edge);
-  overflow: hidden;
-  pointer-events: none;
-`
-
-/* 手机听筒：上边框内居中的小胶囊，垂直位置随实际（含紧凑档）边距居中 */
-const EarPiece = styled.div<{ $top: number }>`
-  position: absolute;
-  top: calc(${({ $top }) => $top}px - 2.5px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: 36px;
-  height: 5px;
-  border-radius: 3px;
-  background: var(--device-bezel-ink);
-  opacity: 0.55;
-`
-
-/* 手机前摄：听筒右侧小圆点 */
-const FrontCamera = styled.div<{ $top: number }>`
-  position: absolute;
-  top: calc(${({ $top }) => $top}px - 2.5px);
-  left: calc(50% + 26px);
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--device-bezel-ink);
-  opacity: 0.7;
-`
-
-/* 平板前摄：上边框居中小圆点，无听筒 */
-const TabletCamera = styled.div<{ $top: number }>`
-  position: absolute;
-  top: calc(${({ $top }) => $top}px - 2px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--device-bezel-ink);
-  opacity: 0.7;
-`
-
-const SkinMask = styled.img`
-  position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 1;
-  max-width: none;
-  transform-origin: 0 0;
-  pointer-events: none;
-`
-
-const CanvasSlot = styled.div<{ $layout: ScreenLayout | null }>`
-  position: absolute;
-  left: ${({ $layout }) => ($layout ? `${$layout.offsetX}px` : '0')};
-  top: ${({ $layout }) => ($layout ? `${$layout.offsetY}px` : '0')};
-  width: ${({ $layout }) => ($layout ? `${$layout.width}px` : '0')};
-  height: ${({ $layout }) => ($layout ? `${$layout.height}px` : '0')};
-
-  & > canvas {
+  .stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
     width: 100%;
-    height: 100%;
-    display: block;
-    background: #000;
-    cursor: default;
-  }
-`
-
-const Overlay = styled.div`
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: #9aa2ad;
-  pointer-events: auto;
-
-  .spin {
-    animation: spin 1.2s linear infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    /* 主题工作台底（中性板面，随亮暗/主题系统切换）；canvas 黑色只留给未绘制屏幕 */
+    background: var(--board-bg);
+    overflow: hidden;
+    outline: none;
   }
 
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
+  /* 设备外壳：外圆角只作用于屏幕之外；overflow 裁掉装饰越界，屏幕是兄弟节点不受影响 */
+  .skin-shell {
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .frame-shell {
+    position: absolute;
+    background: var(--device-shell);
+    border: 1px solid var(--device-shell-edge);
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  /* 手机听筒：上边框内居中的小胶囊，垂直位置随实际（含紧凑档）边距居中 */
+  .ear-piece {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--device-bezel-ink);
+    opacity: 0.55;
+  }
+
+  /* 手机前摄：听筒右侧小圆点 */
+  .front-camera {
+    position: absolute;
+    left: calc(50% + 26px);
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--device-bezel-ink);
+    opacity: 0.7;
+  }
+
+  /* 平板前摄：上边框居中小圆点，无听筒 */
+  .tablet-camera {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--device-bezel-ink);
+    opacity: 0.7;
+  }
+
+  .skin-mask {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 1;
+    max-width: none;
+    transform-origin: 0 0;
+    pointer-events: none;
+  }
+
+  .canvas-slot {
+    position: absolute;
+
+    & > canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: #000;
+      cursor: default;
     }
   }
-`
 
-const OverlayText = styled.p`
-  margin: 0;
-  font-size: 13px;
-`
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #9aa2ad;
+    pointer-events: auto;
 
-const OverlayHint = styled.p`
-  margin: 0;
-  max-width: 360px;
-  font-size: 11px;
-  line-height: 1.5;
-  word-break: break-all;
-`
+    .spin {
+      animation: spin 1.2s linear infinite;
+    }
 
-const RetryButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 4px;
-  height: 28px;
-  padding: 0 12px;
-  border: 1px solid var(--board-control-line);
-  border-radius: 6px;
-  background: var(--board-bg);
-  color: var(--board-ink);
-  font-size: 12px;
-  cursor: pointer;
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  }
 
-  &:hover {
+  .overlay-text {
+    margin: 0;
+    font-size: 13px;
+  }
+
+  .overlay-hint {
+    margin: 0;
+    max-width: 360px;
+    font-size: 11px;
+    line-height: 1.5;
+    word-break: break-all;
+  }
+
+  .retry-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 4px;
+    height: 28px;
+    padding: 0 12px;
+    border: 1px solid var(--board-control-line);
+    border-radius: 6px;
+    background: var(--board-bg);
+    color: var(--board-ink);
+    font-size: 12px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--board-bg-raised);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+  }
+
+  .input-error {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    max-width: 80%;
+    padding: 4px 10px;
+    border-radius: 6px;
     background: var(--board-bg-raised);
+    border: 1px solid var(--board-hairline);
+    color: var(--board-tile-ink);
+    font-size: 11px;
   }
 
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
+  /* 文本代理：透明、1px、绝对定位在舞台内，不拦截指针 */
+  .proxy-input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    border: none;
+    padding: 0;
+    pointer-events: none;
   }
-`
 
-const InputError = styled.p`
-  position: absolute;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  margin: 0;
-  max-width: 80%;
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: var(--board-bg-raised);
-  border: 1px solid var(--board-hairline);
-  color: var(--board-tile-ink);
-  font-size: 11px;
-`
-
-/* 文本代理：透明、1px、绝对定位在舞台内，不拦截指针 */
-const ProxyInput = styled.input`
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  border: none;
-  padding: 0;
-  pointer-events: none;
-`
-
-const ToolbarRow = styled.div`
-  flex: none;
+  .toolbar-row {
+    flex: none;
+  }
 `
 
 export default DeviceCanvas

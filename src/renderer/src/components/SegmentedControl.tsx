@@ -46,8 +46,9 @@ function SegmentedControl<T extends string>({
       }}
     >
       {options.map((option) => (
-        <Segment
+        <button
           key={option.value}
+          className="seg"
           type="button"
           role="radio"
           aria-checked={option.value === value}
@@ -59,7 +60,7 @@ function SegmentedControl<T extends string>({
           onClick={() => onChange(option.value)}
         >
           {option.label}
-        </Segment>
+        </button>
       ))}
     </Wrapper>
   )
@@ -71,34 +72,34 @@ const Wrapper = styled.div`
   padding: 2px;
   background: var(--board-bg-raised);
   border-radius: 4px;
-`
 
-const Segment = styled.button`
-  height: 22px;
-  padding: 0 8px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--board-ink-dim);
-  font-family: inherit;
-  font-size: 11px;
-  line-height: 1.5;
-  cursor: pointer;
-  transition:
-    background-color 0.12s,
-    color 0.12s;
+  .seg {
+    height: 22px;
+    padding: 0 8px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--board-ink-dim);
+    font-family: inherit;
+    font-size: 11px;
+    line-height: 1.5;
+    cursor: pointer;
+    transition:
+      background-color 0.12s,
+      color 0.12s;
+  }
 
-  &:hover {
+  .seg:hover {
     background: var(--board-hover-veil);
   }
 
-  &[aria-checked='true'] {
+  .seg[aria-checked='true'] {
     background: var(--board-segment-selected-bg);
     color: var(--board-tile-ink);
     font-weight: 600;
   }
 
-  &:focus-visible {
+  .seg:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
   }

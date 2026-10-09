@@ -48,37 +48,37 @@ const CanvasPlaceholder = ({
     <Wrapper>
       {device !== null ? (
         <>
-          <Title>{device.name}</Title>
-          <Hint>{STATE_HINTS[device.status]}</Hint>
-          {device.serial ? <SubHint>serial：{device.serial}</SubHint> : null}
+          <h3 className="title">{device.name}</h3>
+          <p className="hint">{STATE_HINTS[device.status]}</p>
+          {device.serial ? <p className="sub-hint">serial：{device.serial}</p> : null}
           {hint !== null ? (
             <>
-              <ErrorHint>{hint}</ErrorHint>
+              <p className="error-hint">{hint}</p>
               <Button onClick={onRecheck} disabled={rechecking}>
-                <ActionLabel>
+                <span className="action-label">
                   <RefreshCw size={14} />
                   重新检查
-                </ActionLabel>
+                </span>
               </Button>
             </>
           ) : null}
-          {device.lastError ? <ErrorHint>{device.lastError.message}</ErrorHint> : null}
+          {device.lastError ? <p className="error-hint">{device.lastError.message}</p> : null}
         </>
       ) : storeState === 'error' ? (
         <>
-          <Title>设备数据读取失败</Title>
-          <Hint>devices.json 异常，应用已冻结元数据写入并保留原文件</Hint>
+          <h3 className="title">设备数据读取失败</h3>
+          <p className="hint">devices.json 异常，应用已冻结元数据写入并保留原文件</p>
           <Button onClick={onRecheck} disabled={rechecking}>
-            <ActionLabel>
+            <span className="action-label">
               <RefreshCw size={14} />
               重新检查
-            </ActionLabel>
+            </span>
           </Button>
         </>
       ) : (
         <>
-          <Title>还没有设备</Title>
-          <Hint>三步创建一台：选画像 → 选镜像 → 命名</Hint>
+          <h3 className="title">还没有设备</h3>
+          <p className="hint">三步创建一台：选画像 → 选镜像 → 命名</p>
           <Button
             variant="primary"
             onClick={onCreate}
@@ -87,10 +87,10 @@ const CanvasPlaceholder = ({
               createDisabled ? '设备元数据写入已冻结，暂不能新建设备（详情见左侧汇总）' : undefined
             }
           >
-            <NewLabel>
+            <span className="new-label">
               <Plus size={14} />
               新建设备
-            </NewLabel>
+            </span>
           </Button>
         </>
       )}
@@ -108,46 +108,46 @@ const Wrapper = styled.div`
   min-width: 0;
   padding: 24px;
   text-align: center;
-`
 
-const Title = styled.h3`
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--board-ink);
-`
+  .title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--board-ink);
+  }
 
-const Hint = styled.p`
-  margin: 0;
-  font-size: 12px;
-  color: var(--board-ink-dim);
-`
+  .hint {
+    margin: 0;
+    font-size: 12px;
+    color: var(--board-ink-dim);
+  }
 
-const SubHint = styled.p`
-  margin: 0 0 8px;
-  font-size: 11px;
-  color: var(--board-ink-dim);
-  font-family: ui-monospace, monospace;
-`
+  .sub-hint {
+    margin: 0 0 8px;
+    font-size: 11px;
+    color: var(--board-ink-dim);
+    font-family: ui-monospace, monospace;
+  }
 
-const ErrorHint = styled.p`
-  margin: 4px 0 0;
-  max-width: 420px;
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--board-tile-ink);
-`
+  .error-hint {
+    margin: 4px 0 0;
+    max-width: 420px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--board-tile-ink);
+  }
 
-const ActionLabel = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-`
+  .action-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
 
-const NewLabel = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  .new-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
 `
 
 export default CanvasPlaceholder

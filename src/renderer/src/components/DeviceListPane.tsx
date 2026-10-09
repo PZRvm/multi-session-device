@@ -49,23 +49,27 @@ const DeviceListPane = ({
     {devices.length === 0 ? (
       loadError !== null ? (
         // invoke 级失败不经过 storeHealth——按读取失败展示并保留重试（plan 差距表）
-        <EmptyHint>
+        <p className="empty-hint">
           设备列表加载失败：{loadError}
           <br />
-          <RetryLink onClick={onRetryLoad}>重试加载</RetryLink>
-        </EmptyHint>
+          <button className="retry-link" onClick={onRetryLoad}>
+            重试加载
+          </button>
+        </p>
       ) : storeState === 'error' ? (
-        <EmptyHint>设备数据读取失败：devices.json 异常，修复后点上方「重新检查」重试</EmptyHint>
+        <p className="empty-hint">
+          设备数据读取失败：devices.json 异常，修复后点上方「重新检查」重试
+        </p>
       ) : storeState === 'read-only' ? (
-        <EmptyHint>
+        <p className="empty-hint">
           设备记录存在异常（如重复 id 或坏条目），暂无可显示的设备；修复 devices.json
           后点上方「重新检查」
-        </EmptyHint>
+        </p>
       ) : (
-        <EmptyHint>还没有设备，点左下角「新建设备」创建第一台</EmptyHint>
+        <p className="empty-hint">还没有设备，点左下角「新建设备」创建第一台</p>
       )
     ) : (
-      <List>
+      <div className="list">
         {devices.map((device) => (
           <DeviceRow
             key={device.id}
@@ -84,7 +88,7 @@ const DeviceListPane = ({
             onRenameBlocked={onRenameBlocked}
           />
         ))}
-      </List>
+      </div>
     )}
   </Wrapper>
 )
@@ -95,37 +99,37 @@ const Wrapper = styled.div`
   flex: 1;
   min-height: 0;
   background: var(--board-bg);
-`
 
-const List = styled.div`
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
+  .list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
 
-  /* 行间发丝线（Hairline Rule） */
-  & > div + div {
-    border-top: 1px solid var(--board-hairline);
+    /* 行间发丝线（Hairline Rule） */
+    & > div + div {
+      border-top: 1px solid var(--board-hairline);
+    }
   }
-`
 
-const EmptyHint = styled.p`
-  margin: 24px 14px;
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--board-ink-dim);
-`
+  .empty-hint {
+    margin: 24px 14px;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--board-ink-dim);
+  }
 
-const RetryLink = styled.button`
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--board-tile-ink);
-  font-size: 12px;
-  text-decoration: underline;
-  cursor: pointer;
+  .retry-link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--board-tile-ink);
+    font-size: 12px;
+    text-decoration: underline;
+    cursor: pointer;
+  }
 
-  &:focus-visible {
+  .retry-link:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
   }

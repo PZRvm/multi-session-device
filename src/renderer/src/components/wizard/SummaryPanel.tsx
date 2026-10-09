@@ -30,59 +30,61 @@ const SummaryPanel = ({ profile, image, verdict }: SummaryPanelProps): React.JSX
       : []
 
   return (
-    <Aside aria-label="设备摘要">
-      <Section>
-        <SectionTitle>设备画像</SectionTitle>
+    <Wrapper aria-label="设备摘要">
+      <section className="section">
+        <h4 className="section-title">设备画像</h4>
         {profile === null ? (
-          <EmptyLine>未选择</EmptyLine>
+          <span className="empty-line">未选择</span>
         ) : (
           <>
-            <Name>{profile.name}</Name>
-            <Line>{profile.manufacturer ?? '厂商未知'}</Line>
-            <Line>
+            <span className="name">{profile.name}</span>
+            <span className="line">{profile.manufacturer ?? '厂商未知'}</span>
+            <span className="line">
               {FORM_FACTOR_LABELS[profile.formFactor]}
               {screen.length > 0 ? ` · ${screen.join(' · ')}` : ''}
-            </Line>
-            <Line>
+            </span>
+            <span className="line">
               API {apiRangeDisplay(profile)}
               {profile.playSupported === true ? ' · Play' : ''}
-            </Line>
+            </span>
           </>
         )}
-      </Section>
+      </section>
 
-      <Section>
-        <SectionTitle>系统镜像</SectionTitle>
+      <section className="section">
+        <h4 className="section-title">系统镜像</h4>
         {image === null ? (
-          <EmptyLine>未选择</EmptyLine>
+          <span className="empty-line">未选择</span>
         ) : (
           <>
-            <Name>API {apiDisplay(image)}</Name>
-            <Line>{serviceLabels(image).join(' + ')}</Line>
-            <Line>{image.abi}</Line>
-            <Line>
+            <span className="name">API {apiDisplay(image)}</span>
+            <span className="line">{serviceLabels(image).join(' + ')}</span>
+            <span className="line">{image.abi}</span>
+            <span className="line">
               {image.installed ? '已安装' : `下载 ${formatSize(image.sizeBytes)}`}
               {image.api.extensionLevel !== null ? ` · 扩展 ${image.api.extensionLevel}` : ''}
-            </Line>
+            </span>
             {verdict !== null && verdict.reasons.length > 0 ? (
-              <ReasonList>
+              <ul className="reason-list">
                 {verdict.reasons.map((reason) => (
-                  <ReasonItem key={reason}>{reason}</ReasonItem>
+                  <li className="reason-item" key={reason}>
+                    {reason}
+                  </li>
                 ))}
-              </ReasonList>
+              </ul>
             ) : null}
           </>
         )}
-      </Section>
+      </section>
 
-      <Hint>
+      <p className="hint">
         附加设置在「附加设置」标签配置；未配置的项按镜像与画像默认值创建（Cold Boot、 host GPU）。
-      </Hint>
-    </Aside>
+      </p>
+    </Wrapper>
   )
 }
 
-const Aside = styled.aside`
+const Wrapper = styled.aside`
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -91,55 +93,55 @@ const Aside = styled.aside`
   padding: 14px;
   border-left: 1px solid var(--board-hairline);
   overflow-y: auto;
-`
 
-const Section = styled.section`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-`
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
 
-const SectionTitle = styled.h4`
-  margin: 0 0 2px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--board-hairline);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--board-ink-dim);
-`
+  .section-title {
+    margin: 0 0 2px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--board-hairline);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--board-ink-dim);
+  }
 
-const Name = styled.span`
-  font-size: 13px;
-  font-weight: 600;
-`
+  .name {
+    font-size: 13px;
+    font-weight: 600;
+  }
 
-const Line = styled.span`
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--board-ink-dim);
-`
+  .line {
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--board-ink-dim);
+  }
 
-const EmptyLine = styled.span`
-  font-size: 11px;
-  color: var(--board-ink-dim);
-`
+  .empty-line {
+    font-size: 11px;
+    color: var(--board-ink-dim);
+  }
 
-const ReasonList = styled.ul`
-  margin: 4px 0 0;
-  padding-left: 14px;
-`
+  .reason-list {
+    margin: 4px 0 0;
+    padding-left: 14px;
+  }
 
-const ReasonItem = styled.li`
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--board-ink-dim);
-`
+  .reason-item {
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--board-ink-dim);
+  }
 
-const Hint = styled.p`
-  margin: auto 0 0;
-  font-size: 10px;
-  line-height: 1.6;
-  color: var(--board-ink-dim);
+  .hint {
+    margin: auto 0 0;
+    font-size: 10px;
+    line-height: 1.6;
+    color: var(--board-ink-dim);
+  }
 `
 
 export default SummaryPanel

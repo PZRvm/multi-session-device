@@ -16,8 +16,10 @@ const ListRow = ({
   onSelect
 }: ListRowProps): React.JSX.Element => (
   <Wrapper type="button" aria-current={selected || undefined} onClick={onSelect}>
-    <Title>{title}</Title>
-    {subtitle ? <Subtitle $selected={selected}>{subtitle}</Subtitle> : null}
+    <span className="row-title">{title}</span>
+    {subtitle ? (
+      <span className={selected ? 'row-subtitle is-selected' : 'row-subtitle'}>{subtitle}</span>
+    ) : null}
   </Wrapper>
 )
 
@@ -52,25 +54,23 @@ const Wrapper = styled.button`
     outline: 2px solid var(--accent);
     outline-offset: -2px;
   }
-`
 
-const Title = styled.span`
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.5;
-`
+  .row-title {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.5;
+  }
 
-const Subtitle = styled.span<{ $selected: boolean }>`
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--board-ink-dim);
+  .row-subtitle {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--board-ink-dim);
+  }
 
-  ${({ $selected }) =>
-    $selected &&
-    `
-      color: inherit;
-      opacity: 0.72;
-    `}
+  .row-subtitle.is-selected {
+    color: inherit;
+    opacity: 0.72;
+  }
 `
 
 export default ListRow

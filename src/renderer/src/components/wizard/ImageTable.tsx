@@ -94,8 +94,9 @@ const ImageTable = ({
 
   return (
     <Layout>
-      <Toolbar>
-        <ServiceSelect
+      <div className="toolbar">
+        <select
+          className="service-select"
           value={filters.service}
           aria-label="服务筛选"
           onChange={(event) =>
@@ -107,9 +108,9 @@ const ImageTable = ({
               {option.label}
             </option>
           ))}
-        </ServiceSelect>
-        <SwitchRow>
-          <Switch>
+        </select>
+        <div className="switch-row">
+          <div className="switch">
             <input
               id="wizard-images-full"
               type="checkbox"
@@ -119,8 +120,8 @@ const ImageTable = ({
               }
             />
             <label htmlFor="wizard-images-full">完整列表</label>
-          </Switch>
-          <Switch>
+          </div>
+          <div className="switch">
             <input
               id="wizard-images-preview"
               type="checkbox"
@@ -130,8 +131,8 @@ const ImageTable = ({
               }
             />
             <label htmlFor="wizard-images-preview">Preview</label>
-          </Switch>
-          <Switch>
+          </div>
+          <div className="switch">
             <input
               id="wizard-images-unsupported"
               type="checkbox"
@@ -141,25 +142,26 @@ const ImageTable = ({
               }
             />
             <label htmlFor="wizard-images-unsupported">不支持项</label>
-          </Switch>
-        </SwitchRow>
-      </Toolbar>
+          </div>
+        </div>
+      </div>
 
-      <Scroller>
-        <HeadRow>
-          <HeadCell>API</HeadCell>
-          <HeadCell>服务</HeadCell>
-          <HeadCell>ABI</HeadCell>
-          <HeadCell className="num">大小</HeadCell>
-          <HeadCell className="center">状态</HeadCell>
-        </HeadRow>
+      <div className="scroller">
+        <div className="head-row">
+          <div className="head-cell">API</div>
+          <div className="head-cell">服务</div>
+          <div className="head-cell">ABI</div>
+          <div className="head-cell num">大小</div>
+          <div className="head-cell center">状态</div>
+        </div>
         {rows.map((image, index) => {
           const verdict = verdicts.get(image.packageName)
           const selected = image.packageName === selectedPackageName
           const isDownloading = downloading?.packageName === image.packageName
           const selectable = image.installed && verdict?.status === 'supported'
           return (
-            <Row
+            <div
+              className="row"
               key={image.packageName}
               role="button"
               tabIndex={index === safeRovingIndex ? 0 : -1}
@@ -182,23 +184,28 @@ const ImageTable = ({
                 }
               }}
             >
-              <ApiCell>
+              <div className="api-cell">
                 API {apiDisplay(image)}
-                {image.api.codename !== null ? <RowTag>{image.api.codename}</RowTag> : null}
+                {image.api.codename !== null ? (
+                  <span className="row-tag">{image.api.codename}</span>
+                ) : null}
                 {image.api.extensionLevel !== null ? (
-                  <RowTag>扩展 {image.api.extensionLevel}</RowTag>
+                  <span className="row-tag">扩展 {image.api.extensionLevel}</span>
                 ) : null}
                 {image.featureTags.map((tag) => (
-                  <RowTag key={tag}>{tag === 'page_size_16kb' ? '16KB 页' : tag}</RowTag>
+                  <span className="row-tag" key={tag}>
+                    {tag === 'page_size_16kb' ? '16KB 页' : tag}
+                  </span>
                 ))}
-              </ApiCell>
-              <Cell>{serviceLabels(image).join(' + ')}</Cell>
-              <Cell>{image.abi}</Cell>
-              <Cell className="num">{image.installed ? '—' : formatSize(image.sizeBytes)}</Cell>
-              <StatusCell className="num">
+              </div>
+              <div className="cell">{serviceLabels(image).join(' + ')}</div>
+              <div className="cell">{image.abi}</div>
+              <div className="cell num">{image.installed ? '—' : formatSize(image.sizeBytes)}</div>
+              <div className="status-cell num">
                 {image.installed ? (
                   <>
-                    <StatusText
+                    <span
+                      className="status-text"
                       title={
                         verdict?.status === 'supported'
                           ? undefined
@@ -208,9 +215,10 @@ const ImageTable = ({
                       {verdict?.status === 'supported'
                         ? '已安装'
                         : `已安装 · ${verdict?.status === 'unknown' ? '兼容性未知' : '不兼容'}`}
-                    </StatusText>
+                    </span>
                     {onUninstall !== null ? (
-                      <UninstallButton
+                      <span
+                        className="uninstall-btn"
                         role="button"
                         tabIndex={index === safeRovingIndex ? 0 : -1}
                         aria-disabled={uninstallingPackage !== null || downloadBusy}
@@ -232,15 +240,16 @@ const ImageTable = ({
                         }}
                       >
                         {uninstallingPackage === image.packageName ? (
-                          <UninstallSpinner size={14} aria-hidden="true" />
+                          <Loader2 size={14} aria-hidden="true" className="uninstall-spinner" />
                         ) : (
                           <Trash2 size={14} aria-hidden="true" />
                         )}
-                      </UninstallButton>
+                      </span>
                     ) : null}
                   </>
                 ) : (
-                  <DownloadButton
+                  <span
+                    className="download-btn"
                     role="button"
                     tabIndex={index === safeRovingIndex ? 0 : -1}
                     aria-disabled={downloadBusy || uninstallingPackage !== null}
@@ -261,20 +270,22 @@ const ImageTable = ({
                   >
                     {isDownloading ? (
                       <>
-                        <ProgressFill
+                        <span
+                          className="progress-fill"
                           aria-hidden="true"
                           style={{ width: `${downloading.percent}%` }}
                         />
-                        <PercentText>{downloading.percent}%</PercentText>
+                        <span className="percent-text">{downloading.percent}%</span>
                       </>
                     ) : (
                       <Download size={13} />
                     )}
-                  </DownloadButton>
+                  </span>
                 )}
                 {isDownloading ? (
-                  <CancelDownloadButton
+                  <button
                     type="button"
+                    className="cancel-download-btn"
                     aria-label={`取消下载 API ${apiDisplay(image)} ${serviceLabel(image)}`}
                     onClick={(event) => {
                       event.stopPropagation()
@@ -282,21 +293,24 @@ const ImageTable = ({
                     }}
                   >
                     取消
-                  </CancelDownloadButton>
+                  </button>
                 ) : null}
-              </StatusCell>
-            </Row>
+              </div>
+            </div>
           )
         })}
-        {rows.length === 0 ? <EmptyHint>当前筛选下没有镜像</EmptyHint> : null}
-      </Scroller>
-      <Legend>
+        {rows.length === 0 ? <p className="empty-hint">当前筛选下没有镜像</p> : null}
+      </div>
+      <p className="legend">
         推荐视图默认展示最近五个正式 API；完整列表、Preview、扩展与不支持项按开关展开。
         兼容性原因悬停可见，展示开关不改变创建资格。
-      </Legend>
+      </p>
     </Layout>
   )
 }
+
+/** 全表唯一轨道定义（API 弹性吸收余宽；状态列定宽容纳进度钮+取消钮） */
+const GRID_COLUMNS = 'minmax(200px, 1.6fr) minmax(110px, 1fr) 84px 76px 132px'
 
 const Layout = styled.div`
   display: flex;
@@ -304,306 +318,303 @@ const Layout = styled.div`
   min-height: 0;
   flex: 1;
   gap: 8px;
-`
 
-/** 全表唯一轨道定义（API 弹性吸收余宽；状态列定宽容纳进度钮+取消钮） */
-const GRID_COLUMNS = 'minmax(200px, 1.6fr) minmax(110px, 1fr) 84px 76px 132px'
-
-const Toolbar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex: none;
-  flex-wrap: wrap;
-`
-
-const ServiceSelect = styled.select`
-  padding: 5px 8px;
-  border: 1px solid var(--board-hairline);
-  border-radius: 4px;
-  background: var(--board-bg);
-  color: var(--board-ink);
-  font-size: 12px;
-
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex: none;
+    flex-wrap: wrap;
   }
-`
 
-const SwitchRow = styled.div`
-  display: flex;
-  gap: 12px;
-`
+  .service-select {
+    padding: 5px 8px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: var(--board-bg);
+    color: var(--board-ink);
+    font-size: 12px;
 
-const Switch = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  color: var(--board-ink-dim);
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+  }
 
-  label {
+  .switch-row {
+    display: flex;
+    gap: 12px;
+  }
+
+  .switch {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--board-ink-dim);
+
+    label {
+      cursor: pointer;
+    }
+
+    input:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+  }
+
+  .scroller {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: var(--board-bg);
+    display: grid;
+    grid-template-columns: ${GRID_COLUMNS};
+    /* 行数少时（wear 推荐视图仅 3 行）阻止默认 stretch 把表头与行均匀拉高填满容器 */
+    align-content: start;
+  }
+
+  .head-row {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    background: var(--board-bg-raised);
+    border-bottom: 1px solid var(--board-hairline);
+  }
+
+  .head-cell {
+    padding: 7px 10px;
+    color: var(--board-ink-dim);
+    font-size: 11px;
+    font-weight: 500;
+
+    &.num {
+      text-align: right;
+    }
+
+    &.center {
+      text-align: center;
+    }
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    align-items: center;
     cursor: pointer;
+    transition: background-color 0.12s;
+
+    &:hover {
+      background: var(--board-hover-veil);
+    }
+
+    &[aria-pressed='true'] {
+      background: var(--board-segment-selected-bg);
+      box-shadow: inset 2px 0 0 var(--accent);
+    }
+
+    &[aria-disabled='true'] {
+      cursor: default;
+      opacity: 0.75;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+    }
   }
 
-  input:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
-`
-
-const Scroller = styled.div`
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  border: 1px solid var(--board-hairline);
-  border-radius: 4px;
-  background: var(--board-bg);
-  display: grid;
-  grid-template-columns: ${GRID_COLUMNS};
-  /* 行数少时（wear 推荐视图仅 3 行）阻止默认 stretch 把表头与行均匀拉高填满容器 */
-  align-content: start;
-`
-
-const HeadRow = styled.div`
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: subgrid;
-  grid-column: 1 / -1;
-  background: var(--board-bg-raised);
-  border-bottom: 1px solid var(--board-hairline);
-`
-
-const HeadCell = styled.div`
-  padding: 7px 10px;
-  color: var(--board-ink-dim);
-  font-size: 11px;
-  font-weight: 500;
-
-  &.num {
-    text-align: right;
+  .api-cell {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    padding: 7px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
   }
 
-  &.center {
-    text-align: center;
-  }
-`
+  .cell {
+    padding: 7px 10px;
+    font-size: 12px;
+    color: var(--board-ink);
 
-const Row = styled.div`
-  display: grid;
-  grid-template-columns: subgrid;
-  grid-column: 1 / -1;
-  align-items: center;
-  cursor: pointer;
-  transition: background-color 0.12s;
-
-  &:hover {
-    background: var(--board-hover-veil);
+    &.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
   }
 
-  &[aria-pressed='true'] {
-    background: var(--board-segment-selected-bg);
-    box-shadow: inset 2px 0 0 var(--accent);
+  .status-cell {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    min-height: 34px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
-  &[aria-disabled='true'] {
-    cursor: default;
-    opacity: 0.75;
+  .status-text {
+    white-space: nowrap;
   }
 
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: -2px;
+  .row-tag {
+    margin-left: 6px;
+    padding: 1px 6px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--board-ink-dim);
+    flex: none;
   }
-`
 
-const ApiCell = styled.div`
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  padding: 7px 10px;
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-`
+  .download-btn {
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 45px;
+    height: 24px;
+    padding: 0 6px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: var(--board-bg-raised);
+    color: var(--board-ink);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
 
-const Cell = styled.div`
-  padding: 7px 10px;
-  font-size: 12px;
-  color: var(--board-ink);
+    &:hover {
+      background: var(--board-hover-veil);
+    }
 
-  &.num {
-    text-align: right;
+    &[aria-disabled='true'] {
+      cursor: default;
+      opacity: 0.7;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+  }
+
+  .empty-hint {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 16px 12px;
+    font-size: 12px;
+    color: var(--board-ink-dim);
+  }
+
+  .legend {
+    margin: 0;
+    flex: none;
+    font-size: 11px;
+    color: var(--board-ink-dim);
+  }
+
+  .cancel-download-btn {
+    flex: none;
+    padding: 3px 10px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: var(--board-bg-raised);
+    color: var(--board-ink-dim);
+    font-size: 11px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--board-hover-veil);
+      color: var(--board-ink);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+  }
+
+  /** 下载钮内的进度填充层：按百分比铺宽，视觉即「下载到哪了」 */
+  .progress-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: color-mix(in srgb, var(--loading) 28%, transparent);
+    transition: width 0.3s ease-out;
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  }
+
+  .percent-text {
+    position: relative;
+    z-index: 1;
     font-variant-numeric: tabular-nums;
   }
-`
 
-const StatusCell = styled.div`
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  min-height: 34px;
-  padding: 5px 10px;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-`
+  .uninstall-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--danger, #b3261e);
+    cursor: pointer;
+    transition: background-color 0.12s;
 
-const StatusText = styled.span`
-  white-space: nowrap;
-`
+    &:hover {
+      background: var(--board-hover-veil);
+    }
 
-const RowTag = styled.span`
-  margin-left: 6px;
-  padding: 1px 6px;
-  border: 1px solid var(--board-hairline);
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 400;
-  color: var(--board-ink-dim);
-  flex: none;
-`
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
 
-const DownloadButton = styled.span`
-  position: relative;
-  overflow: hidden;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 45px;
-  height: 24px;
-  padding: 0 6px;
-  border: 1px solid var(--board-hairline);
-  border-radius: 4px;
-  background: var(--board-bg-raised);
-  color: var(--board-ink);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
+    &[aria-disabled='true'] {
+      cursor: default;
+      opacity: 0.45;
 
-  &:hover {
-    background: var(--board-hover-veil);
+      &:hover {
+        background: transparent;
+      }
+    }
   }
 
-  &[aria-disabled='true'] {
-    cursor: default;
-    opacity: 0.7;
+  .uninstall-spinner {
+    color: var(--loading);
+    animation: uninstall-spin 1.2s linear infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
+
+    @keyframes uninstall-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
   }
-
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
-`
-
-const EmptyHint = styled.p`
-  grid-column: 1 / -1;
-  margin: 0;
-  padding: 16px 12px;
-  font-size: 12px;
-  color: var(--board-ink-dim);
-`
-
-const Legend = styled.p`
-  margin: 0;
-  flex: none;
-  font-size: 11px;
-  color: var(--board-ink-dim);
 `
 
 export default ImageTable
-
-const CancelDownloadButton = styled.button`
-  flex: none;
-  padding: 3px 10px;
-  border: 1px solid var(--board-hairline);
-  border-radius: 4px;
-  background: var(--board-bg-raised);
-  color: var(--board-ink-dim);
-  font-size: 11px;
-  cursor: pointer;
-
-  &:hover {
-    background: var(--board-hover-veil);
-    color: var(--board-ink);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
-`
-
-/** 下载钮内的进度填充层：按百分比铺宽，视觉即「下载到哪了」 */
-const ProgressFill = styled.span`
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: color-mix(in srgb, var(--loading) 28%, transparent);
-  transition: width 0.3s ease-out;
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
-`
-
-const PercentText = styled.span`
-  position: relative;
-  z-index: 1;
-  font-variant-numeric: tabular-nums;
-`
-
-const UninstallButton = styled.span`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--danger, #b3261e);
-  cursor: pointer;
-  transition: background-color 0.12s;
-
-  &:hover {
-    background: var(--board-hover-veil);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
-
-  &[aria-disabled='true'] {
-    cursor: default;
-    opacity: 0.45;
-
-    &:hover {
-      background: transparent;
-    }
-  }
-`
-
-const UninstallSpinner = styled(Loader2)`
-  color: var(--loading);
-  animation: uninstall-spin 1.2s linear infinite;
-
-  @media (prefers-reduced-motion: reduce) {
-    animation: none;
-  }
-
-  @keyframes uninstall-spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-`
