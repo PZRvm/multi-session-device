@@ -1,7 +1,8 @@
 ---
 description: 渲染层 styled-components 全量重排——每文件只留一个 Wrapper，内部元素改 className 后代选择器，视觉零变化
-status: in_progress
+status: completed
 created: 2026-10-10
+completed: 2026-10-10
 ---
 
 # styled-components 单 Wrapper 化（全局重排） — plan
@@ -136,3 +137,5 @@ const Subtitle = styled.span<{ $selected: boolean }>`
 集中验证结果：`typecheck` / `lint` 通过；vitest 805 通过 6 跳过（既有 skip）；守卫 grep——15 个违规文件每文件恰 1 个 styled 定义、`styled(` 包装 0 处；`npx prettier --check src` 通过。分批提交在 refactor/styled-single-wrapper 分支上完成后 squash 为 dev 565b61a。
 
 Done criteria 剩余一项未闭合：dev 目检与截图对比（人工项）——目检通过后由人把 `status` 翻成 `completed`。执行中发现的既有问题记在 [issue](../notes/issue/2026-10-10-styled-refactor-review.md)。
+
+2026-10-10 当日后续：issue 待修 4 项已全部修复（提交见 git log，修复记录在 issue）；用户目检验收通过（含选中态状态点配色与发丝线两处视觉改动），全部 done criteria 闭合，`status` 翻 `completed`。
