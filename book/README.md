@@ -136,6 +136,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-config-safety-followup-audit.md](notes/issue/2026-10/2026-10-09-config-safety-followup-audit.md) — 复查确认创建临时行落盘、残留事务后改名误冻结、旧设备摄像头漏计和相机编号重排误拦截四项缺口
 - [2026-10-09-profiles-clean-machine-no-java.md](notes/issue/2026-10/2026-10-09-profiles-clean-machine-no-java.md) — profiles.ts 以宿主环境启动 avdmanager 未注入自带 JRE；从未装过 Java 的干净 Mac 上向导画像枚举失败，新建设备被挡在第一步，违背 PRD E 零依赖
 - [2026-10-09-remaining-fixes-review-findings.md](notes/issue/2026-10/2026-10-09-remaining-fixes-review-findings.md) — 五项修复 review 新发现：布局归零漏释放已有按下状态，控制写失败后关闭 parser 触发未观察 ACK rejection
+- [2026-10-09-sdk-image-download-system-proxy.md](notes/issue/2026-10/2026-10-09-sdk-image-download-system-proxy.md) — SDK、镜像清单与镜像字节下载仍使用 Node fetch，代理可用但直连不可用时可能失败；本轮只修官方皮肤，其他路径另立任务
 
 ### notes/learn/
 
@@ -192,13 +193,16 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-08-skin-overrides-display-size.md](notes/learn/2026-10/2026-10-08-skin-overrides-display-size.md) — 无头模拟器也会从皮肤读取屏幕尺寸；小图标先对比配置、实际尺寸和密度
 - [2026-10-09-config-edit-safety.md](notes/learn/2026-10/2026-10-09-config-edit-safety.md) — 已有模拟器编辑只归一化差异，恢复必须同时比较配置与元数据；官方工具与真实安卓状态需要独立验收
 - [2026-10-09-devices-test-fixture-gotchas.md](notes/learn/2026-10/2026-10-09-devices-test-fixture-gotchas.md) — devices 域测试挂具的两个坑——双 freshDomain 的 handlerFor 取首个注册、mock start 固定 runId 与按代次隔离机制的映射失配
+- [2026-10-09-electron-fetch-system-proxy.md](notes/learn/2026-10/2026-10-09-electron-fetch-system-proxy.md) — Electron 主进程的 Node fetch 不遵循系统代理；官方皮肤用 net.fetch 后在直连 DNS 失败的真实进程中仍可获取，命令行探针不能替代应用默认路径验收
 - [2026-10-09-emulator-camera-arg-compat.md](notes/learn/2026-10/2026-10-09-emulator-camera-arg-compat.md) — emulator 虚拟场景只认 config 小写；创建和编辑共用映射，复现先保留原配置以免掩盖相机闪退
 - [2026-10-09-external-paste-event.md](notes/learn/2026-10/2026-10-09-external-paste-event.md) — 外部粘贴不会走 insertText 或 compositionend；隐藏输入代理必须显式处理 paste 并阻止默认插入
+- [2026-10-09-input-release-control-write-and-listeners.md](notes/learn/2026-10/2026-10-09-input-release-control-write-and-listeners.md) — 输入释放要与新输入门控分开，控制发送同时观察 write/consumed/ACK，正常等待结束也要移除 abort 监听；皮肤别名以官方绑定和尺寸为证
 - [2026-10-09-remaining-issue-fixes.md](notes/learn/2026-10/2026-10-09-remaining-issue-fixes.md) — 工具环境要显式注入、画布要区分流与布局就绪、scrcpy 回包要用与 writer 一致的解析器
 
 ### notes/task/
 
-- [2026-10-09-待修问题清单.md](notes/task/2026-10-09-待修问题清单.md) — issue 全量核对后的未修问题盘点：两项 P2 输入与 ACK 缺口、设备库读取诊断、摄像头占用键、快照崩溃绕开等，供检查定优先级
+- [2026-10-09-剩余缺口验收后代码审查.md](notes/task/2026-10-09-剩余缺口验收后代码审查.md) — 剩余缺口和官方皮肤网络修复验收后的代码审查：未发现新增明确缺陷，148 项相关回归与类型检查通过
+- [2026-10-09-待修问题清单.md](notes/task/2026-10-09-待修问题清单.md) — issue 全量核对后的追踪清单：六项代码缺口已收口，Pixel 7/API 34 卡顿暂缓；快照绕开、跨平台与真机验收仍保留
 
 ### notes/think-report/
 
@@ -255,7 +259,9 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-config-safety-followup-fixes.md](plans/2026-10-09-config-safety-followup-fixes.md) — 修复补充复查四项——创建临时行落盘、改名绕过残留事务清理、摄像头占用改启动时仲裁与虚拟场景回退
 - [2026-10-09-emulator-config-safety-fixes.md](plans/2026-10-09-emulator-config-safety-fixes.md) — 修复用户指定的前十四项配置安全、下载创建、编辑差异、摄像头并发、皮肤残留及文档问题
 - [2026-10-09-external-text-paste.md](plans/2026-10-09-external-text-paste.md) — 修复投屏输入代理缺少 paste 事件处理，支持从宿主复制纯文本并粘贴到当前模拟器
+- [2026-10-09-remaining-code-gaps.md](plans/2026-10-09-remaining-code-gaps.md) — 修复布局归零漏释放、控制写失败未处理异常、官方皮肤别名与监听器卫生；设备库和摄像头占用已确认完成，卡顿暂缓
 - [2026-10-09-remaining-issue-fixes.md](plans/2026-10-09-remaining-issue-fixes.md) — 分五批修复画像枚举依赖宿主 Java、向导加载失败卡住、画布过早就绪、皮肤像素预算和剪贴板控制回包
+- [2026-10-09-skin-download-system-proxy.md](plans/2026-10-09-skin-download-system-proxy.md) — 官方皮肤下载改用 Electron 网络栈遵循系统代理，保留固定源与完整性预算，并为网络失败和超时提供可操作提示
 - [2026-10-09-virtual-scene-camera-edit.md](plans/2026-10-09-virtual-scene-camera-edit.md) — 修复编辑页写入 virtualScene 导致 Android 摄像头为零和相机闪退，并支持保存修正历史配置
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
@@ -276,4 +282,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 186 documents -->
+<!-- 192 documents -->

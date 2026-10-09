@@ -1,6 +1,6 @@
 ---
 description: 分五批修复画像枚举依赖宿主 Java、向导加载失败卡住、画布过早就绪、皮肤像素预算和剪贴板控制回包
-status: in_progress
+status: completed
 created: 2026-10-09
 ---
 
@@ -111,11 +111,11 @@ created: 2026-10-09
 
 - [x] B1：无宿主 Java 时画像与能力查询正常，三个生产调用都使用当前 SDK 的自带 JRE，错误提示可操作。
 - [x] B2：加载失败可提示并重开，取消及旧窗口事件不影响新窗口，权限和上下文隔离保持有效。
-- [ ] B3：初测、等待提示和零尺寸新输入门控已通过；review 新发现已有按下状态漏释放，待独立修复。
+- [x] B3：初测、等待提示和零尺寸新输入门控已通过；2026-10-09 独立后续修复已按下状态的释放，键盘/触点归零与旋转回归通过。
 - [x] B4：预算依据有记录，正常皮肤通过，三条入口在浏览器解码前拒绝超限，不留下半成品。
-- [ ] B5：解析根因及真实 ACK/同步消息已通过，隔离、断开与清理回归通过；review 新发现写失败后 ACK Promise 未处理 rejection，待独立修复。
+- [x] B5：解析根因及真实 ACK/同步消息已通过；2026-10-09 独立后续修复写失败时 ACK/consumed 未处理异常，会话清理与迟到 ACK 回归通过。
 - [x] 全量 test/lint/build/格式检查通过，常规测试运行无未处理异常；八项 review 在案，新增两项 P2 仅记录。
-- [ ] 按实际证据回写五项 issue、learn 与 stage 对应结果，计划状态 completed；刷新 `npm run book:index`，零警告、链接可解析。
+- [x] 按实际证据回写五项 issue、learn 与 stage 对应结果，计划状态 completed；刷新 `npm run book:index`，零警告、链接可解析。
 
 ## 计划编写时的结果
 
@@ -138,3 +138,7 @@ created: 2026-10-09
 review 对照本轮开始时源码快照，避免把此前未提交改动混入本轮；八项检查涵盖正确性、权限、竞态、边界、兼容、资源清理、测试有效性与范围。两项新增 P2 有临时可运行证据，原五篇 issue 已补结果，learn 和 stage 同步。未提交 git，原用户改动保持。
 
 真实诊断证据保留于系统临时目录 msd-five-fixes-9_m7z6j9：Java 无宿主环境对照、wizard 失败重试、canvas 新旧窗口截图、195 张素材统计、B5 raw metadata 及前后耗时。测试只创建临时文件、窗口和 AVD；控制回包日志不记录剪贴板内容。生产会话 destroyAll 后本次 forward 为零；owned emulator PID 61956 已退出，没有停止无关设备或重启共享 ADB server。
+
+## 2026-10-09 独立后续收口
+
+首轮 review 两项 P2 已在 [后续计划](2026-10-09-remaining-code-gaps.md)修复，B3/B5 关闭，整份计划 completed。Node 20/22 全量均 786 项通过、6 项既有跳过，build/typecheck/lint 通过且无未处理异常；本轮新增的键盘/触点归零、旧代次保护和 socket 写失败回归不依赖用户设备。首轮真实 ACK 证据保留，本轮未重新进行真实 AVD 验收。清单、stage 和 learn 已同步。

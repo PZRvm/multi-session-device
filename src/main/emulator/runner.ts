@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { serialForPort, tcpProbe, type PortAllocator } from './ports'
 import { listAdbSerials, runAdb, scrubAdbEnv } from './adb'
-import { awaitWithAbort } from './abort'
+import { abortableSleep, awaitWithAbort } from './abort'
 
 // 容错上限（非冷启动验收耗时）：PoC 实测无头冷启动 ~24s，超时裕量留给慢机器
 export const BOOT_TIMEOUT_MS = 240_000
@@ -101,23 +101,6 @@ const pushTailChunk = (chunks: Buffer[], chunk: Buffer): void => {
   for (let index = 0; index < chunks.length - 1; index += 1) total += chunks[index]!.length
   while (total > STDERR_TAIL_BYTES * 4 && chunks.length > 1) total -= chunks.shift()!.length
 }
-
-const abortableSleep = (ms: number, signal?: AbortSignal): Promise<void> =>
-  new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new Error('aborted'))
-      return
-    }
-    const timer = setTimeout(resolve, ms)
-    signal?.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer)
-        reject(new Error('aborted'))
-      },
-      { once: true }
-    )
-  })
 
 /** boot 探测默认实现：getprop 单次命令 5s 超时，adbd 未就绪时按未启动继续等 */
 export const defaultBootProbe =

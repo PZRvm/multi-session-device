@@ -508,6 +508,39 @@ describe('ScrcpyManager（fake transport）', () => {
       return { settled, result }
     }
 
+    it.each(['immediate', 'deferred'] as const)(
+      '%s socket.write callback 失败关闭会话、清 ACK，迟到回包无效',
+      async (mode) => {
+        const harness = await importManager()
+        try {
+          const view = await openClipboardView(harness, 'd1', 'emulator-5554')
+          const failure = new Error('synthetic socket write failed')
+          view.socket.write = (chunk, callback) => {
+            view.socket.written.push(chunk)
+            if (mode === 'immediate') callback?.(failure)
+            else setTimeout(() => callback?.(failure), 0)
+            return true
+          }
+          const pending = observe(view.paste())
+          await flush()
+          expect(await pending.result).toBe(failure)
+          expect(pending.settled).toHaveBeenCalledOnce()
+          expect(harness.manager.activeDeviceId()).toBeNull()
+          expect(
+            collect().states.some((state) => state.error?.includes('synthetic socket write failed'))
+          ).toBe(true)
+          expect(vi.getTimerCount()).toBe(0)
+          expect(view.socket.listenerCount('data')).toBe(0)
+          view.socket.emit('data', ackMessage(view.sequence()))
+          await harness.manager.destroySession('d1')
+          await vi.advanceTimersByTimeAsync(2000)
+          expect(pending.settled).toHaveBeenCalledOnce()
+        } finally {
+          await harness.manager.destroyAll()
+        }
+      }
+    )
+
     it('UTF-8 SET_CLIPBOARD 与逐字节 ACK 提前完成，未知/迟到 ACK 不误报', async () => {
       const harness = await importManager()
       try {

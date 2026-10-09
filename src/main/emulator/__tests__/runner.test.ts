@@ -1,6 +1,7 @@
 // @vitest-environment node
-import { EventEmitter } from 'node:events'
+import { EventEmitter, getEventListeners } from 'node:events'
 import type { ChildProcess, SpawnOptions } from 'node:child_process'
+import { abortableSleep } from '../abort'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BOOT_INTERVAL_MS,
@@ -47,23 +48,6 @@ class FakeChild extends EventEmitter {
     this.emit('close', code, signal)
   }
 }
-
-const abortableSleep = (ms: number, signal?: AbortSignal): Promise<void> =>
-  new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new Error('aborted'))
-      return
-    }
-    const timer = setTimeout(() => resolve(), ms)
-    signal?.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer)
-        reject(new Error('aborted'))
-      },
-      { once: true }
-    )
-  })
 
 type Harness = ReturnType<typeof makeRunner>
 
@@ -128,6 +112,29 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
+})
+
+describe('可取消等待的监听器清理', () => {
+  it('同一 signal 连续 20 次正常等待后没有监听器残留', async () => {
+    const controller = new AbortController()
+    for (let index = 0; index < 20; index += 1) {
+      const pending = abortableSleep(10, controller.signal)
+      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(1)
+      await tick(10)
+      await pending
+      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+    }
+  })
+  it('取消与已取消均及时拒绝，没有监听器和计时器残留', async () => {
+    const controller = new AbortController()
+    const pending = expect(abortableSleep(100, controller.signal)).rejects.toThrow('aborted')
+    controller.abort()
+    await pending
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+    expect(vi.getTimerCount()).toBe(0)
+    await expect(abortableSleep(100, controller.signal)).rejects.toThrow('aborted')
+    expect(vi.getTimerCount()).toBe(0)
+  })
 })
 
 describe('EmulatorRunner 启动', () => {

@@ -7,6 +7,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { downloadSkin, gitBlobId, officialSkinName, skinImageMime } from '../skinSource'
 import { readSkinPresentation } from '../skinPresentation'
 import { pngImage } from './skinImageFixture'
+import { XMLParser } from 'fast-xml-parser'
+import catalog from '../skinSources.json'
+import { parseSkinLayout } from '../skins'
+
+const network = vi.hoisted(() => ({ fetch: vi.fn() }))
+vi.mock('electron', () => ({ net: { fetch: network.fetch } }))
 
 const layout = readFileSync(join(__dirname, 'fixtures/skins/pixel_7-layout'))
 const png = pngImage()
@@ -39,9 +45,145 @@ const temporary = async (): Promise<string> => {
 }
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  vi.restoreAllMocks()
+  network.fetch.mockReset()
+})
+
+describe('默认官方网络路径', () => {
+  const mockRemote = (): void => {
+    network.fetch.mockImplementation(async (url: string) => new Response(await fetchText(url)))
+  }
+
+  it('默认路径用 Electron 网络栈，Node 直连不可用仍能获取并复用缓存', async () => {
+    const root = await temporary()
+    const direct = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'))
+    mockRemote()
+    const record = await downloadSkin('pixel_7', root, () => {})
+    expect(record.name).toBe('pixel_7')
+    expect(network.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('format=JSON'),
+      expect.objectContaining({ signal: expect.any(AbortSignal), credentials: 'omit' })
+    )
+    expect(direct).not.toHaveBeenCalled()
+    const count = network.fetch.mock.calls.length
+    expect((await downloadSkin('pixel_7', root, () => {})).skinRef).toBe(record.skinRef)
+    expect(network.fetch).toHaveBeenCalledTimes(count)
+  })
+
+  it.each([
+    [new Error('net::ERR_PROXY_CONNECTION_FAILED'), '系统代理'],
+    [new DOMException('Timed out', 'TimeoutError'), '30 秒']
+  ])('连接失败 %s 有可操作提示；失败后允许重试', async (error, expected) => {
+    const root = await temporary()
+    network.fetch.mockRejectedValueOnce(error)
+    await expect(downloadSkin('pixel_7', root, () => {})).rejects.toThrow(expected)
+    await expect(readdir(join(root, 'device-skins'))).rejects.toMatchObject({ code: 'ENOENT' })
+    mockRemote()
+    expect((await downloadSkin('pixel_7', root, () => {})).name).toBe('pixel_7')
+  })
+
+  it.each([
+    [() => new Response('denied', { status: 403 }), 'HTTP 403'],
+    [() => new Response(null), '空内容'],
+    [() => new Response('x'.repeat(Math.floor(16 * 1024 * 1024 * 1.4) + 1)), '体积超限'],
+    [
+      () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(new Error('connection reset'))
+            }
+          })
+        ),
+      '下载中断'
+    ]
+  ])('保留 HTTP/空响应/预算错误并识别中途断开：%s', async (response, expected) => {
+    const root = await temporary()
+    network.fetch.mockResolvedValueOnce(response())
+    await expect(downloadSkin('pixel_7', root, () => {})).rejects.toThrow(expected)
+  })
 })
 
 describe('固定官方来源获取', () => {
+  it.each(catalog.aliases)('$profileId 的皮肤尺寸与登记画像一致（允许横竖交换）', (alias) => {
+    const layout = parseSkinLayout(
+      readFileSync(join(__dirname, `fixtures/skins/aliases/${alias.name}-layout`), 'utf8')
+    )!
+    expect(layout).not.toBeNull()
+    const expected = [alias.screenWidth, alias.screenHeight].sort((a, b) => a - b)
+    for (const orientation of [layout.portrait, layout.landscape].filter(
+      (value) => value !== null
+    )) {
+      expect([orientation.screenWidth, orientation.screenHeight].sort((a, b) => a - b)).toEqual(
+        expected
+      )
+    }
+    expect([layout.portrait, layout.landscape].some((value) => value !== null)).toBe(true)
+  })
+
+  it('别名与目录名合并下载、缓存复用，且 URL 只使用白名单目录', async () => {
+    const root = await temporary()
+    const aliasLayout = readFileSync(join(__dirname, 'fixtures/skins/aliases/nexus_5-layout'))
+    const parsed = parseSkinLayout(aliasLayout.toString('utf8'))!
+    const aliasResources = new Map([
+      ['layout', aliasLayout],
+      ...parsed.imageAssets.map((file) => [file, png] as const)
+    ])
+    const aliasFetch = vi.fn(async (url: string) => {
+      expect(url).toContain('/nexus_5/')
+      if (url.endsWith('format=JSON'))
+        return JSON.stringify({
+          entries: [...aliasResources].map(([name, bytes]) => ({
+            name,
+            type: 'blob',
+            id: gitBlobId(bytes)
+          }))
+        })
+      return aliasResources.get(url.split('/').at(-1)!.split('?')[0])!.toString('base64')
+    })
+    const deps = { fetchText: aliasFetch, studioRoot: '/missing' }
+    const [byAlias, byName] = await Promise.all([
+      downloadSkin('Nexus 5', root, () => {}, deps),
+      downloadSkin('nexus_5', root, () => {}, deps)
+    ])
+    expect(byAlias.skinRef).toBe(byName.skinRef)
+    const calls = aliasFetch.mock.calls.length
+    expect((await downloadSkin('Nexus 5', root, () => {}, deps)).skinRef).toBe(byName.skinRef)
+    expect(aliasFetch).toHaveBeenCalledTimes(calls)
+    expect(await readdir(join(root, 'device-skins'))).toHaveLength(1)
+  })
+
+  it('别名皮肤尺寸不符时在入库前拒绝', async () => {
+    const root = await temporary()
+    await expect(
+      downloadSkin('Nexus 5', root, () => {}, { fetchText, studioRoot: '/missing' })
+    ).rejects.toThrow('尺寸')
+    await expect(readdir(join(root, 'device-skins'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+  it('按官方 XML 的明确皮肤绑定支持旧 Nexus 和汽车别名', () => {
+    const parser = new XMLParser({ removeNSPrefix: true, parseTagValue: false })
+    let checked = 0
+    for (const file of ['nexus', 'automotive']) {
+      const xml = parser.parse(
+        readFileSync(join(__dirname, `fixtures/devices-xml/${file}.xml`), 'utf8')
+      )
+      for (const device of xml.devices.device) {
+        const id = device.id ?? device.name
+        if (
+          id.startsWith('Nexus ') ||
+          id === 'Galaxy Nexus' ||
+          ['automotive_1080p_landscape', 'automotive_ultrawide'].includes(id)
+        ) {
+          expect(officialSkinName(id)).toBe(device.hardware.skin)
+          checked += 1
+        }
+      }
+    }
+    expect(checked).toBe(14)
+    expect(officialSkinName('Nexus')).toBeNull()
+    expect(officialSkinName('nexus 5')).toBeNull()
+    expect(officialSkinName('pixel_fold')).toBeNull()
+  })
   it('精确匹配，不接受模糊画像或路径', async () => {
     expect(officialSkinName('pixel_7')).toBe('pixel_7')
     expect(officialSkinName('Pixel 7')).toBeNull()
