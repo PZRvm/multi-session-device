@@ -147,6 +147,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-10-screenshot-review-p3s.md](notes/issue/2026-10/2026-10-10-screenshot-review-p3s.md) — 截屏批 review P3 共十项——首轮五项（save TOCTOU、缓存竞态、0×0 PNG、错误气泡时效、动画重复）+ 独立 review 追加五项（stderr 无界、oversized 绕 i18n、通道名错位、过期回调覆盖、runner 直测缺口）
 - [2026-10-10-settings-copy-dead-keys-and-learn-stale.md](notes/issue/2026-10/2026-10-10-settings-copy-dead-keys-and-learn-stale.md) — 已修复：设置窗三语字典的 title/preview 死键已删，learn 笔记「open/close 桥」表述已更正为仅 open
 - [2026-10-10-settings-window-crash-reopen.md](notes/issue/2026-10/2026-10-10-settings-window-crash-reopen.md) — P2：设置窗就绪后 renderer 崩溃未释放单例，主窗齿轮再次打开只聚焦故障窗；静态前端 review 发现，待独立修复
+- [2026-10-10-three-features-merge-code-review.md](notes/issue/2026-10/2026-10-10-three-features-merge-code-review.md) — 一期收尾三功能（APK 拖拽安装/截屏/日志面板）合并 dev 复核 review——4 项 P2、7 项 P3；同日修复批全量处置
 
 ### notes/learn/
 
@@ -210,6 +211,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-remaining-issue-fixes.md](notes/learn/2026-10/2026-10-09-remaining-issue-fixes.md) — 工具环境要显式注入、画布要区分流与布局就绪、scrcpy 回包要用与 writer 一致的解析器
 - [2026-10-10-compact-appearance-menu.md](notes/learn/2026-10/2026-10-10-compact-appearance-menu.md) — styled 后代 button 仍会影响子组件，外观模式图标须读所选值，窄栏菜单须用真实排版验收
 - [2026-10-10-electron-settings-static-preview.md](notes/learn/2026-10/2026-10-10-electron-settings-static-preview.md) — 设置静态前端的只读边界与验收：展示模型留在 renderer，多语样例独立验证，截图需核对渲染状态和 DIP
+- [2026-10-10-electron-window-two-coordinate-systems.md](notes/learn/2026-10/2026-10-10-electron-window-two-coordinate-systems.md) — Electron 窗口尺寸有两套坐标系——getBounds/setSize 是外框、getContentBounds/setContentSize 是内容；跨平台做 UI 布局钳制时混用两套会差一个帧差宽度（Windows 14-16px），且测试替身常把「外框=内容」烧进假设掩盖缺陷
 - [2026-10-10-electron39-dragdrop-webutils.md](notes/learn/2026-10/2026-10-10-electron39-dragdrop-webutils.md) — Electron 39 拖放文件路径必须经 preload webUtils.getPathForFile 中转；jsdom 拖放测试三个坑（小写事件名、relatedTarget 不进 init、DataTransfer 靠 fireEvent init）
 - [2026-10-10-logcat-verify-pitfalls.md](notes/learn/2026-10/2026-10-10-logcat-verify-pitfalls.md) — 日志面板验证期两个环境陷阱：npm run format 不透传参数全仓扰动；npx electron 直指 js 文件会换 app 名隔离 userData
 - [2026-10-10-screenshot-adb-binary-and-hooks-rules.md](notes/learn/2026-10/2026-10-10-screenshot-adb-binary-and-hooks-rules.md) — 截屏批三个实现经验——exec-out 二进制必须 Buffer 版 runner（runAdb utf8 化毁字节）、互斥检查与占位间不得夹 await、react-hooks 新规则用渲染期派生替代 effect setState
@@ -307,4 +309,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 217 documents -->
+<!-- 219 documents -->
