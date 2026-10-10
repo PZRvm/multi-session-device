@@ -138,6 +138,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-profiles-clean-machine-no-java.md](notes/issue/2026-10/2026-10-09-profiles-clean-machine-no-java.md) — profiles.ts 以宿主环境启动 avdmanager 未注入自带 JRE；从未装过 Java 的干净 Mac 上向导画像枚举失败，新建设备被挡在第一步，违背 PRD E 零依赖
 - [2026-10-09-remaining-fixes-review-findings.md](notes/issue/2026-10/2026-10-09-remaining-fixes-review-findings.md) — 五项修复 review 新发现：布局归零漏释放已有按下状态，控制写失败后关闭 parser 触发未观察 ACK rejection
 - [2026-10-09-sdk-image-download-system-proxy.md](notes/issue/2026-10/2026-10-09-sdk-image-download-system-proxy.md) — SDK、镜像清单与镜像字节下载仍使用 Node fetch，代理可用但直连不可用时可能失败；本轮只修官方皮肤，其他路径另立任务
+- [2026-10-10-boardhead-toggle-review-p3s.md](notes/issue/2026-10/2026-10-10-boardhead-toggle-review-p3s.md) — 主窗左上亮暗切换钮 review 两项 P3——matchMedia 订阅与 provider 重复、切换钮用动作标签而非 aria-pressed
 - [2026-10-10-settings-copy-dead-keys-and-learn-stale.md](notes/issue/2026-10/2026-10-10-settings-copy-dead-keys-and-learn-stale.md) — 已修复：设置窗三语字典的 title/preview 死键已删，learn 笔记「open/close 桥」表述已更正为仅 open
 - [2026-10-10-settings-window-crash-reopen.md](notes/issue/2026-10/2026-10-10-settings-window-crash-reopen.md) — P2：设置窗就绪后 renderer 崩溃未释放单例，主窗齿轮再次打开只聚焦故障窗；静态前端 review 发现，待独立修复
 
@@ -269,6 +270,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-settings-frontend.md](plans/2026-10-09-settings-frontend.md) — 设置窗口静态前端方案：五分类双栏、三语文案、SDK 三态来源、组件与窗口接线边界
 - [2026-10-09-skin-download-system-proxy.md](plans/2026-10-09-skin-download-system-proxy.md) — 官方皮肤下载改用 Electron 网络栈遵循系统代理，保留固定源与完整性预算，并为网络失败和超时提供可操作提示
 - [2026-10-09-virtual-scene-camera-edit.md](plans/2026-10-09-virtual-scene-camera-edit.md) — 修复编辑页写入 virtualScene 导致 Android 摄像头为零和相机闪退，并支持保存修正历史配置
+- [2026-10-10-i18n-and-appearance.md](plans/2026-10-10-i18n-and-appearance.md) — 全应用三语 i18n（字典单源 + locale 持久化广播 + 三窗与主进程文案迁移）与设置窗外观接通，合并施工图共四批
 - [2026-10-10-settings-chrome-and-appearance.md](plans/2026-10-10-settings-chrome-and-appearance.md) — 设置窗按用户参考图隐藏标题栏，左上角仅保留关闭和全屏，改为齿轮导航与图标外观控件
 - [2026-10-10-settings-reference-layout.md](plans/2026-10-10-settings-reference-layout.md) — 设置静态界面按用户参考图保留行式外观与主题色，隐藏主窗顶部外观 tab
 - [2026-10-10-styled-single-wrapper-refactor.md](plans/2026-10-10-styled-single-wrapper-refactor.md) — 渲染层 styled-components 全量重排——每文件只留一个 Wrapper，内部元素改 className 后代选择器，视觉零变化
@@ -291,4 +293,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 201 documents -->
+<!-- 203 documents -->
