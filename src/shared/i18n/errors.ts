@@ -423,6 +423,7 @@ const zhCN = {
   logcatMainOnlySuffix: '仅主窗可打开日志窗',
   logcatWindowOnlySuffix: '仅日志窗可调用',
   logcatDeviceNotRunning: '设备未运行，无法订阅日志',
+  logcatSpawnFailed: '日志进程启动失败：{message}',
   logcatInvalidPayloadSuffix: '非法的日志请求载荷'
 }
 
@@ -822,6 +823,7 @@ const zhTW: ErrorsCopy = {
   logcatMainOnlySuffix: '僅主窗可開啟日誌視窗',
   logcatWindowOnlySuffix: '僅日誌視窗可呼叫',
   logcatDeviceNotRunning: '裝置未執行，無法訂閱日誌',
+  logcatSpawnFailed: '日誌程序啟動失敗：{message}',
   logcatInvalidPayloadSuffix: '非法的日誌請求載荷'
 }
 
@@ -1268,6 +1270,7 @@ const enUS: ErrorsCopy = {
   logcatMainOnlySuffix: 'only the main window may open the log window',
   logcatWindowOnlySuffix: 'only the log window may call this',
   logcatDeviceNotRunning: 'device is not running; cannot subscribe to logs',
+  logcatSpawnFailed: 'failed to start the log process: {message}',
   logcatInvalidPayloadSuffix: 'invalid logcat request payload'
 }
 

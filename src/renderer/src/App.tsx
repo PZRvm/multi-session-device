@@ -14,10 +14,7 @@ import DeviceHealthNotice from './components/DeviceHealthNotice'
 import DeviceListPane from './components/DeviceListPane'
 import LogcatPanel from './components/LogcatPanel'
 import ResizeHandle from './components/ResizeHandle'
-import {
-  clampListWidth,
-  LIST_MAX_WIDTH
-} from './components/listWidth'
+import { clampListWidth, LIST_MAX_WIDTH } from './components/listWidth'
 import {
   clampLogPaneWidth,
   LOG_PANE_MAX_WIDTH,
@@ -394,7 +391,9 @@ const App = (): React.JSX.Element => {
         }
         clamp={(width) =>
           dockVisible
-            ? clampListWidth(Math.min(width, viewportWidth - logPaneWidth - 5 - LOG_CANVAS_MIN_WIDTH))
+            ? clampListWidth(
+                Math.min(width, viewportWidth - logPaneWidth - 5 - LOG_CANVAS_MIN_WIDTH)
+              )
             : clampListWidth(width)
         }
       />
@@ -436,9 +435,14 @@ const App = (): React.JSX.Element => {
             onResize={setLogPaneWidth}
             ariaLabel={copy.logcatResizeAria}
             minWidth={LOG_PANE_MIN_WIDTH}
-            maxWidth={Math.min(LOG_PANE_MAX_WIDTH, viewportWidth - listWidth - 5 - LOG_CANVAS_MIN_WIDTH)}
+            maxWidth={Math.min(
+              LOG_PANE_MAX_WIDTH,
+              viewportWidth - listWidth - 5 - LOG_CANVAS_MIN_WIDTH
+            )}
             clamp={(width) =>
-              clampLogPaneWidth(Math.min(width, viewportWidth - listWidth - 5 - LOG_CANVAS_MIN_WIDTH))
+              clampLogPaneWidth(
+                Math.min(width, viewportWidth - listWidth - 5 - LOG_CANVAS_MIN_WIDTH)
+              )
             }
           />
           <aside className="log-pane" style={{ width: logPaneWidth }}>

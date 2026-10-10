@@ -2,7 +2,7 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WebContents } from 'electron'
-import type { Device, DeviceSnapshot, LogcatBatchMessage } from '@shared/types'
+import type { Device, LogcatBatchMessage } from '@shared/types'
 
 const mocks = vi.hoisted(() => ({
   handle: vi.fn(),
@@ -59,20 +59,6 @@ const asWebContents = (contents: FakeContents): WebContents => contents as unkno
 const deviceOf = (id: string, status: Device['status'], serial?: string, runId?: string): Device =>
   ({ id, name: id, status, serial, runId }) as unknown as Device
 
-const makeSnapshot = (devices: Device[]): DeviceSnapshot =>
-  ({
-    revision: 1,
-    devices,
-    storeHealth: { state: 'ok', issues: [] },
-    reconciliation: {
-      signature: null,
-      unavailableCount: 0,
-      orphanCount: 0,
-      storeState: 'ok',
-      pendingNotification: false
-    }
-  }) as unknown as DeviceSnapshot
-
 const batchesOf = (contents: FakeContents): LogcatBatchMessage[] =>
   contents.send.mock.calls
     .filter((call) => call[0] === 'logcat:batch')
@@ -88,7 +74,14 @@ describe('日志域会话与流控', () => {
     return createLogcatManager({
       adbPath: () => '/fake/adb',
       toolEnv: () => ({ ANDROID_SDK_ROOT: '/sdk' }),
-      snapshot: () => makeSnapshot(devices),
+      runtimeViews: () =>
+        devices.map((device) => ({
+          id: device.id,
+          name: device.name,
+          status: device.status,
+          serial: device.serial,
+          runId: device.runId
+        })),
       isLogcatWindow: (sender) => sender.id === 99
     })
   }
@@ -290,12 +283,23 @@ describe('日志域会话与流控', () => {
       handlerOf('logcat:context')({ sender: asWebContents(contentsA) }, undefined)
     ).toThrow('logcatWindowOnlySuffix')
     const logcatWindow = makeContents(99)
-    const snapshot = handlerOf('logcat:context')(
+    const views = handlerOf('logcat:context')(
       { sender: asWebContents(logcatWindow) },
       undefined
-    ) as DeviceSnapshot
-    expect(snapshot.devices).toHaveLength(1)
-    expect(snapshot.devices[0].id).toBe('d1')
+    ) as Array<{ id: string }>
+    expect(views).toHaveLength(1)
+    expect(views[0].id).toBe('d1')
+  })
+
+  it('spawn 同步失败：订阅显式报错（不再静默空态）', async () => {
+    mocks.spawn.mockImplementation(() => {
+      throw new Error('ENOENT: no such file or directory, adb')
+    })
+    const manager = await makeManager([deviceOf('d1', 'running', 's1', 'run-1')])
+    manager.registerIpc()
+    expect(() =>
+      handlerOf('logcat:subscribe')({ sender: asWebContents(contentsA) }, { deviceId: 'd1' })
+    ).toThrow('logcatSpawnFailed')
   })
 
   it('非法载荷被拒', async () => {

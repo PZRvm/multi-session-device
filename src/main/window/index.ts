@@ -17,8 +17,8 @@ export function getMainWindow(): BrowserWindow | null {
 
 export function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
-    // 1200 使默认尺寸即可容纳「列表 280 + 日志 dock 320 + 画布保底 560」的
-    // 三栏布局（App 侧 LOG_CANVAS_MIN_WIDTH）——日志 dock 默认固定在右侧
+    // 1200 使默认尺寸即可容纳「列表 280 + 日志 dock 320 + 画布保底 560」的三栏
+    // 布局（App 侧 LOG_CANVAS_MIN_WIDTH）——dock 默认收起，展开/贴回时窄窗拉宽到该宽
     width: 1200,
     height: 670,
     show: false,

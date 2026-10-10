@@ -4,7 +4,7 @@ import {
   attachDeviceStreamBridge,
   adbBinaryPath,
   androidToolEnv,
-  currentDeviceSnapshot,
+  listDeviceRuntimeViews,
   listDeviceNamesReferencing,
   savedDeviceSkinRef,
   registerDevicesIpc
@@ -49,7 +49,7 @@ export function registerIpcHandlers(): void {
   const logcat = createLogcatManager({
     adbPath: adbBinaryPath,
     toolEnv: androidToolEnv,
-    snapshot: currentDeviceSnapshot,
+    runtimeViews: listDeviceRuntimeViews,
     isLogcatWindow: isLogcatWindowSender
   })
   logcat.registerIpc()

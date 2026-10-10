@@ -1,7 +1,7 @@
 ---
 description: 日志域 adb 进程 spawn 同步失败时保留空会话，订阅者只见「暂无日志」空态，无任何错误提示
 created: 2026-10-10
-status: open
+status: closed
 ---
 
 # 日志会话 spawn 失败静默为空态
@@ -23,3 +23,7 @@ status: open
 
 - 概率低：adb 路径由 SDK bootstrap 域管理，正常流程下存在；但「用户手动删 SDK 目录后设备仍在 running」等场景可触达。
 - review（plan 2026-10-10-logcat-panel Phase 5）发现，按 workflow 只记录不修复。
+
+## 处置记录 — 2026-10-10
+
+按建议第二条实现：会话记录 `spawnError`（`logcatSpawnFailed` 词条 + 原始错误附详情，三语），`spawn` 同步失败不再静默——订阅即 reject，面板经既有错误条渲染（订阅失败通路此前已就绪）。补单测「spawn 同步失败：订阅显式报错」；重试入口未加（切设备/重开 dock 即重订，天然重试）。

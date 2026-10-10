@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { ipcMain, type WebContents } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
-import type { DeviceSnapshot, LogcatBatchMessage, LogcatLine } from '@shared/types'
+import type { DeviceRuntimeView, LogcatBatchMessage, LogcatLine } from '@shared/types'
 import { msg } from '../locale'
 
 // 日志域（plan 2026-10-10-logcat-panel）：每台 running 设备一个 `adb logcat` 会话，
@@ -28,6 +28,8 @@ interface LogcatSession {
   deviceId: string
   runId: string
   serial: string
+  /** spawn 同步失败原因（adb 缺失等）：订阅即报错，不再静默空态 */
+  spawnError: string | null
   child: ChildProcess | null
   /** 会话内单调递增行号 */
   seq: number
@@ -45,8 +47,8 @@ interface LogcatSession {
 export interface LogcatManagerDeps {
   adbPath: () => string
   toolEnv: () => NodeJS.ProcessEnv
-  /** 当前设备快照（订阅惰性建会时判 running；日志窗上下文通道返回） */
-  snapshot: () => DeviceSnapshot
+  /** 设备运行态窄视图（订阅惰性建会时判 running；日志窗上下文通道返回） */
+  runtimeViews: () => DeviceRuntimeView[]
   /** 日志窗 sender 判定（上下文通道守卫；由 window/logcat 注入） */
   isLogcatWindow: (sender: WebContents) => boolean
 }
@@ -59,10 +61,10 @@ export interface LogcatManager {
 }
 
 const runningDeviceOf = (
-  snapshot: DeviceSnapshot,
+  views: DeviceRuntimeView[],
   deviceId: string
 ): { runId: string; serial: string } | null => {
-  const device = snapshot.devices.find((entry) => entry.id === deviceId)
+  const device = views.find((entry) => entry.id === deviceId)
   if (!device || device.status !== 'running' || !device.runId || !device.serial) return null
   return { runId: device.runId, serial: device.serial }
 }
@@ -176,6 +178,7 @@ export function createLogcatManager(deps: LogcatManagerDeps): LogcatManager {
       deviceId: device.id,
       runId: device.runId,
       serial: device.serial,
+      spawnError: null,
       child: null,
       seq: 0,
       ring: [],
@@ -192,8 +195,11 @@ export function createLogcatManager(deps: LogcatManagerDeps): LogcatManager {
         env: deps.toolEnv(),
         stdio: ['ignore', 'pipe', 'pipe']
       })
-    } catch {
-      // spawn 同步失败（如 adb 缺失）：会话空壳保留——订阅者拿到空回放，不阻塞设备运行
+    } catch (error) {
+      // spawn 同步失败（如 adb 缺失）：会话壳保留运行位，订阅时显式报错（不静默空态）
+      session.spawnError = msg('logcatSpawnFailed', {
+        message: error instanceof Error ? error.message : String(error)
+      })
       return session
     }
     session.child = child
@@ -234,10 +240,11 @@ export function createLogcatManager(deps: LogcatManagerDeps): LogcatManager {
     let session = sessions.get(deviceId)
     if (!session) {
       // 惰性建会：桥未及建（订阅先于 running 事件落地）或会话曾因 adb 退出被销毁
-      const device = runningDeviceOf(deps.snapshot(), deviceId)
+      const device = runningDeviceOf(deps.runtimeViews(), deviceId)
       if (!device) throw new Error(msg('logcatDeviceNotRunning'))
       session = startSession({ id: deviceId, ...device })
     }
+    if (session.spawnError) throw new Error(session.spawnError)
     // 先把攒批发给既有订阅者，回放才是完整最新状态（否则 pending 尾部行会在
     // 回放与随后的 flush 中重复出现）
     flushNow(session)
@@ -292,11 +299,11 @@ export function createLogcatManager(deps: LogcatManagerDeps): LogcatManager {
       acknowledge(message.deviceId, event.sender.id, message.upToSeq)
       return Promise.resolve()
     })
-    ipcMain.handle(IPC_CHANNELS.logcatContext, (event): DeviceSnapshot => {
+    ipcMain.handle(IPC_CHANNELS.logcatContext, (event): DeviceRuntimeView[] => {
       if (!deps.isLogcatWindow(event.sender)) {
         throw new Error(`${IPC_CHANNELS.logcatContext}: ${msg('logcatWindowOnlySuffix')}`)
       }
-      return deps.snapshot()
+      return deps.runtimeViews()
     })
   }
 

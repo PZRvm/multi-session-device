@@ -135,13 +135,13 @@ export function openLogcatWindow(deviceId?: string): Promise<void> {
 // 服务器时序竞态（偶发不清除，主窗从此缩不小）；will-resize 钳制是纯同步逻辑，
 // 解除 = 变量置零，无竞态。程序化 setSize/setBounds 不触发 will-resize，拉宽不受影响
 let dockMinWidth = 0
-let resizeHookAttached = false
+/** 已挂钳制钩子的主窗 id——主窗关闭重开（macOS activate 重建）后按新窗重挂 */
+let resizeHookWindowId = -1
 
 const attachDockResizeHook = (): void => {
-  if (resizeHookAttached) return
   const window = getMainWindow()
-  if (!window) return
-  resizeHookAttached = true
+  if (!window || window.id === resizeHookWindowId) return
+  resizeHookWindowId = window.id
   // 用户拖拽：will-resize 预阻止（无闪跳；macOS 支持）
   window.on('will-resize', (event, newBounds) => {
     if (dockMinWidth > 0 && newBounds.width < dockMinWidth) {
@@ -189,32 +189,29 @@ export function registerLogcatIpc(): void {
   })
   // dock 展开态同步：展开时锁主窗 minWidth（dock 不会被窗口缩窄挤掉），
   // 窗口不够宽则拉宽到 minWidth（窄窗点入口 = 黏滞右侧而非退化独立窗）；收起解锁
-  ipcMain.handle(
-    IPC_CHANNELS.logcatDockState,
-    (event, raw: unknown): Promise<void> => {
-      const window = getMainWindow()
-      if (window?.webContents !== event.sender) {
-        throw new Error(`${IPC_CHANNELS.logcatDockState}: ${msg('logcatMainOnlySuffix')}`)
-      }
-      const { expanded, minWidth } = (raw ?? {}) as { expanded?: boolean; minWidth?: number }
-      if (expanded !== true && expanded !== false) {
+  ipcMain.handle(IPC_CHANNELS.logcatDockState, (event, raw: unknown): Promise<void> => {
+    const window = getMainWindow()
+    if (window?.webContents !== event.sender) {
+      throw new Error(`${IPC_CHANNELS.logcatDockState}: ${msg('logcatMainOnlySuffix')}`)
+    }
+    const { expanded, minWidth } = (raw ?? {}) as { expanded?: boolean; minWidth?: number }
+    if (expanded !== true && expanded !== false) {
+      throw new Error(`${IPC_CHANNELS.logcatDockState}: ${msg('logcatInvalidPayloadSuffix')}`)
+    }
+    if (expanded) {
+      if (typeof minWidth !== 'number' || !Number.isFinite(minWidth) || minWidth <= 0) {
         throw new Error(`${IPC_CHANNELS.logcatDockState}: ${msg('logcatInvalidPayloadSuffix')}`)
       }
-      if (expanded) {
-        if (typeof minWidth !== 'number' || !Number.isFinite(minWidth) || minWidth <= 0) {
-          throw new Error(`${IPC_CHANNELS.logcatDockState}: ${msg('logcatInvalidPayloadSuffix')}`)
-        }
-        attachDockResizeHook()
-        dockMinWidth = Math.round(minWidth)
-        const bounds = window.getBounds()
-        if (bounds.width < minWidth) {
-          // 高度取整（getBounds 在分数缩放下可能是 .5 值，setSize 只收整数）
-          window.setSize(Math.round(minWidth), Math.round(bounds.height))
-        }
-      } else {
-        dockMinWidth = 0
+      attachDockResizeHook()
+      dockMinWidth = Math.round(minWidth)
+      const bounds = window.getBounds()
+      if (bounds.width < minWidth) {
+        // 高度取整（getBounds 在分数缩放下可能是 .5 值，setSize 只收整数）
+        window.setSize(Math.round(minWidth), Math.round(bounds.height))
       }
-      return Promise.resolve()
+    } else {
+      dockMinWidth = 0
     }
-  )
+    return Promise.resolve()
+  })
 }

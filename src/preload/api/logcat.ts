@@ -1,6 +1,6 @@
 import { ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
-import type { DeviceSnapshot, LogcatAckMessage, LogcatBatchMessage } from '@shared/types'
+import type { DeviceRuntimeView, LogcatAckMessage, LogcatBatchMessage } from '@shared/types'
 
 /** 日志域白名单桥：任意窗口可订阅（与投屏域仅主窗不同）；监听返回解绑函数 */
 export const logcatApi = {
@@ -23,8 +23,8 @@ export const logcatApi = {
       ipcRenderer.removeListener(IPC_CHANNELS.logcatBatch, listener)
     }
   },
-  /** 日志窗启动上下文：当前设备快照（仅日志窗可调） */
-  context: (): Promise<DeviceSnapshot> => ipcRenderer.invoke(IPC_CHANNELS.logcatContext),
+  /** 日志窗启动上下文：设备运行态窄视图（仅日志窗可调） */
+  context: (): Promise<DeviceRuntimeView[]> => ipcRenderer.invoke(IPC_CHANNELS.logcatContext),
   /** 主窗调：开/聚焦独立日志窗（可带目标设备） */
   openWindow: (deviceId?: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.logcatWindowOpen, { deviceId }),

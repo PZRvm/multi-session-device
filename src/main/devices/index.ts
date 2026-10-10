@@ -16,6 +16,7 @@ import type {
   DeviceEditStorageInfo,
   DeviceFrameKind,
   DeviceMeta,
+  DeviceRuntimeView,
   DeviceSnapshot,
   ReconcileReport,
   ReconcileResult,
@@ -749,8 +750,16 @@ const broadcastChanged = (): void => {
   }
 }
 
-/** 当前快照读取（窗口上下文域经注入消费——日志窗下拉等；各域自行守卫 sender） */
-export const currentDeviceSnapshot = (): DeviceSnapshot => snapshotNow()
+/** 窗口上下文窄视图（日志窗下拉等）：只暴露 id/名称/运行态/serial/runId——
+ *  相比全量快照不扩散健康详情、镜像与附加设置；各消费域仍须自行守卫 sender */
+export const listDeviceRuntimeViews = (): DeviceRuntimeView[] =>
+  devices.map((device) => ({
+    id: device.id,
+    name: device.name,
+    status: device.status,
+    serial: device.serial,
+    runId: device.runId
+  }))
 
 const requireDevice = (id: string): Device => {
   const device = devices.find((entry) => entry.id === id)

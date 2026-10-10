@@ -1,18 +1,31 @@
 import { useEffect, useState } from 'react'
 import { PanelLeftClose } from 'lucide-react'
 import styled from 'styled-components'
-import type { Device, DeviceSnapshot } from '@shared/types'
+import type { DeviceRuntimeView, DeviceSnapshot } from '@shared/types'
 import { MAIN_COPY } from '@shared/i18n'
 import { toApiResult } from '../api'
 import { useCopy } from '../hooks/useCopy'
 import { useLocaleStore } from '../stores/localeStore'
 import LogcatPanel from '../components/LogcatPanel'
 
+/** 弹出时带来的目标设备（?device=<id>；窗口生命周期内不变，解析一次） */
+const INITIAL_DEVICE_ID = new URLSearchParams(window.location.search).get('device')
+
+/** 全窗广播快照 → 运行态窄视图（本窗只消费下拉/订阅所需字段） */
+const runtimeViewsOf = (snapshot: DeviceSnapshot): DeviceRuntimeView[] =>
+  snapshot.devices.map((device) => ({
+    id: device.id,
+    name: device.name,
+    status: device.status,
+    serial: device.serial,
+    runId: device.runId
+  }))
+
 /** 独立日志窗：running 设备下拉 + 共用日志面板。关窗只是退订——会话跟设备走（plan） */
 const LogcatApp = (): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
   const locale = useLocaleStore((state) => state.locale)
-  const [devices, setDevices] = useState<Device[]>([])
+  const [devices, setDevices] = useState<DeviceRuntimeView[]>([])
   const [pickedId, setPickedId] = useState<string | null>(null)
 
   // 启动上下文（仅日志窗可调）+ devicesChanged 全窗广播跟随
@@ -20,10 +33,10 @@ const LogcatApp = (): React.JSX.Element => {
     let alive = true
     void (async () => {
       const result = await toApiResult(window.api.logcat.context())
-      if (alive && result.ok) setDevices(result.data.devices)
+      if (alive && result.ok) setDevices(result.data)
     })()
     const unbind = window.api.devices.onChanged((snapshot: DeviceSnapshot) => {
-      setDevices(snapshot.devices)
+      setDevices(runtimeViewsOf(snapshot))
     })
     return () => {
       alive = false
@@ -35,12 +48,11 @@ const LogcatApp = (): React.JSX.Element => {
     (device) => device.status === 'running' && device.serial && device.runId
   )
   // 目标链：手选（仍 running）→ 弹出时带来的 ?device= → 首个 running；目标停止自动回退
-  const initialId = new URLSearchParams(window.location.search).get('device')
   const effectiveId =
     pickedId !== null && running.some((device) => device.id === pickedId)
       ? pickedId
-      : initialId !== null && running.some((device) => device.id === initialId)
-        ? initialId
+      : INITIAL_DEVICE_ID !== null && running.some((device) => device.id === INITIAL_DEVICE_ID)
+        ? INITIAL_DEVICE_ID
         : (running[0]?.id ?? null)
   const selected = running.find((device) => device.id === effectiveId) ?? null
 

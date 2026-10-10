@@ -1,7 +1,7 @@
 ---
 description: 日志面板 review P2——主窗关闭后重开，dock 宽度钳制钩子不随新窗口挂载，will-resize 拦截失效
 created: 2026-10-10
-status: open
+status: closed
 severity: P2
 ---
 
@@ -33,3 +33,7 @@ severity: P2
 
 - review（plan 2026-10-10-logcat-panel 正式 review 轮）发现，按 workflow 只记录不修复。
 - 与第六批「弃用 setMinimumSize 改双层钳制」同源——那批引入的防重复 flag 未考虑主窗换代。
+
+## 处置记录 — 2026-10-10
+
+按建议方向修复：`resizeHookAttached` 布尔改为 `resizeHookWindowId`（记录已挂钩的主窗 id），`attachDockResizeHook` 每次比对当前主窗 id——主窗关闭重开（新 BrowserWindow、新 id）后自动重挂。真机回归：锁定/解锁通路正常（主窗换代场景无法自动化模拟 activate 重建，逻辑为三行 id 比对、留合并后人工抽验）。

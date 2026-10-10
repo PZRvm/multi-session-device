@@ -1,7 +1,7 @@
 ---
 description: 日志面板 review P3 备忘——主窗宽度注释过时、快照导出面扩大、日志窗 URL 参数重复解析
 created: 2026-10-10
-status: open
+status: closed
 severity: P3
 ---
 
@@ -22,3 +22,7 @@ severity: P3
 ## 备注
 
 - 均 review（plan 2026-10-10-logcat-panel 正式 review 轮）发现，按 workflow 只记录不修复。
+
+## 处置记录 — 2026-10-10
+
+三项同批修复：① 注释订正为「dock 默认收起，展开/贴回时窄窗拉宽」；② `currentDeviceSnapshot` 全量快照导出移除，改 `listDeviceRuntimeViews()`（DeviceRuntimeView 窄视图：id/名称/status/serial/runId），logcat 域 deps 与 `logcatContext` 返回同步收窄，LogcatApp 广播侧同样窄化；③ `?device=` 解析提为模块级常量 `INITIAL_DEVICE_ID`。883 项测试通过，真机窄视图通路（context → 下拉空态）验证正常。
