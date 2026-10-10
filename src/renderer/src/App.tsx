@@ -273,14 +273,20 @@ const App = (): React.JSX.Element => {
   // dock 展开所需的主窗最小宽（列表 + 分隔条 + 日志栏 + 画布保底）
   const dockNeedWidth = listWidth + 5 + logPaneWidth + LOG_CANVAS_MIN_WIDTH
 
+  // 声明式同步：dock 可见 → 锁主窗 minWidth（拖宽变化跟随）；不可见（收起、
+  // 弹出独立窗、外力兜底）→ 解锁——独立窗口态主窗宽度完全自由
+  useEffect(() => {
+    void toApiResult(
+      window.api.logcat.setDockState(
+        dockVisible ? { expanded: true, minWidth: dockNeedWidth } : { expanded: false }
+      )
+    )
+  }, [dockVisible, dockNeedWidth])
+
+  // 显式拉宽先于展开渲染（窄窗点入口/贴回：dock 出现的同一时刻窗口已够宽）
   const expandDock = async (): Promise<void> => {
     await toApiResult(window.api.logcat.setDockState({ expanded: true, minWidth: dockNeedWidth }))
     setLogDockOpen(true)
-  }
-
-  const collapseDock = async (): Promise<void> => {
-    await toApiResult(window.api.logcat.setDockState({ expanded: false }))
-    setLogDockOpen(false)
   }
 
   // 独立日志窗开着时点入口 = 聚焦该窗（单例）；否则开合 dock（窄窗由 main
@@ -294,7 +300,7 @@ const App = (): React.JSX.Element => {
       return
     }
     if (dockVisible) {
-      await collapseDock()
+      setLogDockOpen(false)
       return
     }
     await expandDock()
@@ -303,7 +309,7 @@ const App = (): React.JSX.Element => {
   const handlePopOutLogcat = async (): Promise<void> => {
     if (!logcatDevice) return
     const result = await toApiResult(window.api.logcat.openWindow(logcatDevice.id))
-    if (result.ok) await collapseDock()
+    if (result.ok) setLogDockOpen(false)
   }
 
   // 独立窗「贴回」：关窗由 main 侧完成，这里重新展开 dock（窄窗同样拉宽）

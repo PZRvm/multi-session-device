@@ -45,7 +45,8 @@ beforeEach(() => {
     logcat: {
       isWindowOpen: vi.fn(async () => false),
       openWindow: vi.fn(async () => undefined),
-      onDockBack: () => () => {}
+      onDockBack: () => () => {},
+      setDockState: vi.fn(async () => undefined)
     },
     devices: {
       list: vi.fn(async () => ({

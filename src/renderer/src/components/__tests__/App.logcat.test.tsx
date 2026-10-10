@@ -188,7 +188,7 @@ describe('主窗日志 dock', () => {
     expect(screen.getByRole('log')).toBeTruthy()
   })
 
-  it('面板弹出：开独立窗（带目标设备）成功后 dock 收起', async () => {
+  it('面板弹出：开独立窗（带目标设备）成功后 dock 收起并解锁 minWidth', async () => {
     render(<App />)
     fireEvent.click(toggleButton())
     await screen.findByRole('log')
@@ -198,6 +198,30 @@ describe('主窗日志 dock', () => {
       await Promise.resolve()
     })
     expect(screen.queryByRole('log')).toBeNull()
+    // 独立窗口态主窗宽度自由：dock 不可见即解锁
+    expect(setDockState).toHaveBeenLastCalledWith({ expanded: false })
+  })
+
+  it('窄窗贴回：按需拉宽主窗并黏滞展开 dock', async () => {
+    setViewport(1000)
+    let dockBackListener: (() => void) | null = null
+    ;(window as unknown as { api: { logcat: { onDockBack: unknown } } }).api.logcat.onDockBack = (
+      callback: () => void
+    ): (() => void) => {
+      dockBackListener = callback
+      return () => {
+        dockBackListener = null
+      }
+    }
+    render(<App />)
+    expect(screen.queryByRole('log')).toBeNull()
+    act(() => {
+      dockBackListener?.()
+    })
+    // mock 的 setDockState 在 expanded 且当前视口不足时把视口拉宽到 minWidth
+    expect(setDockState).toHaveBeenCalledWith({ expanded: true, minWidth: 1165 })
+    expect(await screen.findByRole('log')).toBeTruthy()
+    expect(window.innerWidth).toBe(1165)
   })
 
   it('设备停止后入口消失、dock 保留空态（无设备订阅）', async () => {
