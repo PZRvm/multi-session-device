@@ -34,6 +34,7 @@ const BoardHead = ({ count, compact, onOpenSettings }: BoardHeadProps): React.JS
           triggerLabel={copy.themeSwitch}
         />
         <button
+          className="settings-button"
           type="button"
           title={copy.settings}
           aria-label={copy.settings}
@@ -85,7 +86,7 @@ const Wrapper = styled.div`
     margin-left: auto;
     -webkit-app-region: no-drag;
   }
-  button {
+  .settings-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -101,15 +102,15 @@ const Wrapper = styled.div`
       background-color 0.12s,
       color 0.12s;
   }
-  button:hover:not(:disabled) {
+  .settings-button:hover:not(:disabled) {
     background: var(--board-hover-veil);
     color: var(--board-ink);
   }
-  button:focus-visible {
+  .settings-button:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
   }
-  button:disabled {
+  .settings-button:disabled {
     cursor: default;
     opacity: 0.45;
   }

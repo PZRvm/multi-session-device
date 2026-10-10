@@ -85,6 +85,30 @@ describe('BoardHead', () => {
   })
 
   describe('外观选择（共用 AppearanceModePicker）', () => {
+    it.each([
+      ['system', false, 'monitor'],
+      ['system', true, 'monitor'],
+      ['light', true, 'sun'],
+      ['dark', false, 'moon']
+    ] as const)('紧凑态 %s / 系统暗色 %s 显示 %s 图标', (mode, prefersDark, icon) => {
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn().mockReturnValue({
+          matches: prefersDark,
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn()
+        })
+      )
+      useThemeStore.setState({ mode })
+      try {
+        render(<BoardHead count={0} compact />)
+        const trigger = screen.getByRole('button', { name: copy.themeSwitch })
+        expect(trigger.querySelector(`svg.lucide-${icon}`)).toBeTruthy()
+      } finally {
+        vi.unstubAllGlobals()
+      }
+    })
+
     it('紧凑态（compact）：触发钮展开菜单，三态单选当前高亮，选中即写 store 并收起', () => {
       useThemeStore.setState({ mode: 'system' })
       render(<BoardHead count={0} compact />)
@@ -102,6 +126,7 @@ describe('BoardHead', () => {
       fireEvent.click(items[1])
       expect(writeTheme).toHaveBeenCalledWith('light')
       expect(useThemeStore.getState().mode).toBe('light')
+      expect(trigger.querySelector('svg.lucide-sun')).toBeTruthy()
       // 选中后菜单收起
       expect(screen.queryByRole('menu')).toBeNull()
     })
@@ -112,6 +137,17 @@ describe('BoardHead', () => {
       expect(screen.getByRole('menu')).toBeTruthy()
       fireEvent.keyDown(document, { key: 'Escape' })
       expect(screen.queryByRole('menu')).toBeNull()
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: copy.themeSwitch }))
+    })
+
+    it('紧凑态：点击组件外关闭菜单', () => {
+      render(<BoardHead count={0} compact />)
+      fireEvent.click(screen.getByRole('button', { name: copy.themeSwitch }))
+      fireEvent.pointerDown(document.body)
+      expect(screen.queryByRole('menu')).toBeNull()
+      expect(
+        screen.getByRole('button', { name: copy.themeSwitch }).getAttribute('aria-expanded')
+      ).toBe('false')
     })
 
     it('宽态（compact=false）：分段直选三态，aria-pressed 跟随且选中即写 store', () => {
