@@ -179,6 +179,7 @@ i18n 初始键（mainWindow 域）：`logcatTitle`、`logcatFilterPlaceholder`�
 - **用户反馈迭代（同日，第二批）**：dock 改回默认收起且不持久化开合状态（每启从收起起步）；独立窗 head 区 darwin 下接管拖拽（`-webkit-app-region: drag`，select/贴回按钮 no-drag——hiddenInset 无系统标题栏，此前窗口不可拖）；新增「贴回」闭环（独立窗 header 右端按钮 → `logcat:dock-back` → main 关日志窗并广播主窗重新展开 dock）；主窗入口点击先查 `logcat:window-state`，独立窗开着即聚焦（单例 focus）而非重开 dock。真机验证 10/10（合成拖拽需辅助功能权限未自动化，拖动由 app-region 机制保证、留用户确认）。
 - **用户反馈迭代（同日，第三批）**：dock 展开时窗口缩窄不再隐藏 dock——新增 `logcat:dock-state` 通道，展开时 main 锁主窗 `setMinimumSize`（列表+分隔条+日志栏+画布保底的实际值），收起/弹出解锁；窄窗点入口不再退化独立窗，改为 main 自动拉宽窗口让 dock 黏滞右侧（独立窗只经面板内「弹出」产生）；列表与日志栏拖宽把手加动态上限（dock 展开时拖不到挤爆画布的宽度）。真机验证：renderer 通路触发 main 拉宽（1400→2000 实测）、够宽不动作；minWidth 锁定行为由 setMinimumSize 语义保证（合成拖拽无法自动化），留用户确认。
 - **用户反馈迭代（同日，第四批）**：minWidth 锁定改声明式跟随——effect 以 `dockVisible` 为源同步 `dock-state`（可见锁、不可见解锁），`dockNeedWidth` 随拖宽自动跟随重锁；收起/弹出简化为纯 `setLogDockOpen(false)`，解锁由 effect 统一保证。独立窗口态主窗宽度完全自由；贴回窄窗按需拉宽（与入口展开共用 expandDock 通路），新增窄窗贴回与弹出解锁两组单测断言。882 项测试通过（6 项原有跳过），typecheck/lint/build 通过。
+- **用户反馈迭代（同日，第五批）**：用户真机仍报「独立窗后主窗缩不小」（隔离验证 main/renderer 通路均正常，单测亦绿——判断为未定位的时序路径）。工程兜底：`openLogcatWindow` 的 ready-to-show 回调里 main 直接清主窗 minWidth 锁（独立窗出现 ⇒ 主窗自由成为 main 侧硬保证，renderer effect 降级为冗余保险）。真机验证最坏情况（绕过 React 直调 IPC）：锁定 1165 → 开独立窗 → resizeTo(900) 成功。另修 onDockBack 订阅闭包捕获过期 dockNeedWidth（改经 ref 取最新值）。
 
 ### Phase 4：验证
 
