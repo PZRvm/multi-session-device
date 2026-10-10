@@ -167,3 +167,7 @@ i18n 初始键（mainWindow 域）：`screenshotAction`、`screenshotCopied`、`
 - 经验入 [learn：exec-out 二进制流与 react-hooks 新规则](../notes/learn/2026-10/2026-10-10-screenshot-adb-binary-and-hooks-rules.md)；stage05 截屏步骤附实现批注（步骤因录屏未做保持未勾）。
 - 本 plan 置 completed：仅指「截屏半边」完成；stage 步骤「截屏+录屏」整步完成仍需录屏批。
 
+### 追加小批 — 2026-10-10 气泡手动关闭
+
+应用户要求在气泡左上角补关闭 icon（圆形 ×，lucide X，三语 aria-label「关闭」）：`ScreenshotPopover` 加 `onClose` 与常驻关闭钮；`useScreenshot` 重新暴露 `dismiss`（渲染期派生收起路径不变）；`DeviceToolbar`/`DeviceCanvas` 接线 `onScreenshotDismiss`。新增 2 项测试、全量 878 项通过，typecheck/lint/prettier 通过；真机 CDP 验证点关闭气泡即收、再截屏气泡重现（截图目检关闭钮不遮缩略图内容）。自动消失（10s）与设备离开 running 的收起路径不受影响。
+
