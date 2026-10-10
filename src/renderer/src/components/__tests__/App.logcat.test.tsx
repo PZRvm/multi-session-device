@@ -224,7 +224,7 @@ describe('主窗日志 dock', () => {
     expect(window.innerWidth).toBe(1165)
   })
 
-  it('设备停止后入口消失、dock 保留空态（无设备订阅）', async () => {
+  it('设备停止后：入口消失且 dock 自动收起、minWidth 解锁（不留死锁）', async () => {
     const { rerender } = render(<App />)
     fireEvent.click(toggleButton())
     await screen.findByRole('log')
@@ -239,8 +239,10 @@ describe('主窗日志 dock', () => {
     })
     rerender(<App />)
     expect(screen.queryByTitle(copy.logcatTitle)).toBeNull()
-    // dock 不自动强收：面板显示无设备空态
-    expect(screen.getByText(copy.logcatNoDevice)).toBeTruthy()
+    // dock 自动收起（不再保留空态挂死）
+    expect(screen.queryByRole('log')).toBeNull()
+    // 解锁随 dockVisible 变 false 发出
+    expect(setDockState).toHaveBeenLastCalledWith({ expanded: false })
   })
 
   it('批次推送渲染到面板（端到端：App 装配 → useLogcatFeed）', async () => {

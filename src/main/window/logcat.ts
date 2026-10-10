@@ -101,12 +101,8 @@ export function openLogcatWindow(deviceId?: string): Promise<void> {
       if (logcatSession !== session || session.settled || window.isDestroyed()) return
       session.ready = true
       // 独立窗出现 ⇒ 主窗 dock 必然收起（renderer 随后 setLogDockOpen(false)）——
-      // main 侧直接清 dock 留下的 minWidth 锁，保证独立窗口态主窗宽度自由，
-      // 不依赖 renderer effect 的解锁时序
-      const main = getMainWindow()
-      if (main && !main.isDestroyed() && main.getMinimumSize()[0] > 0) {
-        main.setMinimumSize(0, 0)
-      }
+      // main 侧先解除宽钳制，保证独立窗口态主窗宽度自由，不依赖 renderer 解锁时序
+      dockMinWidth = 0
       settle()
       window.show()
       window.focus()
@@ -133,6 +129,33 @@ export function openLogcatWindow(deviceId?: string): Promise<void> {
     fail(error)
   }
   return session.result
+}
+
+// dock 展开态的最小宽钳制：不用 setMinimumSize——macOS 上 (0,0) 恢复存在窗口
+// 服务器时序竞态（偶发不清除，主窗从此缩不小）；will-resize 钳制是纯同步逻辑，
+// 解除 = 变量置零，无竞态。程序化 setSize/setBounds 不触发 will-resize，拉宽不受影响
+let dockMinWidth = 0
+let resizeHookAttached = false
+
+const attachDockResizeHook = (): void => {
+  if (resizeHookAttached) return
+  const window = getMainWindow()
+  if (!window) return
+  resizeHookAttached = true
+  // 用户拖拽：will-resize 预阻止（无闪跳；macOS 支持）
+  window.on('will-resize', (event, newBounds) => {
+    if (dockMinWidth > 0 && newBounds.width < dockMinWidth) {
+      event.preventDefault()
+    }
+  })
+  // 程序化 setBounds/resizeTo（含窗口服务器异常路径）：事后回弹钳制——
+  // setSize 回到 min 后不再小于阈值，无递归
+  window.on('resize', () => {
+    if (dockMinWidth > 0 && !window.isDestroyed() && window.getBounds().width < dockMinWidth) {
+      const bounds = window.getBounds()
+      window.setSize(dockMinWidth, bounds.height)
+    }
+  })
 }
 
 export function registerLogcatIpc(): void {
@@ -180,12 +203,13 @@ export function registerLogcatIpc(): void {
         if (typeof minWidth !== 'number' || !Number.isFinite(minWidth) || minWidth <= 0) {
           throw new Error(`${IPC_CHANNELS.logcatDockState}: ${msg('logcatInvalidPayloadSuffix')}`)
         }
-        window.setMinimumSize(minWidth, 0)
+        attachDockResizeHook()
+        dockMinWidth = minWidth
         if (window.getBounds().width < minWidth) {
           window.setSize(minWidth, window.getBounds().height)
         }
       } else {
-        window.setMinimumSize(0, 0)
+        dockMinWidth = 0
       }
       return Promise.resolve()
     }

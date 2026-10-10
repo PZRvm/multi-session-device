@@ -273,6 +273,13 @@ const App = (): React.JSX.Element => {
   // dock 展开所需的主窗最小宽（列表 + 分隔条 + 日志栏 + 画布保底）
   const dockNeedWidth = listWidth + 5 + logPaneWidth + LOG_CANVAS_MIN_WIDTH
 
+  // dock 跟随设备生命周期：无 running 设备（停止/删除/选中切走）时自动收起。
+  // 否则 dock 空态挂死——入口按钮随设备消失、弹出按钮无设备直接 return，
+  // dock 关不掉且 minWidth 锁残留（用户反馈「打开过 logcat 后窗口缩不小」）
+  useEffect(() => {
+    if (!logcatDevice) setLogDockOpen(false)
+  }, [logcatDevice])
+
   // 声明式同步：dock 可见 → 锁主窗 minWidth（拖宽变化跟随）；不可见（收起、
   // 弹出独立窗、外力兜底）→ 解锁——独立窗口态主窗宽度完全自由
   useEffect(() => {
