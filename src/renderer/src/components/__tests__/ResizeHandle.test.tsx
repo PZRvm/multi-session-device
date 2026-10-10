@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clampListWidth, LIST_MAX_WIDTH, LIST_MIN_WIDTH } from '../listWidth'
 import ResizeHandle from '../ResizeHandle'
+import { MAIN_COPY } from '@shared/i18n'
+const copy = MAIN_COPY['zh-CN']
 
 afterEach(cleanup)
 
@@ -17,7 +19,7 @@ describe('clampListWidth', () => {
 describe('ResizeHandle', () => {
   it('separator 语义：宽度与上下限进 aria 值', () => {
     render(<ResizeHandle width={280} onResize={vi.fn()} />)
-    const handle = screen.getByRole('separator', { name: '调整列表宽度' })
+    const handle = screen.getByRole('separator', { name: copy.resizeAria })
     expect(handle.getAttribute('aria-valuenow')).toBe('280')
     expect(handle.getAttribute('aria-valuemin')).toBe(String(LIST_MIN_WIDTH))
     expect(handle.getAttribute('aria-valuemax')).toBe(String(LIST_MAX_WIDTH))
@@ -26,7 +28,7 @@ describe('ResizeHandle', () => {
   it('方向键微调 ±16px，且收敛到边界内', () => {
     const onResize = vi.fn()
     render(<ResizeHandle width={280} onResize={onResize} />)
-    const handle = screen.getByRole('separator', { name: '调整列表宽度' })
+    const handle = screen.getByRole('separator', { name: copy.resizeAria })
     fireEvent.keyDown(handle, { key: 'ArrowRight' })
     fireEvent.keyDown(handle, { key: 'ArrowLeft' })
     expect(onResize).toHaveBeenNthCalledWith(1, 296)
@@ -34,7 +36,7 @@ describe('ResizeHandle', () => {
 
     const atMax = vi.fn()
     render(<ResizeHandle width={LIST_MAX_WIDTH} onResize={atMax} />)
-    fireEvent.keyDown(screen.getAllByRole('separator', { name: '调整列表宽度' })[1], {
+    fireEvent.keyDown(screen.getAllByRole('separator', { name: copy.resizeAria })[1], {
       key: 'ArrowRight'
     })
     expect(atMax).toHaveBeenCalledWith(LIST_MAX_WIDTH)

@@ -5,6 +5,8 @@ import type { ScreenViewRef } from '../../hooks/useDeviceScreen'
 import DeviceCanvas from '../DeviceCanvas'
 import App from '../../App'
 import { useDeviceStore } from '../../stores/deviceStore'
+import { MAIN_COPY } from '@shared/i18n'
+const copy = MAIN_COPY['zh-CN']
 
 const mocks = vi.hoisted(() => ({
   inputHook: vi.fn(),
@@ -132,9 +134,9 @@ afterEach(() => {
 it('旋转失败显示原因，恢复后允许再次点击', async () => {
   input.mockRejectedValueOnce(new Error('锁定屏幕旋转失败：permission denied'))
   render(<DeviceCanvas device={device} onStop={async () => {}} />)
-  fireEvent.click(screen.getByRole('button', { name: '旋转屏幕' }))
+  fireEvent.click(screen.getByRole('button', { name: copy.rotate }))
   expect(await screen.findByText('锁定屏幕旋转失败：permission denied')).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: '旋转屏幕' }))
+  fireEvent.click(screen.getByRole('button', { name: copy.rotate }))
   await waitFor(() => expect(input).toHaveBeenCalledTimes(2))
 })
 
@@ -143,7 +145,7 @@ it('旋转等待时暂停画布与工具条，重复点击只发一次，仍可�
   input.mockReturnValueOnce(pending.promise)
   const onStop = vi.fn(async () => {})
   render(<DeviceCanvas device={device} onStop={onStop} />)
-  const rotate = screen.getByRole('button', { name: '旋转屏幕' }) as HTMLButtonElement
+  const rotate = screen.getByRole('button', { name: copy.rotate }) as HTMLButtonElement
   act(() => {
     rotate.click()
     rotate.click()
@@ -151,7 +153,7 @@ it('旋转等待时暂停画布与工具条，重复点击只发一次，仍可�
   expect(input).toHaveBeenCalledTimes(1)
   expect(rotate.disabled).toBe(true)
   expect(mocks.inputHook.mock.lastCall?.[0].enabled).toBe(false)
-  fireEvent.click(screen.getByRole('button', { name: '关闭设备' }))
+  fireEvent.click(screen.getByRole('button', { name: copy.powerOff }))
   expect(onStop).toHaveBeenCalledOnce()
   await act(async () => pending.resolve())
   expect(rotate.disabled).toBe(false)
@@ -161,7 +163,7 @@ it('等待期间 generation 原地更新后，旧请求失败不显示到新画�
   const pending = deferred<void>()
   input.mockReturnValueOnce(pending.promise)
   render(<DeviceCanvas device={device} onStop={async () => {}} />)
-  fireEvent.click(screen.getByRole('button', { name: '旋转屏幕' }))
+  fireEvent.click(screen.getByRole('button', { name: copy.rotate }))
   mocks.screenRef.current.envelope!.generation += 1
   await act(async () => pending.reject(new Error('归属过期')))
   expect(screen.queryByText('归属过期')).toBeNull()
@@ -172,7 +174,7 @@ it('切换设备时新画布不继承旋转等待，旧请求失败不显示到�
   input.mockReturnValueOnce(pending.promise)
   render(<App />)
   await act(async () => {})
-  fireEvent.click(screen.getByRole('button', { name: '旋转屏幕' }))
+  fireEvent.click(screen.getByRole('button', { name: copy.rotate }))
   const second: Device = { ...device, id: 'd2', name: 'Second Pixel', runId: 'r2' }
   act(() => {
     mocks.screenRef.current.envelope = {
@@ -184,7 +186,7 @@ it('切换设备时新画布不继承旋转等待，旧请求失败不显示到�
     }
     useDeviceStore.setState({ devices: [device, second], selectedId: 'd2' })
   })
-  expect((screen.getByRole('button', { name: '旋转屏幕' }) as HTMLButtonElement).disabled).toBe(
+  expect((screen.getByRole('button', { name: copy.rotate }) as HTMLButtonElement).disabled).toBe(
     false
   )
   await act(async () => pending.reject(new Error('旧设备锁定失败')))
@@ -207,7 +209,7 @@ it('电源停止当前设备，停止后显示占位，只在左侧点击启动�
   }
   start.mockResolvedValueOnce({ revision: 3, devices: [device], ...healthExtras })
   render(<App />)
-  const power = screen.getByRole('button', { name: '关闭设备' }) as HTMLButtonElement
+  const power = screen.getByRole('button', { name: copy.powerOff }) as HTMLButtonElement
   act(() => {
     power.click()
     power.click()
@@ -230,29 +232,29 @@ it('电源停止当前设备，停止后显示占位，只在左侧点击启动�
       ...healthExtras
     })
   )
-  expect(await screen.findByText('设备已停止，从左侧列表启动它')).toBeTruthy()
-  expect(screen.queryByRole('button', { name: '关闭设备' })).toBeNull()
+  expect(await screen.findByText(copy.hintStopped)).toBeTruthy()
+  expect(screen.queryByRole('button', { name: copy.powerOff })).toBeNull()
   expect(start).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: '启动 Pixel test' }))
   await waitFor(() => expect(start).toHaveBeenCalledExactlyOnceWith('d1'))
-  expect(await screen.findByRole('button', { name: '关闭设备' })).toBeTruthy()
+  expect(await screen.findByRole('button', { name: copy.powerOff })).toBeTruthy()
 })
 
 it('画面连接失败仍能关机，停止失败沿用提示且可重试', async () => {
   mocks.status = 'error'
   stop.mockRejectedValueOnce(new Error('停止进程失败'))
   render(<App />)
-  fireEvent.click(screen.getByRole('button', { name: '关闭设备' }))
+  fireEvent.click(screen.getByRole('button', { name: copy.powerOff }))
   await waitFor(() =>
     expect(dialog).toHaveBeenCalledWith({
       title: '停止失败',
       message: '停止进程失败',
-      buttons: ['知道了']
+      buttons: [copy.ok]
     })
   )
   await waitFor(() =>
-    expect((screen.getByRole('button', { name: '关闭设备' }) as HTMLButtonElement).disabled).toBe(
-      false
-    )
+    expect(
+      (screen.getByRole('button', { name: copy.powerOff }) as HTMLButtonElement).disabled
+    ).toBe(false)
   )
 })

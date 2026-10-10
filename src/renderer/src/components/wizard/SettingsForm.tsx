@@ -5,80 +5,15 @@ import type {
   SettingFieldCapability,
   WizardCapabilities
 } from '@shared/types'
-import { NETWORK_SPEED_LABELS, NETWORK_DELAY_LABELS, GPU_LABELS } from './labels'
+import { WIZARD_COPY, format } from '@shared/i18n'
+import { useCopy } from '../../hooks/useCopy'
+import { gpuLabels, networkDelayLabels, networkSpeedLabels } from './labels'
 
 /**
  * 附加设置表单（plan 设计 3/4）：按皮肤/摄像头/网络/启动/内部存储/模拟性能分组。
  * 控件旁说明单位与限制；禁用字段显示能力原因（main 的 WizardCapabilities）。
  * 值变更走 onChange（整对象上抛）；校验错误定位到字段（红边 + 文案）。
  */
-
-/** 摄像头选择：none/emulated/virtualScene + 枚举到的宿主 webcam（带权限归属说明）；尊重字段禁用态（review P1） */
-const cameraSelect = (
-  key: 'frontCamera' | 'rearCamera',
-  label: string,
-  value: DeviceAdvancedSettings,
-  onChange: (next: DeviceAdvancedSettings) => void,
-  capabilities: WizardCapabilities
-): React.JSX.Element => {
-  const current = value[key]
-  const disabledReason = capabilities.fields[key]?.disabledReason ?? null
-  const disabled = disabledReason !== null
-  const options: Array<{ value: string; label: string }> = [
-    { value: 'emulated', label: '模拟画面' },
-    { value: 'none', label: '关闭' },
-    { value: 'virtualScene', label: '虚拟场景' },
-    ...capabilities.webcamDeviceIds.map((id) => ({
-      value: id,
-      label:
-        capabilities.cameraSnapshot?.devices.find((entry) => entry.id === id)?.name ??
-        `真实摄像头 ${id}`
-    }))
-  ]
-  return (
-    <div className="field" data-disabled={disabled || undefined}>
-      <label className="label" htmlFor={`setting-${key}`}>
-        {label}
-      </label>
-      <select
-        className="select"
-        id={`setting-${key}`}
-        disabled={disabled}
-        value={current.mode === 'webcam' ? (current.deviceId ?? '') : current.mode}
-        onChange={(event) => {
-          const picked = event.target.value
-          if (picked === 'none' || picked === 'emulated' || picked === 'virtualScene') {
-            onChange({ ...value, [key]: { mode: picked, deviceId: null } })
-          } else {
-            onChange({
-              ...value,
-              [key]: {
-                mode: 'webcam',
-                deviceId: picked,
-                hostDeviceId: capabilities.cameraSnapshot?.devices.find(
-                  (entry) => entry.id === picked
-                )?.deviceLabel
-              }
-            })
-          }
-        }}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <p className="hint">
-        {disabled
-          ? disabledReason
-          : capabilities.webcamDeviceIds.length === 0
-            ? (capabilities.cameraSnapshot?.error ?? '未枚举到宿主摄像头，请刷新或检查权限')
-            : '同一摄像头不能同时配给两台设备；macOS 权限归属本应用'}
-      </p>
-    </div>
-  )
-}
 
 export interface SettingsFormProps {
   capabilities: WizardCapabilities
@@ -117,8 +52,76 @@ const SettingsForm = ({
   mode = 'create',
   storageDisplay = null
 }: SettingsFormProps): React.JSX.Element => {
+  const copy = useCopy(WIZARD_COPY)
   const field = (key: string): SettingFieldCapability | null => capabilities.fields[key] ?? null
   const disabledReasonOf = (key: string): string | null => field(key)?.disabledReason ?? null
+  /** 摄像头选择：none/emulated/virtualScene + 枚举到的宿主 webcam（带权限归属说明）；
+   *  尊重字段禁用态（review P1） */
+  const cameraSelect = (
+    key: 'frontCamera' | 'rearCamera',
+    label: string,
+    value: DeviceAdvancedSettings,
+    onChange: (next: DeviceAdvancedSettings) => void,
+    capabilities: WizardCapabilities
+  ): React.JSX.Element => {
+    const current = value[key]
+    const disabledReason = capabilities.fields[key]?.disabledReason ?? null
+    const disabled = disabledReason !== null
+    const options: Array<{ value: string; label: string }> = [
+      { value: 'emulated', label: copy.cameraEmulated },
+      { value: 'none', label: copy.cameraOff },
+      { value: 'virtualScene', label: copy.cameraVirtualScene },
+      ...capabilities.webcamDeviceIds.map((id) => ({
+        value: id,
+        label:
+          capabilities.cameraSnapshot?.devices.find((entry) => entry.id === id)?.name ??
+          format(copy.webcamLabel, { id })
+      }))
+    ]
+    return (
+      <div className="field" data-disabled={disabled || undefined}>
+        <label className="label" htmlFor={`setting-${key}`}>
+          {label}
+        </label>
+        <select
+          className="select"
+          id={`setting-${key}`}
+          disabled={disabled}
+          value={current.mode === 'webcam' ? (current.deviceId ?? '') : current.mode}
+          onChange={(event) => {
+            const picked = event.target.value
+            if (picked === 'none' || picked === 'emulated' || picked === 'virtualScene') {
+              onChange({ ...value, [key]: { mode: picked, deviceId: null } })
+            } else {
+              onChange({
+                ...value,
+                [key]: {
+                  mode: 'webcam',
+                  deviceId: picked,
+                  hostDeviceId: capabilities.cameraSnapshot?.devices.find(
+                    (entry) => entry.id === picked
+                  )?.deviceLabel
+                }
+              })
+            }
+          }}
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <p className="hint">
+          {disabled
+            ? disabledReason
+            : capabilities.webcamDeviceIds.length === 0
+              ? (capabilities.cameraSnapshot?.error ?? copy.cameraNoDeviceHint)
+              : copy.cameraSharedHint}
+        </p>
+      </div>
+    )
+  }
   const num = (
     key: keyof DeviceAdvancedSettings & string,
     label: string,
@@ -126,10 +129,15 @@ const SettingsForm = ({
   ): React.JSX.Element => {
     const capability = field(key)
     const disabled = capability?.disabledReason !== null && capability?.disabledReason !== undefined
+    const rangeMin = capability?.min
+    const rangeMax = capability?.max
     const hint = disabled
       ? disabledReasonOf(key)
-      : capability?.min !== null && capability?.min !== undefined
-        ? `范围 ${capability.min}–${capability.max}`
+      : rangeMin !== null && rangeMin !== undefined
+        ? format(copy.rangeHint, {
+            min: String(rangeMin),
+            max: String(rangeMax)
+          })
         : null
     return (
       <div className="field" data-disabled={disabled || undefined}>
@@ -185,7 +193,7 @@ const SettingsForm = ({
             onPick((event.target.value === '' ? null : event.target.value) as T | null)
           }}
         >
-          <option value="">{key === 'skinRef' ? '通用外框' : '跟随默认'}</option>
+          <option value="">{key === 'skinRef' ? copy.genericFrame : copy.followDefault}</option>
           {options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -200,14 +208,22 @@ const SettingsForm = ({
   return (
     <Wrapper>
       <fieldset className="group">
-        <legend className="group-title">皮肤</legend>
+        <legend className="group-title">{copy.groupSkin}</legend>
         {select(
           'skinRef',
-          '机型皮肤',
+          copy.fieldSkinRef,
           value.skinRef,
           skins.map((skin) => ({
             value: skin.skinRef,
-            label: `${skin.name}（${({ sdk: '本机 SDK', imported: '已导入', downloaded: '官方缓存' } as Record<string, string>)[skin.source] ?? skin.source}）`
+            label: `${skin.name}（${
+              (
+                {
+                  sdk: copy.skinSourceSdk,
+                  imported: copy.skinSourceImported,
+                  downloaded: copy.skinSourceDownloaded
+                } as Record<string, string>
+              )[skin.source] ?? skin.source
+            }）`
           })),
           (next) => onChange({ ...value, skinRef: next })
         )}
@@ -218,7 +234,7 @@ const SettingsForm = ({
             disabled={skinDownloading !== null}
             onClick={() => void onImportSkin()}
           >
-            导入压缩包…
+            {copy.importArchive}
           </button>
           {capabilities.recommendedSkin ? (
             <button
@@ -228,15 +244,13 @@ const SettingsForm = ({
               onClick={() => void onDownloadSkin(capabilities.recommendedSkin!.name)}
             >
               {skinDownloading !== null
-                ? '正在获取…'
-                : `获取 ${capabilities.recommendedSkin.name} 官方皮肤`}
+                ? copy.fetching
+                : format(copy.fetchOfficialSkin, { name: capabilities.recommendedSkin.name })}
             </button>
           ) : null}
         </div>
         <p className="hint">
-          {capabilities.recommendedSkin
-            ? '已缓存的对应机型皮肤默认选中；未选择时使用通用外框。'
-            : '该机型暂无已核实的官方皮肤；可使用通用外框或导入压缩包。'}
+          {capabilities.recommendedSkin ? copy.skinHintRecommended : copy.skinHintNone}
         </p>
         {skinError ? (
           <p className="field-error" role="alert">
@@ -246,9 +260,9 @@ const SettingsForm = ({
       </fieldset>
 
       <fieldset className="group">
-        <legend className="group-title">摄像头</legend>
-        {cameraSelect('frontCamera', '前置摄像头', value, onChange, capabilities)}
-        {cameraSelect('rearCamera', '后置摄像头', value, onChange, capabilities)}
+        <legend className="group-title">{copy.groupCamera}</legend>
+        {cameraSelect('frontCamera', copy.fieldFrontCamera, value, onChange, capabilities)}
+        {cameraSelect('rearCamera', copy.fieldRearCamera, value, onChange, capabilities)}
         {onCameraAction ? (
           <div className="skin-actions">
             {capabilities.cameraSnapshot?.permission === 'not-determined' ? (
@@ -258,7 +272,7 @@ const SettingsForm = ({
                 className="skin-button"
                 onClick={() => void onCameraAction('request')}
               >
-                允许使用摄像头
+                {copy.requestCamera}
               </button>
             ) : null}
             {['denied', 'restricted'].includes(capabilities.cameraSnapshot?.permission ?? '') ? (
@@ -268,7 +282,7 @@ const SettingsForm = ({
                 className="skin-button"
                 onClick={() => void onCameraAction('settings')}
               >
-                打开摄像头权限设置
+                {copy.openCameraSettings}
               </button>
             ) : null}
             <button
@@ -277,12 +291,12 @@ const SettingsForm = ({
               className="skin-button"
               onClick={() => void onCameraAction('refresh')}
             >
-              {cameraBusy ? '正在检查…' : '刷新摄像头'}
+              {cameraBusy ? copy.checking : copy.refreshCamera}
             </button>
           </div>
         ) : null}
         {['denied', 'restricted'].includes(capabilities.cameraSnapshot?.permission ?? '') ? (
-          <p className="hint">系统未允许本应用使用摄像头。修改系统权限后请重启应用。</p>
+          <p className="hint">{copy.cameraDeniedHint}</p>
         ) : null}
         {cameraError ? (
           <p className="field-error" role="alert">
@@ -292,28 +306,28 @@ const SettingsForm = ({
       </fieldset>
 
       <fieldset className="group">
-        <legend className="group-title">网络</legend>
+        <legend className="group-title">{copy.groupNetwork}</legend>
         {select(
           'networkSpeed',
-          '网络速度',
+          copy.fieldNetworkSpeed,
           value.networkSpeed,
-          NETWORK_SPEED_LABELS.map(([preset, label]) => ({ value: preset, label })),
+          networkSpeedLabels(copy).map(([preset, label]) => ({ value: preset, label })),
           (next) => onChange({ ...value, networkSpeed: next })
         )}
         {select(
           'networkLatency',
-          '网络延迟',
+          copy.fieldNetworkLatency,
           value.networkLatency,
-          NETWORK_DELAY_LABELS.map(([preset, label]) => ({ value: preset, label })),
+          networkDelayLabels(copy).map(([preset, label]) => ({ value: preset, label })),
           (next) => onChange({ ...value, networkLatency: next })
         )}
       </fieldset>
 
       <fieldset className="group">
-        <legend className="group-title">启动</legend>
+        <legend className="group-title">{copy.groupBoot}</legend>
         <div className="field" data-disabled={!capabilities.quickBootAvailable || undefined}>
-          <label className="label">启动模式</label>
-          <div className="radio-row" role="radiogroup" aria-label="启动模式">
+          <label className="label">{copy.fieldBootMode}</label>
+          <div className="radio-row" role="radiogroup" aria-label={copy.fieldBootMode}>
             <label className="radio-label">
               <input
                 type="radio"
@@ -321,7 +335,7 @@ const SettingsForm = ({
                 checked={value.bootMode === 'cold'}
                 onChange={() => onChange({ ...value, bootMode: 'cold' })}
               />
-              Cold Boot（全新启动）
+              {copy.bootCold}
             </label>
             <label className="radio-label">
               <input
@@ -333,33 +347,33 @@ const SettingsForm = ({
                   if (capabilities.quickBootAvailable) onChange({ ...value, bootMode: 'quick' })
                 }}
               />
-              Quick Boot
+              {copy.bootQuick}
             </label>
           </div>
           <p className="hint">
             {capabilities.quickBootAvailable
-              ? 'Quick 恢复上次快照；配置或镜像变化后自动回冷启动'
+              ? copy.bootQuickHint
               : capabilities.quickBootDisabledReason}
           </p>
         </div>
         {select(
           'orientation',
-          '初始朝向',
+          copy.fieldOrientation,
           value.orientation,
           [
-            { value: 'portrait' as const, label: '竖屏' },
-            { value: 'landscape' as const, label: '横屏' }
+            { value: 'portrait' as const, label: copy.orientationPortrait },
+            { value: 'landscape' as const, label: copy.orientationLandscape }
           ],
           (next) => onChange({ ...value, orientation: next })
         )}
       </fieldset>
 
       <fieldset className="group">
-        <legend className="group-title">内部存储</legend>
+        <legend className="group-title">{copy.groupStorage}</legend>
         {mode === 'edit' ? (
           <div className="field" data-disabled>
             <label className="label" htmlFor="setting-internal-storage-edit">
-              userdata 容量
+              {copy.userdataCapacity}
             </label>
             <input
               className="num-input"
@@ -369,36 +383,34 @@ const SettingsForm = ({
               aria-readonly="true"
               value={storageDisplay ?? String(value.internalStorageMiB)}
             />
-            <p className="hint">已有模拟器不支持修改内部存储，容量保持原配置。</p>
+            <p className="hint">{copy.storageFixedHint}</p>
           </div>
         ) : (
-          num('internalStorageMiB', 'userdata 初始容量', 'MiB')
+          num('internalStorageMiB', copy.userdataInitial, 'MiB')
         )}
-        {mode === 'create' ? (
-          <p className="hint">默认 6144 MiB（6 GB，按 1024 换算）；创建后不可扩容。</p>
-        ) : null}
+        {mode === 'create' ? <p className="hint">{copy.storageDefaultHint}</p> : null}
       </fieldset>
 
       <fieldset className="group">
-        <legend className="group-title">模拟性能</legend>
-        {num('cpuCores', 'CPU 核数', '核')}
-        {num('ramMiB', '内存（整机 RAM）', 'MiB')}
-        {num('vmHeapMiB', 'VM heap', 'MiB')}
+        <legend className="group-title">{copy.groupPerformance}</legend>
+        {num('cpuCores', copy.fieldCpuCores, copy.unitCores)}
+        {num('ramMiB', copy.fieldRam, 'MiB')}
+        {num('vmHeapMiB', copy.fieldVmHeap, 'MiB')}
         {select(
           'graphics',
-          'GPU 渲染',
+          copy.fieldGraphics,
           value.graphics === 'auto' ? null : value.graphics,
-          GPU_LABELS.map(([mode, label]) => ({ value: mode, label })),
+          gpuLabels(copy).map(([mode, label]) => ({ value: mode, label })),
           (next) => onChange({ ...value, graphics: (next ?? 'auto') as GpuMode })
         )}
         {select(
           'preferredAbi',
-          '应用 ABI',
+          copy.fieldPreferredAbi,
           value.preferredAbi === 'optimal' ? null : value.preferredAbi,
           [{ value: 'arm64-v8a' as const, label: 'arm64-v8a' }],
           (next) => onChange({ ...value, preferredAbi: next ?? 'optimal' })
         )}
-        <p className="hint">Optimal 解析为所选镜像 ABI（本期 arm64）。软件渲染性能低于硬件加速。</p>
+        <p className="hint">{copy.abiHint}</p>
       </fieldset>
     </Wrapper>
   )

@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { WIZARD_COPY, format } from '@shared/i18n'
 import type {
   DeviceProfile,
   ImageCatalogResult,
@@ -9,6 +10,16 @@ import type {
   WizardCapabilities
 } from '@shared/types'
 import DeviceWizard from '../DeviceWizard'
+
+// UI 文案断言经字典取词（zh-CN 基准）；夹具输入（注入错误、用户输入）保持字面量
+const copy = WIZARD_COPY['zh-CN']
+/** 行内 aria 为「<动词> API <n> <服务>」——测试只锚定动词 + API 段 */
+const downloadAria = (api: string): RegExp =>
+  new RegExp(format(copy.downloadAria, { api, service: '' }).trimEnd())
+const uninstallAria = (api: string): RegExp =>
+  new RegExp(format(copy.uninstallInstalledAria, { api, service: '' }).trimEnd())
+const cancelDownloadAria = (api: string): RegExp =>
+  new RegExp(format(copy.cancelDownloadAria, { api, service: '' }).trimEnd())
 
 // vitest 未开 globals，RTL 的自动 cleanup 不注册——显式清理防多次 render 堆叠
 afterEach(cleanup)
@@ -183,17 +194,17 @@ const PKG36 = 'system-images;android-36;google_apis_playstore;arm64-v8a'
 /** 进配置页：选第一个画像 → 下一步 */
 const gotoConfigure = (profileName = 'Pixel 8'): void => {
   fireEvent.click(screen.getByText(profileName))
-  fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+  fireEvent.click(screen.getByRole('button', { name: copy.next }))
 }
 
 describe('DeviceWizard', () => {
   it('第一页未选画像时「下一步」禁用；选中后可进第二页', () => {
     const { onCreate } = setup()
-    expect((screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement).disabled).toBe(
+    expect((screen.getByRole('button', { name: copy.next }) as HTMLButtonElement).disabled).toBe(
       true
     )
     gotoConfigure()
-    expect(screen.getByText('第 2 / 2 页 · 配置设备')).toBeTruthy()
+    expect(screen.getByText(`第 2 / 2 页 · ${copy.pageConfigure}`)).toBeTruthy()
     expect(onCreate).not.toHaveBeenCalled()
   })
 
@@ -201,24 +212,24 @@ describe('DeviceWizard', () => {
     setup()
     expect(screen.getByText('Pixel 8')).toBeTruthy()
     expect(screen.queryByText('Pixel Tablet')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /平板/ }))
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.ffTablet) }))
     expect(screen.getByText('Pixel Tablet')).toBeTruthy()
     expect(screen.queryByText('Pixel 8')).toBeNull()
     fireEvent.click(screen.getByText('Pixel Tablet'))
-    fireEvent.click(screen.getByRole('button', { name: /手机/ }))
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.ffPhone) }))
     expect(screen.queryByText('Pixel Tablet')).toBeNull()
-    expect((screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement).disabled).toBe(
+    expect((screen.getByRole('button', { name: copy.next }) as HTMLButtonElement).disabled).toBe(
       true
     )
   })
 
   it('搜索只过滤不选中：过滤命中也不自动创建选中', () => {
     setup()
-    fireEvent.change(screen.getByLabelText('搜索画像名称'), { target: { value: 'Fold' } })
+    fireEvent.change(screen.getByLabelText(copy.searchAria), { target: { value: 'Fold' } })
     expect(screen.queryByText('Pixel 8')).toBeNull()
-    fireEvent.change(screen.getByLabelText('搜索画像名称'), { target: { value: 'Pixel 8' } })
+    fireEvent.change(screen.getByLabelText(copy.searchAria), { target: { value: 'Pixel 8' } })
     expect(screen.getByText('Pixel 8')).toBeTruthy()
-    expect((screen.getByRole('button', { name: '下一步' }) as HTMLButtonElement).disabled).toBe(
+    expect((screen.getByRole('button', { name: copy.next }) as HTMLButtonElement).disabled).toBe(
       true
     )
   })
@@ -226,23 +237,23 @@ describe('DeviceWizard', () => {
   it('第二页：未装镜像显示下载按钮且不可选；已装可选；默认名 = 画像名 + API', () => {
     setup()
     gotoConfigure()
-    expect((screen.getByLabelText('设备名称') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText(copy.nameLabel) as HTMLInputElement).value).toBe('')
     const row35 = screen.getByText('API 35').closest('[role="button"]') as HTMLElement
     expect(row35.getAttribute('aria-disabled')).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: /下载 API 35/ }))
+    fireEvent.click(screen.getByRole('button', { name: downloadAria('35') }))
     fireEvent.click(screen.getByText('API 36'))
-    expect((screen.getByLabelText('设备名称') as HTMLInputElement).value).toBe('Pixel 8 API 36')
+    expect((screen.getByLabelText(copy.nameLabel) as HTMLInputElement).value).toBe('Pixel 8 API 36')
   })
 
   it('摘要面板：选画像与镜像后显示画像与镜像要点', () => {
     setup()
     gotoConfigure()
     fireEvent.click(screen.getByText('API 36'))
-    const aside = screen.getByLabelText('设备摘要')
+    const aside = screen.getByLabelText(copy.summaryAria)
     expect(aside.textContent).toContain('Pixel 8')
     expect(aside.textContent).toContain('Google Play')
     expect(aside.textContent).toContain('arm64-v8a')
-    expect(aside.textContent).toContain('已安装')
+    expect(aside.textContent).toContain(copy.installed)
   })
 
   it('不兼容镜像（x86_64）默认不可见，打开开关后可见但不可选', () => {
@@ -261,11 +272,13 @@ describe('DeviceWizard', () => {
     )
     gotoConfigure()
     expect(screen.queryByText('x86_64')).toBeNull()
-    fireEvent.click(screen.getByLabelText('不支持项'))
+    fireEvent.click(screen.getByLabelText(copy.unsupportedToggle))
     const row = screen.getByText('x86_64').closest('[role="button"]') as HTMLElement
     expect(row.getAttribute('aria-disabled')).toBe('true')
     fireEvent.click(screen.getByText('x86_64'))
-    expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: copy.create }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
   })
 
   it('创建：回调完整 CreateDeviceInput（自定义名生效）', async () => {
@@ -274,12 +287,12 @@ describe('DeviceWizard', () => {
     fireEvent.click(screen.getByText('API 36'))
     // 能力装载是异步的——等创建钮随 capabilities 就绪解锁
     await waitFor(() =>
-      expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(
-        false
-      )
+      expect(
+        (screen.getByRole('button', { name: copy.create }) as HTMLButtonElement).disabled
+      ).toBe(false)
     )
-    fireEvent.change(screen.getByLabelText('设备名称'), { target: { value: '  我的测试机  ' } })
-    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+    fireEvent.change(screen.getByLabelText(copy.nameLabel), { target: { value: '  我的测试机  ' } })
+    fireEvent.click(screen.getByRole('button', { name: copy.create }))
     expect(onCreate).toHaveBeenCalledWith({
       profileId: 'pixel_8',
       profileLabel: 'Pixel 8',
@@ -320,26 +333,26 @@ describe('DeviceWizard', () => {
     gotoConfigure()
     fireEvent.click(screen.getByText('API 36'))
     await waitFor(() =>
-      expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(
-        false
-      )
+      expect(
+        (screen.getByRole('button', { name: copy.create }) as HTMLButtonElement).disabled
+      ).toBe(false)
     )
-    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+    fireEvent.click(screen.getByRole('button', { name: copy.create }))
     await waitFor(() =>
-      expect((screen.getByRole('button', { name: '创建中…' }) as HTMLButtonElement).disabled).toBe(
-        true
-      )
+      expect(
+        (screen.getByRole('button', { name: copy.creating }) as HTMLButtonElement).disabled
+      ).toBe(true)
     )
-    fireEvent.click(screen.getByRole('button', { name: '创建中…' }))
-    fireEvent.click(screen.getByRole('button', { name: '创建中…' }))
+    fireEvent.click(screen.getByRole('button', { name: copy.creating }))
+    fireEvent.click(screen.getByRole('button', { name: copy.creating }))
     expect(onCreate).toHaveBeenCalledTimes(1)
     await act(async () => {
       resolveCreate()
     })
     await waitFor(() =>
-      expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(
-        false
-      )
+      expect(
+        (screen.getByRole('button', { name: copy.create }) as HTMLButtonElement).disabled
+      ).toBe(false)
     )
   })
 
@@ -347,12 +360,12 @@ describe('DeviceWizard', () => {
     setup()
     gotoConfigure()
     fireEvent.click(screen.getByText('API 36'))
-    fireEvent.change(screen.getByLabelText('设备名称'), { target: { value: '自定义名' } })
-    fireEvent.click(screen.getByRole('button', { name: '上一步' }))
+    fireEvent.change(screen.getByLabelText(copy.nameLabel), { target: { value: '自定义名' } })
+    fireEvent.click(screen.getByRole('button', { name: copy.back }))
     const row = screen.getByText('Pixel 8').closest('[aria-pressed]') as HTMLElement
     expect(row.getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    expect((screen.getByLabelText('设备名称') as HTMLInputElement).value).toBe('自定义名')
+    fireEvent.click(screen.getByRole('button', { name: copy.next }))
+    expect((screen.getByLabelText(copy.nameLabel) as HTMLInputElement).value).toBe('自定义名')
     expect(imageRow(PKG36).getAttribute('aria-pressed')).toBe('true')
   })
 
@@ -360,11 +373,13 @@ describe('DeviceWizard', () => {
     setup()
     gotoConfigure()
     fireEvent.click(screen.getByText('API 36'))
-    fireEvent.change(screen.getByLabelText('设备名称'), { target: { value: '自定义名' } })
+    fireEvent.change(screen.getByLabelText(copy.nameLabel), { target: { value: '自定义名' } })
     fireEvent.click(screen.getByText('API 34'))
-    expect((screen.getByLabelText('设备名称') as HTMLInputElement).value).toBe('自定义名')
-    fireEvent.change(screen.getByLabelText('设备名称'), { target: { value: '   ' } })
-    expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByLabelText(copy.nameLabel) as HTMLInputElement).value).toBe('自定义名')
+    fireEvent.change(screen.getByLabelText(copy.nameLabel), { target: { value: '   ' } })
+    expect((screen.getByRole('button', { name: copy.create }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
   })
 
   it('Esc 取消（独立窗体语义）', () => {
@@ -375,7 +390,7 @@ describe('DeviceWizard', () => {
 
   it('「取消」按钮触发 onCancel', () => {
     const { onCancel } = setup()
-    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    fireEvent.click(screen.getByRole('button', { name: copy.cancel }))
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
@@ -383,8 +398,8 @@ describe('DeviceWizard', () => {
     const { onCreate } = setup()
     gotoConfigure()
     fireEvent.click(screen.getByText('API 36'))
-    fireEvent.click(screen.getByRole('tab', { name: '附加设置' }))
-    await screen.findByText('CPU 核数')
+    fireEvent.click(screen.getByRole('tab', { name: copy.tabSettings }))
+    await screen.findByText(copy.fieldCpuCores)
     // Quick 未开放：radio 禁用
     const quickRadio = screen
       .getAllByRole('radio')
@@ -392,11 +407,11 @@ describe('DeviceWizard', () => {
     expect(quickRadio).toBeUndefined() // 未开放时不渲染 quick 选项的激活路径——改断言 Cold 存在
     expect(screen.getByRole('radio', { name: /Cold Boot/ })).toBeTruthy()
     // 改 CPU 核数后创建回传
-    fireEvent.change(screen.getByLabelText('CPU 核数', { exact: false }), {
+    fireEvent.change(screen.getByLabelText(copy.fieldCpuCores, { exact: false }), {
       target: { value: '6' }
     })
-    fireEvent.click(screen.getByRole('tab', { name: '设备' }))
-    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+    fireEvent.click(screen.getByRole('tab', { name: copy.tabDevice }))
+    fireEvent.click(screen.getByRole('button', { name: copy.create }))
     await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(1))
     const payload = onCreate.mock.calls[0][0] as { advancedSettings: { cpuCores: number } }
     expect(payload.advancedSettings.cpuCores).toBe(6)
@@ -420,19 +435,19 @@ describe('DeviceWizard', () => {
       setup()
       gotoConfigure()
       fireEvent.click(screen.getByText('API 36'))
-      fireEvent.click(screen.getByRole('tab', { name: '附加设置' }))
-      const skinSelect = (await screen.findByLabelText('机型皮肤')) as HTMLSelectElement
+      fireEvent.click(screen.getByRole('tab', { name: copy.tabSettings }))
+      const skinSelect = (await screen.findByLabelText(copy.fieldSkinRef)) as HTMLSelectElement
       // 注入能力样本 skinIds 为空 → 导入前字段禁用
       expect(skinSelect.disabled).toBe(true)
-      fireEvent.click(screen.getByRole('button', { name: '导入压缩包…' }))
+      fireEvent.click(screen.getByRole('button', { name: copy.importArchive }))
       // absorb：skinIds 并入新皮肤、字段解锁——不重拉能力（画像×镜像未变）
       await waitFor(() => expect(skinSelect.disabled).toBe(false))
       expect(screen.queryByText(/皮肤不在可用清单中/)).toBeNull()
-      fireEvent.click(screen.getByRole('tab', { name: '设备' }))
+      fireEvent.click(screen.getByRole('tab', { name: copy.tabDevice }))
       await waitFor(() =>
-        expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(
-          false
-        )
+        expect(
+          (screen.getByRole('button', { name: copy.create }) as HTMLButtonElement).disabled
+        ).toBe(false)
       )
     } finally {
       delete (window as { api?: unknown }).api
@@ -502,17 +517,19 @@ describe('DeviceWizard 清单加载反馈（代次守卫回归）', () => {
       images: vi.fn(() => dImages.promise)
     })
     render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
-    await screen.findByText('正在加载设备画像…')
+    await screen.findByText(copy.loadingProfiles)
     dProfiles.resolve(PROFILES)
     await screen.findByText('Pixel 8')
     fireEvent.click(screen.getByText('Pixel 8'))
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    expect(await screen.findByText('正在加载系统镜像…')).toBeTruthy()
-    expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: copy.next }))
+    expect(await screen.findByText(copy.loadingImages)).toBeTruthy()
+    expect((screen.getByRole('button', { name: copy.create }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
     dImages.resolve(catalogOf(IMAGES))
     await screen.findByText('API 36')
     fireEvent.click(screen.getByText('API 36'))
-    expect((screen.getByLabelText('设备名称') as HTMLInputElement).value).toBe('Pixel 8 API 36')
+    expect((screen.getByLabelText(copy.nameLabel) as HTMLInputElement).value).toBe('Pixel 8 API 36')
   })
 
   it('仅镜像失败：第二页显示错误与镜像重试，画像数据保留可回退', async () => {
@@ -527,9 +544,9 @@ describe('DeviceWizard 清单加载反馈（代次守卫回归）', () => {
     dProfiles.resolve(PROFILES)
     await screen.findByText('Pixel 8')
     fireEvent.click(screen.getByText('Pixel 8'))
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    fireEvent.click(screen.getByRole('button', { name: copy.next }))
     expect(await screen.findByText('镜像清单拉取失败')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '上一步' }))
+    fireEvent.click(screen.getByRole('button', { name: copy.back }))
     expect(screen.getByText('Pixel 8')).toBeTruthy()
   })
 
@@ -549,8 +566,8 @@ describe('DeviceWizard 清单加载反馈（代次守卫回归）', () => {
     dProfiles.resolve(PROFILES)
     await screen.findByText('Pixel 8')
     fireEvent.click(screen.getByText('Pixel 8'))
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    expect(screen.getByText('正在加载系统镜像…')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: copy.next }))
+    expect(screen.getByText(copy.loadingImages)).toBeTruthy()
     // 下载完成事件触发重拉（第 2 代请求），旧请求仍挂起
     act(() =>
       handle.emitProgress({
@@ -608,16 +625,18 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     await screen.findByText('Pixel 8')
     gotoConfigure()
     fireEvent.click(screen.getByText('API 36'))
-    fireEvent.click(screen.getByRole('button', { name: /下载 API 35/ }))
-    expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: downloadAria('35') }))
+    expect((screen.getByRole('button', { name: copy.create }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
     act(() => handle.emitProgress({ packageName: PKG_MISSING, percent: 60, message: '下载中' }))
     expect(screen.getByText('60%')).toBeTruthy()
     act(() => handle.emitProgress({ packageName: PKG_MISSING, percent: 100, message: '下载中' }))
     await waitFor(() => expect(imagesMock.mock.calls.length).toBeGreaterThanOrEqual(2))
     await waitFor(() =>
-      expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(
-        false
-      )
+      expect(
+        (screen.getByRole('button', { name: copy.create }) as HTMLButtonElement).disabled
+      ).toBe(false)
     )
   })
 
@@ -629,10 +648,10 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
     await screen.findByText('Pixel 8')
     gotoConfigure()
-    fireEvent.click(screen.getByRole('button', { name: /下载 API 35/ }))
+    fireEvent.click(screen.getByRole('button', { name: downloadAria('35') }))
     expect(await screen.findByText('网络中断')).toBeTruthy()
-    expect(screen.getByRole('button', { name: '重试下载' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '重试下载' }))
+    expect(screen.getByRole('button', { name: copy.retryDownload })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: copy.retryDownload }))
     await waitFor(() => expect(downloadImage).toHaveBeenCalledTimes(2))
   })
 
@@ -647,11 +666,11 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
     await screen.findByText('Pixel 8')
     gotoConfigure()
-    fireEvent.click(screen.getByRole('button', { name: /下载 API 35/ }))
+    fireEvent.click(screen.getByRole('button', { name: downloadAria('35') }))
     act(() => handle.emitProgress({ packageName: PKG_MISSING, percent: 100, message: '下载中' }))
     expect(await screen.findByText('重拉失败')).toBeTruthy()
     expect(screen.getByText('API 36')).toBeTruthy()
-    expect(screen.getByRole('button', { name: '重试' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: copy.retry })).toBeTruthy()
   })
 
   it('重开向导：清单带回进行中的下载 → 行显示进度、下载钮互斥、后续事件继续更新', async () => {
@@ -682,9 +701,9 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     act(() => handle.emitProgress({ packageName: PKG_MISSING, percent: 100, message: '下载中' }))
     await waitFor(() => expect(imagesMock.mock.calls.length).toBeGreaterThanOrEqual(2))
     await waitFor(() =>
-      expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(
-        false
-      )
+      expect(
+        (screen.getByRole('button', { name: copy.create }) as HTMLButtonElement).disabled
+      ).toBe(false)
     )
   })
 
@@ -706,7 +725,7 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
       })
     )
     expect(await screen.findByText('网络中断')).toBeTruthy()
-    expect(screen.getByRole('button', { name: '重试下载' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: copy.retryDownload })).toBeTruthy()
     expect(screen.queryByText('60%')).toBeNull()
   })
 
@@ -730,13 +749,13 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
     await screen.findByText('Pixel 8')
     gotoConfigure()
-    fireEvent.click(screen.getByRole('button', { name: /下载 API 35/ }))
+    fireEvent.click(screen.getByRole('button', { name: downloadAria('35') }))
     act(() => handle.emitProgress({ packageName: PKG_MISSING, percent: 40, message: '下载中' }))
-    fireEvent.click(screen.getByRole('button', { name: /取消下载 API 35/ }))
+    fireEvent.click(screen.getByRole('button', { name: cancelDownloadAria('35') }))
     await waitFor(() => expect(cancel).toHaveBeenCalledWith(PKG_MISSING))
     await waitFor(() => expect(screen.queryByText('40%')).toBeNull())
-    expect(screen.getByRole('button', { name: /下载 API 35/ })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '重试下载' })).toBeNull()
+    expect(screen.getByRole('button', { name: downloadAria('35') })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: copy.retryDownload })).toBeNull()
   })
 
   it('取消广播（重开窗场景）：清下载态且不显示错误横幅', async () => {
@@ -757,8 +776,8 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
       })
     )
     await waitFor(() => expect(screen.queryByText('55%')).toBeNull())
-    expect(screen.queryByRole('button', { name: '重试下载' })).toBeNull()
-    expect(screen.getByRole('button', { name: /下载 API 35/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: copy.retryDownload })).toBeNull()
+    expect(screen.getByRole('button', { name: downloadAria('35') })).toBeTruthy()
   })
 
   it('已装行删除镜像：确认（注入场景直通）→ 调用卸载 → 成功后重拉清单', async () => {
@@ -787,12 +806,12 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     )
     await screen.findByText('Pixel 8')
     gotoConfigure()
-    fireEvent.click(screen.getByRole('button', { name: /删除已安装镜像 API 36/ }))
+    fireEvent.click(screen.getByRole('button', { name: uninstallAria('36') }))
     await waitFor(() => expect(imagesMock.mock.calls.length).toBeGreaterThanOrEqual(2))
     // 重拉后 36 行回到下载态
     await waitFor(() =>
       expect(
-        (screen.getByRole('button', { name: /下载 API 36/ }) as HTMLElement).getAttribute(
+        (screen.getByRole('button', { name: downloadAria('36') }) as HTMLElement).getAttribute(
           'aria-disabled'
         )
       ).toBe('false')
@@ -817,10 +836,12 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     expect(rowOf(PKG36).getAttribute('tabindex')).toBe('-1')
     // 焦点行（35，未装）的下载钮可 Tab；36 行的删除钮 -1
     expect(
-      (screen.getByRole('button', { name: /下载 API 35/ }) as HTMLElement).getAttribute('tabindex')
+      (screen.getByRole('button', { name: downloadAria('35') }) as HTMLElement).getAttribute(
+        'tabindex'
+      )
     ).toBe('0')
     expect(
-      (screen.getByRole('button', { name: /删除已安装镜像 API 36/ }) as HTMLElement).getAttribute(
+      (screen.getByRole('button', { name: uninstallAria('36') }) as HTMLElement).getAttribute(
         'tabindex'
       )
     ).toBe('-1')
@@ -831,7 +852,7 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} onUninstallImage={async () => {}} />)
     await screen.findByText('Pixel 8')
     gotoConfigure()
-    const button = screen.getByRole('button', { name: /删除已安装镜像 API 36/ })
+    const button = screen.getByRole('button', { name: uninstallAria('36') })
     fireEvent.keyDown(button, { key: 'Enter' })
     await waitFor(() => expect(button.getAttribute('aria-busy')).toBe('true'))
   })
@@ -843,14 +864,14 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     await screen.findByText('Pixel 8')
     gotoConfigure()
     // 恢复：36 行 aria-busy，34 行删除钮禁用且不 busy
-    const busyRow = screen.getByRole('button', { name: /删除已安装镜像 API 36/ })
+    const busyRow = screen.getByRole('button', { name: uninstallAria('36') })
     await waitFor(() => expect(busyRow.getAttribute('aria-busy')).toBe('true'))
-    const other = screen.getByRole('button', { name: /删除已安装镜像 API 34/ })
+    const other = screen.getByRole('button', { name: uninstallAria('34') })
     expect(other.getAttribute('aria-disabled')).toBe('true')
     expect(other.getAttribute('aria-busy')).toBe('false')
     // 下载钮也感知卸载互斥
     expect(
-      (screen.getByRole('button', { name: /下载 API 35/ }) as HTMLElement).getAttribute(
+      (screen.getByRole('button', { name: downloadAria('35') }) as HTMLElement).getAttribute(
         'aria-disabled'
       )
     ).toBe('true')
@@ -867,7 +888,7 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
     await screen.findByText('Pixel 8')
     gotoConfigure()
-    const busyRow = screen.getByRole('button', { name: /删除已安装镜像 API 36/ })
+    const busyRow = screen.getByRole('button', { name: uninstallAria('36') })
     await waitFor(() => expect(busyRow.getAttribute('aria-busy')).toBe('true'))
     act(() =>
       handle.emitUninstallState({
@@ -892,9 +913,9 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     )
     await screen.findByText('Pixel 8')
     gotoConfigure()
-    fireEvent.click(screen.getByRole('button', { name: /删除已安装镜像 API 36/ }))
+    fireEvent.click(screen.getByRole('button', { name: uninstallAria('36') }))
     expect(await screen.findByText(/正被设备引用/)).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '知道了' }))
+    fireEvent.click(screen.getByRole('button', { name: copy.ok }))
     expect(screen.queryByText(/正被设备引用/)).toBeNull()
   })
 
@@ -914,13 +935,13 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     )
     await screen.findByText('Pixel 8')
     gotoConfigure()
-    fireEvent.click(screen.getByRole('button', { name: /删除已安装镜像 API 36/ }))
+    fireEvent.click(screen.getByRole('button', { name: uninstallAria('36') }))
     // 正在删的行：icon 变加载态（aria-busy）且禁用
-    const busy = screen.getByRole('button', { name: /删除已安装镜像 API 36/ }) as HTMLElement
+    const busy = screen.getByRole('button', { name: uninstallAria('36') }) as HTMLElement
     await waitFor(() => expect(busy.getAttribute('aria-busy')).toBe('true'))
     expect(busy.getAttribute('aria-disabled')).toBe('true')
     // 其余已装行的删除 icon 同步互斥禁用
-    const other = screen.getByRole('button', { name: /删除已安装镜像 API 34/ }) as HTMLElement
+    const other = screen.getByRole('button', { name: uninstallAria('34') }) as HTMLElement
     expect(other.getAttribute('aria-disabled')).toBe('true')
     expect(other.getAttribute('aria-busy')).toBe('false')
     await act(async () => {
@@ -936,7 +957,7 @@ describe('DeviceWizard 下载流（互斥与错误反馈回归）', () => {
     render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
     await screen.findByText('Pixel 8')
     gotoConfigure()
-    const button = screen.getByRole('button', { name: /下载 API 35/ })
+    const button = screen.getByRole('button', { name: downloadAria('35') })
     fireEvent.click(button)
     fireEvent.click(button) // 同 tick 连点：downloadingRef 拦住第二次
     await waitFor(() => expect(downloadImage).toHaveBeenCalledTimes(1))
@@ -961,19 +982,27 @@ describe('官方皮肤与摄像头新入口', () => {
     )
     gotoConfigure()
     fireEvent.click(screen.getByText('API 36'))
-    fireEvent.click(screen.getByRole('tab', { name: '附加设置' }))
-    const button = await screen.findByRole('button', { name: /获取 pixel_8/ })
+    fireEvent.click(screen.getByRole('tab', { name: copy.tabSettings }))
+    const button = await screen.findByRole('button', {
+      name: new RegExp(format(copy.fetchOfficialSkin, { name: 'pixel_8' }))
+    })
     fireEvent.click(button)
     fireEvent.click(button)
     expect(download).toHaveBeenCalledTimes(1)
-    expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: copy.create }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
     await act(async () => {
       pending.reject(new Error('官方源连接失败'))
       await pending.promise.catch(() => {})
     })
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', '官方源连接失败')
     expect(
-      (screen.getByRole('button', { name: /获取 pixel_8/ }) as HTMLButtonElement).disabled
+      (
+        screen.getByRole('button', {
+          name: new RegExp(format(copy.fetchOfficialSkin, { name: 'pixel_8' }))
+        }) as HTMLButtonElement
+      ).disabled
     ).toBe(false)
   })
   it('摄像头刷新保留用户 CPU 设置，选择友好名称回传稳定宿主 id', async () => {
@@ -998,14 +1027,14 @@ describe('官方皮肤与摄像头新入口', () => {
     )
     gotoConfigure()
     fireEvent.click(screen.getByText('API 36'))
-    fireEvent.click(screen.getByRole('tab', { name: '附加设置' }))
-    const cpu = await screen.findByLabelText('CPU 核数', { exact: false })
+    fireEvent.click(screen.getByRole('tab', { name: copy.tabSettings }))
+    const cpu = await screen.findByLabelText(copy.fieldCpuCores, { exact: false })
     fireEvent.change(cpu, { target: { value: '6' } })
-    fireEvent.click(screen.getByRole('button', { name: '刷新摄像头' }))
-    await screen.findByRole('button', { name: '刷新摄像头' })
+    fireEvent.click(screen.getByRole('button', { name: copy.refreshCamera }))
+    await screen.findByRole('button', { name: copy.refreshCamera })
     expect((cpu as HTMLInputElement).value).toBe('6')
-    fireEvent.change(screen.getByLabelText('前置摄像头'), { target: { value: 'webcam0' } })
-    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+    fireEvent.change(screen.getByLabelText(copy.fieldFrontCamera), { target: { value: 'webcam0' } })
+    fireEvent.click(screen.getByRole('button', { name: copy.create }))
     await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(1))
     expect(onCreate.mock.calls[0][0]).toMatchObject({
       advancedSettings: {
@@ -1037,14 +1066,16 @@ it('缓存默认皮肤不覆盖同机型换镜像前明确选择的通用外框'
   )
   gotoConfigure()
   fireEvent.click(screen.getByText('API 36'))
-  fireEvent.click(screen.getByRole('tab', { name: '附加设置' }))
-  fireEvent.change(await screen.findByLabelText('机型皮肤'), { target: { value: '' } })
-  fireEvent.click(screen.getByRole('tab', { name: '设备' }))
+  fireEvent.click(screen.getByRole('tab', { name: copy.tabSettings }))
+  fireEvent.change(await screen.findByLabelText(copy.fieldSkinRef), { target: { value: '' } })
+  fireEvent.click(screen.getByRole('tab', { name: copy.tabDevice }))
   fireEvent.click(screen.getByText('API 34'))
   await waitFor(() =>
-    expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: copy.create }) as HTMLButtonElement).disabled).toBe(
+      false
+    )
   )
-  fireEvent.click(screen.getByRole('button', { name: '创建' }))
+  fireEvent.click(screen.getByRole('button', { name: copy.create }))
   await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(1))
   expect(onCreate.mock.calls[0][0]).toMatchObject({ advancedSettings: { skinRef: null } })
 })
@@ -1053,8 +1084,8 @@ describe('取消皮肤操作不是失败（review P3：null 哨兵静默早退�
   const openAdvanced = async (): Promise<HTMLSelectElement> => {
     gotoConfigure()
     fireEvent.click(screen.getByText('API 36'))
-    fireEvent.click(screen.getByRole('tab', { name: '附加设置' }))
-    return (await screen.findByLabelText('机型皮肤')) as HTMLSelectElement
+    fireEvent.click(screen.getByRole('tab', { name: copy.tabSettings }))
+    return (await screen.findByLabelText(copy.fieldSkinRef)) as HTMLSelectElement
   }
 
   it('获取官方皮肤时同意框取消（resolve null）：无失败警示、字段不解锁、创建不受阻', async () => {
@@ -1073,16 +1104,26 @@ describe('取消皮肤操作不是失败（review P3：null 哨兵静默早退�
     )
     const skinSelect = await openAdvanced()
     expect(skinSelect.disabled).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: /获取 pixel_8/ }))
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: new RegExp(format(copy.fetchOfficialSkin, { name: 'pixel_8' }))
+      })
+    )
     await waitFor(() => expect(download).toHaveBeenCalledTimes(1))
     await act(async () => {})
     expect(screen.queryByRole('alert')).toBeNull()
     // 取消不是入库成功：不 absorb、不解锁字段
     expect(skinSelect.disabled).toBe(true)
     expect(
-      (screen.getByRole('button', { name: /获取 pixel_8/ }) as HTMLButtonElement).disabled
+      (
+        screen.getByRole('button', {
+          name: new RegExp(format(copy.fetchOfficialSkin, { name: 'pixel_8' }))
+        }) as HTMLButtonElement
+      ).disabled
     ).toBe(false)
-    expect((screen.getByRole('button', { name: '创建' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: copy.create }) as HTMLButtonElement).disabled).toBe(
+      false
+    )
   })
 
   it('导入压缩包时取消选择器（resolve null）：无失败警示、字段不解锁', async () => {
@@ -1098,13 +1139,13 @@ describe('取消皮肤操作不是失败（review P3：null 哨兵静默早退�
     )
     const skinSelect = await openAdvanced()
     expect(skinSelect.disabled).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: '导入压缩包…' }))
+    fireEvent.click(screen.getByRole('button', { name: copy.importArchive }))
     await waitFor(() => expect(choose).toHaveBeenCalledTimes(1))
     await act(async () => {})
     expect(screen.queryByRole('alert')).toBeNull()
     expect(skinSelect.disabled).toBe(true)
     expect(
-      (screen.getByRole('button', { name: '导入压缩包…' }) as HTMLButtonElement).disabled
+      (screen.getByRole('button', { name: copy.importArchive }) as HTMLButtonElement).disabled
     ).toBe(false)
   })
 })

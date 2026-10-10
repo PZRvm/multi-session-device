@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { Device } from '@shared/types'
 import DeviceRow from '../DeviceRow'
+import { MAIN_COPY, format } from '@shared/i18n'
+const copy = MAIN_COPY['zh-CN']
 
 // vitest 未开 globals，RTL 的自动 cleanup 不注册——显式清理防多次 render 堆叠
 afterEach(cleanup)
@@ -79,16 +81,24 @@ describe('DeviceRow', () => {
   it('渲染名称、画像 · API · 状态副行与状态点', () => {
     setup()
     expect(screen.getByText('Pixel 8 API 34')).toBeTruthy()
-    expect(screen.getByText('Pixel 8 · API 34 · 停止')).toBeTruthy()
-    expect(screen.getByRole('img', { name: '状态：停止' })).toBeTruthy()
+    expect(screen.getByText('Pixel 8 · API 34 · ' + copy.statusStopped)).toBeTruthy()
+    expect(
+      screen.getByRole('img', { name: format(copy.statusAria, { status: copy.statusStopped }) })
+    ).toBeTruthy()
   })
 
   it('停止态：启动钮回调 onStart；删除可用', () => {
     const { onStart } = setup()
-    fireEvent.click(screen.getByRole('button', { name: '启动 Pixel 8 API 34' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: format(copy.startAria, { name: 'Pixel 8 API 34' }) })
+    )
     expect(onStart).toHaveBeenCalledTimes(1)
     expect(
-      (screen.getByRole('button', { name: '删除 Pixel 8 API 34' }) as HTMLButtonElement).disabled
+      (
+        screen.getByRole('button', {
+          name: format(copy.deleteAria, { name: 'Pixel 8 API 34' })
+        }) as HTMLButtonElement
+      ).disabled
     ).toBe(false)
   })
 
@@ -97,9 +107,13 @@ describe('DeviceRow', () => {
       device: { ...baseDevice, status: 'running', serial: 'emulator-5554' }
     })
     expect(screen.getByText('Pixel 8 · API 34 · emulator-5554')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '停止 Pixel 8 API 34' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: format(copy.stopAria, { name: 'Pixel 8 API 34' }) })
+    )
     expect(onStop).toHaveBeenCalledTimes(1)
-    fireEvent.click(screen.getByRole('button', { name: '复制 serial（emulator-5554）' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: format(copy.copySerialAria, { serial: 'emulator-5554' }) })
+    )
     expect(onCopySerial).toHaveBeenCalledTimes(1)
   })
 
@@ -108,13 +122,21 @@ describe('DeviceRow', () => {
       device: { ...baseDevice, status: 'starting', serial: 'emulator-5554' }
     })
     // 语义落在与按钮同尺寸的非交互槽位上，旋转 SVG 自身退为装饰
-    const busy = screen.getByRole('img', { name: '启动中 Pixel 8 API 34' })
+    const busy = screen.getByRole('img', {
+      name: format(copy.startingAria, { name: 'Pixel 8 API 34' })
+    })
     expect(busy.tagName).toBe('SPAN')
     expect(busy.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: '取消启动 Pixel 8 API 34' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: format(copy.cancelStartAria, { name: 'Pixel 8 API 34' }) })
+    )
     expect(onCancelStart).toHaveBeenCalledTimes(1)
     expect(
-      (screen.getByRole('button', { name: '删除 Pixel 8 API 34' }) as HTMLButtonElement).disabled
+      (
+        screen.getByRole('button', {
+          name: format(copy.deleteAria, { name: 'Pixel 8 API 34' })
+        }) as HTMLButtonElement
+      ).disabled
     ).toBe(true)
   })
 
@@ -127,10 +149,16 @@ describe('DeviceRow', () => {
       }
     })
     expect(screen.getByText('停止失败：停止超时')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '重试停止 Pixel 8 API 34' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: format(copy.retryStopAria, { name: 'Pixel 8 API 34' }) })
+    )
     expect(onStop).toHaveBeenCalledTimes(1)
     expect(
-      (screen.getByRole('button', { name: '删除 Pixel 8 API 34' }) as HTMLButtonElement).disabled
+      (
+        screen.getByRole('button', {
+          name: format(copy.deleteAria, { name: 'Pixel 8 API 34' })
+        }) as HTMLButtonElement
+      ).disabled
     ).toBe(true)
   })
 
@@ -148,19 +176,27 @@ describe('DeviceRow', () => {
   it('创建中/删除中：无启停钮、删除禁用、双击不进重命名', () => {
     for (const status of ['creating', 'deleting'] as const) {
       setup({ device: { ...baseDevice, status } })
-      expect(screen.queryByRole('button', { name: '启动 Pixel 8 API 34' })).toBeNull()
       expect(
-        (screen.getByRole('button', { name: '删除 Pixel 8 API 34' }) as HTMLButtonElement).disabled
+        screen.queryByRole('button', { name: format(copy.startAria, { name: 'Pixel 8 API 34' }) })
+      ).toBeNull()
+      expect(
+        (
+          screen.getByRole('button', {
+            name: format(copy.deleteAria, { name: 'Pixel 8 API 34' })
+          }) as HTMLButtonElement
+        ).disabled
       ).toBe(true)
       fireEvent.doubleClick(screen.getByText('Pixel 8 API 34'))
-      expect(screen.queryByLabelText('重命名设备')).toBeNull()
+      expect(screen.queryByLabelText(copy.renameAria)).toBeNull()
       cleanup()
     }
   })
 
   it('点删除钮回调 onDelete；行点击回调 onSelect', () => {
     const { onDelete, onSelect } = setup()
-    fireEvent.click(screen.getByRole('button', { name: '删除 Pixel 8 API 34' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: format(copy.deleteAria, { name: 'Pixel 8 API 34' }) })
+    )
     expect(onDelete).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByText('Pixel 8 API 34'))
     expect(onSelect).toHaveBeenCalledTimes(1)
@@ -185,8 +221,12 @@ describe('DeviceRow', () => {
           }
         }
       })
-      expect(screen.getByText('文件缺失：缺少 d1.ini（AVD 可能被外部删除）')).toBeTruthy()
-      const start = screen.getByRole('button', { name: '启动 Pixel 8 API 34' }) as HTMLButtonElement
+      expect(
+        screen.getByText(`${copy.availMissing}：缺少 d1.ini（AVD 可能被外部删除）`)
+      ).toBeTruthy()
+      const start = screen.getByRole('button', {
+        name: format(copy.startAria, { name: 'Pixel 8 API 34' })
+      }) as HTMLButtonElement
       expect(start.disabled).toBe(true)
       expect(start.title).toContain('重新检查')
       fireEvent.click(start)
@@ -200,7 +240,9 @@ describe('DeviceRow', () => {
           availability: { state: 'checking', issues: [], checkedAt: null }
         }
       })
-      const start = screen.getByRole('button', { name: '启动 Pixel 8 API 34' }) as HTMLButtonElement
+      const start = screen.getByRole('button', {
+        name: format(copy.startAria, { name: 'Pixel 8 API 34' })
+      }) as HTMLButtonElement
       expect(start.disabled).toBe(true)
       fireEvent.click(start)
       expect(onStart).not.toHaveBeenCalled()
@@ -227,13 +269,17 @@ describe('DeviceRow', () => {
         }
       })
       expect(screen.getByText(/存在冲突的重复值/)).toBeTruthy()
-      fireEvent.click(screen.getByRole('button', { name: '停止 Pixel 8 API 34' }))
+      fireEvent.click(
+        screen.getByRole('button', { name: format(copy.stopAria, { name: 'Pixel 8 API 34' }) })
+      )
       expect(onStop).toHaveBeenCalledTimes(1)
     })
 
     it('库不可信（store error）：停止态启动禁用', () => {
       const { onStart } = setup({ storeTrusted: false })
-      const start = screen.getByRole('button', { name: '启动 Pixel 8 API 34' }) as HTMLButtonElement
+      const start = screen.getByRole('button', {
+        name: format(copy.startAria, { name: 'Pixel 8 API 34' })
+      }) as HTMLButtonElement
       expect(start.disabled).toBe(true)
       fireEvent.click(start)
       expect(onStart).not.toHaveBeenCalled()
@@ -241,13 +287,15 @@ describe('DeviceRow', () => {
 
     it('库只读（read-only）：删除禁用并说明；双击/F2 不进重命名', () => {
       setup({ metaWritable: false })
-      const del = screen.getByRole('button', { name: '删除 Pixel 8 API 34' }) as HTMLButtonElement
+      const del = screen.getByRole('button', {
+        name: format(copy.deleteAria, { name: 'Pixel 8 API 34' })
+      }) as HTMLButtonElement
       expect(del.disabled).toBe(true)
       expect(del.title).toContain('冻结')
       fireEvent.doubleClick(screen.getByText('Pixel 8 API 34'))
-      expect(screen.queryByLabelText('重命名设备')).toBeNull()
+      expect(screen.queryByLabelText(copy.renameAria)).toBeNull()
       fireEvent.keyDown(screen.getByText('Pixel 8 API 34').parentElement!, { key: 'F2' })
-      expect(screen.queryByLabelText('重命名设备')).toBeNull()
+      expect(screen.queryByLabelText(copy.renameAria)).toBeNull()
     })
   })
 
@@ -277,7 +325,7 @@ describe('DeviceRow', () => {
     it('双击行进入重命名：输入框出现、回填现名、自动聚焦', () => {
       setup()
       fireEvent.doubleClick(screen.getByText('Pixel 8 API 34'))
-      const input = screen.getByLabelText('重命名设备') as HTMLInputElement
+      const input = screen.getByLabelText(copy.renameAria) as HTMLInputElement
       expect(input.value).toBe('Pixel 8 API 34')
       expect(document.activeElement).toBe(input)
     })
@@ -285,27 +333,27 @@ describe('DeviceRow', () => {
     it('Enter 提交修剪后的新名并退出重命名', () => {
       const { onRename } = setup()
       fireEvent.doubleClick(screen.getByText('Pixel 8 API 34'))
-      const input = screen.getByLabelText('重命名设备')
+      const input = screen.getByLabelText(copy.renameAria)
       fireEvent.change(input, { target: { value: '  新名字  ' } })
       fireEvent.keyDown(input, { key: 'Enter' })
       expect(onRename).toHaveBeenCalledWith('新名字')
-      expect(screen.queryByLabelText('重命名设备')).toBeNull()
+      expect(screen.queryByLabelText(copy.renameAria)).toBeNull()
     })
 
     it('Escape 取消：不回调 onRename', () => {
       const { onRename } = setup()
       fireEvent.doubleClick(screen.getByText('Pixel 8 API 34'))
-      const input = screen.getByLabelText('重命名设备')
+      const input = screen.getByLabelText(copy.renameAria)
       fireEvent.change(input, { target: { value: '改名' } })
       fireEvent.keyDown(input, { key: 'Escape' })
       expect(onRename).not.toHaveBeenCalled()
-      expect(screen.queryByLabelText('重命名设备')).toBeNull()
+      expect(screen.queryByLabelText(copy.renameAria)).toBeNull()
     })
 
     it('空/纯空白名不提交', () => {
       const { onRename } = setup()
       fireEvent.doubleClick(screen.getByText('Pixel 8 API 34'))
-      const input = screen.getByLabelText('重命名设备')
+      const input = screen.getByLabelText(copy.renameAria)
       fireEvent.change(input, { target: { value: '   ' } })
       fireEvent.keyDown(input, { key: 'Enter' })
       expect(onRename).not.toHaveBeenCalled()
@@ -314,7 +362,7 @@ describe('DeviceRow', () => {
     it('F2 进入重命名：输入框出现、回填现名、自动聚焦', () => {
       setup()
       fireEvent.keyDown(screen.getByText('Pixel 8 API 34').parentElement!, { key: 'F2' })
-      const input = screen.getByLabelText('重命名设备') as HTMLInputElement
+      const input = screen.getByLabelText(copy.renameAria) as HTMLInputElement
       expect(input.value).toBe('Pixel 8 API 34')
       expect(document.activeElement).toBe(input)
     })
@@ -322,21 +370,21 @@ describe('DeviceRow', () => {
     it('选中态下再按 Enter 进入重命名（macOS Finder 惯例）', () => {
       setup({ selected: true })
       fireEvent.keyDown(screen.getByText('Pixel 8 API 34').parentElement!, { key: 'Enter' })
-      expect(screen.getByLabelText('重命名设备')).toBeTruthy()
+      expect(screen.getByLabelText(copy.renameAria)).toBeTruthy()
     })
 
     it('未选中 Enter 仅选中，不进重命名', () => {
       const { onSelect } = setup()
       fireEvent.keyDown(screen.getByText('Pixel 8 API 34').parentElement!, { key: 'Enter' })
       expect(onSelect).toHaveBeenCalledTimes(1)
-      expect(screen.queryByLabelText('重命名设备')).toBeNull()
+      expect(screen.queryByLabelText(copy.renameAria)).toBeNull()
     })
 
     it('创建中/删除中：F2 不进重命名', () => {
       for (const status of ['creating', 'deleting'] as const) {
         setup({ device: { ...baseDevice, status } })
         fireEvent.keyDown(screen.getByText('Pixel 8 API 34').parentElement!, { key: 'F2' })
-        expect(screen.queryByLabelText('重命名设备')).toBeNull()
+        expect(screen.queryByLabelText(copy.renameAria)).toBeNull()
         cleanup()
       }
     })
@@ -345,7 +393,7 @@ describe('DeviceRow', () => {
       const { onSelect, onRename } = setup()
       const row = screen.getByText('Pixel 8 API 34').parentElement!
       fireEvent.keyDown(row, { key: 'F2' })
-      const input = screen.getByLabelText('重命名设备')
+      const input = screen.getByLabelText(copy.renameAria)
       fireEvent.change(input, { target: { value: '键盘名' } })
       fireEvent.keyDown(input, { key: 'Enter' })
       expect(onRename).toHaveBeenCalledWith('键盘名')
@@ -355,7 +403,7 @@ describe('DeviceRow', () => {
     it('失焦提交；与原名相同不提交', () => {
       const { onRename } = setup()
       fireEvent.doubleClick(screen.getByText('Pixel 8 API 34'))
-      const input = screen.getByLabelText('重命名设备')
+      const input = screen.getByLabelText(copy.renameAria)
       fireEvent.change(input, { target: { value: '失焦改名' } })
       fireEvent.blur(input)
       expect(onRename).toHaveBeenCalledWith('失焦改名')
@@ -363,7 +411,7 @@ describe('DeviceRow', () => {
       // 组件不持有提交结果（改名走回调由父级落库），再次双击回填的仍是现 prop 名；
       // 与原名相同的提交视为无变化
       fireEvent.doubleClick(screen.getByText('Pixel 8 API 34'))
-      fireEvent.blur(screen.getByLabelText('重命名设备'))
+      fireEvent.blur(screen.getByLabelText(copy.renameAria))
       expect(onRename).toHaveBeenCalledTimes(1)
     })
   })
@@ -391,9 +439,9 @@ describe('DeviceRow（review 修复轮）', () => {
       />
     )
     fireEvent.doubleClick(screen.getByText('Pixel 8 API 34'))
-    expect(screen.queryByLabelText('重命名设备')).toBeNull()
+    expect(screen.queryByLabelText(copy.renameAria)).toBeNull()
     fireEvent.keyDown(screen.getByText('Pixel 8 API 34').parentElement!, { key: 'F2' })
-    expect(screen.queryByLabelText('重命名设备')).toBeNull()
+    expect(screen.queryByLabelText(copy.renameAria)).toBeNull()
     expect(onRenameBlocked).toHaveBeenCalledTimes(2)
     expect(onRename).not.toHaveBeenCalled()
   })

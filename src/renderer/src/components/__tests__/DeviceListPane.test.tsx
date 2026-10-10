@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Device } from '@shared/types'
 import DeviceListPane from '../DeviceListPane'
+import { MAIN_COPY, format } from '@shared/i18n'
+const copy = MAIN_COPY['zh-CN']
 
 afterEach(cleanup)
 
@@ -47,27 +49,27 @@ const renderPane = (overrides: Partial<Parameters<typeof DeviceListPane>[0]>): v
 describe('DeviceListPane 空库文案（review P2-3/P3）', () => {
   it('正常空库：还没有设备', () => {
     renderPane({})
-    expect(screen.getByText(/还没有设备/)).toBeTruthy()
+    expect(screen.getByText(new RegExp(copy.emptyList.split('，')[0]))).toBeTruthy()
   })
 
   it('list invoke 失败（loadError）：显示读取失败与重试入口，不显示普通空库文案', () => {
     const onRetryLoad = vi.fn()
     renderPane({ loadError: 'boom', onRetryLoad })
-    expect(screen.getByText(/设备列表加载失败：boom/)).toBeTruthy()
+    expect(screen.getByText(format(copy.loadFailed, { message: 'boom' }))).toBeTruthy()
     expect(screen.queryByText(/还没有设备/)).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '重试加载' }))
+    fireEvent.click(screen.getByRole('button', { name: copy.retryLoad }))
     expect(onRetryLoad).toHaveBeenCalledTimes(1)
   })
 
   it('store error：devices.json 异常文案', () => {
     renderPane({ storeState: 'error' })
-    expect(screen.getByText(/设备数据读取失败/)).toBeTruthy()
+    expect(screen.getByText(new RegExp(copy.listReadFailed.split('：')[0]))).toBeTruthy()
     expect(screen.queryByText(/还没有设备/)).toBeNull()
   })
 
   it('read-only 且无可显示行：提示条目异常，不再自相矛盾地说「还没有设备」', () => {
     renderPane({ storeState: 'read-only' })
-    expect(screen.getByText(/设备记录存在异常/)).toBeTruthy()
+    expect(screen.getByText(new RegExp(copy.readOnlyEmpty.split('（')[0]))).toBeTruthy()
     expect(screen.queryByText(/还没有设备/)).toBeNull()
   })
 

@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReconciliationSummary, StoreHealth } from '@shared/types'
 import DeviceHealthNotice from '../DeviceHealthNotice'
+import { MAIN_COPY, format } from '@shared/i18n'
+const copy = MAIN_COPY['zh-CN']
 
 afterEach(cleanup)
 
@@ -45,8 +47,8 @@ describe('DeviceHealthNotice', () => {
       { ...okSummary, storeState: 'error', signature: 'sig' },
       { state: 'error', issues: [{ code: 'invalid-json', message: 'devices.json 不是合法 JSON' }] }
     )
-    expect(screen.getByText(/设备元数据读取失败/)).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '查看详情' }))
+    expect(screen.getByText(new RegExp(copy.errorState.split('（')[0]))).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: copy.viewDetail }))
     expect(onViewDetail).toHaveBeenCalledTimes(1)
   })
 
@@ -56,10 +58,22 @@ describe('DeviceHealthNotice', () => {
       okStore,
       ['A 机', 'B 机', 'C 机', 'D 机']
     )
-    expect(screen.getByText(/2 台设备文件异常（A 机、B 机、C 机 等 4 台）/)).toBeTruthy()
-    expect(screen.getByText(/3 组 AVD 文件没有对应设备记录/)).toBeTruthy()
+    expect(
+      screen.getByText(
+        new RegExp(
+          format(copy.unavailableDevices, {
+            count: 2,
+            names: 'A 机、B 机、C 机',
+            more: format(copy.moreSuffix, { count: 4 })
+          })
+        )
+      )
+    ).toBeTruthy()
+    expect(
+      screen.getByText(new RegExp(format(copy.orphanAvds, { count: 3 }).split('（')[0]))
+    ).toBeTruthy()
     expect(screen.getByText(/不自动清理/)).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /重新检查/ }))
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.recheck) }))
     expect(onRecheck).toHaveBeenCalledTimes(1)
   })
 
@@ -74,8 +88,8 @@ describe('DeviceHealthNotice', () => {
         onViewDetail={vi.fn()}
       />
     )
-    expect((screen.getByRole('button', { name: /重新检查/ }) as HTMLButtonElement).disabled).toBe(
-      true
-    )
+    expect(
+      (screen.getByRole('button', { name: new RegExp(copy.recheck) }) as HTMLButtonElement).disabled
+    ).toBe(true)
   })
 })

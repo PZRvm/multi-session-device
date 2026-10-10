@@ -1,36 +1,38 @@
 import type { GpuMode, NetworkPreset } from '@shared/types'
+import type { WizardCopy } from '@shared/i18n'
 
-/** 设置表单的枚举展示（与 main/emulator/settings.ts 锁定的实测枚举一致） */
+/** 设置表单的枚举展示（与 main/emulator/settings.ts 锁定的实测枚举一致）。
+ *  文案经 wizard 域字典取词——调用方传当前语言的 WizardCopy */
 
-export const NETWORK_SPEED_LABELS: Array<[NetworkPreset, string]> = [
-  ['gsm', 'GSM（慢）'],
-  ['hscsd', 'HSCSD'],
-  ['gprs', 'GPRS'],
-  ['umts', 'UMTS / 3G'],
-  ['edge', 'EDGE'],
-  ['hsdpa', 'HSDPA'],
-  ['lte', 'LTE / 4G'],
-  ['evdo', 'EVDO'],
-  ['5g', '5G'],
-  ['full', '不限速']
+export const networkSpeedLabels = (copy: WizardCopy): Array<[NetworkPreset, string]> => [
+  ['gsm', copy.netSpeedGsm],
+  ['hscsd', copy.netHscsd],
+  ['gprs', copy.netGprs],
+  ['umts', copy.netSpeedUmts],
+  ['edge', copy.netEdge],
+  ['hsdpa', copy.netHsdpa],
+  ['lte', copy.netSpeedLte],
+  ['evdo', copy.netEvdo],
+  ['5g', copy.net5g],
+  ['full', copy.netSpeedFull]
 ]
 
-export const NETWORK_DELAY_LABELS: Array<[NetworkPreset, string]> = [
-  ['gsm', 'GSM（高延迟）'],
-  ['hscsd', 'HSCSD'],
-  ['gprs', 'GPRS'],
-  ['umts', 'UMTS / 3G'],
-  ['edge', 'EDGE'],
-  ['hsdpa', 'HSDPA（无延迟）'],
-  ['lte', 'LTE（无延迟）'],
-  ['evdo', 'EVDO（无延迟）'],
-  ['5g', '5G（无延迟）'],
-  ['none', '无延迟']
+export const networkDelayLabels = (copy: WizardCopy): Array<[NetworkPreset, string]> => [
+  ['gsm', copy.netDelayGsm],
+  ['hscsd', copy.netHscsd],
+  ['gprs', copy.netGprs],
+  ['umts', copy.netDelayUmts],
+  ['edge', copy.netDelayEdge],
+  ['hsdpa', copy.netDelayHsdpa],
+  ['lte', copy.netDelayLte],
+  ['evdo', copy.netDelayEvdo],
+  ['5g', copy.netDelay5g],
+  ['none', copy.netDelayNone]
 ]
 
-export const GPU_LABELS: Array<[GpuMode, string]> = [
-  ['host', '硬件加速（host）'],
-  ['swiftshader_indirect', '软件渲染（SwiftShader）'],
-  ['angle_indirect', 'ANGLE（兼容层）'],
-  ['guest', '客户机渲染（guest）']
+export const gpuLabels = (copy: WizardCopy): Array<[GpuMode, string]> => [
+  ['host', copy.gpuHost],
+  ['swiftshader_indirect', copy.gpuSwiftShader],
+  ['angle_indirect', copy.gpuAngle],
+  ['guest', copy.gpuGuest]
 ]

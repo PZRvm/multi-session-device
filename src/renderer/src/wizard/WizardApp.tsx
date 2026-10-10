@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
+import { WIZARD_COPY } from '@shared/i18n'
 import type { CreateDeviceInput, WizardContext } from '@shared/types'
 import { toApiResult } from '../api'
+import { useCopy } from '../hooks/useCopy'
+import { useLocaleStore } from '../stores/localeStore'
 import DeviceEditor from '../components/DeviceEditor'
 import DeviceWizard from '../components/DeviceWizard'
 
@@ -11,6 +14,8 @@ import DeviceWizard from '../components/DeviceWizard'
  */
 const WizardApp = (): React.JSX.Element => {
   const [context, setContext] = useState<WizardContext | null>(null)
+  const locale = useLocaleStore((state) => state.locale)
+  const copy = useCopy(WIZARD_COPY)
 
   useEffect(() => {
     void (async () => {
@@ -23,7 +28,11 @@ const WizardApp = (): React.JSX.Element => {
     const result = await toApiResult(window.api.devices.create(input))
     if (!result.ok) {
       await toApiResult(
-        window.api.dialog.show({ title: '创建失败', message: result.error, buttons: ['知道了'] })
+        window.api.dialog.show({
+          title: copy.createFailed,
+          message: result.error,
+          buttons: [copy.ok]
+        })
       )
       return
     }
@@ -37,9 +46,17 @@ const WizardApp = (): React.JSX.Element => {
   // 上下文未知前不渲染（误闪创建页会丢编辑首帧）
   if (context === null) return <></>
   if (context.kind === 'edit') {
-    return <DeviceEditor deviceId={context.deviceId} onCancel={handleCancel} />
+    return (
+      <div lang={locale} style={{ height: '100%' }}>
+        <DeviceEditor deviceId={context.deviceId} onCancel={handleCancel} />
+      </div>
+    )
   }
-  return <DeviceWizard onCreate={handleCreate} onCancel={handleCancel} />
+  return (
+    <div lang={locale} style={{ height: '100%' }}>
+      <DeviceWizard onCreate={handleCreate} onCancel={handleCancel} />
+    </div>
+  )
 }
 
 export default WizardApp

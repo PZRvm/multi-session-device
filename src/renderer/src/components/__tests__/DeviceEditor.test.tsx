@@ -8,6 +8,8 @@ import type {
   WizardCapabilities
 } from '@shared/types'
 import DeviceEditor from '../DeviceEditor'
+import { WIZARD_COPY, format } from '@shared/i18n'
+const copy = WIZARD_COPY['zh-CN']
 
 afterEach(cleanup)
 afterEach(() => {
@@ -146,9 +148,11 @@ describe('DeviceEditor（编辑页）', () => {
   it('只有明确勾选恢复默认挖孔才提交恢复请求，未知 legacy 也可使用', async () => {
     const harness = mountEditor(snapshot({ settings: null }))
     const checkbox = await screen.findByLabelText(/恢复安卓默认挖孔/)
-    expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: copy.save }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
     fireEvent.click(checkbox)
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.click(screen.getByRole('button', { name: copy.save }))
     await waitFor(() =>
       expect(harness.save).toHaveBeenCalledWith({
         id: DEVICE_ID,
@@ -159,22 +163,24 @@ describe('DeviceEditor（编辑页）', () => {
   })
   it('回填名称与设置；机型/API 只读展示；内部存储只读', async () => {
     mountEditor(snapshot())
-    const nameInput = (await screen.findByLabelText('设备名称')) as HTMLInputElement
+    const nameInput = (await screen.findByLabelText(copy.nameLabel)) as HTMLInputElement
     expect(nameInput.value).toBe('编辑机')
     expect(await screen.findByText(/Pixel 8 · API 36/)).toBeTruthy()
     expect(screen.getByText(/内部存储 6144 MiB/)).toBeTruthy()
-    const storage = screen.getByLabelText('userdata 容量') as HTMLInputElement
+    const storage = screen.getByLabelText(copy.userdataCapacity) as HTMLInputElement
     expect(storage.disabled).toBe(true)
-    expect(screen.getByText('已有模拟器不支持修改内部存储，容量保持原配置。')).toBeTruthy()
+    expect(screen.getByText(copy.storageFixedHint)).toBeTruthy()
     // 无改动：保存禁用
-    expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: copy.save }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
   })
 
   it('改 RAM 后保存：载荷只带差异字段，不含存储/ABI/名称', async () => {
     const harness = mountEditor(snapshot())
     const ram = (await screen.findByLabelText(/内存（整机 RAM）/)) as HTMLInputElement
     fireEvent.change(ram, { target: { value: '4096' } })
-    const saveButton = screen.getByRole('button', { name: '保存' }) as HTMLButtonElement
+    const saveButton = screen.getByRole('button', { name: copy.save }) as HTMLButtonElement
     await waitFor(() => expect(saveButton.disabled).toBe(false))
     fireEvent.click(saveButton)
     await waitFor(() => expect(harness.save).toHaveBeenCalledTimes(1))
@@ -187,10 +193,10 @@ describe('DeviceEditor（编辑页）', () => {
 
   it('改名并调 heap：名称与差异同载荷提交', async () => {
     const harness = mountEditor(snapshot())
-    fireEvent.change(await screen.findByLabelText('设备名称'), { target: { value: '新名字' } })
+    fireEvent.change(await screen.findByLabelText(copy.nameLabel), { target: { value: '新名字' } })
     const heap = (await screen.findByLabelText(/VM heap/)) as HTMLInputElement
     fireEvent.change(heap, { target: { value: '512' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.click(screen.getByRole('button', { name: copy.save }))
     await waitFor(() => expect(harness.save).toHaveBeenCalled())
     const input = harness.save.mock.calls[0]![0]
     expect(input.name).toBe('新名字')
@@ -223,11 +229,15 @@ describe('DeviceEditor（编辑页）', () => {
     fireEvent.change(await screen.findByLabelText(/内存（整机 RAM）/), {
       target: { value: '4096' }
     })
-    fireEvent.click(screen.getByRole('button', { name: 'VM heap：采用配置值' }))
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: format(copy.adoptAria, { field: copy.fieldVmHeap }) })
+    )
+    fireEvent.click(screen.getByRole('button', { name: copy.save }))
     expect(await screen.findByRole('alert')).toBeTruthy()
     expect(screen.getByText(/指纹失效/)).toBeTruthy()
-    expect((screen.getByLabelText(/内存（整机 RAM）/) as HTMLInputElement).value).toBe('4096')
+    expect((screen.getByLabelText(new RegExp(copy.fieldRam)) as HTMLInputElement).value).toBe(
+      '4096'
+    )
     expect((screen.getByRole('spinbutton', { name: /^VM heap/ }) as HTMLInputElement).value).toBe(
       '228'
     )
@@ -240,16 +250,18 @@ describe('DeviceEditor（编辑页）', () => {
     fireEvent.change(ram, { target: { value: '4096' } })
     harness.push(pushOf('running'))
     await waitFor(() =>
-      expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(
+      expect((screen.getByRole('button', { name: copy.save }) as HTMLButtonElement).disabled).toBe(
         true
       )
     )
-    expect(screen.getByText('请先停止模拟器后再保存')).toBeTruthy()
-    expect((screen.getByLabelText(/内存（整机 RAM）/) as HTMLInputElement).value).toBe('4096')
+    expect(screen.getByText(copy.editorSaveBlockedRunning)).toBeTruthy()
+    expect((screen.getByLabelText(new RegExp(copy.fieldRam)) as HTMLInputElement).value).toBe(
+      '4096'
+    )
     // 回到停止态：恢复可保存
     harness.push(pushOf('stopped'))
     await waitFor(() =>
-      expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(
+      expect((screen.getByRole('button', { name: copy.save }) as HTMLButtonElement).disabled).toBe(
         false
       )
     )
@@ -257,20 +269,22 @@ describe('DeviceEditor（编辑页）', () => {
 
   it('设备被删推送：保存禁用并提示', async () => {
     const harness = mountEditor(snapshot())
-    await screen.findByLabelText('设备名称')
+    await screen.findByLabelText(copy.nameLabel)
     harness.push({ ...pushOf('stopped'), devices: [] })
-    expect(await screen.findByText('设备已被删除，无法保存')).toBeTruthy()
-    expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(await screen.findByText(copy.editorDeviceMissing)).toBeTruthy()
+    expect((screen.getByRole('button', { name: copy.save }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
   })
 
   it('运行中初载后停止：解除运行阻断，草稿保持且无需重开', async () => {
     const harness = mountEditor(snapshot({ status: 'running' }))
-    fireEvent.change(await screen.findByLabelText('设备名称'), { target: { value: '新名' } })
-    const save = screen.getByRole('button', { name: '保存' }) as HTMLButtonElement
+    fireEvent.change(await screen.findByLabelText(copy.nameLabel), { target: { value: '新名' } })
+    const save = screen.getByRole('button', { name: copy.save }) as HTMLButtonElement
     expect(save.disabled).toBe(true)
     harness.push(pushOf('stopped'))
     await waitFor(() => expect(save.disabled).toBe(false))
-    expect((screen.getByLabelText('设备名称') as HTMLInputElement).value).toBe('新名')
+    expect((screen.getByLabelText(copy.nameLabel) as HTMLInputElement).value).toBe('新名')
   })
 
   it('停止不能撤销文件冻结；旧值越界不阻止单独改名', async () => {
@@ -279,9 +293,11 @@ describe('DeviceEditor（编辑页）', () => {
     const harness = mountEditor(
       snapshot({ capabilities: caps, saveBlockedReason: '文件冻结', status: 'running' })
     )
-    fireEvent.change(await screen.findByLabelText('设备名称'), { target: { value: '新名' } })
+    fireEvent.change(await screen.findByLabelText(copy.nameLabel), { target: { value: '新名' } })
     harness.push(pushOf('stopped'))
-    expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: copy.save }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
     expect(screen.getByText('文件冻结')).toBeTruthy()
   })
 
@@ -289,10 +305,10 @@ describe('DeviceEditor（编辑页）', () => {
     const harness = mountEditor(
       snapshot({ settings: null, settingsBlockedReason: '旧设置未知，保持原配置' })
     )
-    fireEvent.change(await screen.findByLabelText('设备名称'), { target: { value: '新名' } })
+    fireEvent.change(await screen.findByLabelText(copy.nameLabel), { target: { value: '新名' } })
     expect(screen.queryByLabelText(/内存（整机 RAM）/)).toBeNull()
     expect(screen.getByText('旧设置未知，保持原配置')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.click(screen.getByRole('button', { name: copy.save }))
     await waitFor(() =>
       expect(harness.save).toHaveBeenCalledWith({
         id: DEVICE_ID,
@@ -306,8 +322,8 @@ describe('DeviceEditor（编辑页）', () => {
     const harness = mountEditor(
       snapshot({ settings: settings({ ramMiB: 512, vmHeapMiB: 2048, internalStorageMiB: 999999 }) })
     )
-    fireEvent.change(await screen.findByLabelText('设备名称'), { target: { value: '新名' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.change(await screen.findByLabelText(copy.nameLabel), { target: { value: '新名' } })
+    fireEvent.click(screen.getByRole('button', { name: copy.save }))
     await waitFor(() => expect(harness.save).toHaveBeenCalled())
   })
 
@@ -318,7 +334,9 @@ describe('DeviceEditor（编辑页）', () => {
       })
     )
     expect(await screen.findByText(/元数据写入已冻结/)).toBeTruthy()
-    expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: copy.save }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
   })
 
   it('存在差异时未改表单也能保存，默认提交表单值，仅同步可写字段', async () => {
@@ -329,8 +347,8 @@ describe('DeviceEditor（编辑页）', () => {
         ]
       })
     )
-    await screen.findByRole('button', { name: 'VM heap：采用配置值' })
-    const save = screen.getByRole('button', { name: '保存' }) as HTMLButtonElement
+    await screen.findByRole('button', { name: format(copy.adoptAria, { field: copy.fieldVmHeap }) })
+    const save = screen.getByRole('button', { name: copy.save }) as HTMLButtonElement
     expect(save.disabled).toBe(false)
     fireEvent.click(save)
     await waitFor(() =>
@@ -351,8 +369,12 @@ describe('DeviceEditor（编辑页）', () => {
         ]
       })
     )
-    fireEvent.change(await screen.findByLabelText('设备名称'), { target: { value: '我的草稿' } })
-    fireEvent.click(screen.getByRole('button', { name: 'VM heap：采用配置值' }))
+    fireEvent.change(await screen.findByLabelText(copy.nameLabel), {
+      target: { value: '我的草稿' }
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: format(copy.adoptAria, { field: copy.fieldVmHeap }) })
+    )
     expect((screen.getByRole('spinbutton', { name: /^VM heap/ }) as HTMLInputElement).value).toBe(
       '228'
     )
@@ -360,7 +382,7 @@ describe('DeviceEditor（编辑页）', () => {
       (screen.getByRole('spinbutton', { name: /^内存（整机 RAM）/ }) as HTMLInputElement).value
     ).toBe('2048')
     expect(screen.getByText(/已采用配置值 228 MiB/)).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.click(screen.getByRole('button', { name: copy.save }))
     await waitFor(() =>
       expect(harness.save).toHaveBeenCalledWith({
         id: DEVICE_ID,
@@ -380,7 +402,9 @@ describe('DeviceEditor（编辑页）', () => {
     )
     await screen.findByText(/原值无法识别，不能采用/)
     expect(screen.queryByRole('button', { name: /采用配置值/ })).toBeNull()
-    expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: copy.save }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
   })
 
   it('字段警告（外部 config 不一致）逐条展示', async () => {
@@ -407,7 +431,7 @@ describe('DeviceEditor（编辑页）', () => {
         onLoadSnapshot={vi.fn(async () => snapshot())}
       />
     )
-    fireEvent.click(await screen.findByRole('button', { name: '取消' }))
+    fireEvent.click(await screen.findByRole('button', { name: copy.cancel }))
     expect(onCancel).toHaveBeenCalledTimes(1)
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(onCancel).toHaveBeenCalledTimes(2)

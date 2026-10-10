@@ -1,16 +1,9 @@
 import { Plus, RefreshCw } from 'lucide-react'
 import styled from 'styled-components'
+import { MAIN_COPY, format } from '@shared/i18n'
 import type { Device, StoreHealthState } from '@shared/types'
+import { useCopy } from '../hooks/useCopy'
 import Button from './Button'
-
-const STATE_HINTS: Record<Device['status'], string> = {
-  creating: '正在创建 AVD，完成后可启动',
-  stopped: '设备已停止，从左侧列表启动它',
-  starting: '正在启动模拟器，等待系统 boot 完成',
-  running: '设备运行中，投屏与操控在下一步接入',
-  stopping: '正在停止模拟器并回收端口',
-  deleting: '正在删除 AVD 与元数据'
-}
 
 type CanvasPlaceholderProps = {
   device: Device | null
@@ -43,21 +36,32 @@ const CanvasPlaceholder = ({
   createDisabled = false,
   rechecking = false
 }: CanvasPlaceholderProps): React.JSX.Element => {
+  const copy = useCopy(MAIN_COPY)
+  const stateHints: Record<Device['status'], string> = {
+    creating: copy.hintCreating,
+    stopped: copy.hintStopped,
+    starting: copy.hintStarting,
+    running: copy.hintRunning,
+    stopping: copy.hintStopping,
+    deleting: copy.hintDeleting
+  }
   const hint = device !== null && device.status === 'stopped' ? healthHint(device) : null
   return (
     <Wrapper>
       {device !== null ? (
         <>
           <h3 className="title">{device.name}</h3>
-          <p className="hint">{STATE_HINTS[device.status]}</p>
-          {device.serial ? <p className="sub-hint">serial：{device.serial}</p> : null}
+          <p className="hint">{stateHints[device.status]}</p>
+          {device.serial ? (
+            <p className="sub-hint">{format(copy.serialLabel, { serial: device.serial })}</p>
+          ) : null}
           {hint !== null ? (
             <>
               <p className="error-hint">{hint}</p>
               <Button onClick={onRecheck} disabled={rechecking}>
                 <span className="action-label">
                   <RefreshCw size={14} />
-                  重新检查
+                  {copy.recheck}
                 </span>
               </Button>
             </>
@@ -66,30 +70,28 @@ const CanvasPlaceholder = ({
         </>
       ) : storeState === 'error' ? (
         <>
-          <h3 className="title">设备数据读取失败</h3>
-          <p className="hint">devices.json 异常，应用已冻结元数据写入并保留原文件</p>
+          <h3 className="title">{copy.readFailedTitle}</h3>
+          <p className="hint">{copy.readFailedHint}</p>
           <Button onClick={onRecheck} disabled={rechecking}>
             <span className="action-label">
               <RefreshCw size={14} />
-              重新检查
+              {copy.recheck}
             </span>
           </Button>
         </>
       ) : (
         <>
-          <h3 className="title">还没有设备</h3>
-          <p className="hint">三步创建一台：选画像 → 选镜像 → 命名</p>
+          <h3 className="title">{copy.emptyTitle}</h3>
+          <p className="hint">{copy.emptyHint}</p>
           <Button
             variant="primary"
             onClick={onCreate}
             disabled={createDisabled}
-            title={
-              createDisabled ? '设备元数据写入已冻结，暂不能新建设备（详情见左侧汇总）' : undefined
-            }
+            title={createDisabled ? copy.createDisabledTitleCanvas : undefined}
           >
             <span className="new-label">
               <Plus size={14} />
-              新建设备
+              {copy.createDevice}
             </span>
           </Button>
         </>

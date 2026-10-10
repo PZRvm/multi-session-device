@@ -1,5 +1,7 @@
 import { useRef } from 'react'
 import styled from 'styled-components'
+import { MAIN_COPY } from '@shared/i18n'
+import { useCopy } from '../hooks/useCopy'
 import { clampListWidth, LIST_MAX_WIDTH, LIST_MIN_WIDTH } from './listWidth'
 
 const KEYBOARD_STEP = 16
@@ -11,6 +13,7 @@ type ResizeHandleProps = {
 
 /** 左右分栏 5px 拖拽分隔条：中缝 1px 可视线，pointer capture 拖拽 + 方向键微调 */
 const ResizeHandle = ({ width, onResize }: ResizeHandleProps): React.JSX.Element => {
+  const copy = useCopy(MAIN_COPY)
   // ref 跨渲染持有拖拽起点——拖拽期间父组件随宽度重渲染，普通变量会丢
   const dragStart = useRef({ x: 0, width: 0 })
 
@@ -18,7 +21,7 @@ const ResizeHandle = ({ width, onResize }: ResizeHandleProps): React.JSX.Element
     <Wrapper
       role="separator"
       aria-orientation="vertical"
-      aria-label="调整列表宽度"
+      aria-label={copy.resizeAria}
       aria-valuenow={width}
       aria-valuemin={LIST_MIN_WIDTH}
       aria-valuemax={LIST_MAX_WIDTH}

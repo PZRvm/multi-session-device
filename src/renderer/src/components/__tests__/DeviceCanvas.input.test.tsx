@@ -21,6 +21,8 @@ import {
   type InjectContext
 } from '../../../../main/scrcpy/control'
 import DeviceCanvas from '../DeviceCanvas'
+import { MAIN_COPY, format } from '@shared/i18n'
+const copy = MAIN_COPY['zh-CN']
 
 const mocks = vi.hoisted(() => ({
   screenRef: {
@@ -110,10 +112,10 @@ it.each(['success', 'failure'])(
         onStop={async () => {}}
       />
     )
-    const proxy = screen.getByLabelText('Pixel test 输入')
+    const proxy = screen.getByLabelText(format(copy.inputAria, { name: 'Pixel test' }))
     fireEvent.keyDown(proxy, { key: 'ArrowDown' })
     expect(heldByDevice.has(AndroidKeyCode.ArrowDown)).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: '旋转屏幕' }))
+    fireEvent.click(screen.getByRole('button', { name: copy.rotate }))
     await waitFor(() => expect(lockRotation).toHaveBeenCalledOnce())
     try {
       expect(heldByDevice.size).toBe(0)
@@ -186,7 +188,9 @@ describe('外部纯文本粘贴', () => {
       />
     )
     return {
-      proxy: screen.getByLabelText('Paste test 输入') as HTMLInputElement,
+      proxy: screen.getByLabelText(
+        format(copy.inputAria, { name: 'Paste test' })
+      ) as HTMLInputElement,
       input,
       acceptedInput
     }

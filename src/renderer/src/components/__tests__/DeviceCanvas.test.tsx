@@ -2,6 +2,8 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Device, DeviceSkinPresentation } from '@shared/types'
 import DeviceCanvas from '../DeviceCanvas'
+import { MAIN_COPY, format } from '@shared/i18n'
+const copy = MAIN_COPY['zh-CN']
 
 vi.mock('../../hooks/useDeviceInput', () => ({ useDeviceInput: () => {} }))
 vi.mock('../../hooks/useDeviceScreen', () => ({
@@ -82,7 +84,7 @@ const device = {
 it('真实皮肤前景在视频上方，透传输入；通用外框没有该遮罩', async () => {
   ;(window as { api?: unknown }).api = { sdk: { deviceSkinPresentation: vi.fn(async () => skin) } }
   const { container, rerender } = render(<DeviceCanvas device={device} onStop={async () => {}} />)
-  await screen.findByLabelText('Pixel 7 画面')
+  await screen.findByLabelText(format(copy.canvasAria, { name: 'Pixel 7' }))
   const mask = await waitFor(() => {
     const image = container.querySelector('img')
     expect(image).not.toBeNull()
@@ -114,7 +116,7 @@ it('完全不透明的前景回退通用外框，保留视频且顶部没有提�
   expect(screen.queryByRole('status')).toBeNull()
   expect(screen.queryByText(/暂用通用外框/)).toBeNull()
   expect(container.querySelector('img')).toBeNull()
-  expect(screen.getByLabelText('Pixel 7 画面')).not.toBeNull()
+  expect(screen.getByLabelText(format(copy.canvasAria, { name: 'Pixel 7' }))).not.toBeNull()
 })
 
 it('普通背景允许不透明，不被当作前景遮罩拒绝', async () => {
@@ -145,7 +147,7 @@ it('无法检查前景透明度时保留设备视频并回退', async () => {
   expect(HTMLCanvasElement.prototype.getContext).toHaveBeenCalled()
   expect(screen.queryByRole('status')).toBeNull()
   expect(container.querySelector('img')).toBeNull()
-  expect(screen.getByLabelText('Pixel 7 画面')).not.toBeNull()
+  expect(screen.getByLabelText(format(copy.canvasAria, { name: 'Pixel 7' }))).not.toBeNull()
 })
 
 it('皮肤与视频比例不匹配时静默回退，画面顶部没有文字', async () => {
@@ -164,5 +166,5 @@ it('皮肤与视频比例不匹配时静默回退，画面顶部没有文字', a
   expect(maskPixels).toHaveBeenCalled()
   expect(container.querySelector('img')).toBeNull()
   expect(screen.queryByRole('status')).toBeNull()
-  expect(screen.getByLabelText('Pixel 7 画面')).not.toBeNull()
+  expect(screen.getByLabelText(format(copy.canvasAria, { name: 'Pixel 7' }))).not.toBeNull()
 })

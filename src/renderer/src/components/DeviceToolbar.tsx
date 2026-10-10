@@ -1,6 +1,8 @@
 import { ChevronLeft, Home, Power, RotateCw, SquareStack, Volume1, Volume2 } from 'lucide-react'
 import styled from 'styled-components'
 import type { ScreenToolbarButton } from '@shared/types'
+import { useCopy } from '../hooks/useCopy'
+import { MAIN_COPY } from '@shared/i18n'
 
 type DeviceToolbarProps = {
   disabled: boolean
@@ -10,7 +12,7 @@ type DeviceToolbarProps = {
   onRotate: () => void
 }
 
-/** 物理键工具条：返回/主页/概览/电源/音量加减 + 旋转；中文可访问名 + 焦点样式 + 禁用态 */
+/** 物理键工具条：返回/主页/概览/电源/音量加减 + 旋转；本地化可访问名 + 焦点样式 + 禁用态 */
 const DeviceToolbar = ({
   disabled,
   powerDisabled,
@@ -18,20 +20,21 @@ const DeviceToolbar = ({
   onPower,
   onRotate
 }: DeviceToolbarProps): React.JSX.Element => {
+  const copy = useCopy(MAIN_COPY)
   const buttons: Array<{
     button: ScreenToolbarButton | 'power'
     label: string
     icon: React.JSX.Element
   }> = [
-    { button: 'back', label: '返回', icon: <ChevronLeft size={16} /> },
-    { button: 'home', label: '主页', icon: <Home size={16} /> },
-    { button: 'overview', label: '概览', icon: <SquareStack size={16} /> },
-    { button: 'power', label: '关闭设备', icon: <Power size={16} /> },
-    { button: 'volume-up', label: '音量加', icon: <Volume2 size={16} /> },
-    { button: 'volume-down', label: '音量减', icon: <Volume1 size={16} /> }
+    { button: 'back', label: copy.back, icon: <ChevronLeft size={16} /> },
+    { button: 'home', label: copy.home, icon: <Home size={16} /> },
+    { button: 'overview', label: copy.overview, icon: <SquareStack size={16} /> },
+    { button: 'power', label: copy.powerOff, icon: <Power size={16} /> },
+    { button: 'volume-up', label: copy.volumeUp, icon: <Volume2 size={16} /> },
+    { button: 'volume-down', label: copy.volumeDown, icon: <Volume1 size={16} /> }
   ]
   return (
-    <Wrapper role="toolbar" aria-label="设备按键工具条">
+    <Wrapper role="toolbar" aria-label={copy.toolbarAria}>
       {buttons.map((entry) => (
         <button
           key={entry.button}
@@ -48,8 +51,8 @@ const DeviceToolbar = ({
       <button
         className="tool-btn"
         type="button"
-        aria-label="旋转屏幕"
-        title="旋转屏幕"
+        aria-label={copy.rotate}
+        title={copy.rotate}
         disabled={disabled}
         onClick={onRotate}
       >

@@ -1,7 +1,9 @@
 import styled from 'styled-components'
 import { Search } from 'lucide-react'
+import { WIZARD_COPY, format } from '@shared/i18n'
 import type { DeviceFormFactor, DeviceProfile } from '@shared/types'
-import { FORM_FACTOR_LABELS, apiRangeDisplay } from './shared'
+import { useCopy } from '../../hooks/useCopy'
+import { apiRangeDisplay, formFactorLabel } from './shared'
 
 /**
  * 画像页主体：左类别导航（含「显示弃用画像」）+ 右搜索与单选表格。
@@ -43,6 +45,7 @@ const ProfilePage = ({
   selectedId,
   onSelect
 }: ProfilePageProps): React.JSX.Element => {
+  const copy = useCopy(WIZARD_COPY)
   const counts = new Map<DeviceFormFactor, number>()
   for (const profile of profiles) {
     counts.set(profile.formFactor, (counts.get(profile.formFactor) ?? 0) + 1)
@@ -66,7 +69,7 @@ const ProfilePage = ({
 
   return (
     <Layout>
-      <nav className="nav" aria-label="画像类别">
+      <nav className="nav" aria-label={copy.profileCategoryAria}>
         {CATEGORY_ORDER.map((formFactor) => (
           <button
             key={formFactor}
@@ -75,13 +78,13 @@ const ProfilePage = ({
             aria-pressed={formFactor === category}
             onClick={() => onCategoryChange(formFactor)}
           >
-            <span className="nav-label">{FORM_FACTOR_LABELS[formFactor]}</span>
+            <span className="nav-label">{formFactorLabel(copy, formFactor)}</span>
             <span className="nav-count">{counts.get(formFactor) ?? 0}</span>
           </button>
         ))}
         {/* 官方源暂无弃用信号（types 注释在案）——开关随布局保留但禁用并说明，
             不冒充可用功能（review P3：死 UI 处置） */}
-        <div className="deprecated-toggle" title="官方画像源暂无弃用标记，开关待信号源接入后开放">
+        <div className="deprecated-toggle" title={copy.deprecatedToggleTitle}>
           <input
             id="wizard-show-deprecated"
             type="checkbox"
@@ -89,7 +92,7 @@ const ProfilePage = ({
             checked={showDeprecated}
             readOnly
           />
-          <label htmlFor="wizard-show-deprecated">显示弃用画像</label>
+          <label htmlFor="wizard-show-deprecated">{copy.showDeprecated}</label>
         </div>
       </nav>
 
@@ -100,24 +103,24 @@ const ProfilePage = ({
             type="search"
             className="search-input"
             value={search}
-            placeholder="搜索画像名称"
-            aria-label="搜索画像名称"
+            placeholder={copy.searchPlaceholder}
+            aria-label={copy.searchAria}
             onChange={(event) => onSearchChange(event.target.value)}
           />
         </div>
 
         <div className="scroller">
           <div className="head-row" role="row">
-            <div className="head-cell">名称</div>
+            <div className="head-cell">{copy.headName}</div>
             <div className="head-cell num">Play</div>
             <div className="head-cell num">API</div>
-            <div className="head-cell num">宽</div>
-            <div className="head-cell num">高</div>
-            <div className="head-cell num">密度</div>
+            <div className="head-cell num">{copy.headWidth}</div>
+            <div className="head-cell num">{copy.headHeight}</div>
+            <div className="head-cell num">{copy.headDensity}</div>
           </div>
           <div
             role="group"
-            aria-label={`${FORM_FACTOR_LABELS[category]}画像`}
+            aria-label={format(copy.categoryAria, { category: formFactorLabel(copy, category) })}
             onKeyDown={(event) => {
               if (event.key === 'ArrowDown') {
                 event.preventDefault()
@@ -146,8 +149,8 @@ const ProfilePage = ({
               >
                 <div className="row-name">
                   {profile.name}
-                  {profile.creatable ? null : <span className="row-tag">不可创建</span>}
-                  {profile.deprecated ? <span className="row-tag">已弃用</span> : null}
+                  {profile.creatable ? null : <span className="row-tag">{copy.notCreatable}</span>}
+                  {profile.deprecated ? <span className="row-tag">{copy.deprecated}</span> : null}
                 </div>
                 <div className="row-cell num">
                   {profile.playSupported === null ? '—' : profile.playSupported ? '✓' : '—'}
@@ -165,7 +168,7 @@ const ProfilePage = ({
               </div>
             ))}
           </div>
-          {rows.length === 0 ? <p className="empty-hint">该类别下没有匹配的画像</p> : null}
+          {rows.length === 0 ? <p className="empty-hint">{copy.emptyCategory}</p> : null}
         </div>
       </div>
     </Layout>

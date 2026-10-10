@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import styled from 'styled-components'
+import { MAIN_COPY, format } from '@shared/i18n'
 import type { Device, ReconcileReport, RuntimeErrorMessage } from '@shared/types'
 import { toApiResult } from './api'
+import { useCopy } from './hooks/useCopy'
+import { useLocaleStore } from './stores/localeStore'
 import BoardHead from './components/BoardHead'
 import Button from './components/Button'
 import CanvasPlaceholder from './components/CanvasPlaceholder'
@@ -27,12 +30,14 @@ const App = (): React.JSX.Element => {
   const stopDevice = useDeviceStore((state) => state.stop)
   const cancelStartDevice = useDeviceStore((state) => state.cancelStart)
   const setSelected = useDeviceStore((state) => state.setSelected)
+  const locale = useLocaleStore((state) => state.locale)
+  const copy = useCopy(MAIN_COPY)
 
   const [listWidth, setListWidth] = useState(280)
   const [rechecking, setRechecking] = useState(false)
 
   const showAlert = async (title: string, message: string): Promise<void> => {
-    await toApiResult(window.api.dialog.show({ title, message, buttons: ['知道了'] }))
+    await toApiResult(window.api.dialog.show({ title, message, buttons: [copy.ok] }))
   }
 
   useEffect(() => {
@@ -40,48 +45,54 @@ const App = (): React.JSX.Element => {
     return window.api.devices.onChanged(applySnapshot)
   }, [load, applySnapshot])
 
-  // 后台运行故障按 eventId 去重弹原生 dialog；行内 lastError 常驻
+  // 后台运行故障按 eventId 去重弹原生 dialog；行内 lastError 常驻。
+  // copy 入依赖：语言切换后重建订阅，后续弹窗即新语言（已弹出的不追溯）
   const seenErrors = useRef(new Set<string>())
   useEffect(
     () =>
       window.api.devices.onRuntimeError((message: RuntimeErrorMessage) => {
         if (seenErrors.current.has(message.eventId)) return
         seenErrors.current.add(message.eventId)
-        void showAlert('模拟器运行异常', message.message)
+        void showAlert(copy.runtimeErrorTitle, message.message)
       }),
-    []
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- showAlert 每渲染新建，语义上只依赖 copy
+    [copy]
   )
 
   /** 报告详情文本：库异常、设备健康、孤立组与保留策略（不提供自动清理） */
   const buildDetailText = useCallback(async (): Promise<string> => {
     const result = await toApiResult(window.api.devices.reconciliationReport())
-    if (!result.ok || result.data === null) return '当前没有对账报告。'
+    if (!result.ok || result.data === null) return copy.noReconcileReport
     const report: ReconcileReport = result.data
     const lines: string[] = []
     if (report.checkedAt !== null)
-      lines.push(`上次检查：${new Date(report.checkedAt).toLocaleString()}`)
+      lines.push(format(copy.lastChecked, { time: new Date(report.checkedAt).toLocaleString() }))
     for (const issue of report.storeHealth.issues) {
-      lines.push(`元数据：${issue.message}`)
+      lines.push(format(copy.metadataIssue, { message: issue.message }))
     }
     if (report.storeHealth.state === 'error' && report.storeHealth.issues.length === 0) {
-      lines.push('元数据：读取失败（未知原因）')
+      lines.push(copy.metadataReadFailed)
     }
     for (const entry of report.deviceIssues) {
       for (const issue of entry.availability.issues) {
         lines.push(
-          `「${entry.name}」${issue.component === 'image' ? '镜像' : 'AVD'}：${issue.message}`
+          format(copy.deviceIssueLine, {
+            name: entry.name,
+            component: issue.component === 'image' ? copy.componentImage : copy.componentAvd,
+            message: issue.message
+          })
         )
       }
     }
     for (const orphan of report.orphanEntries) {
-      lines.push(`孤立文件组 ${orphan.id}：${orphan.detail}（保留原文件，不自动清理）`)
+      lines.push(format(copy.orphanGroup, { id: orphan.id, detail: orphan.detail }))
     }
     if (report.unrecognizedCount > 0) {
-      lines.push(`另有 ${report.unrecognizedCount} 个非 UUID 命名的 .ini/.avd 形态文件未处理`)
+      lines.push(format(copy.unrecognizedFiles, { count: report.unrecognizedCount }))
     }
-    if (report.scanError !== null) lines.push(`扫描问题：${report.scanError}`)
-    return lines.length > 0 ? lines.join('\n') : '当前没有异常记录。'
-  }, [])
+    if (report.scanError !== null) lines.push(format(copy.scanIssue, { message: report.scanError }))
+    return lines.length > 0 ? lines.join('\n') : copy.noAbnormalRecords
+  }, [copy])
 
   // 对账异常汇总：pendingNotification 变化时弹一次原生 dialog，成功展示后确认；
   // seen 只在成功展示后登记（review P3——失败/中途取消不压制后续重试），异常清零时
@@ -103,17 +114,17 @@ const App = (): React.JSX.Element => {
       if (current.signature !== signature || !current.pendingNotification) return
       const shown = await toApiResult(
         window.api.dialog.show({
-          title: '设备异常汇总',
-          message: '设备文件或元数据存在异常，左侧列表上方已常驻汇总。',
+          title: copy.reconcileSummaryTitle,
+          message: copy.reconcileSummaryMessage,
           detail,
-          buttons: ['知道了']
+          buttons: [copy.ok]
         })
       )
       if (!shown.ok) return // 展示失败不登记 seen，待下次推送重试
       seenSignatures.current.add(signature)
       await toApiResult(window.api.devices.acknowledgeReconciliation(signature))
     })()
-  }, [reconciliation, buildDetailText])
+  }, [reconciliation, buildDetailText, copy])
 
   // main 共用加载结果；同上下文连点也只保留一个提示，直到提示关闭才允许重试。
   const pendingWindowOpens = useRef(new Set<string>())
@@ -134,73 +145,75 @@ const App = (): React.JSX.Element => {
 
   // 创建结果经 devices:changed 快照回流。
   const openWizard = (): Promise<void> =>
-    requestWindow('create', '打开向导失败', () => window.api.wizard.open())
+    requestWindow('create', copy.openWizardFailed, () => window.api.wizard.open())
 
   const openSettings = (): Promise<void> =>
-    requestWindow('settings', '打开设置窗口失败', () => window.api.settings.open())
+    requestWindow('settings', copy.openSettingsFailed, () => window.api.settings.open())
 
   const handleRecheck = async (): Promise<void> => {
     setRechecking(true)
     const result = await reconcile()
     setRechecking(false)
-    if (!result.ok) await showAlert('重新检查失败', result.error)
+    if (!result.ok) await showAlert(copy.recheckFailed, result.error)
   }
 
   const handleViewDetail = async (): Promise<void> => {
     const detail = await buildDetailText()
     await toApiResult(
-      window.api.dialog.show({ title: '设备对账详情', message: detail, buttons: ['知道了'] })
+      window.api.dialog.show({
+        title: copy.reconcileDetailTitle,
+        message: detail,
+        buttons: [copy.ok]
+      })
     )
   }
 
   const handleRename = async (id: string, name: string): Promise<void> => {
     const result = await renameDevice(id, name)
-    if (!result.ok) await showAlert('重命名失败', result.error)
+    if (!result.ok) await showAlert(copy.renameFailed, result.error)
   }
 
   const handleDelete = async (device: Device): Promise<void> => {
     const willStopFirst = device.status === 'running'
     const result = await toApiResult(
       window.api.dialog.show({
-        title: '删除设备',
-        message: `删除「${device.name}」？`,
-        detail: willStopFirst
-          ? '设备正在运行：将先停止并等待退出，再删除 AVD。\n此操作不可撤销：AVD 目录与设备内所有数据将永久删除。'
-          : '此操作不可撤销：\n· AVD 目录将被永久删除\n· 设备内所有数据（登录态、应用、文件）一并消失',
-        buttons: ['取消', '删除'],
+        title: copy.deleteDeviceTitle,
+        message: format(copy.deleteConfirm, { name: device.name }),
+        detail: willStopFirst ? copy.deleteRunningDetail : copy.deleteDetail,
+        buttons: [copy.cancel, copy.delete],
         cancelId: 0
       })
     )
     if (!result.ok) return
     if (result.data.response !== 1) return
     const removed = await removeDevice(device.id)
-    if (!removed.ok) await showAlert('删除失败', removed.error)
+    if (!removed.ok) await showAlert(copy.deleteFailed, removed.error)
   }
 
   const handleStart = async (id: string): Promise<void> => {
     const result = await startDevice(id)
-    if (!result.ok) await showAlert('启动失败', result.error)
+    if (!result.ok) await showAlert(copy.startFailed, result.error)
   }
 
   const handleStop = async (id: string): Promise<void> => {
     const result = await stopDevice(id)
-    if (!result.ok) await showAlert('停止失败', result.error)
+    if (!result.ok) await showAlert(copy.stopFailed, result.error)
   }
 
   const handleCancelStart = async (id: string): Promise<void> => {
     const result = await cancelStartDevice(id)
-    if (!result.ok) await showAlert('取消失败', result.error)
+    if (!result.ok) await showAlert(copy.cancelFailed, result.error)
   }
 
   const handleCopySerial = async (id: string): Promise<void> => {
     const result = await toApiResult(window.api.devices.copySerial(id))
-    if (!result.ok) await showAlert('复制失败', result.error)
+    if (!result.ok) await showAlert(copy.copyFailed, result.error)
   }
 
   // 打开配置编辑窗（plan 2026-10-08）：上下文在 main 侧固定；已有其他上下文
   // 向导窗打开时 main 会聚焦旧窗并报错——这里把原因反馈给用户
   const handleEdit = (id: string): Promise<void> =>
-    requestWindow(`edit:${id}`, '打开编辑窗口失败', () => window.api.wizard.openEditor(id))
+    requestWindow(`edit:${id}`, copy.openEditorFailed, () => window.api.wizard.openEditor(id))
 
   const selected = devices.find((device) => device.id === selectedId) ?? null
   // checking（创建中/暂缓判断）不算「文件异常」——与 main 侧报告口径一致（review P2-2）
@@ -216,10 +229,7 @@ const App = (): React.JSX.Element => {
   const metaWritable = storeHealth.state === 'ok'
 
   const handleRenameBlocked = (): void => {
-    void showAlert(
-      '暂不能重命名',
-      '设备元数据写入已冻结（设备数据异常），暂不能重命名；详情见左侧列表上方汇总'
-    )
+    void showAlert(copy.renameBlockedTitle, copy.renameBlockedMessage)
   }
 
   const handleRetryLoad = (): void => {
@@ -227,7 +237,7 @@ const App = (): React.JSX.Element => {
   }
 
   return (
-    <Wrapper>
+    <Wrapper lang={locale}>
       <div className="list-pane" style={{ width: listWidth }}>
         <BoardHead count={devices.length} onOpenSettings={() => void openSettings()} />
         <DeviceHealthNotice
@@ -261,13 +271,11 @@ const App = (): React.JSX.Element => {
             variant="primary"
             onClick={openWizard}
             disabled={!metaWritable}
-            title={
-              metaWritable ? undefined : '设备元数据写入已冻结，暂不能新建设备（详情见上方汇总）'
-            }
+            title={metaWritable ? undefined : copy.createDisabledTitleFooter}
           >
             <span className="new-label">
               <Plus size={14} />
-              新建设备
+              {copy.createDevice}
             </span>
           </Button>
         </footer>

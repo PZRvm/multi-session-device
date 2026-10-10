@@ -1,34 +1,21 @@
 import { useState } from 'react'
 import { Copy, Loader2, Play, Settings2, Square, Trash2, X } from 'lucide-react'
 import styled from 'styled-components'
+import { MAIN_COPY, format } from '@shared/i18n'
 import type { Device, DeviceAvailability, DeviceStatus } from '@shared/types'
+import { useCopy } from '../hooks/useCopy'
 import Input from './Input'
 
-const STATUS_LABELS: Record<DeviceStatus, string> = {
-  creating: '创建中',
-  stopped: '停止',
-  starting: '启动中',
-  running: '运行中',
-  stopping: '停止中',
-  deleting: '删除中'
-}
-
-const AVAILABILITY_LABELS: Record<DeviceAvailability['state'], string> = {
-  checking: '检查中',
-  valid: '正常',
-  missing: '文件缺失',
-  broken: '文件损坏',
-  inaccessible: '无法访问',
-  unsafe: '路径不安全'
-}
-
 /** 健康原因行：优先展示阻断原因；warning（如镜像身份不同）也提示 */
-const availabilityReason = (availability: DeviceAvailability): string => {
+const availabilityReason = (
+  availability: DeviceAvailability,
+  labels: Record<DeviceAvailability['state'], string>
+): string => {
   const blocking = availability.issues.find((issue) => issue.severity === 'error')
   const hint = blocking ?? availability.issues[0]
   return hint !== undefined
-    ? `${AVAILABILITY_LABELS[availability.state]}：${hint.message}`
-    : AVAILABILITY_LABELS[availability.state]
+    ? `${labels[availability.state]}：${hint.message}`
+    : labels[availability.state]
 }
 
 type DeviceRowProps = {
@@ -71,11 +58,29 @@ const DeviceRow = ({
 }: DeviceRowProps): React.JSX.Element => {
   const [renaming, setRenaming] = useState(false)
   const [draft, setDraft] = useState(device.name)
+  const copy = useCopy(MAIN_COPY)
+
+  const statusLabels: Record<DeviceStatus, string> = {
+    creating: copy.statusCreating,
+    stopped: copy.statusStopped,
+    starting: copy.statusStarting,
+    running: copy.statusRunning,
+    stopping: copy.statusStopping,
+    deleting: copy.statusDeleting
+  }
+  const availabilityLabels: Record<DeviceAvailability['state'], string> = {
+    checking: copy.availChecking,
+    valid: copy.availValid,
+    missing: copy.availMissing,
+    broken: copy.availBroken,
+    inaccessible: copy.availInaccessible,
+    unsafe: copy.availUnsafe
+  }
 
   const availability = device.availability ?? null
   const healthLine =
     availability !== null && availability.state !== 'valid'
-      ? availabilityReason(availability)
+      ? availabilityReason(availability, availabilityLabels)
       : null
 
   // stopped 且 checking/非 valid 禁启动；库不可信（error）同样禁——元数据无法信任
@@ -110,7 +115,7 @@ const DeviceRow = ({
   const subtitle =
     device.status === 'running' && device.serial
       ? `${device.profileLabel} · API ${device.apiDisplay ?? '?'} · ${device.serial}`
-      : `${device.profileLabel} · API ${device.apiDisplay ?? '?'} · ${STATUS_LABELS[device.status]}`
+      : `${device.profileLabel} · API ${device.apiDisplay ?? '?'} · ${statusLabels[device.status]}`
 
   return (
     <Wrapper
@@ -140,14 +145,14 @@ const DeviceRow = ({
         className="status-dot"
         data-status={device.status}
         role="img"
-        aria-label={`状态：${STATUS_LABELS[device.status]}`}
+        aria-label={format(copy.statusAria, { status: statusLabels[device.status] })}
       />
       {renaming ? (
         <Input
           className="rename-input"
           value={draft}
           maxLength={50}
-          aria-label="重命名设备"
+          aria-label={copy.renameAria}
           autoFocus
           onFocus={(event) => event.target.select()}
           onChange={(event) => setDraft(event.target.value)}
@@ -190,8 +195,8 @@ const DeviceRow = ({
           <button
             type="button"
             className="icon-button"
-            aria-label={`启动 ${device.name}`}
-            title={startDisabled ? '设备文件异常或仍在检查，暂不能启动（可先重新检查）' : '启动'}
+            aria-label={format(copy.startAria, { name: device.name })}
+            title={startDisabled ? copy.startDisabledTitle : copy.start}
             disabled={startDisabled}
             onClick={onStart}
           >
@@ -200,14 +205,18 @@ const DeviceRow = ({
         ) : null}
         {device.status === 'starting' ? (
           <>
-            <span className="busy-slot" role="img" aria-label={`启动中 ${device.name}`}>
+            <span
+              className="busy-slot"
+              role="img"
+              aria-label={format(copy.startingAria, { name: device.name })}
+            >
               <Loader2 size={14} aria-hidden="true" className="busy-icon" />
             </span>
             <button
               type="button"
               className="icon-button"
-              aria-label={`取消启动 ${device.name}`}
-              title="取消启动"
+              aria-label={format(copy.cancelStartAria, { name: device.name })}
+              title={copy.cancelStart}
               onClick={onCancelStart}
             >
               <X size={14} />
@@ -219,8 +228,8 @@ const DeviceRow = ({
             <button
               type="button"
               className="icon-button"
-              aria-label={`停止 ${device.name}`}
-              title="停止"
+              aria-label={format(copy.stopAria, { name: device.name })}
+              title={copy.stop}
               onClick={onStop}
             >
               <Square size={14} />
@@ -228,8 +237,8 @@ const DeviceRow = ({
             <button
               type="button"
               className="icon-button"
-              aria-label={`复制 serial（${device.serial ?? ''}）`}
-              title="复制 serial"
+              aria-label={format(copy.copySerialAria, { serial: device.serial ?? '' })}
+              title={copy.copySerial}
               onClick={onCopySerial}
             >
               <Copy size={14} />
@@ -238,15 +247,19 @@ const DeviceRow = ({
         ) : null}
         {device.status === 'stopping' ? (
           <>
-            <span className="busy-slot" role="img" aria-label={`停止中 ${device.name}`}>
+            <span
+              className="busy-slot"
+              role="img"
+              aria-label={format(copy.stoppingAria, { name: device.name })}
+            >
               <Loader2 size={14} aria-hidden="true" className="busy-icon" />
             </span>
             {/* 停止失败保留重试入口；未失败时点击无害（合并到在途清理） */}
             <button
               type="button"
               className="icon-button"
-              aria-label={`重试停止 ${device.name}`}
-              title="停止"
+              aria-label={format(copy.retryStopAria, { name: device.name })}
+              title={copy.stop}
               onClick={onStop}
             >
               <Square size={14} />
@@ -256,11 +269,11 @@ const DeviceRow = ({
         <button
           type="button"
           className="icon-button"
-          aria-label={`编辑配置 ${device.name}`}
+          aria-label={format(copy.editAria, { name: device.name })}
           title={
             device.status === 'creating' || device.status === 'deleting'
-              ? '设备事务进行中，暂不能编辑配置'
-              : '编辑配置（保存前需停止模拟器）'
+              ? copy.editBusyTitle
+              : copy.editTitle
           }
           disabled={device.status === 'creating' || device.status === 'deleting'}
           onClick={onEdit}
@@ -270,8 +283,8 @@ const DeviceRow = ({
         <button
           type="button"
           className="icon-button"
-          aria-label={`删除 ${device.name}`}
-          title={metaWritable ? '删除' : '元数据写入已冻结，暂不能删除（详情见列表上方汇总）'}
+          aria-label={format(copy.deleteAria, { name: device.name })}
+          title={metaWritable ? copy.deleteTitle : copy.deleteFrozenTitle}
           disabled={deleteDisabled}
           onClick={onDelete}
         >

@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Device, DeviceSnapshot, ReconcileReport } from '@shared/types'
 import App from '../../App'
 import { useDeviceStore } from '../../stores/deviceStore'
+import { MAIN_COPY, format } from '@shared/i18n'
+const copy = MAIN_COPY['zh-CN']
 
 vi.mock('../../components/DeviceCanvas', () => ({ default: () => null }))
 vi.mock('../../components/ResizeHandle', () => ({ default: () => null }))
@@ -105,7 +107,7 @@ describe('App 对账汇总提示（plan 设计 5）', () => {
     render(<App />)
     await waitFor(() => expect(dialog).toHaveBeenCalled())
     const shown = dialog.mock.calls[0] as unknown as [{ title: string; detail: string }]
-    expect(shown[0]).toMatchObject({ title: '设备异常汇总' })
+    expect(shown[0]).toMatchObject({ title: copy.reconcileSummaryTitle })
     expect(shown[0].detail).toContain('缺少 d1.ini')
     await waitFor(() => expect(acknowledgeReconciliation).toHaveBeenCalledWith('sig-anomaly-1'))
   })
@@ -129,7 +131,15 @@ describe('App 对账汇总提示（plan 设计 5）', () => {
   it('列表常驻：异常设备在汇总条与健康原因行可见，重新检查可触发', async () => {
     render(<App />)
     expect(await screen.findByRole('status')).toBeTruthy()
-    expect(screen.getByText(/1 台设备文件异常（Pixel test）/)).toBeTruthy()
-    expect(screen.getByText('文件缺失：缺少 d1.ini（AVD 可能被外部删除）')).toBeTruthy()
+    expect(
+      screen.getByText(
+        new RegExp(
+          format(copy.unavailableDevices, { count: 1, names: 'Pixel test', more: '' }).split(
+            '，'
+          )[0]
+        )
+      )
+    ).toBeTruthy()
+    expect(screen.getByText(`${copy.availMissing}：缺少 d1.ini（AVD 可能被外部删除）`)).toBeTruthy()
   })
 })

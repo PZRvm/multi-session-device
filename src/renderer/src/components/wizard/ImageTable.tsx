@@ -2,7 +2,9 @@ import { useState } from 'react'
 import styled from 'styled-components'
 import { Download, Loader2, Trash2 } from 'lucide-react'
 import type { CompatibilityVerdict } from '@shared/compatibility'
+import { WIZARD_COPY, format } from '@shared/i18n'
 import type { ImageEntry, ImageService } from '@shared/types'
+import { useCopy } from '../../hooks/useCopy'
 import { apiDisplay, formatSize, recommendedWindow, serviceLabel, serviceLabels } from './shared'
 
 /**
@@ -51,6 +53,7 @@ const ImageTable = ({
   onUninstall,
   uninstallingPackage
 }: ImageTableProps): React.JSX.Element => {
+  const copy = useCopy(WIZARD_COPY)
   const window = recommendedWindow(images)
   // roving tabindex（review 遗留精修）：整个表格一个 Tab 停留点——焦点行 0、
   // 其余行 -1；行内操作钮只在焦点行可 Tab。↑↓ 行间移动，Tab 不再逐行穿越
@@ -83,7 +86,7 @@ const ImageTable = ({
   }
 
   const serviceOptions: Array<{ value: ImageFilters['service']; label: string }> = [
-    { value: 'all', label: '全部服务' },
+    { value: 'all', label: copy.filterAllServices },
     { value: 'google_play', label: 'Google Play' },
     { value: 'google_apis', label: 'Google APIs' },
     { value: 'aosp', label: 'AOSP' },
@@ -98,7 +101,7 @@ const ImageTable = ({
         <select
           className="service-select"
           value={filters.service}
-          aria-label="服务筛选"
+          aria-label={copy.serviceFilterAria}
           onChange={(event) =>
             onFiltersChange({ ...filters, service: event.target.value as ImageFilters['service'] })
           }
@@ -119,7 +122,7 @@ const ImageTable = ({
                 onFiltersChange({ ...filters, showFullList: event.target.checked })
               }
             />
-            <label htmlFor="wizard-images-full">完整列表</label>
+            <label htmlFor="wizard-images-full">{copy.fullList}</label>
           </div>
           <div className="switch">
             <input
@@ -141,7 +144,7 @@ const ImageTable = ({
                 onFiltersChange({ ...filters, showUnsupported: event.target.checked })
               }
             />
-            <label htmlFor="wizard-images-unsupported">不支持项</label>
+            <label htmlFor="wizard-images-unsupported">{copy.unsupportedToggle}</label>
           </div>
         </div>
       </div>
@@ -149,10 +152,10 @@ const ImageTable = ({
       <div className="scroller">
         <div className="head-row">
           <div className="head-cell">API</div>
-          <div className="head-cell">服务</div>
+          <div className="head-cell">{copy.headService}</div>
           <div className="head-cell">ABI</div>
-          <div className="head-cell num">大小</div>
-          <div className="head-cell center">状态</div>
+          <div className="head-cell num">{copy.headSize}</div>
+          <div className="head-cell center">{copy.headStatus}</div>
         </div>
         {rows.map((image, index) => {
           const verdict = verdicts.get(image.packageName)
@@ -190,17 +193,21 @@ const ImageTable = ({
                   <span className="row-tag">{image.api.codename}</span>
                 ) : null}
                 {image.api.extensionLevel !== null ? (
-                  <span className="row-tag">扩展 {image.api.extensionLevel}</span>
+                  <span className="row-tag">
+                    {format(copy.extTag, { level: image.api.extensionLevel })}
+                  </span>
                 ) : null}
                 {image.featureTags.map((tag) => (
                   <span className="row-tag" key={tag}>
-                    {tag === 'page_size_16kb' ? '16KB 页' : tag}
+                    {tag === 'page_size_16kb' ? copy.tag16kb : tag}
                   </span>
                 ))}
               </div>
               <div className="cell">{serviceLabels(image).join(' + ')}</div>
               <div className="cell">{image.abi}</div>
-              <div className="cell num">{image.installed ? '—' : formatSize(image.sizeBytes)}</div>
+              <div className="cell num">
+                {image.installed ? '—' : formatSize(image.sizeBytes, copy)}
+              </div>
               <div className="status-cell">
                 {image.installed ? (
                   <>
@@ -213,8 +220,10 @@ const ImageTable = ({
                       }
                     >
                       {verdict?.status === 'supported'
-                        ? '已安装'
-                        : `已安装 · ${verdict?.status === 'unknown' ? '兼容性未知' : '不兼容'}`}
+                        ? copy.installed
+                        : verdict?.status === 'unknown'
+                          ? copy.installedUnknownCompat
+                          : copy.installedIncompatible}
                     </span>
                     {onUninstall !== null ? (
                       <span
@@ -223,8 +232,11 @@ const ImageTable = ({
                         tabIndex={index === safeRovingIndex ? 0 : -1}
                         aria-disabled={uninstallingPackage !== null || downloadBusy}
                         aria-busy={uninstallingPackage === image.packageName}
-                        aria-label={`删除已安装镜像 API ${apiDisplay(image)} ${serviceLabel(image)}`}
-                        title="删除已安装的镜像"
+                        aria-label={format(copy.uninstallInstalledAria, {
+                          api: apiDisplay(image),
+                          service: serviceLabel(image)
+                        })}
+                        title={copy.uninstallInstalledTitle}
                         onClick={(event) => {
                           event.stopPropagation()
                           if (uninstallingPackage !== null || downloadBusy) return
@@ -253,7 +265,10 @@ const ImageTable = ({
                     role="button"
                     tabIndex={index === safeRovingIndex ? 0 : -1}
                     aria-disabled={downloadBusy || uninstallingPackage !== null}
-                    aria-label={`下载 API ${apiDisplay(image)} ${serviceLabel(image)}`}
+                    aria-label={format(copy.downloadAria, {
+                      api: apiDisplay(image),
+                      service: serviceLabel(image)
+                    })}
                     onClick={(event) => {
                       event.stopPropagation()
                       if (downloadBusy || uninstallingPackage !== null) return
@@ -286,25 +301,25 @@ const ImageTable = ({
                   <button
                     type="button"
                     className="cancel-download-btn"
-                    aria-label={`取消下载 API ${apiDisplay(image)} ${serviceLabel(image)}`}
+                    aria-label={format(copy.cancelDownloadAria, {
+                      api: apiDisplay(image),
+                      service: serviceLabel(image)
+                    })}
                     onClick={(event) => {
                       event.stopPropagation()
                       onCancelDownload(image.packageName)
                     }}
                   >
-                    取消
+                    {copy.cancel}
                   </button>
                 ) : null}
               </div>
             </div>
           )
         })}
-        {rows.length === 0 ? <p className="empty-hint">当前筛选下没有镜像</p> : null}
+        {rows.length === 0 ? <p className="empty-hint">{copy.imagesEmptyFiltered}</p> : null}
       </div>
-      <p className="legend">
-        推荐视图默认展示最近五个正式 API；完整列表、Preview、扩展与不支持项按开关展开。
-        兼容性原因悬停可见，展示开关不改变创建资格。
-      </p>
+      <p className="legend">{copy.imagesFootnote}</p>
     </Layout>
   )
 }

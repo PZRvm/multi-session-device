@@ -1,5 +1,7 @@
 import styled from 'styled-components'
+import { MAIN_COPY, format } from '@shared/i18n'
 import type { Device, StoreHealthState } from '@shared/types'
+import { useCopy } from '../hooks/useCopy'
 import DeviceRow from './DeviceRow'
 
 type DeviceListPaneProps = {
@@ -44,54 +46,52 @@ const DeviceListPane = ({
   onRename,
   onEdit,
   onRenameBlocked
-}: DeviceListPaneProps): React.JSX.Element => (
-  <Wrapper>
-    {devices.length === 0 ? (
-      loadError !== null ? (
-        // invoke 级失败不经过 storeHealth——按读取失败展示并保留重试（plan 差距表）
-        <p className="empty-hint">
-          设备列表加载失败：{loadError}
-          <br />
-          <button type="button" className="retry-link" onClick={onRetryLoad}>
-            重试加载
-          </button>
-        </p>
-      ) : storeState === 'error' ? (
-        <p className="empty-hint">
-          设备数据读取失败：devices.json 异常，修复后点上方「重新检查」重试
-        </p>
-      ) : storeState === 'read-only' ? (
-        <p className="empty-hint">
-          设备记录存在异常（如重复 id 或坏条目），暂无可显示的设备；修复 devices.json
-          后点上方「重新检查」
-        </p>
+}: DeviceListPaneProps): React.JSX.Element => {
+  const copy = useCopy(MAIN_COPY)
+  return (
+    <Wrapper>
+      {devices.length === 0 ? (
+        loadError !== null ? (
+          // invoke 级失败不经过 storeHealth——按读取失败展示并保留重试（plan 差距表）
+          <p className="empty-hint">
+            {format(copy.loadFailed, { message: loadError })}
+            <br />
+            <button type="button" className="retry-link" onClick={onRetryLoad}>
+              {copy.retryLoad}
+            </button>
+          </p>
+        ) : storeState === 'error' ? (
+          <p className="empty-hint">{copy.listReadFailed}</p>
+        ) : storeState === 'read-only' ? (
+          <p className="empty-hint">{copy.readOnlyEmpty}</p>
+        ) : (
+          <p className="empty-hint">{copy.emptyList}</p>
+        )
       ) : (
-        <p className="empty-hint">还没有设备，点左下角「新建设备」创建第一台</p>
-      )
-    ) : (
-      <div className="list">
-        {devices.map((device) => (
-          <DeviceRow
-            key={device.id}
-            device={device}
-            selected={device.id === selectedId}
-            storeTrusted={storeTrusted}
-            metaWritable={metaWritable}
-            onSelect={() => onSelect(device.id)}
-            onStart={() => onStart(device.id)}
-            onStop={() => onStop(device.id)}
-            onCancelStart={() => onCancelStart(device.id)}
-            onCopySerial={() => onCopySerial(device.id)}
-            onDelete={() => onDelete(device)}
-            onRename={(name) => onRename(device.id, name)}
-            onEdit={() => onEdit(device.id)}
-            onRenameBlocked={onRenameBlocked}
-          />
-        ))}
-      </div>
-    )}
-  </Wrapper>
-)
+        <div className="list">
+          {devices.map((device) => (
+            <DeviceRow
+              key={device.id}
+              device={device}
+              selected={device.id === selectedId}
+              storeTrusted={storeTrusted}
+              metaWritable={metaWritable}
+              onSelect={() => onSelect(device.id)}
+              onStart={() => onStart(device.id)}
+              onStop={() => onStop(device.id)}
+              onCancelStart={() => onCancelStart(device.id)}
+              onCopySerial={() => onCopySerial(device.id)}
+              onDelete={() => onDelete(device)}
+              onRename={(name) => onRename(device.id, name)}
+              onEdit={() => onEdit(device.id)}
+              onRenameBlocked={onRenameBlocked}
+            />
+          ))}
+        </div>
+      )}
+    </Wrapper>
+  )
+}
 
 const Wrapper = styled.div`
   display: flex;

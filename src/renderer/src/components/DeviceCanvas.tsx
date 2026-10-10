@@ -14,17 +14,12 @@ import {
   skinMaskStyle,
   type ScreenLayout
 } from '../screen/geometry'
+import { MAIN_COPY, format } from '@shared/i18n'
+import { useCopy } from '../hooks/useCopy'
 import { useDeviceInput } from '../hooks/useDeviceInput'
 import { useDeviceScreen, type ScreenViewStatus } from '../hooks/useDeviceScreen'
 import { toApiResult } from '../api'
 import DeviceToolbar from './DeviceToolbar'
-
-const STATUS_TEXT: Record<Exclude<ScreenViewStatus, 'idle'>, string> = {
-  connecting: '连接设备画面…',
-  ready: '',
-  error: '画面连接失败',
-  closed: '画面已关闭'
-}
 
 type DeviceCanvasProps = {
   device: Device
@@ -48,8 +43,23 @@ const assertTransparentSkinMask = (image: HTMLImageElement): void => {
 
 /** 右栏画面区：主题工作台 + 设备外框 + 等比居中 canvas + 状态覆盖层 + 物理键工具条 */
 const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element => {
-  const { canvasRef, status, format, error, onGenerationChange, screenRef, retry, paintsRef } =
-    useDeviceScreen(device)
+  const copy = useCopy(MAIN_COPY)
+  const statusText: Record<Exclude<ScreenViewStatus, 'idle'>, string> = {
+    connecting: copy.connecting,
+    ready: '',
+    error: copy.streamError,
+    closed: copy.streamClosed
+  }
+  const {
+    canvasRef,
+    status,
+    format: screenFormat,
+    error,
+    onGenerationChange,
+    screenRef,
+    retry,
+    paintsRef
+  } = useDeviceScreen(device)
   const proxyRef = useRef<HTMLInputElement | null>(null)
   const stageRef = useRef<HTMLDivElement | null>(null)
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
@@ -110,13 +120,13 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
   }, [device.id, device.advancedSettings?.skinRef])
   const frameKind: DeviceFrameKind = device.frameKind ?? 'generic'
   const layout = useMemo<ScreenLayout | null>(() => {
-    if (!format || containerSize.width <= 0 || containerSize.height <= 0) return null
+    if (!screenFormat || containerSize.width <= 0 || containerSize.height <= 0) return null
     if (skin) {
       const skinLayout = computeSkinLayout(
         containerSize.width,
         containerSize.height,
-        format.width,
-        format.height,
+        screenFormat.width,
+        screenFormat.height,
         skin
       )
       if (skinLayout) return skinLayout
@@ -124,11 +134,11 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
     return computeLayout(
       containerSize.width,
       containerSize.height,
-      format.width,
-      format.height,
+      screenFormat.width,
+      screenFormat.height,
       frameKind
     )
-  }, [format, containerSize, frameKind, skin])
+  }, [screenFormat, containerSize, frameKind, skin])
   const layoutRef = useRef<ScreenLayout | null>(null)
   // 事件回调读最新布局：ref 更新放 effect，渲染期不写 ref
   useEffect(() => {
@@ -268,13 +278,13 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
         return status
       },
       get format(): ScreenFormat | null {
-        return format
+        return screenFormat
       }
     }
     return () => {
       delete (window as unknown as Record<string, unknown>)['__msdCanvas']
     }
-  }, [status, format, paintsRef])
+  }, [status, screenFormat, paintsRef])
 
   return (
     <Wrapper>
@@ -352,7 +362,7 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
             height: layout ? layout.height : 0
           }}
         >
-          <canvas ref={canvasRef} aria-label={`${device.name} 画面`} />
+          <canvas ref={canvasRef} aria-label={format(copy.canvasAria, { name: device.name })} />
           {layout?.skin?.orientation.foregroundMask && skin ? (
             <img
               className="skin-mask"
@@ -371,24 +381,24 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
             {status === 'ready' ? (
               <>
                 <Loader2 size={18} className="spin" />
-                <p className="overlay-text">正在准备画面…</p>
+                <p className="overlay-text">{copy.preparing}</p>
               </>
             ) : status === 'connecting' ? (
               <>
                 <Loader2 size={18} className="spin" />
-                <p className="overlay-text">{STATUS_TEXT.connecting}</p>
+                <p className="overlay-text">{statusText.connecting}</p>
               </>
             ) : status === 'error' ? (
               <>
-                <p className="overlay-text">{STATUS_TEXT.error}</p>
+                <p className="overlay-text">{statusText.error}</p>
                 {error ? <p className="overlay-hint">{error}</p> : null}
                 <button type="button" className="retry-button" onClick={retry}>
                   <RotateCcw size={13} />
-                  重试连接
+                  {copy.retryConnect}
                 </button>
               </>
             ) : status === 'closed' ? (
-              <p className="overlay-text">{STATUS_TEXT.closed}</p>
+              <p className="overlay-text">{statusText.closed}</p>
             ) : null}
           </div>
         ) : null}
@@ -401,7 +411,7 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
         <input
           ref={proxyRef}
           className="proxy-input"
-          aria-label={`${device.name} 输入`}
+          aria-label={format(copy.inputAria, { name: device.name })}
           tabIndex={-1}
         />
       </div>

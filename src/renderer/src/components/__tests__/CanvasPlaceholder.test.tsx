@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Device } from '@shared/types'
 import CanvasPlaceholder from '../CanvasPlaceholder'
+import { MAIN_COPY } from '@shared/i18n'
+const copy = MAIN_COPY['zh-CN']
 
 afterEach(cleanup)
 
@@ -27,8 +29,8 @@ describe('CanvasPlaceholder（对账健康态）', () => {
     render(
       <CanvasPlaceholder device={device()} onCreate={vi.fn()} onRecheck={vi.fn()} storeState="ok" />
     )
-    expect(screen.getByText('设备已停止，从左侧列表启动它')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /重新检查/ })).toBeNull()
+    expect(screen.getByText(copy.hintStopped)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: new RegExp(copy.recheck) })).toBeNull()
   })
 
   it('停止且文件异常：显示具体原因与重新检查', () => {
@@ -55,7 +57,7 @@ describe('CanvasPlaceholder（对账健康态）', () => {
       />
     )
     expect(screen.getByText(/缺少 d1.avd 目录/)).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /重新检查/ }))
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.recheck) }))
     expect(onRecheck).toHaveBeenCalledTimes(1)
   })
 
@@ -69,9 +71,9 @@ describe('CanvasPlaceholder（对账健康态）', () => {
         storeState="error"
       />
     )
-    expect(screen.getByText('设备数据读取失败')).toBeTruthy()
-    expect(screen.queryByText('还没有设备')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /重新检查/ }))
+    expect(screen.getByText(copy.readFailedTitle)).toBeTruthy()
+    expect(screen.queryByText(copy.emptyTitle)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.recheck) }))
     expect(onRecheck).toHaveBeenCalledTimes(1)
   })
 
@@ -79,8 +81,8 @@ describe('CanvasPlaceholder（对账健康态）', () => {
     render(
       <CanvasPlaceholder device={null} onCreate={vi.fn()} onRecheck={vi.fn()} storeState="ok" />
     )
-    expect(screen.getByText('还没有设备')).toBeTruthy()
-    expect(screen.getByRole('button', { name: /新建设备/ })).toBeTruthy()
+    expect(screen.getByText(copy.emptyTitle)).toBeTruthy()
+    expect(screen.getByRole('button', { name: new RegExp(copy.createDevice) })).toBeTruthy()
   })
 })
 
@@ -96,7 +98,9 @@ describe('CanvasPlaceholder（新建入口冻结）', () => {
         createDisabled={true}
       />
     )
-    const create = screen.getByRole('button', { name: /新建设备/ }) as HTMLButtonElement
+    const create = screen.getByRole('button', {
+      name: new RegExp(copy.createDevice)
+    }) as HTMLButtonElement
     expect(create.disabled).toBe(true)
     expect(create.title).toContain('冻结')
     fireEvent.click(create)
@@ -115,8 +119,8 @@ describe('CanvasPlaceholder（review 修复轮）', () => {
         rechecking={true}
       />
     )
-    expect((screen.getByRole('button', { name: /重新检查/ }) as HTMLButtonElement).disabled).toBe(
-      true
-    )
+    expect(
+      (screen.getByRole('button', { name: new RegExp(copy.recheck) }) as HTMLButtonElement).disabled
+    ).toBe(true)
   })
 })

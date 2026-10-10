@@ -9,13 +9,16 @@ import type {
   UpdateDeviceInput,
   UpdateDeviceSettings
 } from '@shared/types'
+import { WIZARD_COPY, format } from '@shared/i18n'
 import { EDITABLE_SETTING_KEYS, normalizeEditedSettings } from '@shared/settings-contract'
 import { toApiResult } from '../api'
 import Button from './Button'
 import Input from './Input'
 import SettingsForm from './wizard/SettingsForm'
 import { useWizardResources } from './wizard/useWizardResources'
-import { FORM_FACTOR_LABELS, messageOf } from './wizard/shared'
+import { useCopy } from '../hooks/useCopy'
+import { useLocaleStore } from '../stores/localeStore'
+import { formFactorLabel, messageOf } from './wizard/shared'
 
 /**
  * 已有设备配置编辑页（plan 2026-10-08 设计 4）：顶部名称 + 机型/API 只读上下文，
@@ -24,22 +27,6 @@ import { FORM_FACTOR_LABELS, messageOf } from './wizard/shared'
  * 草稿只在本组件持有——资源刷新/能力更新不重置草稿，冲突需重新读取时由用户
  * 关闭重开（main 侧指纹复验兜底）。
  */
-
-const FIELD_LABELS: Record<string, string> = {
-  skinRef: '机型皮肤',
-  frontCamera: '前置摄像头',
-  rearCamera: '后置摄像头',
-  networkSpeed: '网络速度',
-  networkLatency: '网络延迟',
-  orientation: '初始朝向',
-  bootMode: '启动模式',
-  internalStorageMiB: '内部存储',
-  cpuCores: 'CPU 核数',
-  graphics: 'GPU 渲染',
-  ramMiB: '内存（整机 RAM）',
-  vmHeapMiB: 'VM heap',
-  preferredAbi: '应用 ABI'
-}
 
 /** 只提交白名单字段的变化和待同步项（存储/ABI 永不进入载荷）。 */
 const buildSettingsDiff = (
@@ -59,10 +46,16 @@ const buildSettingsDiff = (
   return diff
 }
 
-const statusBlockLabel = (status: DeviceStatus): string => {
-  if (status === 'running' || status === 'starting') return '请先停止模拟器后再保存'
-  if (status === 'stopping') return '设备停止中，停止完成后再保存'
-  return '设备事务进行中，暂不能保存'
+const statusBlockLabel = (
+  status: DeviceStatus,
+  copy: Pick<
+    (typeof WIZARD_COPY)['zh-CN'],
+    'editorSaveBlockedRunning' | 'editorSaveBlockedStopping' | 'editorSaveBlockedTransaction'
+  >
+): string => {
+  if (status === 'running' || status === 'starting') return copy.editorSaveBlockedRunning
+  if (status === 'stopping') return copy.editorSaveBlockedStopping
+  return copy.editorSaveBlockedTransaction
 }
 
 type EditorPhase = 'loading' | 'ready' | 'error'
@@ -97,6 +90,26 @@ const DeviceEditor = ({
   const [deviceMissing, setDeviceMissing] = useState(false)
   const generationRef = useRef(0)
   const savingRef = useRef(false)
+  const copy = useCopy(WIZARD_COPY)
+  const locale = useLocaleStore((state) => state.locale)
+  const fieldLabels: Record<string, string> = useMemo(
+    () => ({
+      skinRef: copy.fieldSkinRef,
+      frontCamera: copy.fieldFrontCamera,
+      rearCamera: copy.fieldRearCamera,
+      networkSpeed: copy.fieldNetworkSpeed,
+      networkLatency: copy.fieldNetworkLatency,
+      orientation: copy.fieldOrientation,
+      bootMode: copy.fieldBootMode,
+      internalStorageMiB: copy.fieldInternalStorage,
+      cpuCores: copy.fieldCpuCores,
+      graphics: copy.fieldGraphics,
+      ramMiB: copy.fieldRam,
+      vmHeapMiB: copy.fieldVmHeap,
+      preferredAbi: copy.fieldPreferredAbi
+    }),
+    [copy]
+  )
 
   const resources = useWizardResources({
     currentGeneration: () => generationRef.current,
@@ -181,9 +194,10 @@ const DeviceEditor = ({
             snapshot.settings,
             buildSettingsDiff(snapshot.settings, settings, snapshot.configMismatches),
             effectiveCapabilities,
-            snapshot.configMismatches?.map((item) => item.field)
+            snapshot.configMismatches?.map((item) => item.field),
+            locale
           ),
-    [effectiveCapabilities, settings, snapshot]
+    [effectiveCapabilities, settings, snapshot, locale]
   )
   const errors = useMemo(
     () =>
@@ -202,11 +216,11 @@ const DeviceEditor = ({
   const settingsChanged = Object.keys(settingsDiff).length > 0
 
   const liveBlockedReason = deviceMissing
-    ? '设备已被删除，无法保存'
+    ? copy.editorDeviceMissing
     : (live?.status ?? snapshot?.status ?? 'stopped') !== 'stopped'
-      ? statusBlockLabel(live?.status ?? snapshot!.status!)
+      ? statusBlockLabel(live?.status ?? snapshot!.status!, copy)
       : live !== null && live.storeState !== 'ok'
-        ? '设备库写入受限，暂不能保存'
+        ? copy.editorStoreRestricted
         : null
   const blockedReason = liveBlockedReason ?? snapshot?.saveBlockedReason ?? null
 
@@ -253,13 +267,13 @@ const DeviceEditor = ({
         ([field, note]) =>
           note.warning !== null && !snapshot.configMismatches?.some((item) => item.field === field)
       )
-      .map(([field, note]) => [FIELD_LABELS[field] ?? field, note.warning as string])
-  }, [snapshot])
+      .map(([field, note]) => [fieldLabels[field] ?? field, note.warning as string])
+  }, [snapshot, fieldLabels])
 
   const identityLine =
     snapshot !== null
       ? `${snapshot.identity.profileLabel} · API ${snapshot.identity.apiDisplay ?? '?'} · ${
-          FORM_FACTOR_LABELS[snapshot.identity.formFactor] ?? snapshot.identity.formFactor
+          formFactorLabel(copy, snapshot.identity.formFactor) ?? snapshot.identity.formFactor
         }`
       : ''
 
@@ -268,25 +282,25 @@ const DeviceEditor = ({
       <header className="header">
         <span className="traffic-spacer" aria-hidden="true" />
         <div className="title-group">
-          <h3 className="heading">编辑设备</h3>
-          <span className="step-indicator">名称与附加设置 · 机型和系统 API 固定不变</span>
+          <h3 className="heading">{copy.editorHeading}</h3>
+          <span className="step-indicator">{copy.editorStepIndicator}</span>
         </div>
       </header>
 
       <div className="body">
         {phase === 'loading' ? (
-          <p className="hint-pane">正在读取设备配置…</p>
+          <p className="hint-pane">{copy.editorLoading}</p>
         ) : phase === 'error' ? (
           <p className="hint-pane">
-            读取设备配置失败：{loadError}
+            {format(copy.editorLoadFailed, { message: loadError ?? '' })}
             <br />
-            <Button onClick={() => void load()}>重试</Button>
+            <Button onClick={() => void load()}>{copy.retry}</Button>
           </p>
         ) : snapshot !== null ? (
           <div className="settings-pane">
             <div className="name-block">
               <label className="name-label" htmlFor="editor-device-name">
-                设备名称
+                {copy.nameLabel}
               </label>
               <Input
                 id="editor-device-name"
@@ -296,11 +310,13 @@ const DeviceEditor = ({
               />
               <p className="identity-line">{identityLine}</p>
               <p className="identity-line identity-line-small">
-                内部存储{' '}
-                {snapshot.internalStorage.valueMiB === null
-                  ? '未知'
-                  : `${snapshot.internalStorage.valueMiB} MiB`}
-                （{snapshot.internalStorage.note}）
+                {format(copy.editorStorageLine, {
+                  value:
+                    snapshot.internalStorage.valueMiB === null
+                      ? copy.storageUnknown
+                      : `${snapshot.internalStorage.valueMiB} MiB`,
+                  note: snapshot.internalStorage.note
+                })}
               </p>
               <label className="cutout-reset">
                 <input
@@ -308,7 +324,7 @@ const DeviceEditor = ({
                   checked={resetCutout}
                   onChange={(event) => setResetCutout(event.target.checked)}
                 />
-                恢复安卓默认挖孔（下次启动生效，会关闭开发者选项中的挖孔模拟）
+                {copy.cutoutReset}
               </label>
             </div>
 
@@ -326,14 +342,14 @@ const DeviceEditor = ({
                   return (
                     <div className="config-mismatch" key={item.field}>
                       <span className="notice-line">
-                        {FIELD_LABELS[item.field]}：
+                        {fieldLabels[item.field]}：
                         {adopted
-                          ? `已采用配置值 ${item.actualLabel}，保存后同步应用记录。`
-                          : `配置为 ${item.actualLabel}，保存将以表单值为准。${item.actualSettings === null ? '原值无法识别，不能采用。' : ''}`}
+                          ? format(copy.mismatchAdopted, { label: String(item.actualLabel) })
+                          : `${format(copy.mismatchPending, { label: String(item.actualLabel) })}${item.actualSettings === null ? copy.mismatchUnrecognized : ''}`}
                       </span>
                       {item.actualSettings !== null && settings !== null ? (
                         <Button
-                          aria-label={`${FIELD_LABELS[item.field]}：采用配置值`}
+                          aria-label={format(copy.adoptAria, { field: fieldLabels[item.field] })}
                           disabled={saving || adopted}
                           onClick={() => {
                             setSettings((current) =>
@@ -341,7 +357,7 @@ const DeviceEditor = ({
                             )
                           }}
                         >
-                          {adopted ? '已采用' : '采用配置值'}
+                          {adopted ? copy.adopted : copy.adopt}
                         </Button>
                       ) : null}
                     </div>
@@ -357,8 +373,7 @@ const DeviceEditor = ({
 
             {settings === null ? (
               <p className="hint-pane">
-                {snapshot.settingsBlockedReason ??
-                  '旧设备的附加设置无法无损识别，当前仅支持修改名称。'}
+                {snapshot.settingsBlockedReason ?? copy.settingsBlockedFallback}
               </p>
             ) : (
               <SettingsForm
@@ -387,18 +402,16 @@ const DeviceEditor = ({
       </div>
 
       <footer className="footer">
-        <p className="footer-note">
-          {blockedReason ?? '保存后下次冷启动生效；应用、登录与文件保持不变。'}
-        </p>
-        <Button onClick={onCancel}>取消</Button>
+        <p className="footer-note">{blockedReason ?? copy.editorFooterNote}</p>
+        <Button onClick={onCancel}>{copy.cancel}</Button>
         <Button variant="primary" disabled={!canSave} onClick={() => void save()}>
-          {saving ? '保存中…' : '保存'}
+          {saving ? copy.saving : copy.save}
         </Button>
       </footer>
       {saveError !== null ? (
         <div className="error-block" role="alert">
           <span className="error-text">{saveError}</span>
-          <Button onClick={() => setSaveError(null)}>知道了</Button>
+          <Button onClick={() => setSaveError(null)}>{copy.ok}</Button>
         </div>
       ) : null}
     </Wrapper>

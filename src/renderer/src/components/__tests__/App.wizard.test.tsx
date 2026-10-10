@@ -2,6 +2,8 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../../App'
 import { useDeviceStore } from '../../stores/deviceStore'
+import { MAIN_COPY } from '@shared/i18n'
+const copy = MAIN_COPY['zh-CN']
 
 vi.mock('../DeviceCanvas', () => ({ default: () => null }))
 vi.mock('../ResizeHandle', () => ({ default: () => null }))
@@ -83,8 +85,8 @@ describe('打开独立窗口失败提示', () => {
       })
       const button =
         kind === 'create'
-          ? screen.getAllByRole('button', { name: '新建设备' })[0]
-          : screen.getByRole('button', { name: kind === 'edit' ? 'test-edit' : '设置' })
+          ? screen.getAllByRole('button', { name: copy.createDevice })[0]
+          : screen.getByRole('button', { name: kind === 'edit' ? 'test-edit' : copy.settings })
       fireEvent.click(button)
       fireEvent.click(button)
       expect(request).toHaveBeenCalledTimes(1)
@@ -94,10 +96,10 @@ describe('打开独立窗口失败提示', () => {
       expect(dialog).toHaveBeenCalledTimes(1)
       expect(dialog.mock.calls[0][0].title).toBe(
         kind === 'create'
-          ? '打开向导失败'
+          ? copy.openWizardFailed
           : kind === 'edit'
-            ? '打开编辑窗口失败'
-            : '打开设置窗口失败'
+            ? copy.openEditorFailed
+            : copy.openSettingsFailed
       )
       fireEvent.click(button)
       expect(request).toHaveBeenCalledTimes(1)
@@ -118,10 +120,10 @@ describe('打开独立窗口失败提示', () => {
       render(<App />)
     })
     await act(async () => {
-      fireEvent.click(screen.getAllByRole('button', { name: '新建设备' })[0])
+      fireEvent.click(screen.getAllByRole('button', { name: copy.createDevice })[0])
     })
     await act(async () => {
-      fireEvent.click(screen.getAllByRole('button', { name: '新建设备' })[0])
+      fireEvent.click(screen.getAllByRole('button', { name: copy.createDevice })[0])
     })
     expect(open).toHaveBeenCalledTimes(2)
     expect(dialog).not.toHaveBeenCalled()

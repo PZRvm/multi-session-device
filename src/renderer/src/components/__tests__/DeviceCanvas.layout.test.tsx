@@ -2,6 +2,8 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Device, ScreenFormat } from '@shared/types'
 import DeviceCanvas from '../DeviceCanvas'
+import { MAIN_COPY, format } from '@shared/i18n'
+const copy = MAIN_COPY['zh-CN']
 
 const stream = vi.hoisted(() => ({
   format: { codec: 'h264', width: 1080, height: 2400 } as ScreenFormat | null,
@@ -78,13 +80,15 @@ const mount = (): ReturnType<typeof render> =>
 
 it('观察者首回调迟到：挂载即量尺寸，画面有布局并允许输入', () => {
   mount()
-  const canvas = screen.getByLabelText('Layout test 画面')
+  const canvas = screen.getByLabelText(format(copy.canvasAria, { name: 'Layout test' }))
   expect(parseFloat(getComputedStyle(canvas.parentElement!).width)).toBeGreaterThan(0)
-  expect(screen.queryByText('正在准备画面…')).toBeNull()
-  expect((screen.getByRole('button', { name: '旋转屏幕' }) as HTMLButtonElement).disabled).toBe(
+  expect(screen.queryByText(copy.preparing)).toBeNull()
+  expect((screen.getByRole('button', { name: copy.rotate }) as HTMLButtonElement).disabled).toBe(
     false
   )
-  fireEvent.keyDown(screen.getByLabelText('Layout test 输入'), { key: 'Enter' })
+  fireEvent.keyDown(screen.getByLabelText(format(copy.inputAria, { name: 'Layout test' })), {
+    key: 'Enter'
+  })
   expect(input).toHaveBeenCalledOnce()
 })
 
@@ -106,7 +110,9 @@ it('初测扣除边框和 padding，与观察者内容区域尺寸一致', () =>
     } as CSSStyleDeclaration
   })
   mount()
-  const slot = screen.getByLabelText('Layout test 画面').parentElement!
+  const slot = screen.getByLabelText(
+    format(copy.canvasAria, { name: 'Layout test' })
+  ).parentElement!
   const size = (): string[] => {
     const style = computed(slot)
     return [style.width, style.height, style.left, style.top]
@@ -120,29 +126,31 @@ it('初测扣除边框和 padding，与观察者内容区域尺寸一致', () =>
 it('零尺寸时提示等待并丢弃输入；恢复尺寸后开放且不补发旧输入', () => {
   initialSize = { width: 0, height: 0 }
   mount()
-  expect(screen.getByText('正在准备画面…')).toBeTruthy()
-  expect((screen.getByRole('button', { name: '旋转屏幕' }) as HTMLButtonElement).disabled).toBe(
+  expect(screen.getByText(copy.preparing)).toBeTruthy()
+  expect((screen.getByRole('button', { name: copy.rotate }) as HTMLButtonElement).disabled).toBe(
     true
   )
-  const proxy = screen.getByLabelText('Layout test 输入')
+  const proxy = screen.getByLabelText(format(copy.inputAria, { name: 'Layout test' }))
   fireEvent.keyDown(proxy, { key: 'Enter' })
   expect(input).not.toHaveBeenCalled()
   act(() => resize(600, 800))
-  expect(screen.queryByText('正在准备画面…')).toBeNull()
+  expect(screen.queryByText(copy.preparing)).toBeNull()
   expect(input).not.toHaveBeenCalled()
   fireEvent.keyDown(proxy, { key: 'Enter' })
   expect(input).toHaveBeenCalledOnce()
   act(() => resize(0, 0))
-  expect(screen.getByText('正在准备画面…')).toBeTruthy()
+  expect(screen.getByText(copy.preparing)).toBeTruthy()
 })
 
 it('连接 ready 但格式迟到：继续等待，格式有效后自动恢复', () => {
   stream.format = null
   const view = mount()
-  expect(screen.getByText('正在准备画面…')).toBeTruthy()
-  fireEvent.keyDown(screen.getByLabelText('Layout test 输入'), { key: 'Enter' })
+  expect(screen.getByText(copy.preparing)).toBeTruthy()
+  fireEvent.keyDown(screen.getByLabelText(format(copy.inputAria, { name: 'Layout test' })), {
+    key: 'Enter'
+  })
   expect(input).not.toHaveBeenCalled()
   stream.format = { codec: 'h264', width: 1080, height: 2400 }
   view.rerender(<DeviceCanvas device={device} onStop={async () => {}} />)
-  expect(screen.queryByText('正在准备画面…')).toBeNull()
+  expect(screen.queryByText(copy.preparing)).toBeNull()
 })

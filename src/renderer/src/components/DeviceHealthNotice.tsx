@@ -1,6 +1,8 @@
 import { Loader2, RefreshCw } from 'lucide-react'
 import styled from 'styled-components'
+import { MAIN_COPY, format } from '@shared/i18n'
 import type { ReconciliationSummary, StoreHealth } from '@shared/types'
+import { useCopy } from '../hooks/useCopy'
 import Button from './Button'
 
 type DeviceHealthNoticeProps = {
@@ -14,12 +16,6 @@ type DeviceHealthNoticeProps = {
   onViewDetail: () => void
 }
 
-const STORE_STATE_TEXT: Record<StoreHealth['state'], string> = {
-  ok: '',
-  'read-only': '设备元数据写入已冻结（可继续启动已有设备；修复 devices.json 后重新检查）',
-  error: '设备元数据读取失败（devices.json 异常，原文件已保留）'
-}
-
 /** 列表上方的对账汇总条（plan 设计 5）：异常持续可见，重查恢复，详情走原生弹窗；
  * 不提供孤立目录自动清理——只列出与保留策略说明。 */
 const DeviceHealthNotice = ({
@@ -30,19 +26,26 @@ const DeviceHealthNotice = ({
   onRecheck,
   onViewDetail
 }: DeviceHealthNoticeProps): React.JSX.Element | null => {
+  const copy = useCopy(MAIN_COPY)
   const visible =
     summary.signature !== null || storeHealth.state !== 'ok' || summary.orphanCount > 0
   if (!visible) return null
 
+  const stateText: Record<StoreHealth['state'], string> = {
+    ok: '',
+    'read-only': copy.readOnlyState,
+    error: copy.errorState
+  }
   const lines: string[] = []
-  if (storeHealth.state !== 'ok') lines.push(STORE_STATE_TEXT[storeHealth.state])
+  if (storeHealth.state !== 'ok') lines.push(stateText[storeHealth.state])
   if (summary.unavailableCount > 0) {
     const names = affectedNames.slice(0, 3).join('、')
-    const more = affectedNames.length > 3 ? ` 等 ${affectedNames.length} 台` : ''
-    lines.push(`${summary.unavailableCount} 台设备文件异常（${names}${more}），启动已禁用`)
+    const more =
+      affectedNames.length > 3 ? format(copy.moreSuffix, { count: affectedNames.length }) : ''
+    lines.push(format(copy.unavailableDevices, { count: summary.unavailableCount, names, more }))
   }
   if (summary.orphanCount > 0) {
-    lines.push(`${summary.orphanCount} 组 AVD 文件没有对应设备记录（仅列出，不自动清理；详见详情）`)
+    lines.push(format(copy.orphanAvds, { count: summary.orphanCount }))
   }
 
   return (
@@ -56,10 +59,10 @@ const DeviceHealthNotice = ({
             ) : (
               <RefreshCw size={14} />
             )}
-            重新检查
+            {copy.recheck}
           </span>
         </Button>
-        <Button onClick={onViewDetail}>查看详情</Button>
+        <Button onClick={onViewDetail}>{copy.viewDetail}</Button>
       </span>
     </Wrapper>
   )

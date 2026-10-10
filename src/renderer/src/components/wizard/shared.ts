@@ -1,15 +1,19 @@
 import type { DeviceFormFactor, ImageEntry } from '@shared/types'
+import type { WizardCopy } from '@shared/i18n'
 
-/** 向导两页共享的展示工具（产品中文；数据语义见 shared/types 与 compatibility） */
+/** 向导两页共享的展示工具（文案经 wizard 域字典取词；数据语义见 shared/types 与 compatibility） */
 
-export const FORM_FACTOR_LABELS: Record<DeviceFormFactor, string> = {
-  phone: '手机',
-  tablet: '平板',
-  wear: 'Wear OS',
-  desktop: '桌面',
-  tv: '电视',
-  automotive: '车载',
-  unknown: '其他'
+export const formFactorLabel = (copy: WizardCopy, formFactor: DeviceFormFactor): string => {
+  const labels: Record<DeviceFormFactor, string> = {
+    phone: copy.ffPhone,
+    tablet: copy.ffTablet,
+    wear: copy.ffWear,
+    desktop: copy.ffDesktop,
+    tv: copy.ffTv,
+    automotive: copy.ffAutomotive,
+    unknown: copy.ffUnknown
+  }
+  return labels[formFactor]
 }
 
 export const SERVICE_LABELS: Record<string, string> = {
@@ -35,8 +39,8 @@ export const serviceLabel = (entry: Pick<ImageEntry, 'services'>): string =>
 export const serviceLabels = (entry: Pick<ImageEntry, 'services'>): string[] =>
   entry.services.map((service) => SERVICE_LABELS[service] ?? service)
 
-export const formatSize = (bytes: number | null): string =>
-  bytes === null ? '大小未知' : `${(bytes / 1024 ** 3).toFixed(1)} GB`
+export const formatSize = (bytes: number | null, copy: Pick<WizardCopy, 'sizeUnknown'>): string =>
+  bytes === null ? copy.sizeUnknown : `${(bytes / 1024 ** 3).toFixed(1)} GB`
 
 export const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
