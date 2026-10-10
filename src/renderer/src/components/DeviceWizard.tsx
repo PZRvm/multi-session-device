@@ -9,6 +9,7 @@ import type {
   ImageEntry,
   WizardCapabilities
 } from '@shared/types'
+import { WIZARD_COPY, format } from '@shared/i18n'
 import { assessImageCompatibility } from '@shared/compatibility'
 import { normalizeAdvancedSettings } from '@shared/settings-contract'
 import Button from './Button'
@@ -18,6 +19,8 @@ import ImageTable, { type ImageFilters } from './wizard/ImageTable'
 import SummaryPanel from './wizard/SummaryPanel'
 import SettingsForm from './wizard/SettingsForm'
 import { useWizardResources } from './wizard/useWizardResources'
+import { useCopy } from '../hooks/useCopy'
+import { useLocaleStore } from '../stores/localeStore'
 import { apiDisplay, formatSize, messageOf, serviceLabel } from './wizard/shared'
 
 /**
@@ -87,7 +90,7 @@ const useCatalogResource = <T,>(
 /** 清单拉取（注入场景跳过——测试直接给数据） */
 const fetchProfiles = async (): Promise<DeviceProfile[]> => {
   if (typeof window === 'undefined' || !window.api?.sdk) {
-    throw new Error('sdk api 不可用')
+    throw new Error(WIZARD_COPY[useLocaleStore.getState().locale].sdkApiUnavailable)
   }
   return window.api.sdk.profiles()
 }
@@ -111,11 +114,6 @@ type DeviceWizardProps = {
   onUninstallImage?: (packageName: string) => Promise<void>
 }
 
-const PAGE_TITLES: Record<1 | 2, string> = {
-  1: '选择画像',
-  2: '配置设备'
-}
-
 const DeviceWizard = ({
   onCreate,
   onCancel,
@@ -124,6 +122,8 @@ const DeviceWizard = ({
   onWizardCapabilities,
   onUninstallImage
 }: DeviceWizardProps): React.JSX.Element => {
+  const copy = useCopy(WIZARD_COPY)
+  const locale = useLocaleStore((state) => state.locale)
   const [page, setPage] = useState<1 | 2>(1)
   // 画像页筛选
   const [category, setCategory] = useState<DeviceFormFactor>('phone')
@@ -160,7 +160,7 @@ const DeviceWizard = ({
   }>({ download: null, uninstall: null })
   const fetchImagesViaApi = useCallback(async (): Promise<ImageEntry[]> => {
     if (typeof window === 'undefined' || !window.api?.sdk) {
-      throw new Error('sdk api 不可用')
+      throw new Error(WIZARD_COPY[useLocaleStore.getState().locale].sdkApiUnavailable)
     }
     const catalog = await window.api.sdk.images()
     lastActiveRef.current = {
@@ -289,10 +289,16 @@ const DeviceWizard = ({
     if (uninstallingPackage !== null) return
     if (typeof window.api?.dialog?.show === 'function') {
       const result = await window.api.dialog.show({
-        title: '删除已安装镜像',
-        message: `确定删除 API ${apiDisplay(entry)}（${serviceLabel(entry)}）的已安装镜像吗？`,
-        detail: `包：${entry.packageName}\n下载体积约 ${formatSize(entry.sizeBytes)}（解压后磁盘占用更大）。删除后新建使用该镜像的设备需要重新下载。`,
-        buttons: ['删除', '取消'],
+        title: copy.uninstallImageTitle,
+        message: format(copy.uninstallImageConfirm, {
+          api: apiDisplay(entry),
+          service: serviceLabel(entry)
+        }),
+        detail: format(copy.uninstallImageDetail, {
+          packageName: entry.packageName,
+          size: formatSize(entry.sizeBytes, copy)
+        }),
+        buttons: [copy.delete, copy.cancel],
         cancelId: 1
       })
       if (result.response !== 0) return
@@ -417,10 +423,10 @@ const DeviceWizard = ({
     const map = new Map<string, ReturnType<typeof assessImageCompatibility>>()
     if (selectedProfile === null) return map
     for (const entry of images.data) {
-      map.set(entry.packageName, assessImageCompatibility(selectedProfile, entry))
+      map.set(entry.packageName, assessImageCompatibility(selectedProfile, entry, locale))
     }
     return map
-  }, [selectedProfile, images.data])
+  }, [selectedProfile, images.data, locale])
   const selectedVerdict =
     selectedImage === null ? null : (verdicts.get(selectedImage.packageName) ?? null)
 
@@ -450,8 +456,8 @@ const DeviceWizard = ({
     () =>
       effectiveCapabilities === null || advancedSettings === null
         ? { settings: null, errors: {} as Record<string, string> }
-        : normalizeAdvancedSettings(advancedSettings, effectiveCapabilities),
-    [effectiveCapabilities, advancedSettings]
+        : normalizeAdvancedSettings(advancedSettings, effectiveCapabilities, locale),
+    [effectiveCapabilities, advancedSettings, locale]
   )
   const canCreate =
     effectiveName.trim().length > 0 &&
@@ -525,7 +531,7 @@ const DeviceWizard = ({
         {resource.error !== null ? (
           <div className="error-block" role="alert">
             <span className="error-text">{resource.error}</span>
-            <Button onClick={retry}>重试</Button>
+            <Button onClick={retry}>{copy.retry}</Button>
           </div>
         ) : null}
         {waiting ? (
@@ -548,9 +554,9 @@ const DeviceWizard = ({
       return renderCatalogShell(
         profiles,
         () => void reloadProfiles(),
-        '正在加载设备画像…',
-        '正在刷新设备画像…',
-        '画像清单为空',
+        copy.loadingProfiles,
+        copy.refreshingProfiles,
+        copy.profilesEmpty,
         <ProfilePage
           profiles={profiles.data}
           category={category}
@@ -566,12 +572,12 @@ const DeviceWizard = ({
     return renderCatalogShell(
       images,
       () => void reloadImages(),
-      '正在加载系统镜像…',
-      '正在刷新系统镜像…',
-      '镜像清单为空',
+      copy.loadingImages,
+      copy.refreshingImages,
+      copy.imagesEmpty,
       <div className="configure-layout">
         <div className="main">
-          <div className="tab-bar" role="tablist" aria-label="配置分区">
+          <div className="tab-bar" role="tablist" aria-label={copy.configureSections}>
             <button
               type="button"
               role="tab"
@@ -579,7 +585,7 @@ const DeviceWizard = ({
               onClick={() => setTab('device')}
               className="tab"
             >
-              设备
+              {copy.tabDevice}
             </button>
             <button
               type="button"
@@ -588,7 +594,7 @@ const DeviceWizard = ({
               onClick={() => setTab('settings')}
               className="tab"
             >
-              附加设置
+              {copy.tabSettings}
             </button>
           </div>
 
@@ -596,13 +602,13 @@ const DeviceWizard = ({
           {downloadError !== null ? (
             <div className="error-block" role="alert">
               <span className="error-text">{downloadError.message}</span>
-              <Button onClick={retryDownload}>重试下载</Button>
+              <Button onClick={retryDownload}>{copy.retryDownload}</Button>
             </div>
           ) : null}
           {uninstallError !== null ? (
             <div className="error-block" role="alert">
               <span className="error-text">{uninstallError}</span>
-              <Button onClick={() => setUninstallError(null)}>知道了</Button>
+              <Button onClick={() => setUninstallError(null)}>{copy.ok}</Button>
             </div>
           ) : null}
 
@@ -610,21 +616,19 @@ const DeviceWizard = ({
             <div className="device-pane">
               <div className="name-block">
                 <label className="name-label" htmlFor="wizard-device-name">
-                  设备名称
+                  {copy.nameLabel}
                 </label>
                 <Input
                   id="wizard-device-name"
                   value={effectiveName}
                   maxLength={50}
-                  placeholder="设备画像名 + API 版本"
+                  placeholder={copy.namePlaceholder}
                   onChange={(event) => {
                     setName(event.target.value)
                     setNameTouched(true)
                   }}
                 />
-                <p className="name-hint">
-                  默认「设备画像名 + API 版本」；改过后切换镜像不覆盖你的输入。
-                </p>
+                <p className="name-hint">{copy.nameHint}</p>
               </div>
               <ImageTable
                 images={images.data}
@@ -644,7 +648,7 @@ const DeviceWizard = ({
           ) : (
             <div className="settings-pane">
               {capabilities.phase === 'loading' || capabilities.phase === 'idle' ? (
-                <p className="settings-hint">正在加载设置能力…</p>
+                <p className="settings-hint">{copy.loadingCapabilities}</p>
               ) : capabilities.phase === 'error' ? (
                 <p className="settings-hint">{capabilities.error}</p>
               ) : capabilities.data !== null && advancedSettings !== null ? (
@@ -682,9 +686,12 @@ const DeviceWizard = ({
           <span className="traffic-spacer" aria-hidden="true" />
         ) : null}
         <div className="title-group">
-          <h3 className="heading">新建设备</h3>
+          <h3 className="heading">{copy.wizardHeading}</h3>
           <span className="step-indicator">
-            第 {page} / 2 页 · {PAGE_TITLES[page]}
+            {format(copy.stepIndicator, {
+              page,
+              title: page === 1 ? copy.pageProfiles : copy.pageConfigure
+            })}
           </span>
         </div>
       </header>
@@ -692,19 +699,19 @@ const DeviceWizard = ({
       <div className="body">{renderPage()}</div>
 
       <footer className="footer">
-        <Button onClick={onCancel}>取消</Button>
-        {page === 2 ? <Button onClick={() => setPage(1)}>上一步</Button> : null}
+        <Button onClick={onCancel}>{copy.cancel}</Button>
+        {page === 2 ? <Button onClick={() => setPage(1)}>{copy.back}</Button> : null}
         {page === 1 ? (
           <Button
             variant="primary"
             disabled={selectedProfile === null || profiles.phase !== 'ready'}
             onClick={() => setPage(2)}
           >
-            下一步
+            {copy.next}
           </Button>
         ) : (
           <Button variant="primary" disabled={!canCreate || creating} onClick={create}>
-            {creating ? '创建中…' : '创建'}
+            {creating ? copy.creating : copy.create}
           </Button>
         )}
       </footer>

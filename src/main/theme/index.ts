@@ -7,6 +7,7 @@ import {
   themeBoardBackground
 } from '@shared/themeSystems'
 import { getThemeState, loadThemeState, persistThemeState, updateThemeState } from './store'
+import { msg } from '../locale'
 
 /** 建窗底色：token 单源派生（themeSystems 既定消费方式：建窗注入 + 全窗 setBackgroundColor）。
  *  system 模式依赖 themeSource 已先行设置（boot 恢复或切换时同步），shouldUseDarkColors 才反映正确解析 */
@@ -49,7 +50,8 @@ export function registerThemeIpc(): void {
   })
 
   ipcMain.handle(IPC_CHANNELS.themeSetMode, async (_event, mode: unknown): Promise<void> => {
-    if (!isThemeMode(mode)) throw new Error(`${IPC_CHANNELS.themeSetMode}: 非法的 mode`)
+    if (!isThemeMode(mode))
+      throw new Error(`${IPC_CHANNELS.themeSetMode}: ${msg('invalidModeSuffix')}`)
     updateThemeState({ mode })
     // 原生三灯与页面采用同一外观，避免深色失焦控件融入浅色板头
     nativeTheme.themeSource = mode
@@ -63,7 +65,7 @@ export function registerThemeIpc(): void {
     IPC_CHANNELS.themeSetSystemId,
     async (_event, systemId: unknown): Promise<void> => {
       if (!isThemeSystemId(systemId)) {
-        throw new Error(`${IPC_CHANNELS.themeSetSystemId}: 非法的 systemId`)
+        throw new Error(`${IPC_CHANNELS.themeSetSystemId}: ${msg('invalidSystemIdSuffix')}`)
       }
       updateThemeState({ systemId })
       refreshWindowBackgrounds()
