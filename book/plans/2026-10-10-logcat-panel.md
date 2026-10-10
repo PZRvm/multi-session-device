@@ -190,7 +190,9 @@ i18n 初始键（mainWindow 域）：`logcatTitle`、`logcatFilterPlaceholder`�
 
 ### Phase 5：review
 
-自审发现并修复一处 P1：会话销毁原先按 deviceId 裁决，设备快速换代（runId 变化）时旧进程的迟到 exit 回调会误杀新会话——已改为按会话身份裁决（`destroySessionOf`），补回归测试「旧进程 exit 迟到不误杀换代后的新会话」。另发现 spawn 同步失败时保留空会话、订阅者只见空态无错误提示，按 workflow 记 [issue](../notes/issue/2026-10/2026-10-10-logcat-spawn-fail-silent.md)，不在本批修复。
+自审发现并修复一处 P1：会话销毁原先按 deviceId 裁决，设备快速换代（runId 变化）时旧进程的迟到 exit 回调会误杀新会话——已改为按会话身份裁决（`destroySessionOf`），补回归测试「旧进程 exit 迟到不误杀换代后的新会话」。另发现 spawn 同步失败时保留空会话、订阅者只见空态无错误提示，按 workflow 记 [issue](../notes/issue/2026-10/2026-10-10-logcat-spawn-fail-silent.md)。
+
+**正式 review 轮（全部七批反馈落地后，diff dev...HEAD 约 2350 行）**：检查覆盖守卫与权限（订阅/退订/ack 任意窗口为设计、context 仅日志窗、open/dock-state 仅主窗——与通道注释一致）、会话生命周期与进程回收（桥接三事件、destroyAll 入 shutdownStreams、SIGTERM→SIGKILL 兜底、destroyed 自动退订）、竞态（换代身份裁决、订阅前 flush、设备停止自动收）、资源有界（ring/单行/backlog/视图上限）、词条复用（wizardLoadTimeout 等文案通用无错位，settings 先例）、测试覆盖（main 11 + panel 10 + App 10 + 旧文件 stub）。发现并记录：[P2：主窗重开后钳制钩子不随新窗挂载](../notes/issue/2026-10/2026-10-10-logcat-resize-hook-window-recreate.md)（第六批引入的防重复 flag 未考虑主窗换代，will-resize 拦截失效、有 dockVisible 兜底降级）与 [P3 备忘三项](../notes/issue/2026-10/2026-10-10-logcat-review-p3-misc.md)（过时注释、快照导出面、URL 参数重复解析）。总体 disposition 为 **fix**（P2 待独立修复任务），按 workflow 只记录不修复。
 
 ### Phase 6：文档与记录
 
