@@ -100,6 +100,13 @@ export function openLogcatWindow(deviceId?: string): Promise<void> {
     window.once('ready-to-show', () => {
       if (logcatSession !== session || session.settled || window.isDestroyed()) return
       session.ready = true
+      // 独立窗出现 ⇒ 主窗 dock 必然收起（renderer 随后 setLogDockOpen(false)）——
+      // main 侧直接清 dock 留下的 minWidth 锁，保证独立窗口态主窗宽度自由，
+      // 不依赖 renderer effect 的解锁时序
+      const main = getMainWindow()
+      if (main && !main.isDestroyed() && main.getMinimumSize()[0] > 0) {
+        main.setMinimumSize(0, 0)
+      }
       settle()
       window.show()
       window.focus()

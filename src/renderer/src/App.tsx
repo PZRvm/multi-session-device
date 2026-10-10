@@ -312,13 +312,22 @@ const App = (): React.JSX.Element => {
     if (result.ok) setLogDockOpen(false)
   }
 
-  // 独立窗「贴回」：关窗由 main 侧完成，这里重新展开 dock（窄窗同样拉宽）
+  // 独立窗「贴回」：关窗由 main 侧完成，这里重新展开 dock（窄窗同样拉宽）。
+  // 宽度需求经 ref 取最新值——空依赖订阅的闭包不捕获过期的 dockNeedWidth
+  const dockNeedWidthRef = useRef(dockNeedWidth)
+  useEffect(() => {
+    dockNeedWidthRef.current = dockNeedWidth
+  }, [dockNeedWidth])
   useEffect(
     () =>
       window.api.logcat.onDockBack(() => {
-        void expandDock()
+        void (async () => {
+          await toApiResult(
+            window.api.logcat.setDockState({ expanded: true, minWidth: dockNeedWidthRef.current })
+          )
+          setLogDockOpen(true)
+        })()
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- expandDock 随宽度变化，事件只触发一次展开动作
     []
   )
 
