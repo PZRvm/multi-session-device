@@ -272,7 +272,10 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-skin-download-system-proxy.md](plans/2026-10-09-skin-download-system-proxy.md) — 官方皮肤下载改用 Electron 网络栈遵循系统代理，保留固定源与完整性预算，并为网络失败和超时提供可操作提示
 - [2026-10-09-virtual-scene-camera-edit.md](plans/2026-10-09-virtual-scene-camera-edit.md) — 修复编辑页写入 virtualScene 导致 Android 摄像头为零和相机闪退，并支持保存修正历史配置
 - [2026-10-10-compact-appearance-menu.md](plans/2026-10-10-compact-appearance-menu.md) — 窄侧栏外观按钮按所选模式显示图标，三行菜单独立于板头按钮尺寸并居中展开
+- [2026-10-10-drag-apk-install.md](plans/2026-10-10-drag-apk-install.md) — 拖拽 APK 安装设计：画布拖放（webUtils 取路径）→ adb install -r → 悬停高亮与结果浮层，每设备串行
 - [2026-10-10-i18n-and-appearance.md](plans/2026-10-10-i18n-and-appearance.md) — 全应用三语 i18n（字典单源 + locale 持久化广播 + 三窗与主进程文案迁移）与设置窗外观接通，合并施工图共四批
+- [2026-10-10-logcat-panel.md](plans/2026-10-10-logcat-panel.md) — 日志面板设计：右侧可拖宽 dock + 独立日志窗、主进程会话与环形缓冲、批量+ack 流控与多窗口订阅
+- [2026-10-10-screenshot-clipboard-save.md](plans/2026-10-10-screenshot-clipboard-save.md) — 截屏一键保存设计：相机按钮→adb screencap→先入系统剪贴板，气泡内「保存」写入下载目录
 - [2026-10-10-settings-chrome-and-appearance.md](plans/2026-10-10-settings-chrome-and-appearance.md) — 设置窗按用户参考图隐藏标题栏，左上角仅保留关闭和全屏，改为齿轮导航与图标外观控件
 - [2026-10-10-settings-reference-layout.md](plans/2026-10-10-settings-reference-layout.md) — 设置静态界面按用户参考图保留行式外观与主题色，隐藏主窗顶部外观 tab
 - [2026-10-10-styled-single-wrapper-refactor.md](plans/2026-10-10-styled-single-wrapper-refactor.md) — 渲染层 styled-components 全量重排——每文件只留一个 Wrapper，内部元素改 className 后代选择器，视觉零变化
@@ -295,4 +298,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 205 documents -->
+<!-- 208 documents -->
