@@ -19,6 +19,7 @@ import { useCopy } from '../hooks/useCopy'
 import { useDeviceInput } from '../hooks/useDeviceInput'
 import { useDeviceScreen, type ScreenViewStatus } from '../hooks/useDeviceScreen'
 import { useScreenshot } from '../hooks/useScreenshot'
+import { spinKeyframes } from '../styles/animations'
 import { toApiResult } from '../api'
 import DeviceToolbar from './DeviceToolbar'
 
@@ -554,13 +555,7 @@ const Wrapper = styled.div`
     color: #9aa2ad;
 
     .spin {
-      animation: spin 1.2s linear infinite;
-    }
-
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
+      animation: ${spinKeyframes} 1.2s linear infinite;
     }
   }
 

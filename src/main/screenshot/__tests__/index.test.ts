@@ -8,6 +8,7 @@ import {
   clearScreenshotCache,
   formatShotStamp,
   registerScreenshotIpc,
+  runAdbBinary,
   sanitizeFileSegment,
   type AdbBinaryResult,
   type ScreenshotDeps
@@ -125,7 +126,7 @@ describe('screenshot 域', () => {
     expect(mocks.clipboard.writeImage).not.toHaveBeenCalled()
   })
 
-  it('非主窗 sender：两通道都拒绝', async () => {
+  it('非主窗 sender：两通道都拒绝且报对各自通道名', async () => {
     const handlers = new Map<string, (event: unknown, raw: unknown) => Promise<unknown>>()
     mocks.ipcMain.handle.mockImplementation((channel, handler) => handlers.set(channel, handler))
     registerScreenshotIpc({
@@ -133,12 +134,16 @@ describe('screenshot 域', () => {
       isMainSender: () => false,
       runningDevice: async () => ({ serial: 's', name: 'n' })
     })
-    for (const channel of [IPC_CHANNELS.screenshotCapture, IPC_CHANNELS.screenshotSave]) {
-      const message = await rejectMessage(
-        handlers.get(channel)!({ sender: { id: 1 } }, { id: 'd1' })
-      )
-      expect(message).toContain('unregisteredWindowSuffix')
-    }
+    const captureMessage = await rejectMessage(
+      handlers.get(IPC_CHANNELS.screenshotCapture)!({ sender: { id: 1 } }, { id: 'd1' })
+    )
+    expect(captureMessage).toContain('screenshot:capture')
+    expect(captureMessage).toContain('unregisteredWindowSuffix')
+    const saveMessage = await rejectMessage(
+      handlers.get(IPC_CHANNELS.screenshotSave)!({ sender: { id: 1 } }, { id: 'd1' })
+    )
+    expect(saveMessage).toContain('screenshot:save')
+    expect(saveMessage).toContain('unregisteredWindowSuffix')
   })
 
   it('capture 互斥：同设备进行中再调用直接拒绝', async () => {
@@ -225,6 +230,89 @@ describe('screenshot 域', () => {
     const message = await rejectMessage(h.call(IPC_CHANNELS.screenshotSave, { id: 'd1' }))
     expect(message).toContain('screenshotSaveFailed')
   })
+
+  it('save 互斥：同一保存未完成时再次调用直接拒绝', async () => {
+    const h = setup()
+    await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
+    const first = h.call(IPC_CHANNELS.screenshotSave, { id: 'd1' })
+    const message = await rejectMessage(h.call(IPC_CHANNELS.screenshotSave, { id: 'd1' }))
+    expect(message).toBe('screenshotSaveBusy')
+    await expect(first).resolves.toBeTruthy()
+  })
+
+  it('截屏期间设备停止：capture 拒绝、不写剪贴板、不回填缓存', async () => {
+    // cache 是模块级状态：先清掉之前用例截的 d1，保证「缓存为空」前提
+    clearScreenshotCache('d1')
+    const handlers = new Map<string, (event: unknown, raw: unknown) => Promise<unknown>>()
+    mocks.ipcMain.handle.mockImplementation((channel, handler) => handlers.set(channel, handler))
+    let probes = 0
+    registerScreenshotIpc({
+      adbPath: () => '/fake/adb',
+      isMainSender: () => true,
+      runningDevice: async () => {
+        probes += 1
+        return probes === 1 ? { serial: 's', name: 'n' } : null
+      },
+      run: (async () => ({ code: 0, stdout: PNG, stderr: '' })) as unknown as ScreenshotDeps['run']
+    })
+    const message = await rejectMessage(
+      handlers.get(IPC_CHANNELS.screenshotCapture)!({ sender: { id: 1 } }, { id: 'd1' })
+    )
+    expect(message).toBe('screenshotDeviceNotRunning')
+    expect(mocks.clipboard.writeImage).not.toHaveBeenCalled()
+    const stale = await rejectMessage(
+      handlers.get(IPC_CHANNELS.screenshotSave)!({ sender: { id: 1 } }, { id: 'd1' })
+    )
+    expect(stale).toBe('screenshotStale')
+  })
+
+  it('PNG 魔数合法但解码为 0×0：capture 失败且不写剪贴板', async () => {
+    mocks.nativeImage.createFromBuffer.mockImplementationOnce(() => ({
+      getSize: () => ({ width: 0, height: 0 })
+    }))
+    const h = setup()
+    const message = await rejectMessage(h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' }))
+    expect(message).toContain('screenshotCaptureFailed')
+    expect(message).toContain('decoded 0×0')
+    expect(mocks.clipboard.writeImage).not.toHaveBeenCalled()
+  })
+})
+
+describe('runAdbBinary', () => {
+  it('正常路径：收 Buffer stdout、退出码透传', async () => {
+    const result = await runAdbBinary(process.execPath, ['-e', 'process.stdout.write("abc")'])
+    expect(result.code).toBe(0)
+    expect(result.stdout.toString('utf8')).toBe('abc')
+  })
+
+  it('stderr 有界尾部：超 4KiB 只保留尾部', async () => {
+    const result = await runAdbBinary(process.execPath, [
+      '-e',
+      'process.stderr.write("x".repeat(8192))'
+    ])
+    expect(result.code).toBe(0)
+    expect(result.stderr.length).toBe(4096)
+  })
+
+  it('超时：SIGKILL 并 resolve 超时文案（code -1、stdout 空）', async () => {
+    const result = await runAdbBinary('/bin/sleep', ['5'], { timeoutMs: 150 })
+    expect(result.code).toBe(-1)
+    expect(result.stdout.length).toBe(0)
+    expect(result.stderr).toContain('adbCommandTimeout')
+  }, 10_000)
+
+  it('超体积护栏：SIGKILL 并报 screenshotOversized', async () => {
+    const result = await runAdbBinary(process.execPath, [
+      '-e',
+      'setInterval(() => process.stdout.write("0123456789abcdef".repeat(4096)), 1)'
+    ])
+    expect(result.code).toBe(-1)
+    expect(result.stderr).toContain('screenshotOversized')
+  }, 20_000)
+
+  it('二进制不存在：reject', async () => {
+    await expect(runAdbBinary('/no/such/adb', ['-s', 'x'])).rejects.toThrow()
+  })
 })
 
 describe('文件名工具', () => {
@@ -233,7 +321,7 @@ describe('文件名工具', () => {
     expect(sanitizeFileSegment('  Pixel 8  ')).toBe('Pixel 8')
     expect(sanitizeFileSegment('设备')).toBe('设备')
     expect(sanitizeFileSegment('///')).toBe('___')
-    expect(sanitizeFileSegment('   ').length).toBeGreaterThan(0)
+    expect(sanitizeFileSegment('   ')).toBe('device')
     expect(sanitizeFileSegment('x'.repeat(80))).toHaveLength(60)
   })
 

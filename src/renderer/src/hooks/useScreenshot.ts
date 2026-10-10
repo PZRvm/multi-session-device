@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Device } from '@shared/types'
 import { toApiResult } from '../api'
 
-/** 气泡状态机：capturing 只反映在按钮 busy；copied/saved/error 挂 10s 自动消失 */
+/** 气泡状态机：capturing 只反映在按钮 busy；copied/saved 挂 10s 自动消失；error 不自动消失
+ *  （由关闭钮、下一次截屏或设备切换收起） */
 export type ScreenshotState =
   | { phase: 'idle' }
   | { phase: 'capturing' }
@@ -28,6 +29,8 @@ export const useScreenshot = (
   const [latched, setLatched] = useState<ScreenshotState>({ phase: 'idle' })
   const timerRef = useRef(0)
   const stateRef = useRef(latched)
+  /** 单调操作序号：异步完成时 seq 不匹配即过期丢弃（读提交后 state 有提交延迟，不可靠） */
+  const opSeqRef = useRef(0)
 
   // ref 供 save() 同步读当前阶段：提交后同步，渲染期不写 ref
   useEffect(() => {
@@ -46,33 +49,40 @@ export const useScreenshot = (
   }, [clearTimer])
 
   const capture = useCallback(async (): Promise<void> => {
+    const seq = ++opSeqRef.current
     clearTimer()
     setLatched({ phase: 'capturing' })
     const result = await toApiResult(window.api.screenshot.capture(device.id))
+    if (seq !== opSeqRef.current) return
     if (result.ok) {
       setLatched({ phase: 'copied', thumbnail: `data:image/png;base64,${result.data.pngBase64}` })
+      armAutoDismiss()
     } else {
       setLatched({ phase: 'error', message: result.error, thumbnail: null })
     }
-    armAutoDismiss()
   }, [armAutoDismiss, clearTimer, device.id])
 
   const save = useCallback(async (): Promise<void> => {
     const current = stateRef.current
     if (current.phase !== 'copied') return
+    const seq = ++opSeqRef.current
+    clearTimer()
     setLatched({ phase: 'saving', thumbnail: current.thumbnail })
     const result = await toApiResult(window.api.screenshot.save(device.id))
+    // 过期丢弃：save 期间用户可能已重新截屏（P3-9）或点了关闭——旧结果不覆盖新态
+    if (seq !== opSeqRef.current) return
     if (result.ok) {
       setLatched({ phase: 'saved', thumbnail: current.thumbnail, fileName: result.data.fileName })
+      armAutoDismiss()
     } else {
       setLatched({ phase: 'error', message: result.error, thumbnail: current.thumbnail })
     }
-    armAutoDismiss()
-  }, [armAutoDismiss, device.id])
+  }, [armAutoDismiss, clearTimer, device.id])
 
   useEffect(() => clearTimer, [clearTimer])
 
   const dismiss = useCallback((): void => {
+    opSeqRef.current += 1
     clearTimer()
     setLatched({ phase: 'idle' })
   }, [clearTimer])

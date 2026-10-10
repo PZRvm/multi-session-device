@@ -422,6 +422,8 @@ const zhCN = {
   screenshotBusy: '截屏进行中，请稍候',
   screenshotCaptureFailed: '截屏失败：{detail}',
   screenshotSaveFailed: '保存到下载文件夹失败：{detail}',
+  screenshotSaveBusy: '保存进行中，请稍候',
+  screenshotOversized: '截图数据超出大小上限',
   screenshotStale: '截图已过期（设备状态已变化），请重新截屏'
 }
 
@@ -820,6 +822,8 @@ const zhTW: ErrorsCopy = {
   screenshotBusy: '截圖進行中，請稍候',
   screenshotCaptureFailed: '截圖失敗：{detail}',
   screenshotSaveFailed: '儲存到下載資料夾失敗：{detail}',
+  screenshotSaveBusy: '儲存進行中，請稍候',
+  screenshotOversized: '截圖資料超出大小上限',
   screenshotStale: '截圖已過期（裝置狀態已變化），請重新截圖'
 }
 
@@ -1265,6 +1269,8 @@ const enUS: ErrorsCopy = {
   screenshotBusy: 'A screenshot is already in progress',
   screenshotCaptureFailed: 'Screenshot failed: {detail}',
   screenshotSaveFailed: 'Saving to the Downloads folder failed: {detail}',
+  screenshotSaveBusy: 'A save is already in progress',
+  screenshotOversized: 'Screenshot data exceeds the size limit',
   screenshotStale: 'The screenshot expired (device state changed); take a new one'
 }
 

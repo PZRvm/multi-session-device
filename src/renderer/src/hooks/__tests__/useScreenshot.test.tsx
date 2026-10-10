@@ -140,4 +140,89 @@ describe('useScreenshot', () => {
     rerender({ status: 'stopping' })
     expect(result.current.state.phase).toBe('idle')
   })
+
+  it('error 态不自动消失：60s 后仍在，dismiss 可手动收起', async () => {
+    capture.mockRejectedValueOnce(new Error('boom'))
+    const { result } = renderHook(() => useScreenshot(device('running')))
+    await act(async () => {
+      await result.current.capture()
+    })
+    expect(result.current.state.phase).toBe('error')
+    act(() => {
+      vi.advanceTimersByTime(60_000)
+    })
+    expect(result.current.state.phase).toBe('error')
+    act(() => {
+      result.current.dismiss()
+    })
+    expect(result.current.state.phase).toBe('idle')
+  })
+
+  it('save 进行中自动消失计时被清除：超过原 10s 期限仍停在 saving 并正常完成', async () => {
+    capture.mockResolvedValue({ pngBase64: 'QUJD', width: 1, height: 1 })
+    save.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve({ fileName: 'f.png' }), 11_000))
+    )
+    const { result } = renderHook(() => useScreenshot(device('running')))
+    await act(async () => {
+      await result.current.capture()
+    })
+    let pending: Promise<void> | null = null
+    act(() => {
+      pending = result.current.save()
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_500)
+    })
+    expect(result.current.state.phase).toBe('saving')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000)
+      await pending
+    })
+    expect(result.current.state).toEqual({
+      phase: 'saved',
+      thumbnail: 'data:image/png;base64,QUJD',
+      fileName: 'f.png'
+    })
+  })
+
+  it('save 过期回调丢弃：saving 期间重新截屏，旧 save 完成不覆盖新 copied', async () => {
+    capture.mockResolvedValueOnce({ pngBase64: 'QUJD', width: 1, height: 1 })
+    capture.mockResolvedValueOnce({ pngBase64: 'REVGI', width: 1, height: 1 })
+    let releaseSave: (value: { fileName: string }) => void = () => undefined
+    save.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseSave = resolve
+        })
+    )
+    const { result } = renderHook(() => useScreenshot(device('running')))
+    await act(async () => {
+      await result.current.capture()
+    })
+    let pendingSave: Promise<void> | null = null
+    act(() => {
+      pendingSave = result.current.save()
+    })
+    expect(result.current.state.phase).toBe('saving')
+    let pendingCapture: Promise<void> | null = null
+    act(() => {
+      pendingCapture = result.current.capture()
+    })
+    await act(async () => {
+      await pendingCapture
+    })
+    expect(result.current.state).toEqual({
+      phase: 'copied',
+      thumbnail: 'data:image/png;base64,REVGI'
+    })
+    await act(async () => {
+      releaseSave({ fileName: 'old.png' })
+      await pendingSave
+    })
+    expect(result.current.state).toEqual({
+      phase: 'copied',
+      thumbnail: 'data:image/png;base64,REVGI'
+    })
+  })
 })

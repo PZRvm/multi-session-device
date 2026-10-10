@@ -1,4 +1,4 @@
-import { access, constants, writeFile } from 'node:fs/promises'
+import { access, constants, rename, rm, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { app, clipboard, ipcMain, nativeImage } from 'electron'
@@ -17,6 +17,8 @@ export interface AdbBinaryResult {
 const SCREENCAP_TIMEOUT_MS = 15_000
 /** 截图体积护栏：正常 PNG 1–3MB，超 32MB 视为异常流 */
 const MAX_PNG_BYTES = 32 * 1024 * 1024
+/** stderr 有界尾部——与 emulator/adb runAdb 同款（崩溃原因看尾部足够，不攒全量） */
+const STDERR_TAIL_BYTES = 4096
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
 export async function runAdbBinary(
@@ -46,7 +48,7 @@ export async function runAdbBinary(
         settled = true
         child.kill('SIGKILL')
         clearTimeout(timer)
-        resolve({ code: -1, stdout: Buffer.alloc(0), stderr: 'screenshot oversized' })
+        resolve({ code: -1, stdout: Buffer.alloc(0), stderr: msg('screenshotOversized') })
         return
       }
       out.push(chunk)
@@ -61,10 +63,14 @@ export async function runAdbBinary(
     child.on('close', (code) => {
       clearTimeout(timer)
       if (settled) return
+      const rawStderr = Buffer.concat(err)
       resolve({
         code: code ?? -1,
         stdout: Buffer.concat(out),
-        stderr: Buffer.concat(err).toString('utf8')
+        stderr:
+          rawStderr.length > STDERR_TAIL_BYTES
+            ? rawStderr.subarray(-STDERR_TAIL_BYTES).toString('utf8')
+            : rawStderr.toString('utf8')
       })
     })
   })
@@ -133,6 +139,8 @@ const resolveFileName = async (dir: string, base: string): Promise<string> => {
 const cache = new Map<string, CachedShot>()
 /** capture 互斥：同设备同时只允许一次截屏（按钮 busy 之外的 main 侧防线） */
 const captures = new Set<string>()
+/** save 互斥：同设备同时只允许一次保存（双 invoke 与文件名 TOCTOU 的 main 侧防线） */
+const saves = new Set<string>()
 
 export const clearScreenshotCache = (deviceId: string): void => {
   cache.delete(deviceId)
@@ -141,15 +149,15 @@ export const clearScreenshotCache = (deviceId: string): void => {
 export function registerScreenshotIpc(deps: ScreenshotDeps): void {
   const run = deps.run ?? runAdbBinary
   const downloadsDir = deps.downloadsDir ?? (() => app.getPath('downloads'))
-  const requireMainSender = (event: Electron.IpcMainInvokeEvent): void => {
+  const requireMainSender = (channel: string, event: Electron.IpcMainInvokeEvent): void => {
     if (!deps.isMainSender(event.sender))
-      throw new Error(`${IPC_CHANNELS.screenshotCapture}: ${msg('unregisteredWindowSuffix')}`)
+      throw new Error(`${channel}: ${msg('unregisteredWindowSuffix')}`)
   }
 
   ipcMain.handle(
     IPC_CHANNELS.screenshotCapture,
     async (event, raw: unknown): Promise<ScreenshotCaptureResult> => {
-      requireMainSender(event)
+      requireMainSender(IPC_CHANNELS.screenshotCapture, event)
       if (!isDeviceIdPayload(raw)) {
         throw new Error(`${IPC_CHANNELS.screenshotCapture}${msg('invalidPayload')}`)
       }
@@ -178,6 +186,14 @@ export function registerScreenshotIpc(deps: ScreenshotDeps): void {
         }
         const image = nativeImage.createFromBuffer(png)
         const size = image.getSize()
+        // 签名合法但体损坏时 nativeImage 得到 0×0 空图——按失败处理，不写剪贴板
+        if (size.width <= 0 || size.height <= 0) {
+          throw new Error(
+            msg('screenshotCaptureFailed', { detail: `decoded ${size.width}×${size.height}` })
+          )
+        }
+        // 截屏期间设备可能已停止：复核 running，避免停止钩子清缓存后这里又回填
+        if (!(await deps.runningDevice(id))) throw new Error(msg('screenshotDeviceNotRunning'))
         // 图像进系统剪贴板是受控动作：只写本设备刚截的图（镜像 copy-serial 守卫策略）
         clipboard.writeImage(image)
         const entry: CachedShot = {
@@ -198,21 +214,33 @@ export function registerScreenshotIpc(deps: ScreenshotDeps): void {
   ipcMain.handle(
     IPC_CHANNELS.screenshotSave,
     async (event, raw: unknown): Promise<ScreenshotSaveResult> => {
-      requireMainSender(event)
+      requireMainSender(IPC_CHANNELS.screenshotSave, event)
       if (!isDeviceIdPayload(raw)) {
         throw new Error(`${IPC_CHANNELS.screenshotSave}${msg('invalidPayload')}`)
       }
-      const cached = cache.get(raw.id)
-      if (!cached) throw new Error(msg('screenshotStale'))
-      const dir = downloadsDir()
-      const fileName = await resolveFileName(dir, shotFileName(cached).replace(/\.png$/, ''))
+      const id = raw.id
+      // 同步占位（镜像 capture）：同设备保存串行，双 invoke 第二发直接拒绝
+      if (saves.has(id)) throw new Error(msg('screenshotSaveBusy'))
+      saves.add(id)
       try {
-        await writeFile(join(dir, fileName), cached.buffer)
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error)
-        throw new Error(msg('screenshotSaveFailed', { detail }))
+        const cached = cache.get(id)
+        if (!cached) throw new Error(msg('screenshotStale'))
+        const dir = downloadsDir()
+        const fileName = await resolveFileName(dir, shotFileName(cached).replace(/\.png$/, ''))
+        // 先写临时名再原子 rename：检查名与落盘之间不再留覆盖窗口
+        const tempName = `${fileName}.part`
+        try {
+          await writeFile(join(dir, tempName), cached.buffer)
+          await rename(join(dir, tempName), join(dir, fileName))
+        } catch (error) {
+          await rm(join(dir, tempName), { force: true }).catch(() => undefined)
+          const detail = error instanceof Error ? error.message : String(error)
+          throw new Error(msg('screenshotSaveFailed', { detail }))
+        }
+        return { fileName }
+      } finally {
+        saves.delete(id)
       }
-      return { fileName }
     }
   )
 }

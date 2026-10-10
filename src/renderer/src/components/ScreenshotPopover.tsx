@@ -2,6 +2,7 @@ import { Loader2, X } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
 import { useCopy } from '../hooks/useCopy'
+import { spinKeyframes } from '../styles/animations'
 import type { ScreenshotState } from '../hooks/useScreenshot'
 
 type ScreenshotPopoverProps = {
@@ -142,13 +143,7 @@ const Card = styled.div`
   }
 
   .spin {
-    animation: screenshot-spin 0.9s linear infinite;
-  }
-
-  @keyframes screenshot-spin {
-    to {
-      transform: rotate(360deg);
-    }
+    animation: ${spinKeyframes} 0.9s linear infinite;
   }
 `
 
