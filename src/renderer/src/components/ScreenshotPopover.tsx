@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react'
+import { Loader2, X } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
 import { useCopy } from '../hooks/useCopy'
@@ -7,14 +7,27 @@ import type { ScreenshotState } from '../hooks/useScreenshot'
 type ScreenshotPopoverProps = {
   state: Extract<ScreenshotState, { phase: 'copied' | 'saving' | 'saved' | 'error' }>
   onSave: () => void
+  onClose: () => void
 }
 
-/** 截屏结果气泡（非模态，role=status）：缩略图 + 已复制反馈 + 保存到下载文件夹。
+/** 截屏结果气泡（非模态，role=status）：左上关闭 + 缩略图 + 已复制反馈 + 保存到下载文件夹。
  *  10 秒自动消失由 useScreenshot 管理；capturing/idle 时不渲染 */
-const ScreenshotPopover = ({ state, onSave }: ScreenshotPopoverProps): React.JSX.Element => {
+const ScreenshotPopover = ({
+  state,
+  onSave,
+  onClose
+}: ScreenshotPopoverProps): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
   return (
     <Card role="status" aria-live="polite">
+      <button
+        className="close-btn"
+        type="button"
+        aria-label={copy.screenshotClose}
+        onClick={onClose}
+      >
+        <X size={12} />
+      </button>
       {state.thumbnail ? <img className="thumb" src={state.thumbnail} alt="" /> : null}
       {state.phase === 'copied' ? (
         <>
@@ -51,6 +64,34 @@ const Card = styled.div`
   background: var(--board-bg-raised);
   border: 1px solid var(--board-hairline);
   box-shadow: 0 6px 18px rgb(0 0 0 / 18%);
+
+  .close-btn {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid var(--board-hairline);
+    border-radius: 50%;
+    background: var(--board-bg-raised);
+    color: var(--board-ink);
+    cursor: pointer;
+    transition: background-color 0.12s;
+  }
+
+  .close-btn:hover {
+    background: var(--board-hover-veil);
+  }
+
+  .close-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
 
   .thumb {
     width: 100%;

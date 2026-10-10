@@ -21,7 +21,8 @@ const baseProps: ToolbarProps = {
   screenshotBusy: false,
   screenshotState: idle,
   onScreenshot: () => undefined,
-  onScreenshotSave: () => undefined
+  onScreenshotSave: () => undefined,
+  onScreenshotDismiss: () => undefined
 }
 
 describe('DeviceToolbar 截屏钮与气泡', () => {
@@ -62,5 +63,18 @@ describe('DeviceToolbar 截屏钮与气泡', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: copy.screenshotSave }))
     expect(onScreenshotSave).toHaveBeenCalledTimes(1)
+  })
+
+  it('气泡左上关闭钮走 onScreenshotDismiss', () => {
+    const onScreenshotDismiss = vi.fn()
+    render(
+      <DeviceToolbar
+        {...baseProps}
+        screenshotState={{ phase: 'copied', thumbnail }}
+        onScreenshotDismiss={onScreenshotDismiss}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: copy.screenshotClose }))
+    expect(onScreenshotDismiss).toHaveBeenCalledTimes(1)
   })
 })

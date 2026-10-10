@@ -131,6 +131,7 @@ const zhCN = {
   createDisabledTitleFooter: '设备元数据写入已冻结，暂不能新建设备（详情见上方汇总）',
   // ---- 截屏（plan 2026-10-10-screenshot-clipboard-save）----
   screenshotAction: '截屏',
+  screenshotClose: '关闭',
   screenshotCopied: '已复制到剪贴板',
   screenshotSave: '保存到下载文件夹',
   screenshotSaving: '保存中…',
@@ -260,6 +261,7 @@ const zhTW: MainWindowCopy = {
   createDisabledTitleFooter: '裝置中繼資料寫入已凍結，暫不能新建裝置（詳見上方匯總）',
   // ---- 截屏（plan 2026-10-10-screenshot-clipboard-save）----
   screenshotAction: '截圖',
+  screenshotClose: '關閉',
   screenshotCopied: '已複製到剪貼板',
   screenshotSave: '儲存到下載資料夾',
   screenshotSaving: '儲存中…',
@@ -397,6 +399,7 @@ const enUS: MainWindowCopy = {
     'Device metadata writes are frozen; creating devices is unavailable (see the summary above)',
   // ---- Screenshot (plan 2026-10-10-screenshot-clipboard-save) ----
   screenshotAction: 'Screenshot',
+  screenshotClose: 'Close',
   screenshotCopied: 'Copied to clipboard',
   screenshotSave: 'Save to Downloads',
   screenshotSaving: 'Saving…',

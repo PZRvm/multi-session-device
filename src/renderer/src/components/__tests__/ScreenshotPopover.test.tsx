@@ -13,7 +13,7 @@ describe('ScreenshotPopover', () => {
   it('copied：显示缩略图与「已复制」，保存按钮触发 onSave', () => {
     const onSave = vi.fn()
     const state: Extract<ScreenshotState, { phase: 'copied' }> = { phase: 'copied', thumbnail }
-    render(<ScreenshotPopover state={state} onSave={onSave} />)
+    render(<ScreenshotPopover state={state} onSave={onSave} onClose={() => undefined} />)
     expect(screen.queryByRole('status')).not.toBeNull()
     expect(screen.getByAltText('').getAttribute('src')).toBe(thumbnail)
     expect(screen.queryByText(copy.screenshotCopied)).not.toBeNull()
@@ -21,10 +21,31 @@ describe('ScreenshotPopover', () => {
     expect(onSave).toHaveBeenCalledTimes(1)
   })
 
-  it('saving：显示保存中文案，不出现保存按钮', () => {
-    render(<ScreenshotPopover state={{ phase: 'saving', thumbnail }} onSave={() => undefined} />)
+  it('左上关闭钮：本地化可访问名，点击触发 onClose', () => {
+    const onClose = vi.fn()
+    render(
+      <ScreenshotPopover
+        state={{ phase: 'copied', thumbnail }}
+        onSave={() => undefined}
+        onClose={onClose}
+      />
+    )
+    const close = screen.getByRole('button', { name: copy.screenshotClose })
+    fireEvent.click(close)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('saving：显示保存中文案与关闭钮，不出现保存按钮', () => {
+    render(
+      <ScreenshotPopover
+        state={{ phase: 'saving', thumbnail }}
+        onSave={() => undefined}
+        onClose={() => undefined}
+      />
+    )
     expect(screen.queryByText(copy.screenshotSaving)).not.toBeNull()
-    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.queryByRole('button', { name: copy.screenshotSave })).toBeNull()
+    expect(screen.getByRole('button', { name: copy.screenshotClose })).toBeTruthy()
   })
 
   it('saved：显示已保存与文件名', () => {
@@ -32,6 +53,7 @@ describe('ScreenshotPopover', () => {
       <ScreenshotPopover
         state={{ phase: 'saved', thumbnail, fileName: '设备-20261010-130509.png' }}
         onSave={() => undefined}
+        onClose={() => undefined}
       />
     )
     expect(screen.queryByText('已保存：设备-20261010-130509.png')).not.toBeNull()
@@ -42,6 +64,7 @@ describe('ScreenshotPopover', () => {
       <ScreenshotPopover
         state={{ phase: 'error', message: '截屏失败：boom', thumbnail }}
         onSave={() => undefined}
+        onClose={() => undefined}
       />
     )
     expect(screen.queryByText('截屏失败：boom')).not.toBeNull()
@@ -50,6 +73,7 @@ describe('ScreenshotPopover', () => {
       <ScreenshotPopover
         state={{ phase: 'error', message: '设备不在运行中', thumbnail: null }}
         onSave={() => undefined}
+        onClose={() => undefined}
       />
     )
     expect(screen.queryByAltText('')).toBeNull()

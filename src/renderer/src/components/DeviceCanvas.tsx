@@ -439,6 +439,7 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
           onScreenshotSave={() => {
             void shot.save()
           }}
+          onScreenshotDismiss={shot.dismiss}
         />
       </div>
     </Wrapper>

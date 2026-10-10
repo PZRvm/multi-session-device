@@ -23,6 +23,7 @@ export const useScreenshot = (
   busy: boolean
   capture: () => Promise<void>
   save: () => Promise<void>
+  dismiss: () => void
 } => {
   const [latched, setLatched] = useState<ScreenshotState>({ phase: 'idle' })
   const timerRef = useRef(0)
@@ -71,6 +72,11 @@ export const useScreenshot = (
 
   useEffect(() => clearTimer, [clearTimer])
 
+  const dismiss = useCallback((): void => {
+    clearTimer()
+    setLatched({ phase: 'idle' })
+  }, [clearTimer])
+
   // 渲染期派生：设备离开 running（停止/切换）即收起气泡。DeviceCanvas 以
   // id:runId 为 key，重启即重挂载，底层 latched 无跨运行残留问题
   const state: ScreenshotState = device.status === 'running' ? latched : { phase: 'idle' }
@@ -79,6 +85,7 @@ export const useScreenshot = (
     state,
     busy: state.phase === 'capturing',
     capture,
-    save
+    save,
+    dismiss
   }
 }

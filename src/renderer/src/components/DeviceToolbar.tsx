@@ -26,6 +26,7 @@ type DeviceToolbarProps = {
   screenshotState: ScreenshotState
   onScreenshot: () => void
   onScreenshotSave: () => void
+  onScreenshotDismiss: () => void
 }
 
 /** 物理键工具条：返回/主页/概览/电源/音量加减 + 旋转 + 截屏；本地化可访问名 + 焦点样式 + 禁用态 */
@@ -38,7 +39,8 @@ const DeviceToolbar = ({
   screenshotBusy,
   screenshotState,
   onScreenshot,
-  onScreenshotSave
+  onScreenshotSave,
+  onScreenshotDismiss
 }: DeviceToolbarProps): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
   const buttons: Array<{
@@ -94,7 +96,11 @@ const DeviceToolbar = ({
         screenshotState.phase === 'saving' ||
         screenshotState.phase === 'saved' ||
         screenshotState.phase === 'error' ? (
-          <ScreenshotPopover state={screenshotState} onSave={onScreenshotSave} />
+          <ScreenshotPopover
+            state={screenshotState}
+            onSave={onScreenshotSave}
+            onClose={onScreenshotDismiss}
+          />
         ) : null}
       </div>
     </Wrapper>
