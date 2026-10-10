@@ -13,28 +13,26 @@ type BoardHeadProps = {
   onOpenSettings?: () => void
 }
 
-/** 40px 拖拽带：原生三灯留位，左上外观选择（与设置窗通用页共用 AppearanceModePicker），
- *  右端设置与设备计数。 */
+/** 40px 拖拽带：原生三灯留位/标题居左，右端为外观选择（设置齿轮左侧，与设置窗
+ *  通用页共用 AppearanceModePicker）、设置入口与设备计数。 */
 const BoardHead = ({ count, compact, onOpenSettings }: BoardHeadProps): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
   const mode = useThemeStore((state) => state.mode)
   const setMode = useThemeStore((state) => state.setMode)
   return (
     <Wrapper>
-      <span className="head-left">
-        {window.api.platform === 'darwin' ? (
-          <span className="traffic-space" aria-hidden="true" />
-        ) : (
-          <span className="title">{copy.appName}</span>
-        )}
+      {window.api.platform === 'darwin' ? (
+        <span className="traffic-space" aria-hidden="true" />
+      ) : (
+        <span className="title">{copy.appName}</span>
+      )}
+      <span className="head-right">
         <AppearanceModePicker
           mode={mode}
           onChange={setMode}
           compact={compact}
           triggerLabel={copy.themeSwitch}
         />
-      </span>
-      <span className="head-right">
         <button
           type="button"
           title={copy.settings}
@@ -73,23 +71,18 @@ const Wrapper = styled.div`
     font-weight: 600;
     color: var(--board-ink);
   }
-  /* 左上组：三灯让位（darwin）/标题（其余平台）+ 亮暗切换钮；整组可交互区禁拖 */
-  .head-left {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    -webkit-app-region: no-drag;
-  }
   .traffic-space {
     flex: none;
     width: 60px;
     -webkit-app-region: no-drag;
   }
+  /* 右端控件带：外观选择 + 设置 + 设备计数；整组可交互区禁拖 */
   .head-right {
     position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
+    margin-left: auto;
     -webkit-app-region: no-drag;
   }
   button {
