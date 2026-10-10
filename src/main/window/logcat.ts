@@ -149,11 +149,12 @@ const attachDockResizeHook = (): void => {
     }
   })
   // 程序化 setBounds/resizeTo（含窗口服务器异常路径）：事后回弹钳制——
-  // setSize 回到 min 后不再小于阈值，无递归
+  // setSize 回到 min 后不再小于阈值，无递归。尺寸取整：macOS 分数缩放下
+  // getBounds 常返回 .5 值，setSize 只收整数（否则 native 参数转换失败抛错）
   window.on('resize', () => {
     if (dockMinWidth > 0 && !window.isDestroyed() && window.getBounds().width < dockMinWidth) {
       const bounds = window.getBounds()
-      window.setSize(dockMinWidth, bounds.height)
+      window.setSize(Math.round(dockMinWidth), Math.round(bounds.height))
     }
   })
 }
@@ -204,9 +205,11 @@ export function registerLogcatIpc(): void {
           throw new Error(`${IPC_CHANNELS.logcatDockState}: ${msg('logcatInvalidPayloadSuffix')}`)
         }
         attachDockResizeHook()
-        dockMinWidth = minWidth
-        if (window.getBounds().width < minWidth) {
-          window.setSize(minWidth, window.getBounds().height)
+        dockMinWidth = Math.round(minWidth)
+        const bounds = window.getBounds()
+        if (bounds.width < minWidth) {
+          // 高度取整（getBounds 在分数缩放下可能是 .5 值，setSize 只收整数）
+          window.setSize(Math.round(minWidth), Math.round(bounds.height))
         }
       } else {
         dockMinWidth = 0
