@@ -256,6 +256,22 @@ describe('日志域会话与流控', () => {
     expect(replay.lines.map((line) => line.text)).toEqual(['fresh'])
   })
 
+  it('旧进程 exit 迟到不误杀换代后的新会话', async () => {
+    const manager = await makeManager([deviceOf('d1', 'running', 's1', 'run-1')])
+    manager.ensureSession({ id: 'd1', runId: 'run-1', serial: 's1' })
+    await subscribe(manager, contentsA, 'd1')
+    // 换代：旧会话连订阅一起销毁（renderer 按 runId 重挂自动重订），另起新进程
+    manager.ensureSession({ id: 'd1', runId: 'run-2', serial: 's1' })
+    pushLines(['fresh2'])
+    await subscribe(manager, contentsA, 'd1')
+    // 旧进程的 exit 事件此刻才迟到到达——不得影响新会话的推送
+    children[0].emit('exit', 0, null)
+    pushLines(Array.from({ length: 200 }, (_, i) => `n${i}`))
+    const batches = batchesOf(contentsA).filter((b) => !b.replay)
+    expect(batches.length).toBeGreaterThan(0)
+    expect(batches.at(-1)!.runId).toBe('run-2')
+  })
+
   it('webContents 销毁后不再发送（关窗自动退订效果）', async () => {
     const manager = await makeManager([deviceOf('d1', 'running', 's1', 'run-1')])
     manager.ensureSession({ id: 'd1', runId: 'run-1', serial: 's1' })

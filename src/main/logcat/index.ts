@@ -88,9 +88,10 @@ export function createLogcatManager(deps: LogcatManagerDeps): LogcatManager {
     })
   }
 
-  const destroySession = (deviceId: string): Promise<void> => {
-    const session = sessions.get(deviceId)
-    if (!session) return Promise.resolve()
+  // 按会话身份销毁：只在它仍是该设备当前会话时执行。进程 exit/error 回调持有
+  // 旧会话对象——设备换代（runId 变化）后旧进程的迟到 exit 不得误杀新会话
+  const destroySessionOf = (session: LogcatSession): Promise<void> => {
+    if (sessions.get(session.deviceId) !== session) return Promise.resolve()
     // 幂等：并发 destroy 共享同一次清理
     if (!session.cleanup) {
       session.child?.removeAllListeners('exit')
@@ -99,10 +100,16 @@ export function createLogcatManager(deps: LogcatManagerDeps): LogcatManager {
       session.flushTimer = null
       session.pending = []
       session.subscribers.clear()
-      sessions.delete(deviceId)
+      sessions.delete(session.deviceId)
       session.cleanup = killChild(session)
     }
     return session.cleanup
+  }
+
+  const destroySession = (deviceId: string): Promise<void> => {
+    const session = sessions.get(deviceId)
+    if (!session) return Promise.resolve()
+    return destroySessionOf(session)
   }
 
   const sendBatch = (
@@ -200,11 +207,12 @@ export function createLogcatManager(deps: LogcatManagerDeps): LogcatManager {
     child.stdout?.on('data', onData)
     child.stderr?.on('data', onData)
     const onExit = (): void => {
-      // 意外退出（设备重启/adb server 重启）：销毁会话；设备仍在 running 时下次订阅惰性重建
-      void destroySession(session.deviceId)
+      // 意外退出（设备重启/adb server 重启）：销毁自己（若仍是当前会话）；
+      // 设备仍在 running 时下次订阅惰性重建
+      void destroySessionOf(session)
     }
     const onError = (): void => {
-      void destroySession(session.deviceId)
+      void destroySessionOf(session)
     }
     child.once('exit', onExit)
     child.once('error', onError)
