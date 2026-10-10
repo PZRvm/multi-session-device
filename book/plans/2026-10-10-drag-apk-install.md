@@ -1,7 +1,8 @@
 ---
 description: 拖拽 APK 安装设计：画布拖放（webUtils 取路径）→ adb install -r → 悬停高亮与结果浮层，每设备串行
-status: in_progress
+status: completed
 created: 2026-10-10
+completed: 2026-10-10
 ---
 
 # 拖拽 APK 进画面即安装 — plan
@@ -170,11 +171,16 @@ i18n 初始键（mainWindow 域）：`apkDropHint`（含 {设备名} 占位）�
 
 ### Phase 5：review（只记录）
 
-- P3 实现偏离：dragover 期 Chromium 不暴露文件名/扩展名（安全限制），「非 .apk 高亮不出现」无法预判——守卫移到 drop 时，非 apk 拖入会短暂高亮后静默收起（hook 注释已写明）。
-- P3 遗留：真机链路（真拖文件 → webUtils → adb install 实装）jsdom 测不了，待一次真机冒烟后再翻 completed。
-- P3 既有问题：[devices 测试 mock 实现跨 describe 泄漏](../notes/issue/2026-10/2026-10-10-devices-test-mock-leak.md) 已记 issue，未修。
+自检批（实现当天）：三项 P3——dragover 无法预判扩展名（平台限制，守卫移到 drop）、真机链路待冒烟、devices 测试 mock 泄漏（另记 issue，未修）。
+
+独立 review（2026-10-10，用户真机验收后）：**disposition 为 fix**，一项 P2 + 四项 P3，自检三项不重复计入。
+
+- P2：安装中再拖 APK 时 `onDragEnter` 无 phase 守卫，把 `installing` 打回 `dragging`——busyNote 分支真实会话不可达，忙被呈现为红色失败卡，随后被迟到的成功覆盖。测试因缺少 dragenter 步骤未能拦截。已登记 [issue](../notes/issue/2026-10/2026-10-10-apk-install-busy-unreachable.md)，按 workflow 留待独立修复。
+- P3 ×4（不阻塞，均记录在 review 报告）：`timeoutMs: 0` 下 adb 挂死则该设备互斥与浮层无限期滞留（plan 已接受的取舍的残余风险）；`fileNameOf` 按反斜杠切分致文件名含 `\` 时显示截断；失败浮层直出 Electron invoke 前缀（app 级既有 toApiResult 约定，非本批引入）；非法载荷错误消息缺 `': '` 分隔符（诊断可读性）。
+
+审查覆盖：并发/竞态（keyed 挂载清理干净、main 互斥无 TOCTOU）、错误路径（五签名+三重兜底完备）、边界输入（多文件/空路径/非 Files 类型均静默）、安全（sender 守卫有效、spawn 数组参数无注入）、i18n（两域三语键齐、占位一致）、侵入面（既有文件改动最小、无行为破坏）、测试（29/29 过、无断言削弱）、范围（与 plan 排除项逐项吻合）。
 
 ### 状态
 
-实现与自动化验证完成，**status 保持 in_progress**——真机拖放冒烟通过后翻 completed。
+真机冒烟已通过（2026-10-10 用户在 Pixel 8 API 32 实拖 msd-web.apk：安装成功、抽屉可见图标、启动渲染正常；启动入口 resolve-activity 与 pm list 双重确认），**plan 翻 completed**。open 项不随本批关闭：P2 busy 反馈不可达（[issue](../notes/issue/2026-10/2026-10-10-apk-install-busy-unreachable.md)，review disposition 保持 fix）与既有 P3 记录，均留待独立修复批；stage 步骤仍因剪贴板共享半边未开工而保持未勾。
 

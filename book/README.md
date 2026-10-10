@@ -138,6 +138,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-profiles-clean-machine-no-java.md](notes/issue/2026-10/2026-10-09-profiles-clean-machine-no-java.md) — profiles.ts 以宿主环境启动 avdmanager 未注入自带 JRE；从未装过 Java 的干净 Mac 上向导画像枚举失败，新建设备被挡在第一步，违背 PRD E 零依赖
 - [2026-10-09-remaining-fixes-review-findings.md](notes/issue/2026-10/2026-10-09-remaining-fixes-review-findings.md) — 五项修复 review 新发现：布局归零漏释放已有按下状态，控制写失败后关闭 parser 触发未观察 ACK rejection
 - [2026-10-09-sdk-image-download-system-proxy.md](notes/issue/2026-10/2026-10-09-sdk-image-download-system-proxy.md) — SDK、镜像清单与镜像字节下载仍使用 Node fetch，代理可用但直连不可用时可能失败；本轮只修官方皮肤，其他路径另立任务
+- [2026-10-10-apk-install-busy-unreachable.md](notes/issue/2026-10/2026-10-10-apk-install-busy-unreachable.md) — P2：安装中再拖 APK 时 onDragEnter 无 phase 守卫，把 installing 打回 dragging——busyNote 分支真实会话不可达，忙被呈现为红色失败卡
 - [2026-10-10-boardhead-toggle-review-p3s.md](notes/issue/2026-10/2026-10-10-boardhead-toggle-review-p3s.md) — 主窗左上亮暗切换钮 review 两项 P3——matchMedia 订阅与 provider 重复、切换钮用动作标签而非 aria-pressed
 - [2026-10-10-devices-test-mock-leak.md](notes/issue/2026-10/2026-10-10-devices-test-mock-leak.md) — P3：devices 测试 Quick Boot 组的 readAvdConfigRaw.mockRejectedValue 未恢复，clearAllMocks 不清实现，后追加的 describe 被渗入导致顺序敏感
 - [2026-10-10-settings-copy-dead-keys-and-learn-stale.md](notes/issue/2026-10/2026-10-10-settings-copy-dead-keys-and-learn-stale.md) — 已修复：设置窗三语字典的 title/preview 死键已删，learn 笔记「open/close 桥」表述已更正为仅 open
@@ -300,4 +301,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 210 documents -->
+<!-- 211 documents -->
