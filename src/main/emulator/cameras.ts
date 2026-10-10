@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { systemPreferences } from 'electron'
 import type { CameraSnapshot, HostWebcam } from '@shared/types'
+import { msg } from '../locale'
 
 /** 所装 emulator 的摄像头探针；macOS 权限由宿主应用身份与取流责任链共同决定。 */
 export type WebcamEntry = HostWebcam
@@ -22,7 +23,7 @@ const defaultRunner = (emulatorPath: string, args: string[]): Promise<string> =>
     child.stderr?.on('data', (chunk: Buffer) => err.push(chunk))
     const timer = setTimeout(() => {
       child.kill('SIGTERM')
-      reject(new Error(`摄像头枚举超时（${WEBCAM_LIST_TIMEOUT_MS / 1000} 秒），进程已终止`))
+      reject(new Error(msg('cameraListTimeout', { seconds: WEBCAM_LIST_TIMEOUT_MS / 1000 })))
     }, WEBCAM_LIST_TIMEOUT_MS)
     child.on('error', (error) => {
       clearTimeout(timer)
@@ -36,7 +37,10 @@ const defaultRunner = (emulatorPath: string, args: string[]): Promise<string> =>
       else {
         reject(
           new Error(
-            `摄像头枚举失败（exit ${code}）：${(Buffer.concat(err).toString('utf8') || text).slice(-300)}`
+            msg('cameraListFailed', {
+              code: String(code),
+              tail: (Buffer.concat(err).toString('utf8') || text).slice(-300)
+            })
           )
         )
       }
@@ -80,10 +84,10 @@ export const readCameraSnapshot = async (sdkRoot: string): Promise<CameraSnapsho
       devices.length > 0
         ? null
         : permission === 'not-determined'
-          ? '需要允许本应用访问摄像头'
+          ? msg('cameraPermissionRequired')
           : permission === 'denied' || permission === 'restricted'
-            ? '摄像头权限未开放，请在系统设置中允许访问并重启应用'
-            : '未枚举到摄像头；请检查连接及本应用的系统权限，刷新后重试'
+            ? msg('cameraPermissionNotGranted')
+            : msg('cameraNoneFound')
     return { permission, devices, error }
   } catch (error) {
     return {
@@ -103,6 +107,6 @@ export const listWebcams = async (
   const output = await run(emulatorPath, ['-avd', '__webcam_probe__', '-webcam-list'])
   const entries = parseWebcamList(output)
   if (entries.length === 0 && /Camera '/.test(output))
-    throw new Error('摄像头输出格式无法识别，请检查 emulator 版本')
+    throw new Error(msg('cameraFormatUnrecognized'))
   return entries
 }

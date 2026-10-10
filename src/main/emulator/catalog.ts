@@ -9,6 +9,7 @@ import type {
   ImageRevision,
   ImageService
 } from '@shared/types'
+import { msg } from '../locale'
 
 /**
  * 系统镜像目录：六个官方 sys-img manifest（结构化解析）+ 本地 package.xml /
@@ -402,13 +403,16 @@ export const checkLocalImage = async (
           packageName: null,
           abi: null,
           fault: 'missing-dir',
-          faultMessage: `镜像目录不存在（${imageDir}）`
+          faultMessage: msg('catDirMissing', { dir: imageDir })
         }
       : {
           packageName: null,
           abi: null,
           fault: 'unreadable-dir',
-          faultMessage: `镜像目录不可读（${errno ?? '未知错误'}）：${imageDir}`
+          faultMessage: msg('catDirUnreadable', {
+            errno: errno ?? msg('unknownError'),
+            dir: imageDir
+          })
         }
   }
   // 受检文件不追随 symlink（目标可能逃出 SDK 根）
@@ -421,7 +425,7 @@ export const checkLocalImage = async (
             packageName: null,
             abi: null,
             fault: 'symlinked-file',
-            faultMessage: `镜像内受检文件是符号链接（${name}），不追随读取`
+            faultMessage: msg('catFileIsSymlink', { name })
           }
         }
         // package.xml 是不可信输入，读取前量尺寸（review P3：无界读取 → 内存放大）
@@ -434,7 +438,7 @@ export const checkLocalImage = async (
             packageName: null,
             abi: null,
             fault: 'invalid-package-xml',
-            faultMessage: `package.xml 超过 ${MAX_PACKAGE_XML_BYTES / 1024}KiB，视为损坏`
+            faultMessage: msg('catPackageXmlTooLarge', { max: MAX_PACKAGE_XML_BYTES / 1024 })
           }
         }
       } catch {
@@ -453,8 +457,8 @@ export const checkLocalImage = async (
       fault: errno === 'ENOENT' ? 'missing-package-xml' : 'unreadable-package-xml',
       faultMessage:
         errno === 'ENOENT'
-          ? `镜像缺少 package.xml（${imageDir}）`
-          : `package.xml 不可读（${errno ?? '未知错误'}）：${imageDir}`
+          ? msg('catMissingPackageXml', { dir: imageDir })
+          : msg('catPackageXmlUnreadable', { errno: errno ?? msg('unknownError'), dir: imageDir })
     }
   }
   // 尺寸预检后仍可能被换大（TOCTOU）：读后再核一次长度
@@ -463,7 +467,7 @@ export const checkLocalImage = async (
       packageName: null,
       abi: null,
       fault: 'invalid-package-xml',
-      faultMessage: `package.xml 超过 ${MAX_PACKAGE_XML_BYTES / 1024}KiB，视为损坏`
+      faultMessage: msg('catPackageXmlTooLarge', { max: MAX_PACKAGE_XML_BYTES / 1024 })
     }
   }
   const record = readLocalPackageXml(xml)
@@ -472,7 +476,7 @@ export const checkLocalImage = async (
       packageName: null,
       abi: null,
       fault: 'invalid-package-xml',
-      faultMessage: `package.xml 无法解析出镜像身份（${imageDir}）`
+      faultMessage: msg('catPackageXmlNoIdentity', { dir: imageDir })
     }
   }
   if (dirIdentity !== null) {
@@ -482,7 +486,7 @@ export const checkLocalImage = async (
         packageName: record.packageName,
         abi: record.abi,
         fault: 'identity-mismatch',
-        faultMessage: `镜像身份（${record.packageName}）与目录位置（${expected}）矛盾`
+        faultMessage: msg('catIdentityMismatch', { record: record.packageName, expected })
       }
     }
   }
@@ -491,7 +495,7 @@ export const checkLocalImage = async (
       packageName: record.packageName,
       abi: record.abi,
       fault: 'missing-source-properties',
-      faultMessage: `镜像缺少 source.properties（${imageDir}）`
+      faultMessage: msg('catMissingSourceProps', { dir: imageDir })
     }
   }
   if (!(await d.exists(join(imageDir, 'system.img')))) {
@@ -499,7 +503,7 @@ export const checkLocalImage = async (
       packageName: record.packageName,
       abi: record.abi,
       fault: 'missing-system-img',
-      faultMessage: `镜像缺少 system.img（${imageDir}）`
+      faultMessage: msg('catMissingSystemImg', { dir: imageDir })
     }
   }
   return { packageName: record.packageName, abi: record.abi, fault: null, faultMessage: null }

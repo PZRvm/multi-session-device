@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { execFile } from 'node:child_process'
 import { XMLParser } from 'fast-xml-parser'
 import { splitPackageName } from './catalog'
+import { msg } from '../locale'
 
 /**
  * 镜像直连下载（plan 2026-10-06-download-progress-zero）：官方 CLI 两代都
@@ -21,7 +22,7 @@ const PROGRESS_MIN_INTERVAL_MS = 500
 /** 用户显式取消——与错误分流（取消不是失败，plan 2026-10-06-download-cancel 设计 2） */
 export class CancelledError extends Error {
   constructor() {
-    super('已取消')
+    super(msg('dlCancelled'))
     this.name = 'CancelledError'
   }
 }
@@ -67,7 +68,7 @@ export const defaultDeps: Required<DownloaderDeps> = {
   openUrl: async (url, signal) => {
     const response = await fetch(url, { signal })
     if (!response.ok || response.body === null) {
-      throw new Error(`下载源响应 HTTP ${response.status}`)
+      throw new Error(msg('dlHttpStatus', { status: response.status }))
     }
     const lengthHeader = response.headers.get('content-length')
     const totalBytes = lengthHeader === null ? null : Number(lengthHeader)
@@ -96,7 +97,7 @@ export const defaultDeps: Required<DownloaderDeps> = {
       execFile('unzip', ['-q', zipPath, '-d', targetDir], { signal }, (error) => {
         if (signal?.aborted) reject(new CancelledError())
         else if (error === null) resolve()
-        else reject(new Error(`解压失败（unzip exit/error）：${error.message}`))
+        else reject(new Error(msg('dlUnzipFailed', { message: error.message })))
       })
     }),
   pathExists: async (path) => {
@@ -192,7 +193,7 @@ export const downloadImageZip = async (
   signal?: AbortSignal
 ): Promise<string> => {
   if (target.zipUrl === null) {
-    throw new Error('该包在 manifest 中没有可下载的 zip 地址，不支持应用内下载')
+    throw new Error(msg('dlNoZipUrl'))
   }
   const d = { ...defaultDeps, ...deps }
   const throwIfCancelled = (): void => {
@@ -243,7 +244,10 @@ export const downloadImageZip = async (
     if (actual !== target.zipSha1) {
       await d.removePath(zipPath).catch(() => undefined)
       throw new Error(
-        `镜像完整性校验失败（sha1 不符，期望 ${target.zipSha1.slice(0, 8)}… 实得 ${actual.slice(0, 8)}…），已删除损坏文件，请重试`
+        msg('dlIntegrityFailed', {
+          expected: target.zipSha1.slice(0, 8),
+          actual: actual.slice(0, 8)
+        })
       )
     }
   }
@@ -381,7 +385,7 @@ export const installImageZip = async (
     if (signal?.aborted) throw new CancelledError()
   }
   const parts = splitPackageName(target.packageName)
-  if (parts === null) throw new Error(`非法包名：${target.packageName}`)
+  if (parts === null) throw new Error(msg('dlInvalidPackage', { packageName: target.packageName }))
   const unzipDir = tempUnzipPath(sdkRoot, target.packageName)
   const destDir = join(sdkRoot, 'system-images', parts.platformSegment, parts.tagSegment, parts.abi)
   const backupDir = `${destDir}.install-bak`
@@ -396,7 +400,7 @@ export const installImageZip = async (
     throwIfCancelled()
     const sourceDir = await locateContentRoot(unzipDir, d)
     if (sourceDir === null) {
-      throw new Error('压缩包布局与预期不符（未找到 system.img 所在目录），拒绝落位')
+      throw new Error(msg('dlLayoutMismatch'))
     }
     // zip 不带 package.xml——从 manifest 元数据生成（身份+API+tag+abi）
     await d.writeFile(join(sourceDir, 'package.xml'), buildPackageXml(target))
@@ -411,9 +415,7 @@ export const installImageZip = async (
     try {
       await d.moveDir(sourceDir, destDir)
       if (!(await verifyPackageInstall(sdkRoot, target.packageName, deps))) {
-        throw new Error(
-          '安装核验失败（package.xml/source.properties/system.img 不齐或身份不符），已回滚'
-        )
+        throw new Error(msg('dlVerifyFailedRolledBack'))
       }
       // 成功：清备份与临时物
       if (backedUp) await d.removePath(backupDir).catch(() => undefined)
@@ -432,7 +434,12 @@ export const installImageZip = async (
       if (rollbackErrors.length > 0) {
         const main = error instanceof Error ? error.message : String(error)
         throw new Error(
-          `${main}；且回滚未完全成功（${rollbackErrors.join('；')}），残留待清理：${destDir} 与 ${backupDir}`
+          msg('dlRollbackIncomplete', {
+            main,
+            errors: rollbackErrors.join('；'),
+            dest: destDir,
+            backup: backupDir
+          })
         )
       }
       throw error

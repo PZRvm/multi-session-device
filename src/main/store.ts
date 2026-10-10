@@ -13,6 +13,7 @@ import type {
   StoreHealthIssue
 } from '@shared/types'
 import { isStoredAdvancedSettings } from '@shared/settings-contract'
+import { msg } from './locale'
 
 /**
  * 设备元数据 store：v1（apiLevel/variant 反推身份）与 v2（精确包身份 + 设置）
@@ -254,10 +255,10 @@ export const classifyReadError = (error: unknown): { code: string; message: stri
       ? String((error as { code: unknown }).code)
       : null
   const detail = error instanceof Error ? error.message : String(error)
-  if (errno === 'ENOENT') return { code: 'ENOENT', message: '文件不存在' }
+  if (errno === 'ENOENT') return { code: 'ENOENT', message: msg('storeFileMissing') }
   return {
     code: errno ?? 'read-failed',
-    message: `devices.json 读取失败（${errno ?? '未知错误'}）：${detail}`
+    message: msg('storeReadFailed', { errno: errno ?? msg('unknownError'), detail })
   }
 }
 
@@ -296,8 +297,11 @@ export async function readDeviceStore(): Promise<DeviceStoreReadResult> {
     else {
       const reason =
         health.issues.length > 0
-          ? `devices.json 异常（${health.issues.map((issue) => issue.message).join('；')}），已停止写入（原文件保留在 ${path}）`
-          : `devices.json 异常，已停止写入（原文件保留在 ${path}）`
+          ? msg('storeStoppedWritingWithIssues', {
+              issues: health.issues.map((issue) => issue.message).join('；'),
+              path
+            })
+          : msg('storeStoppedWriting', { path })
       writeProtection = reason
     }
     return { metas, health, sourceVersion, suspectIds }
@@ -307,16 +311,16 @@ export async function readDeviceStore(): Promise<DeviceStoreReadResult> {
   try {
     parsed = JSON.parse(raw) as DeviceStoreFile
   } catch {
-    return finish([], errorHealth('invalid-json', 'devices.json 不是合法 JSON'), null, [])
+    return finish([], errorHealth('invalid-json', msg('storeNotJson')), null, [])
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return finish([], errorHealth('invalid-top-level', 'devices.json 顶层不是对象'), null, [])
+    return finish([], errorHealth('invalid-top-level', msg('storeTopNotObject')), null, [])
   }
   if (!Array.isArray(parsed.devices)) {
     // 版本可辨即如实上报（review P3——sourceVersion 口径一致）
     return finish(
       [],
-      errorHealth('missing-devices-array', 'devices.json 缺少 devices 数组'),
+      errorHealth('missing-devices-array', msg('storeNoDevicesArray')),
       parsed.version === STORE_VERSION || parsed.version === LEGACY_VERSION ? parsed.version : null,
       []
     )
@@ -332,7 +336,7 @@ export async function readDeviceStore(): Promise<DeviceStoreReadResult> {
   }
   return finish(
     [],
-    errorHealth('unknown-version', `devices.json 版本未知（${String(parsed.version)}）`),
+    errorHealth('unknown-version', msg('storeUnknownVersion', { version: String(parsed.version) })),
     null,
     []
   )
@@ -373,7 +377,7 @@ function collectEntries(
       issues.push({
         code: 'duplicate-id',
         entryIndex: index,
-        message: `第 ${index + 1} 条 id 重复（${id ?? '无法识别'}），该 id 的全部条目未载入`
+        message: msg('storeEntryDupId', { index: index + 1, id: id ?? 'N/A' })
       })
       return
     }
@@ -395,8 +399,8 @@ function collectEntries(
         entryIndex: index,
         message:
           kind === 'v2'
-            ? `第 ${index + 1} 条记录字段不合法（${field}），未载入`
-            : `第 ${index + 1} 条旧记录不合法，未载入`
+            ? msg('storeEntryFieldInvalid', { index: index + 1, field })
+            : msg('storeEntryLegacyInvalid', { index: index + 1 })
       })
       return
     }
@@ -413,7 +417,7 @@ function collectEntries(
 /** 实例元数据落盘唯一写入口（architecture 模块地图）：tmp + rename 原子替换 */
 export async function writeDeviceMetas(metas: DeviceMeta[]): Promise<void> {
   if (writeProtection !== null) {
-    throw new Error(`元数据文件已写保护：${writeProtection}`)
+    throw new Error(msg('storeWriteProtected', { reason: writeProtection }))
   }
   const path = storePath()
   // 首次以 v2 覆盖 v1 文件前留备份（一次性；备份已存在不重复）。
@@ -424,7 +428,7 @@ export async function writeDeviceMetas(metas: DeviceMeta[]): Promise<void> {
   } catch (error) {
     if (errnoOf(error) !== 'ENOENT') {
       throw new Error(
-        `元数据写入中止：现有 devices.json 读取失败（${errnoOf(error) ?? '未知错误'}），原文件保留`
+        msg('storeWriteAbortedUnreadable', { errno: errnoOf(error) ?? msg('unknownError') })
       )
     }
   }
@@ -433,7 +437,7 @@ export async function writeDeviceMetas(metas: DeviceMeta[]): Promise<void> {
     try {
       current = JSON.parse(existing) as DeviceStoreFile
     } catch {
-      throw new Error('元数据写入中止：现有 devices.json 无法解析，拒绝盲覆盖（原文件保留）')
+      throw new Error(msg('storeWriteAbortedUnparseable'))
     }
     if (current.version === LEGACY_VERSION) {
       try {
@@ -443,7 +447,9 @@ export async function writeDeviceMetas(metas: DeviceMeta[]): Promise<void> {
           await copyFile(path, backupPath())
         } catch (error) {
           throw new Error(
-            `v1 备份失败（${error instanceof Error ? error.message : String(error)}），已中止写入（原文件保留）`
+            msg('storeV1BackupFailed', {
+              message: error instanceof Error ? error.message : String(error)
+            })
           )
         }
       }
@@ -456,7 +462,10 @@ export async function writeDeviceMetas(metas: DeviceMeta[]): Promise<void> {
     await rename(tmp, path)
   } catch (error) {
     throw new Error(
-      `元数据写入失败（${error instanceof Error ? error.message : String(error)}）；临时文件保留在 ${tmp}`
+      msg('storeWriteFailed', {
+        message: error instanceof Error ? error.message : String(error),
+        tmp
+      })
     )
   }
 }

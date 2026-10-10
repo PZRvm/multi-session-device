@@ -9,6 +9,7 @@ import type {
   ReconcileOrphanEntry
 } from '@shared/types'
 import { checkLocalImage, type LocalImageCheck, type LocalImageFault } from './catalog'
+import { msg } from '../locale'
 
 /**
  * AVD 与引用镜像的只读核验（plan 2026-10-05-avd-reconciliation 设计 2）。
@@ -262,7 +263,7 @@ const checkDeviceWith = async (
   const id = meta.id
   if (!UUID_RE.test(id)) {
     // 元数据 id 已在 store 侧按 UUID 校验；此处兜底，不拼出根外路径
-    health.error('unsafe', 'avd', 'invalid-id', `设备 id 不是 UUID 形态（${id}），拒绝核验`)
+    health.error('unsafe', 'avd', 'invalid-id', msg('rcIdNotUuid', { id }))
     return health.result(now)
   }
 
@@ -277,7 +278,7 @@ const checkDeviceWith = async (
         'broken',
         'avd',
         'ini-too-large',
-        `${id}.ini 超过 ${MAX_CONFIG_BYTES / 1024}KiB，视为损坏`
+        msg('rcIniTooLarge', { id, max: MAX_CONFIG_BYTES / 1024 })
       )
     } else {
       try {
@@ -289,22 +290,22 @@ const checkDeviceWith = async (
           'inaccessible',
           'avd',
           'ini-unreadable',
-          `${id}.ini 读取失败（${errno ?? '未知错误'}）`
+          msg('rcIniReadFailed', { id, errno: errno ?? msg('unknownError') })
         )
       }
     }
   } else if (iniOutcome.kind === 'missing') {
-    health.error('missing', 'avd', 'ini-missing', `缺少 ${id}.ini（AVD 可能被外部删除）`)
+    health.error('missing', 'avd', 'ini-missing', msg('rcMissingIni', { id }))
   } else if (iniOutcome.kind === 'symlink') {
-    health.error('unsafe', 'avd', 'ini-symlink', `${id}.ini 是符号链接，拒绝核验`)
+    health.error('unsafe', 'avd', 'ini-symlink', msg('rcIniIsSymlink', { id }))
   } else if (iniOutcome.kind === 'not-file') {
-    health.error('broken', 'avd', 'ini-not-file', `${id}.ini 不是普通文件`)
+    health.error('broken', 'avd', 'ini-not-file', msg('rcIniNotRegular', { id }))
   } else {
     health.error(
       'inaccessible',
       'avd',
       'ini-inaccessible',
-      `${id}.ini 无法访问（${iniOutcome.errno ?? '未知错误'}）`
+      msg('rcIniUnaccessible', { id, errno: iniOutcome.errno ?? msg('unknownError') })
     )
   }
 
@@ -314,22 +315,27 @@ const checkDeviceWith = async (
   if (dirOutcome.kind === 'ok') {
     avdDirReal = await realpathOrNull(avdDirPath, d)
     if (avdDirReal === null) {
-      health.error('inaccessible', 'avd', 'avd-dir-unresolvable', `${id}.avd 路径无法解析`)
+      health.error(
+        'inaccessible',
+        'avd',
+        'avd-dir-unresolvable',
+        msg('rcAvdPathUnparsable', { id })
+      )
     } else if (ctx.avdHomeReal !== null && !isWithin(ctx.avdHomeReal, avdDirReal)) {
-      health.error('unsafe', 'avd', 'avd-dir-escape', `${id}.avd 的实际位置逃出应用 AVD 根`)
+      health.error('unsafe', 'avd', 'avd-dir-escape', msg('rcAvdEscapeRoot', { id }))
     }
   } else if (dirOutcome.kind === 'missing') {
-    health.error('missing', 'avd', 'avd-dir-missing', `缺少 ${id}.avd 目录（AVD 可能被外部删除）`)
+    health.error('missing', 'avd', 'avd-dir-missing', msg('rcMissingAvdDir', { id }))
   } else if (dirOutcome.kind === 'symlink') {
-    health.error('unsafe', 'avd', 'avd-dir-symlink', `${id}.avd 是符号链接，拒绝核验`)
+    health.error('unsafe', 'avd', 'avd-dir-symlink', msg('rcAvdIsSymlink', { id }))
   } else if (dirOutcome.kind === 'not-directory') {
-    health.error('broken', 'avd', 'avd-dir-not-directory', `${id}.avd 不是目录`)
+    health.error('broken', 'avd', 'avd-dir-not-directory', msg('rcAvdNotDir', { id }))
   } else {
     health.error(
       'inaccessible',
       'avd',
       'avd-dir-inaccessible',
-      `${id}.avd 无法访问（${dirOutcome.errno ?? '未知错误'}）`
+      msg('rcAvdUnaccessible', { id, errno: dirOutcome.errno ?? msg('unknownError') })
     )
   }
 
@@ -337,23 +343,18 @@ const checkDeviceWith = async (
   if (iniValues !== null && avdDirReal !== null) {
     const declared = iniValues.values.get('path')
     if (declared === undefined) {
-      health.error('broken', 'avd', 'ini-path-missing', `${id}.ini 缺少 path 键，无法确认 AVD 归属`)
+      health.error('broken', 'avd', 'ini-path-missing', msg('rcIniPathMissingKey', { id }))
     } else {
       const resolved = declared.startsWith('/') ? declared : resolve(dirs.avdHome, declared)
       // 原始声明先查逃逸段（resolve 会把 `..` 规范化掉，相对分支曾因此不可达——review P3）
       if (hasEscapeSegments(declared.split('/')) || hasEscapeSegments(resolved.split(sep))) {
-        health.error('unsafe', 'avd', 'ini-path-escape', `${id}.ini 的 path 指向根外路径，拒绝核验`)
+        health.error('unsafe', 'avd', 'ini-path-escape', msg('rcIniPathEscape', { id }))
       } else {
         const declaredReal = await realpathOrNull(resolved, d)
         if (declaredReal === null) {
-          health.error('broken', 'avd', 'ini-path-invalid', `${id}.ini 的 path 指向不存在的位置`)
+          health.error('broken', 'avd', 'ini-path-invalid', msg('rcIniPathNotFound', { id }))
         } else if (declaredReal !== avdDirReal) {
-          health.error(
-            'broken',
-            'avd',
-            'ini-path-mismatch',
-            `${id}.ini 的 path 与 ${id}.avd 实际位置不一致`
-          )
+          health.error('broken', 'avd', 'ini-path-mismatch', msg('rcIniPathMismatch', { id }))
         }
       }
     }
@@ -370,7 +371,7 @@ const checkDeviceWith = async (
           'broken',
           'avd',
           'config-too-large',
-          `config.ini 超过 ${MAX_CONFIG_BYTES / 1024}KiB，视为损坏`
+          msg('rcConfigTooLarge', { max: MAX_CONFIG_BYTES / 1024 })
         )
       } else {
         try {
@@ -382,22 +383,22 @@ const checkDeviceWith = async (
             'inaccessible',
             'avd',
             'config-unreadable',
-            `config.ini 读取失败（${errno ?? '未知错误'}）`
+            msg('rcConfigReadFailed', { errno: errno ?? msg('unknownError') })
           )
         }
       }
     } else if (configOutcome.kind === 'missing') {
-      health.error('missing', 'avd', 'config-missing', '缺少 config.ini（AVD 可能被外部删除）')
+      health.error('missing', 'avd', 'config-missing', msg('rcMissingConfigIni'))
     } else if (configOutcome.kind === 'symlink') {
-      health.error('unsafe', 'avd', 'config-symlink', 'config.ini 是符号链接，拒绝核验')
+      health.error('unsafe', 'avd', 'config-symlink', msg('rcConfigIsSymlink'))
     } else if (configOutcome.kind === 'not-file') {
-      health.error('broken', 'avd', 'config-not-file', 'config.ini 不是普通文件')
+      health.error('broken', 'avd', 'config-not-file', msg('rcConfigNotRegular'))
     } else {
       health.error(
         'inaccessible',
         'avd',
         'config-inaccessible',
-        `config.ini 无法访问（${configOutcome.errno ?? '未知错误'}）`
+        msg('rcConfigUnaccessible', { errno: configOutcome.errno ?? msg('unknownError') })
       )
     }
   }
@@ -406,21 +407,16 @@ const checkDeviceWith = async (
   if (configValues !== null) {
     for (const key of configValues.conflicts) {
       if (CRITICAL_CONFIG_KEYS.includes(key)) {
-        health.error('broken', 'avd', 'config-conflict', `config.ini 的 ${key} 存在冲突的重复值`)
+        health.error('broken', 'avd', 'config-conflict', msg('rcKeyDuplicate', { key }))
       }
     }
     const sysdir = configValues.values.get('image.sysdir.1')
     const abiRaw = configValues.values.get('abi.type')
     configAbi = typeof abiRaw === 'string' && abiRaw.length > 0 ? abiRaw : null
     if (sysdir === undefined || sysdir.length === 0) {
-      health.error(
-        'broken',
-        'avd',
-        'config-missing-sysdir',
-        'config.ini 缺少 image.sysdir.1，无法定位系统镜像'
-      )
+      health.error('broken', 'avd', 'config-missing-sysdir', msg('rcNoSysdir'))
     } else if (configAbi === null) {
-      health.error('broken', 'avd', 'config-missing-abi', 'config.ini 缺少 abi.type')
+      health.error('broken', 'avd', 'config-missing-abi', msg('rcNoAbiType'))
     }
     // 分辨率关键项：可解析性（缺失降为 warning，不误伤省略项的旧配置）
     const lcdKeys = ['hw.lcd.width', 'hw.lcd.height', 'hw.lcd.density']
@@ -428,20 +424,11 @@ const checkDeviceWith = async (
     for (const key of lcdKeys) {
       const value = configValues!.values.get(key)
       if (value !== undefined && !/^\d+$/.test(value)) {
-        health.error(
-          'broken',
-          'avd',
-          'config-invalid-lcd',
-          `config.ini 的 ${key} 不是数值（${value}）`
-        )
+        health.error('broken', 'avd', 'config-invalid-lcd', msg('rcKeyNotNumeric', { key, value }))
       }
     }
     if (missingLcd.length === lcdKeys.length) {
-      health.warning(
-        'avd',
-        'config-lcd-missing',
-        'config.ini 未声明分辨率关键项（hw.lcd.width/height/density）'
-      )
+      health.warning('avd', 'config-lcd-missing', msg('rcLcdKeysMissing'))
     }
 
     // ---- 5. skin.path 边界：SDK skins 或应用 device-skins 之外为 unsafe ----
@@ -456,12 +443,7 @@ const checkDeviceWith = async (
             (ctx.sdkRootReal !== null && isWithin(ctx.sdkRootReal, skinReal)) ||
             (ctx.skinsRootReal !== null && isWithin(ctx.skinsRootReal, skinReal))
           if (!inside) {
-            health.error(
-              'unsafe',
-              'avd',
-              'skin-path-escape',
-              'skin.path 指向应用受控目录之外，拒绝核验'
-            )
+            health.error('unsafe', 'avd', 'skin-path-escape', msg('rcSkinPathOutside'))
           }
         } else {
           const skinResolved = resolve(skinPath)
@@ -469,40 +451,25 @@ const checkDeviceWith = async (
             isWithin(resolve(dirs.sdkRoot), skinResolved) ||
             isWithin(resolve(dirs.skinsRoot), skinResolved)
           if (!insideLexical) {
-            health.error(
-              'unsafe',
-              'avd',
-              'skin-path-escape',
-              'skin.path 指向应用受控目录之外，拒绝核验'
-            )
+            health.error('unsafe', 'avd', 'skin-path-escape', msg('rcSkinPathOutside'))
           }
         }
       } else if (hasEscapeSegments(skinPath.split('/'))) {
-        health.error('unsafe', 'avd', 'skin-path-escape', 'skin.path 含路径逃逸段，拒绝核验')
+        health.error('unsafe', 'avd', 'skin-path-escape', msg('rcSkinPathEscapeSegment'))
       }
     }
   }
 
   // ---- 6. 引用镜像：从实际 sysdir 解析 + 单包带诊断核验 ----
   if (configValues !== null && ctx.sdkRootReal === null) {
-    health.error(
-      'missing',
-      'image',
-      'sdk-root-missing',
-      '应用 SDK 根不可用（未建立或不可读），无法核验系统镜像——这是环境问题，不代表 AVD 已删除'
-    )
+    health.error('missing', 'image', 'sdk-root-missing', msg('rcSdkRootUnavailable'))
   } else if (configValues !== null) {
     const sysdir = configValues.values.get('image.sysdir.1')
     if (typeof sysdir === 'string' && sysdir.length > 0) {
       const isAbsolute = sysdir.startsWith('/')
       const segments = sysdir.replace(/\/+$/, '').split('/')
       if (hasEscapeSegments(isAbsolute ? segments.slice(1) : segments)) {
-        health.error(
-          'unsafe',
-          'image',
-          'image-sysdir-escape',
-          'image.sysdir.1 含路径逃逸段，拒绝核验'
-        )
+        health.error('unsafe', 'image', 'image-sysdir-escape', msg('rcSysdirEscapeSegment'))
       } else {
         const imageDir = isAbsolute ? sysdir : join(dirs.sdkRoot, ...segments)
         let dirIdentity: { platformSegment: string; tagSegment: string; abi: string } | null = null
@@ -521,12 +488,7 @@ const checkDeviceWith = async (
           ctx.sdkRootReal !== null &&
           !isWithin(ctx.sdkRootReal, imageReal)
         ) {
-          health.error(
-            'unsafe',
-            'image',
-            'image-sysdir-escape',
-            'image.sysdir.1 的实际位置逃出应用 SDK 根'
-          )
+          health.error('unsafe', 'image', 'image-sysdir-escape', msg('rcSysdirEscape'))
         } else {
           await applyImageCheck(health, meta, imageDir, imageReal, dirIdentity, configAbi, ctx, d)
         }
@@ -570,7 +532,12 @@ const applyImageCheck = async (
   const check = await cached
   if (check.fault !== null) {
     const mapped = imageFaultState[check.fault]
-    health.error(mapped.state, 'image', mapped.code, check.faultMessage ?? '系统镜像核验失败')
+    health.error(
+      mapped.state,
+      'image',
+      mapped.code,
+      check.faultMessage ?? msg('rcImageVerifyFailed')
+    )
     return
   }
   // 实际镜像 ABI 与 config 的 abi.type 矛盾 = broken（emulator 按后者启动会失败）
@@ -579,7 +546,7 @@ const applyImageCheck = async (
       'broken',
       'image',
       'abi-mismatch',
-      `config.ini 的 abi.type（${configAbi}）与实际镜像 ABI（${check.abi}）矛盾`
+      msg('rcAbiMismatch', { configAbi, abi: check.abi })
     )
   }
   // 元数据身份与实际不同 = warning（保留两份身份，不改元数据、不自动下载）
@@ -587,7 +554,7 @@ const applyImageCheck = async (
     health.warning(
       'image',
       'image-identity-differs',
-      `实际镜像（${check.packageName}）与保存的镜像身份（${meta.imagePackageName}）不同，请核对`
+      msg('rcImageIdentityDiffers', { actual: check.packageName, saved: meta.imagePackageName })
     )
   }
 }
@@ -623,7 +590,7 @@ const withTimeout = (
           {
             component: 'avd',
             code: 'check-timeout',
-            message: `文件检查超时（${CHECK_TIMEOUT_MS / 1000} 秒），本轮结果不可用`,
+            message: msg('rcCheckTimeout', { seconds: CHECK_TIMEOUT_MS / 1000 }),
             severity: 'error'
           }
         ],
@@ -682,11 +649,11 @@ const scanOrphans = async (
     const hasIni = iniStems.has(stem)
     const hasAvd = avdStems.has(stem)
     const detail =
-      hasIni && hasAvd ? '完整组' : hasIni ? '仅 .ini（AVD 目录缺失）' : '仅 .avd 目录（缺少 .ini）'
+      hasIni && hasAvd ? msg('rcFullGroup') : hasIni ? msg('rcIniOnlyGroup') : msg('rcAvdOnlyGroup')
     orphans.push({
       id: stem,
       kind: linked ? 'metadata-linked' : 'orphan',
-      detail: linked ? `${detail}（元数据异常关联）` : `${detail}（无元数据记录）`
+      detail: linked ? msg('rcMetaAnomalySuffix', { detail }) : msg('rcNoMetaSuffix', { detail })
     })
   }
   orphans.sort((a, b) => a.id.localeCompare(b.id))
@@ -742,17 +709,12 @@ export const runReconciliation = async (
     for (const meta of request.metas) {
       availabilityById.set(
         meta.id,
-        rootAvailability(
-          checkedAt,
-          'avd-home-missing',
-          '应用 AVD 根目录不存在，所有设备的 AVD 文件均缺失',
-          'missing'
-        )
+        rootAvailability(checkedAt, 'avd-home-missing', msg('rcAvdRootMissing'), 'missing')
       )
     }
   } else if (rootFault === 'symlink') {
     // 设计 2.1「根自身逃逸为 unsafe」：根 symlink 一律 unsafe，不当「读不了」降格
-    const message = `应用 AVD 根路径是符号链接（${request.dirs.avdHome}），拒绝核验`
+    const message = msg('rcAvdRootIsSymlink', { dir: request.dirs.avdHome })
     scanError = message
     for (const meta of request.metas) {
       availabilityById.set(
@@ -763,8 +725,8 @@ export const runReconciliation = async (
   } else if (rootFault !== null) {
     const message =
       rootFault === 'inaccessible'
-        ? `应用 AVD 根目录不可读，无法核对任何设备文件（${request.dirs.avdHome}）`
-        : `应用 AVD 根路径不是目录（${request.dirs.avdHome}）`
+        ? msg('rcAvdRootUnreadable', { dir: request.dirs.avdHome })
+        : msg('rcAvdRootNotDir', { dir: request.dirs.avdHome })
     scanError = message
     for (const meta of request.metas) {
       availabilityById.set(
@@ -791,7 +753,10 @@ export const runReconciliation = async (
       unrecognizedCount = outcome.unrecognizedCount
     } catch (error) {
       scanError =
-        scanError ?? `孤立组扫描失败：${error instanceof Error ? error.message : String(error)}`
+        scanError ??
+        msg('rcOrphanScanFailed', {
+          message: error instanceof Error ? error.message : String(error)
+        })
     }
   }
 
@@ -814,7 +779,7 @@ const checkDeviceHealthWithContext = async (
       'inaccessible',
       'avd',
       'check-error',
-      `检查失败（${error instanceof Error ? error.message : String(error)}）`
+      msg('rcCheckFailed', { message: error instanceof Error ? error.message : String(error) })
     )
     return health.result(now)
   }

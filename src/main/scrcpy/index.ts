@@ -24,6 +24,7 @@ import {
 } from './control'
 import { establishTransport, SCRCPY_SERVER_VERSION, type Transport } from './transport'
 import { SafeControlMessageWriter } from './controlWriter'
+import { msg } from '../locale'
 
 // ---- 预算（设计值，超限走重同步而非积压）----
 /** 未确认包数/字节上限（IPC 背压；重同步突发不受此限，由缓存上限约束） */
@@ -166,7 +167,7 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
       async readExactly(length: number): Promise<Uint8Array> {
         // 在协议库按声明长度分配内存前检查；同时约束粘连包/未完成分片的积压。
         if (!Number.isSafeInteger(length) || length < 0 || messageBytes + length > 1024 * 1024) {
-          throw new Error('控制流设备消息超过 1 MiB 预算')
+          throw new Error(msg('controlBudgetExceeded'))
         }
         messageBytes += length
         const value = await buffered.readExactly(length)
@@ -177,7 +178,7 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
     const onData = (chunk: Buffer): void => {
       queuedBytes += chunk.length
       if (queuedBytes > 2 * 1024 * 1024) {
-        controller.error(new Error('控制流缓冲超过 2 MiB 预算'))
+        controller.error(new Error(msg('controlBufferExceeded')))
         unlink()
         return
       }
@@ -238,7 +239,9 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
         settled = true
         parsers.error(error)
         session.state = 'error'
-        session.error = `控制流读取失败：${error instanceof Error ? error.message : String(error)}`
+        session.error = msg('controlStreamReadFailed', {
+          message: error instanceof Error ? error.message : String(error)
+        })
         sendState(session)
         await destroySession(session.deviceId)
       } finally {
@@ -253,12 +256,12 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
     new Promise<void>((resolve, reject) => {
       const writer = session.writer
       if (!writer) {
-        reject(new Error('控制通道不可用'))
+        reject(new Error(msg('controlChannelUnavailable')))
         return
       }
       // 库保留未确认序列号，超时降级后仍需限制数量，直到 ACK 或会话关闭。
       if (session.clipboardWrites >= 64 || session.clipboardSequence >= Number.MAX_SAFE_INTEGER) {
-        reject(new Error('剪贴板确认积压，请重新连接设备后重试'))
+        reject(new Error(msg('clipboardBacklog')))
         return
       }
       const sequence = ++session.clipboardSequence
@@ -267,7 +270,7 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
         if (!session.clipboardAcks.delete(sequence)) return
         clearTimeout(timer)
         if (ok) resolve()
-        else reject(error instanceof Error ? error : new Error('剪贴板控制通道已关闭'))
+        else reject(error instanceof Error ? error : new Error(msg('clipboardChannelClosed')))
       }
       // 缺 ACK 时保留既有派发降级；确认仅代表服务端收到，不证明控件接受粘贴。
       const timer = setTimeout(() => finish(true), CLIPBOARD_ACK_TIMEOUT_MS)
@@ -282,7 +285,9 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
           finish(false, error)
           if (!session.abort.signal.aborted) {
             session.state = 'error'
-            session.error = `剪贴板控制发送失败：${error instanceof Error ? error.message : String(error)}`
+            session.error = msg('clipboardSendFailed', {
+              message: error instanceof Error ? error.message : String(error)
+            })
             sendState(session)
             void destroySession(session.deviceId)
           }
@@ -434,7 +439,10 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
         transport.videoSize.height > 65_535
       ) {
         throw new Error(
-          `视频尺寸非法（${transport.videoSize.width}×${transport.videoSize.height}）`
+          msg('videoSizeInvalid', {
+            width: transport.videoSize.width,
+            height: transport.videoSize.height
+          })
         )
       }
       session.format = {
@@ -558,10 +566,10 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
   // ---- IPC ----
 
   const requireReadySession = (sender: Electron.WebContents): StreamSession => {
-    if (!deps.isMainSender(sender)) throw new Error('screen: 未登记的窗口')
-    if (!active) throw new Error('screen: 当前没有活动视图')
+    if (!deps.isMainSender(sender)) throw new Error(msg('screenUnregisteredWindow'))
+    if (!active) throw new Error(msg('screenNoActiveView'))
     const session = sessions.get(active.deviceId)
-    if (!session || session.state !== 'ready') throw new Error('screen: 活动会话未就绪')
+    if (!session || session.state !== 'ready') throw new Error(msg('screenSessionNotReady'))
     return session
   }
 
@@ -569,7 +577,7 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
     ipcMain.handle(
       IPC_CHANNELS.screenActivate,
       async (event, raw: unknown): Promise<ScreenStateMessage | null> => {
-        if (!deps.isMainSender(event.sender)) throw new Error('screen: 未登记的窗口')
+        if (!deps.isMainSender(event.sender)) throw new Error(msg('screenUnregisteredWindow'))
         if (typeof raw !== 'object' || raw === null) throw new Error('screen:activate: 非法的入参')
         const value = raw as Record<string, unknown>
         const id = value['id']
@@ -598,15 +606,15 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
     )
 
     ipcMain.handle(IPC_CHANNELS.screenRetry, async (event, raw: unknown): Promise<void> => {
-      if (!deps.isMainSender(event.sender)) throw new Error('screen: 未登记的窗口')
+      if (!deps.isMainSender(event.sender)) throw new Error(msg('screenUnregisteredWindow'))
       if (typeof raw !== 'object' || raw === null) throw new Error('screen:retry: 非法的入参')
       const value = raw as Record<string, unknown>
       if (typeof value['id'] !== 'string' || typeof value['runId'] !== 'string') {
         throw new Error('screen:retry: 非法的入参')
       }
       const session = sessions.get(value['id'])
-      if (!session) throw new Error('screen:retry: 会话不存在')
-      if (session.runId !== value['runId']) throw new Error('screen:retry: 代次过期')
+      if (!session) throw new Error(msg('retryNoSession'))
+      if (session.runId !== value['runId']) throw new Error(msg('retryGenerationStale'))
       await destroySession(value['id'])
       await ensureSession({ id: value['id'], runId: value['runId'], serial: session.serial })
     })
@@ -639,13 +647,13 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
         request.generation !== session.generation ||
         request.viewToken !== active?.viewToken
       ) {
-        throw new Error('screen:input: 归属过期（旧视图/旧代次）')
+        throw new Error(msg('inputStale'))
       }
       if (request.width !== session.format.width || request.height !== session.format.height) {
-        throw new Error('screen:input: 画面尺寸与当前代次不符（等待旋转后的新尺寸）')
+        throw new Error(msg('inputSizeMismatch'))
       }
       const writer = session.writer
-      if (!writer) throw new Error('screen:input: 控制通道不可用')
+      if (!writer) throw new Error(msg('inputControlUnavailable'))
       if (session.rotating) return
       const context: InjectContext = {
         writer,
@@ -662,7 +670,9 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
             10_000
           )
           if (result.code !== 0) {
-            throw new Error(`锁定屏幕旋转失败：${result.stderr || result.stdout || result.code}`)
+            throw new Error(
+              msg('rotateLockFailed', { detail: result.stderr || result.stdout || result.code })
+            )
           }
           if (
             session.abort.signal.aborted ||
@@ -671,7 +681,7 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
             active.viewToken !== request.viewToken ||
             session.generation !== request.generation
           ) {
-            throw new Error('screen:input: 归属过期（旋转锁定期间视图/代次已变化）')
+            throw new Error(msg('inputStaleDuringRotation'))
           }
         }
       }

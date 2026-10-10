@@ -6,6 +6,7 @@ import type { WizardContext } from '@shared/types'
 import { appIcon } from '../app-icon'
 import { themeWindowBackground } from '../theme'
 import { getMainWindow } from './index'
+import { msg } from '../locale'
 
 // 新建设备独立窗口单例（2026-10-06 用户确认由模态改非模态，plan
 // 2026-10-06-wizard-independent-window）：可移动、不阻塞主窗输入。
@@ -25,7 +26,7 @@ let wizardSession: WizardSession | null = null
 const LOAD_TIMEOUT_MS = 15_000
 
 const contextLabel = (context: WizardContext): string =>
-  context.kind === 'create' ? '新建设备' : '编辑设备'
+  context.kind === 'create' ? msg('wizardCreateLabel') : msg('wizardEditLabel')
 
 const sameContext = (a: WizardContext, b: WizardContext): boolean =>
   a.kind === b.kind && (a.kind !== 'edit' || b.kind !== 'edit' || a.deviceId === b.deviceId)
@@ -56,7 +57,10 @@ export function openWizardWindow(context: WizardContext = { kind: 'create' }): P
     if (!sameContext(current.context, context)) {
       return Promise.reject(
         new Error(
-          `已有「${contextLabel(current.context)}」窗口打开，请先关闭它再打开「${contextLabel(context)}」`
+          msg('wizardAlreadyOpen', {
+            current: contextLabel(current.context),
+            target: contextLabel(context)
+          })
         )
       )
     }
@@ -90,7 +94,7 @@ export function openWizardWindow(context: WizardContext = { kind: 'create' }): P
   const fail = (cause: unknown): void => {
     if (session.settled) return
     const detail = cause instanceof Error ? cause.message : String(cause)
-    settle(new Error(`加载「${contextLabel(session.context)}」窗口失败：${detail}`))
+    settle(new Error(msg('wizardLoadFailed', { label: contextLabel(session.context), detail })))
     release()
     if (session.window && !session.window.isDestroyed()) session.window.destroy()
   }
@@ -141,9 +145,9 @@ export function openWizardWindow(context: WizardContext = { kind: 'create' }): P
       if (isMainFrame) fail(new Error(`${description}（${code}）`))
     })
     window.webContents.on('render-process-gone', (_event, details) => {
-      fail(new Error(`渲染进程退出（${details.reason}）`))
+      fail(new Error(msg('wizardRendererExit', { reason: details.reason })))
     })
-    timeout = setTimeout(() => fail(new Error('15 秒内未完成窗口加载，请重试')), LOAD_TIMEOUT_MS)
+    timeout = setTimeout(() => fail(new Error(msg('wizardLoadTimeout'))), LOAD_TIMEOUT_MS)
 
     const load =
       is.dev && process.env['ELECTRON_RENDERER_URL']
@@ -167,7 +171,7 @@ export function registerWizardIpc(deps: WizardIpcDeps = {}): void {
   ipcMain.handle(IPC_CHANNELS.wizardOpen, (event): Promise<void> => {
     // sender 守卫保留（不可信，宁可解析失败也不盲开）；parent 已移除——向导窗完全独立
     if (!BrowserWindow.fromWebContents(event.sender)) {
-      throw new Error(`${IPC_CHANNELS.wizardOpen}: 无法定位调用方窗口`)
+      throw new Error(`${IPC_CHANNELS.wizardOpen}: ${msg('wizardCallerNotFound')}`)
     }
     return openWizardWindow()
   })
@@ -175,7 +179,7 @@ export function registerWizardIpc(deps: WizardIpcDeps = {}): void {
   // 主窗开编辑窗（plan 2026-10-08 设计 1）：仅主窗可调；目标设备由 devices 域核验
   ipcMain.handle(IPC_CHANNELS.wizardOpenEditor, async (event, raw: unknown): Promise<void> => {
     if (getMainWindow()?.webContents.id !== event.sender.id) {
-      throw new Error(`${IPC_CHANNELS.wizardOpenEditor}: 仅主窗可打开编辑窗`)
+      throw new Error(`${IPC_CHANNELS.wizardOpenEditor}: ${msg('editorMainOnly')}`)
     }
     if (
       typeof raw !== 'object' ||
@@ -183,7 +187,7 @@ export function registerWizardIpc(deps: WizardIpcDeps = {}): void {
       typeof (raw as Record<string, unknown>).id !== 'string' ||
       !UUID_RE.test((raw as Record<string, unknown>).id as string)
     ) {
-      throw new Error(`${IPC_CHANNELS.wizardOpenEditor}: 非法的设备标识`)
+      throw new Error(`${IPC_CHANNELS.wizardOpenEditor}: ${msg('invalidDeviceId')}`)
     }
     const deviceId = (raw as { id: string }).id
     if (deps.assertEditorTarget) await deps.assertEditorTarget(deviceId)
@@ -194,7 +198,7 @@ export function registerWizardIpc(deps: WizardIpcDeps = {}): void {
   ipcMain.handle(IPC_CHANNELS.wizardContext, (event): WizardContext | null => {
     const context = wizardContextOf(event.sender)
     if (context === null) {
-      throw new Error(`${IPC_CHANNELS.wizardContext}: 非向导窗调用`)
+      throw new Error(`${IPC_CHANNELS.wizardContext}: ${msg('wizardCallerNotAllowed')}`)
     }
     return context
   })
@@ -203,7 +207,7 @@ export function registerWizardIpc(deps: WizardIpcDeps = {}): void {
     const sender = BrowserWindow.fromWebContents(event.sender)
     // 只允许向导窗关自己——别的窗发 close 予以拒绝
     if (!isWizardSender(sender)) {
-      throw new Error(`${IPC_CHANNELS.wizardClose}: 非向导窗调用`)
+      throw new Error(`${IPC_CHANNELS.wizardClose}: ${msg('wizardCallerNotAllowed')}`)
     }
     sender?.close()
   })

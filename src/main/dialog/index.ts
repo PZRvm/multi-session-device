@@ -2,6 +2,7 @@ import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { DialogOptions, DialogResult } from '@shared/types'
 import { appIcon } from '../app-icon'
+import { msg } from '../locale'
 
 const isDialogOptions = (value: unknown): value is DialogOptions => {
   if (typeof value !== 'object' || value === null) return false
@@ -29,7 +30,7 @@ export function registerDialogIpc(): void {
   ipcMain.handle(IPC_CHANNELS.dialogShow, async (event, raw: unknown): Promise<DialogResult> => {
     // renderer 传来的 payload 不可信，先过运行时守卫再进业务
     if (!isDialogOptions(raw)) {
-      throw new Error(`${IPC_CHANNELS.dialogShow}: 非法的 options`)
+      throw new Error(`${IPC_CHANNELS.dialogShow}: ${msg('invalidDialogOptions')}`)
     }
     const window = BrowserWindow.fromWebContents(event.sender)
     const options = { ...raw, icon: appIcon }

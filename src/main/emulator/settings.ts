@@ -24,6 +24,7 @@ export {
   settingsToConfigPatch,
   settingsToRunnerArgs
 } from '@shared/settings-contract'
+import { msg } from '../locale'
 
 const DEFAULT_INTERNAL_STORAGE_MIB = 6 * 1024
 const DEFAULT_CPU_CORES = 4
@@ -158,7 +159,7 @@ export const buildCapabilities = (input: {
     emulatorVersion: input.emulatorVersion,
     defaults,
     fields: {
-      skinRef: disabled('未找到可用皮肤（SDK 未装或库为空）'),
+      skinRef: disabled(msg('capSkinNone')),
       // 摄像头字段开放（批次 8 已交付枚举/占用核验/启动重核验）；webcam 选项
       // 由 buildEnrichedCapabilities 按宿主枚举注入 webcamDeviceIds
       frontCamera: enabled(),
@@ -167,19 +168,18 @@ export const buildCapabilities = (input: {
       networkLatency: enabled(),
       orientation:
         input.profile.formFactor === 'wear' || input.profile.formFactor === 'tv'
-          ? disabled('该形态不支持固定初始朝向')
+          ? disabled(msg('capOrientationUnsupported'))
           : enabled(),
-      bootMode: disabled('Quick Boot 尚未通过稳定性门槛，当前按 Cold Boot 创建'),
+      bootMode: disabled(msg('capQuickBootGate')),
       internalStorageMiB: enabled(2048, 64 * 1024),
       cpuCores: enabled(1, hostCpuCores()),
       graphics: enabled(),
       ramMiB: enabled(minRam, 32 * 1024),
       vmHeapMiB: enabled(64, MAX_VM_HEAP_MIB),
-      preferredAbi: disabled('跨架构镜像属二期；Optimal 即解析为选中包 ABI')
+      preferredAbi: disabled(msg('abiReadOnlyCrossArch'))
     },
     quickBootAvailable: false,
-    quickBootDisabledReason:
-      'Quick Boot 尚未通过稳定性门槛（连续恢复测试进行中），当前按 Cold Boot 创建',
+    quickBootDisabledReason: msg('capQuickBootGateWatching'),
     webcamDeviceIds: [],
     skinIds: []
   }
@@ -240,7 +240,7 @@ export const buildEnrichedCapabilities = async (
   capabilities.fields.skinRef =
     capabilities.skinIds.length > 0
       ? { disabledReason: null, min: null, max: null, step: null }
-      : { disabledReason: '未找到可用皮肤（SDK 未装或库为空）', min: null, max: null, step: null }
+      : { disabledReason: msg('capSkinNone'), min: null, max: null, step: null }
   const recommendedName = officialSkinName(input.profile.id)
   const selectedSkin = [...sdkSkins, ...importedSkins].find(
     (record) => record.name === recommendedName
@@ -260,7 +260,9 @@ export const buildEnrichedCapabilities = async (
     capabilities.cameraSnapshot = {
       permission: 'unknown',
       devices: [],
-      error: `摄像头枚举失败：${error instanceof Error ? error.message : String(error)}`
+      error: msg('capCameraEnumFailed', {
+        message: error instanceof Error ? error.message : String(error)
+      })
     }
   }
   return capabilities

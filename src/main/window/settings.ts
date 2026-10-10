@@ -5,6 +5,7 @@ import { IPC_CHANNELS } from '@shared/ipc-channels'
 import { appIcon } from '../app-icon'
 import { themeWindowBackground } from '../theme'
 import { getMainWindow } from './index'
+import { msg } from '../locale'
 
 interface SettingsSession {
   window: BrowserWindow | null
@@ -53,7 +54,13 @@ export function openSettingsWindow(): Promise<void> {
   }
   const fail = (cause: unknown): void => {
     if (session.settled) return
-    settle(new Error(`加载设置窗口失败：${cause instanceof Error ? cause.message : String(cause)}`))
+    settle(
+      new Error(
+        msg('loadSettingsFailed', {
+          detail: cause instanceof Error ? cause.message : String(cause)
+        })
+      )
+    )
     release()
     if (session.window && !session.window.isDestroyed()) session.window.destroy()
   }
@@ -66,7 +73,7 @@ export function openSettingsWindow(): Promise<void> {
       minHeight: 460,
       show: false,
       backgroundColor: themeWindowBackground(),
-      title: '设置',
+      title: msg('settingsWindowTitle'),
       icon: appIcon,
       // darwin 用原生三灯（向导窗同款 hiddenInset 度量；对齐姊妹仓库设置窗模式）：
       // 灯归系统自管且无逐灯隐藏 API，最小化/全屏能力禁用后黄/绿为无效按钮，仅红灯关窗
@@ -97,9 +104,9 @@ export function openSettingsWindow(): Promise<void> {
       if (isMainFrame) fail(new Error(`${description}（${code}）`))
     })
     window.webContents.on('render-process-gone', (_event, details) => {
-      fail(new Error(`渲染进程退出（${details.reason}）`))
+      fail(new Error(msg('wizardRendererExit', { reason: details.reason })))
     })
-    timeout = setTimeout(() => fail(new Error('15 秒内未完成窗口加载，请重试')), 15_000)
+    timeout = setTimeout(() => fail(new Error(msg('wizardLoadTimeout'))), 15_000)
     const load =
       is.dev && process.env['ELECTRON_RENDERER_URL']
         ? window.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/settings.html`)
@@ -114,7 +121,7 @@ export function openSettingsWindow(): Promise<void> {
 export function registerSettingsIpc(): void {
   ipcMain.handle(IPC_CHANNELS.settingsOpen, (event): Promise<void> => {
     if (getMainWindow()?.webContents !== event.sender) {
-      throw new Error(`${IPC_CHANNELS.settingsOpen}: 仅主窗可打开设置窗`)
+      throw new Error(`${IPC_CHANNELS.settingsOpen}: ${msg('settingsMainOnlySuffix')}`)
     }
     return openSettingsWindow()
   })

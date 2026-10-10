@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import type { DeviceSkinOrientation, SkinImagePart } from '@shared/types'
 import AdmZip from 'adm-zip'
 import { SkinImageBudget, SKIN_IMAGE_MAX_BYTES } from './skinImageLimits'
+import { msg } from '../locale'
 
 /**
  * 机型皮肤域（plan 设计 6）：SDK 已装皮肤扫描、layout 解析、本地导入与
@@ -316,10 +317,10 @@ const assertSkinResourceLimits = async (
         const size = (info as { size?: number }).size
         if (typeof size === 'number') bytes += size
         if (files > MAX_SKIN_FILES) {
-          throw new Error(`压缩包资源数超限（> ${MAX_SKIN_FILES} 个文件），导入拒绝`)
+          throw new Error(msg('skinTooManyFiles', { max: MAX_SKIN_FILES }))
         }
         if (bytes > MAX_SKIN_BYTES) {
-          throw new Error('压缩包体积超限（> 256 MB），导入拒绝')
+          throw new Error(msg('skinZipTooLarge'))
         }
       }
     }
@@ -353,17 +354,17 @@ export const importSkinArchive = async (
         if ((await d.stat(full)).isDirectory()) directories.push(full)
       }
       if (directories.length !== 1) {
-        throw new Error('压缩包结构不合法：未找到皮肤 layout 文件（应包含一个皮肤目录）')
+        throw new Error(msg('skinZipStructureInvalid'))
       }
       skinDir = directories[0]
     }
     const layout = parseSkinLayout(await d.readFile(join(skinDir, 'layout')))
     if (layout === null) {
-      throw new Error('皮肤 layout 不完整（缺 parts/layouts 或屏幕尺寸），导入拒绝')
+      throw new Error(msg('skinLayoutIncomplete'))
     }
     // 可渲染性前置校验（review P3）：零素材皮肤入库必被投屏拒绝，导入即拒
     if (renderableArtFiles(layout).length === 0) {
-      throw new Error('皮肤没有可渲染的背景图片（layout 未引用背景/前景素材），导入拒绝')
+      throw new Error(msg('skinNoBackground'))
     }
     // 素材引用核验 + 路径逃逸核验（词法 resolve + 禁 `..`/绝对引用 + 条目存在性；
     // adm-zip 解包不产符号链接，词法与 realpath 等效——review P3 措辞对齐）
@@ -371,14 +372,14 @@ export const importSkinArchive = async (
     const entries = await d.readdir(skinDir)
     for (const asset of layout.imageAssets) {
       if (asset.includes('..') || asset.startsWith('/')) {
-        throw new Error(`素材引用越界（${asset}），导入拒绝`)
+        throw new Error(msg('skinAssetOutOfRange', { asset }))
       }
       if (!entries.includes(asset)) {
-        throw new Error(`素材缺失（${asset}），导入拒绝`)
+        throw new Error(msg('skinAssetMissing', { asset }))
       }
       const assetResolved = resolve(dirname(join(skinDir, 'layout')), asset)
       if (!assetResolved.startsWith(skinRootResolved)) {
-        throw new Error(`素材路径逃逸（${asset}），导入拒绝`)
+        throw new Error(msg('skinAssetPathEscape', { asset }))
       }
     }
     await assertSkinResourceLimits(skinDir, d)
@@ -387,7 +388,7 @@ export const importSkinArchive = async (
       const path = join(skinDir, asset)
       const info = await d.stat(path)
       if (info.isDirectory() || (info as { size?: number }).size! > SKIN_IMAGE_MAX_BYTES)
-        throw new Error(`素材 ${asset}：不是图片文件或体积超限`)
+        throw new Error(msg('skinAssetInvalid', { asset }))
       budget.add(asset, await d.readImage(path))
     }
     const id = randomUUID()

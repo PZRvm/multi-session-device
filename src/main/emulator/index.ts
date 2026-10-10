@@ -26,6 +26,7 @@ import type {
   SdkUninstallState,
   WizardCapabilities
 } from '@shared/types'
+import { msg } from '../locale'
 
 /** 应用自有 SDK 根（PRD E：userData/AndroidSDK；设置自定义路径属 stage 05） */
 export const defaultSdkRoot = (): string => join(app.getPath('userData'), 'AndroidSDK')
@@ -36,7 +37,7 @@ export const defaultAvdHome = (): string => join(app.getPath('userData'), 'avd-h
 const resolveRoot = (raw: unknown): string => {
   if (raw === undefined || raw === null) return defaultSdkRoot()
   if (typeof raw === 'string' && raw.length > 0) return raw
-  throw new Error('sdk: 非法的 SDK 根')
+  throw new Error(`sdk: ${msg('sdkInvalidRoot')}`)
 }
 
 const pushToAllWindows = (channel: string, payload: unknown): void => {
@@ -52,18 +53,17 @@ const pushProgress = (progress: SdkProgress): void =>
 const confirmLicenses = async (): Promise<void> => {
   const window = BrowserWindow.getAllWindows()[0]
   const options = {
-    title: 'Android SDK 许可确认',
-    message: '首次引导需要下载 Android SDK 组件（platform-tools、emulator 等）。',
-    detail:
-      '这些组件受 Android SDK 许可协议约束：\n· android-sdk-license（两版）\n· android-sdk-preview-license\n\n同意后本应用将在自有目录内写入许可确认文件并下载组件（数百 MB，仅此一次）。你拒绝则不下载、不写任何文件。',
-    buttons: ['同意并继续', '拒绝'],
+    title: msg('licenseTitle'),
+    message: msg('licenseMessage'),
+    detail: msg('licenseDetail'),
+    buttons: [msg('licenseAccept'), msg('licenseReject')],
     cancelId: 1,
     icon: appIcon
   }
   const result = window
     ? await dialog.showMessageBox(window, options)
     : await dialog.showMessageBox(options)
-  if (result.response !== 0) throw new Error('用户拒绝 Android SDK 许可，bootstrap 中止')
+  if (result.response !== 0) throw new Error(msg('licenseRejected'))
 }
 
 // 画像缓存（5min）：avdmanager list device 是 Java 子进程（秒级），不必每次向导都跑。
@@ -134,14 +134,14 @@ const toSkinSummary = (record: SkinRecord): DeviceSkinSummary => {
 /** 向导专用通道的 sender 守卫（plan 设计 9）：非向导窗调用直接拒绝 */
 const requireWizardSender = (channel: string, event: Electron.IpcMainInvokeEvent): void => {
   if (!wizardOwns(event.sender)) {
-    throw new Error(`${channel}: 非向导窗调用`)
+    throw new Error(`${channel}${msg('wizardCallerNotAllowed')}`)
   }
 }
 
 const requireSdkReady = async (root: string): Promise<void> => {
   const snapshot = await detectSdk(root)
   if (!snapshot.cmdlineTools.present || !snapshot.jre.present) {
-    throw new Error('SDK 尚未就绪（缺 cmdline-tools 或 JRE），先完成 SDK 引导')
+    throw new Error(msg('sdkNotReady'))
   }
 }
 
@@ -200,7 +200,7 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     IPC_CHANNELS.sdkWizardCapabilities,
     async (_event, raw: unknown): Promise<WizardCapabilities> => {
       if (typeof raw !== 'object' || raw === null) {
-        throw new Error(`${IPC_CHANNELS.sdkWizardCapabilities}: 非法的入参`)
+        throw new Error(`${IPC_CHANNELS.sdkWizardCapabilities}${msg('invalidPayload')}`)
       }
       const input = raw as Record<string, unknown>
       if (
@@ -209,7 +209,7 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
         input.profileId.length === 0 ||
         splitPackageName(input.imagePackageName) === null
       ) {
-        throw new Error(`${IPC_CHANNELS.sdkWizardCapabilities}: 非法的画像/镜像标识`)
+        throw new Error(`${IPC_CHANNELS.sdkWizardCapabilities}${msg('invalidProfileImageId')}`)
       }
       const root = resolveRoot(undefined)
       await requireSdkReady(root)
@@ -217,12 +217,14 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
       const profiles = await profilesCached(root)
       const profile = profiles.find((entry) => entry.id === input.profileId)
       if (profile === undefined) {
-        throw new Error(`${IPC_CHANNELS.sdkWizardCapabilities}: 画像不存在或不可创建`)
+        throw new Error(
+          `${IPC_CHANNELS.sdkWizardCapabilities}: ${msg('profileMissingOrNotCreatable')}`
+        )
       }
       const local = await scanLocalImages(root)
       const imageRecord = local.get(input.imagePackageName)
       if (imageRecord === undefined) {
-        throw new Error(`${IPC_CHANNELS.sdkWizardCapabilities}: 镜像未安装，能力不可用`)
+        throw new Error(`${IPC_CHANNELS.sdkWizardCapabilities}: ${msg('imageNotInstalledForCaps')}`)
       }
       const capabilities = await buildEnrichedCapabilities(
         {
@@ -240,14 +242,14 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
   // ---- 机型皮肤域（plan 设计 6/9）：清单只读（主窗+向导）；导入与下载仅向导窗 ----
 
   ipcMain.handle(IPC_CHANNELS.sdkDeviceSkinPresentation, async (event, raw: unknown) => {
-    if (event.sender !== getMainWindow()?.webContents) throw new Error('皮肤资源仅主窗可读')
+    if (event.sender !== getMainWindow()?.webContents) throw new Error(msg('skinResourceMainOnly'))
     if (
       typeof raw !== 'object' ||
       raw === null ||
       typeof (raw as Record<string, unknown>).deviceId !== 'string'
     )
-      throw new Error('非法设备标识')
-    if (!deps.savedDeviceSkinRef) throw new Error('设备皮肤查询未接入')
+      throw new Error(msg('invalidDeviceId'))
+    if (!deps.savedDeviceSkinRef) throw new Error(msg('skinQueryNotWired'))
     const ref = await deps.savedDeviceSkinRef((raw as { deviceId: string }).deviceId)
     return readSkinPresentation(ref, defaultSdkRoot(), app.getPath('userData'))
   })
@@ -258,7 +260,7 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
       raw === null ||
       typeof (raw as Record<string, unknown>).request !== 'boolean'
     )
-      throw new Error('非法摄像头操作')
+      throw new Error(msg('invalidCameraAction'))
     if ((raw as { request: boolean }).request) await requestCameraPermission()
     return readCameraSnapshot(defaultSdkRoot())
   })
@@ -288,11 +290,11 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
       requireWizardSender(IPC_CHANNELS.wizardChooseDeviceSkin, event)
       const wizard = BrowserWindow.fromWebContents(event.sender)
       if (wizard === null) {
-        throw new Error(`${IPC_CHANNELS.wizardChooseDeviceSkin}: 向导窗已不可用`)
+        throw new Error(`${IPC_CHANNELS.wizardChooseDeviceSkin}: ${msg('wizardChooseUnavailable')}`)
       }
       const picked = await dialog.showOpenDialog(wizard, {
-        title: '导入机型皮肤压缩包',
-        filters: [{ name: '皮肤压缩包', extensions: ['zip'] }],
+        title: msg('importSkinDialogTitle'),
+        filters: [{ name: msg('skinArchiveFilterName'), extensions: ['zip'] }],
         properties: ['openFile']
       })
       if (picked.canceled || picked.filePaths.length === 0) {
@@ -309,14 +311,14 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     async (event, raw: unknown): Promise<DeviceSkinSummary | null> => {
       requireWizardSender(IPC_CHANNELS.sdkDownloadDeviceSkin, event)
       if (typeof raw !== 'object' || raw === null) {
-        throw new Error(`${IPC_CHANNELS.sdkDownloadDeviceSkin}: 非法的入参`)
+        throw new Error(`${IPC_CHANNELS.sdkDownloadDeviceSkin}${msg('invalidPayload')}`)
       }
       const skinName = (raw as Record<string, unknown>).skinName
       if (typeof skinName !== 'string' || officialSkinName(skinName) === null) {
-        throw new Error(`${IPC_CHANNELS.sdkDownloadDeviceSkin}: 非法的皮肤名`)
+        throw new Error(`${IPC_CHANNELS.sdkDownloadDeviceSkin}: ${msg('invalidSkinName')}`)
       }
       if (skinDownloading) {
-        throw new Error(`已有皮肤在下载（${skinDownloading}），请等待完成`)
+        throw new Error(msg('skinDownloadBusy', { skin: skinDownloading }))
       }
       skinDownloading = skinName
       try {
@@ -327,12 +329,12 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
         )
         if (!accepted) {
           const wizard = BrowserWindow.fromWebContents(event.sender)
-          if (!wizard) throw new Error('向导窗已关闭')
+          if (!wizard) throw new Error(msg('wizardWindowClosed'))
           const result = await dialog.showMessageBox(wizard, {
-            title: '获取官方机型皮肤',
-            message: '从 Android Studio 官方资源库获取皮肤并缓存在本机。',
-            detail: `来源：${SKIN_SOURCE_URL}\n素材适用上游资源库条款。本应用只按需获取，后续同机型复用缓存；本机 Studio 有相同版本文件时直接复用。`,
-            buttons: ['继续获取', '取消'],
+            title: msg('skinConsentTitle'),
+            message: msg('skinConsentMessage'),
+            detail: msg('skinConsentDetail', { url: SKIN_SOURCE_URL }),
+            buttons: [msg('skinConsentContinue'), msg('dialogCancel')],
             cancelId: 1
           })
           if (result.response !== 0) return null
@@ -358,7 +360,7 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
       raw === null ||
       typeof (raw as Record<string, unknown>).packageName !== 'string'
     ) {
-      throw new Error(`${IPC_CHANNELS.sdkUninstallImage}: 非法的入参`)
+      throw new Error(`${IPC_CHANNELS.sdkUninstallImage}${msg('invalidPayload')}`)
     }
     const packageName = (raw as Record<string, unknown>).packageName as string
     const root = resolveRoot(undefined)
@@ -382,7 +384,9 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
         // 对它无意义），文案标注是卸载步骤
         pushToAllWindows(IPC_CHANNELS.sdkUninstallState, {
           packageName,
-          error: `卸载失败：${error instanceof Error ? error.message : String(error)}`
+          error: msg('uninstallImageFailed', {
+            message: error instanceof Error ? error.message : String(error)
+          })
         } satisfies SdkUninstallState)
         throw error
       }
@@ -399,9 +403,9 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
           // 复核失败就地广播（重开窗口只依赖广播，不看 invoke 拒绝）
           pushToAllWindows(IPC_CHANNELS.sdkUninstallState, {
             packageName,
-            error: `卸载后仍检测到残留目录（${dir}），可手动清理后刷新清单`
+            error: msg('uninstallResidualDir', { dir })
           } satisfies SdkUninstallState)
-          throw new Error(`卸载后仍检测到残留目录（${dir}），可手动清理后刷新清单`)
+          throw new Error(msg('uninstallResidualDir', { dir }))
         }
       }
       imagesCache = null
@@ -421,7 +425,7 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
       raw === null ||
       typeof (raw as Record<string, unknown>).packageName !== 'string'
     ) {
-      throw new Error(`${IPC_CHANNELS.sdkDownloadImage}: 非法的入参`)
+      throw new Error(`${IPC_CHANNELS.sdkDownloadImage}${msg('invalidPayload')}`)
     }
     const packageName = (raw as Record<string, unknown>).packageName as string
     // 守卫从固定正则升级为可信目录核验：包必须出现在当前 manifest/本地扫描结果里
@@ -433,10 +437,14 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
         : await listImagesWithState(root)
     const entry = catalog.images.find((image) => image.packageName === packageName)
     if (entry === undefined) {
-      throw new Error(`${IPC_CHANNELS.sdkDownloadImage}: 包 ${packageName} 不在可信镜像目录中`)
+      throw new Error(
+        `${IPC_CHANNELS.sdkDownloadImage}: ${msg('packageNotTrusted', { packageName })}`
+      )
     }
     if (entry.abi !== 'arm64-v8a') {
-      throw new Error(`${IPC_CHANNELS.sdkDownloadImage}: 跨架构镜像（${entry.abi}）本期不支持下载`)
+      throw new Error(
+        `${IPC_CHANNELS.sdkDownloadImage}: ${msg('crossArchDownloadUnsupported', { abi: entry.abi })}`
+      )
     }
     // 统一包操作互斥（packageOps）：拒绝进行中的下载/卸载（文案含包名）；
     // 下载侧的取消链路（abort/done）保留在 downloading 对象上
@@ -522,11 +530,11 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     async (event, raw: unknown): Promise<void> => {
       requireWizardSender(IPC_CHANNELS.sdkCancelDownloadImage, event)
       if (typeof raw !== 'object' || raw === null) {
-        throw new Error(`${IPC_CHANNELS.sdkCancelDownloadImage}: 非法的入参`)
+        throw new Error(`${IPC_CHANNELS.sdkCancelDownloadImage}${msg('invalidPayload')}`)
       }
       const packageName = (raw as Record<string, unknown>).packageName
       if (typeof packageName !== 'string') {
-        throw new Error(`${IPC_CHANNELS.sdkCancelDownloadImage}: 非法的包名`)
+        throw new Error(`${IPC_CHANNELS.sdkCancelDownloadImage}: ${msg('invalidPackageName')}`)
       }
       const task = downloading
       if (task === null || task.packageName !== packageName) return

@@ -10,6 +10,7 @@ import {
   readJarProfileMetas,
   sdklibJarPathFor
 } from './profileMetadata'
+import { msg } from '../locale'
 
 /**
  * 设备画像：`avdmanager list device`（可创建性真值：id/Name/OEM/Tag）+ sdklib
@@ -33,7 +34,7 @@ const defaultRunner = async (avdmanagerPath: string, sdkRoot: string): Promise<s
   const javaHome = join(sdkRoot, 'jre', 'Contents', 'Home')
   const javaBin = join(javaHome, 'bin', 'java')
   const androidUserHome = join(sdkRoot, 'android-user')
-  const repairHint = `设备画像查询失败：请检查当前 SDK 的自带 JRE，并重新引导或修复 SDK/JRE（${javaBin}）`
+  const repairHint = msg('profilesQueryFailed', { javaBin })
   try {
     await access(javaBin, constants.X_OK)
   } catch (cause) {
@@ -69,7 +70,7 @@ const defaultRunner = async (avdmanagerPath: string, sdkRoot: string): Promise<s
           .join('\n')
         reject(
           new Error(
-            `${repairHint}；avdmanager list device 失败（exit ${code}）：${tail.slice(-400)}`
+            msg('avdmanagerListFailed', { repairHint, code: String(code), tail: tail.slice(-400) })
           )
         )
       }

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { SdkComponentName, SdkProgress, SdkSnapshot } from '@shared/types'
+import { msg } from '../locale'
 
 // ---- 钉版下载源（升级 = 显式改这里 + 重跑真机集成）----
 
@@ -171,7 +172,7 @@ export interface BootstrapDeps {
 
 const defaultFetcher = async (url: string): Promise<Buffer> => {
   const response = await fetch(url)
-  if (!response.ok) throw new Error(`下载失败：HTTP ${response.status}（${url}）`)
+  if (!response.ok) throw new Error(msg('downloadHttpFailed', { status: response.status, url }))
   return Buffer.from(await response.arrayBuffer())
 }
 
@@ -179,7 +180,11 @@ const verifyChecksum = (buffer: Buffer, expected: string, algorithm: 'sha256' | 
   const actual = createHash(algorithm).update(buffer).digest('hex')
   if (actual !== expected) {
     throw new Error(
-      `校验和不匹配（${algorithm}）：期望 ${expected.slice(0, 16)}…，实际 ${actual.slice(0, 16)}…`
+      msg('checksumMismatch', {
+        algorithm,
+        expected: expected.slice(0, 16),
+        actual: actual.slice(0, 16)
+      })
     )
   }
 }
@@ -201,7 +206,10 @@ const defaultUnpacker = async (archive: Buffer, dest: string): Promise<void> => 
         else {
           reject(
             new Error(
-              `解压失败（exit ${code}）：${Buffer.concat(stderr).toString('utf8').slice(-400)}`
+              msg('sdkExtractFailed', {
+                code: String(code),
+                tail: Buffer.concat(stderr).toString('utf8').slice(-400)
+              })
             )
           )
         }
@@ -261,7 +269,7 @@ export async function uninstallSdkManagerPackage(
           child.kill('SIGTERM')
           reject(
             new Error(
-              `sdkmanager --uninstall ${packageName} 超时（${timeoutMs / 1000} 秒），进程已终止`
+              msg('sdkUninstallTimeoutKilled', { pkg: packageName, seconds: timeoutMs / 1000 })
             )
           )
         }, timeoutMs)
@@ -274,7 +282,11 @@ export async function uninstallSdkManagerPackage(
           if (code === 0) return resolve()
           reject(
             new Error(
-              `sdkmanager --uninstall ${packageName} 失败（exit ${code}）：${Buffer.concat(output).toString('utf8').slice(-500)}`
+              msg('sdkUninstallFailed', {
+                pkg: packageName,
+                code: String(code),
+                tail: Buffer.concat(output).toString('utf8').slice(-500)
+              })
             )
           )
         })
@@ -288,7 +300,9 @@ export async function uninstallSdkManagerPackage(
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(
       () =>
-        reject(new Error(`sdkmanager --uninstall ${packageName} 超时（${timeoutMs / 1000} 秒）`)),
+        reject(
+          new Error(msg('sdkUninstallTimeout', { pkg: packageName, seconds: timeoutMs / 1000 }))
+        ),
       timeoutMs
     )
   })
@@ -325,7 +339,11 @@ const defaultRunner = async (
       else {
         reject(
           new Error(
-            `sdkmanager ${packages.join(' ')} 失败（exit ${code}）：${Buffer.concat(stderr).toString('utf8').slice(-500)}`
+            msg('sdkInstallFailed', {
+              packages: packages.join(' '),
+              code: String(code),
+              tail: Buffer.concat(stderr).toString('utf8').slice(-500)
+            })
           )
         )
       }
@@ -363,7 +381,7 @@ export async function bootstrapSdk(
   const snapshot = await detectSdk(root)
   const steps = planBootstrap(snapshot)
   if (steps.length === 0) {
-    onProgress({ stage: 'done', percent: 100, message: 'SDK 四件套已就绪，无需 bootstrap' })
+    onProgress({ stage: 'done', percent: 100, message: msg('sdkAlreadyReady') })
     return snapshot
   }
 
@@ -371,24 +389,24 @@ export async function bootstrapSdk(
   await mkdir(paths.userHome, { recursive: true })
 
   if (steps.includes('licenses')) {
-    onProgress({ stage: 'licenses', message: '写入 SDK 许可哈希' })
+    onProgress({ stage: 'licenses', message: msg('sdkStepLicense') })
     await writeLicenseFiles(root)
   }
 
   if (steps.includes('jre')) {
-    onProgress({ stage: 'jre', message: `下载 JRE（Temurin 21）` })
+    onProgress({ stage: 'jre', message: msg('sdkStepDownloadJre') })
     const archive = await fetcher(sources.jreUrl)
     verifyChecksum(archive, sources.jreSha256, 'sha256')
     const tmp = join(root, '.tmp-jre')
     await rm(tmp, { recursive: true, force: true })
     await mkdir(tmp, { recursive: true })
     try {
-      onProgress({ stage: 'jre', message: '解压 JRE' })
+      onProgress({ stage: 'jre', message: msg('sdkStepExtractJre') })
       await unpacker(archive, tmp)
       // Temurin tar 解出 <version>-jre/Contents/...——把 Contents 归位到 <root>/jre/Contents
       const children = await readdir(tmp)
       const top = children.find((name) => !name.startsWith('.'))
-      if (!top) throw new Error('JRE 压缩包结构异常：无顶层目录')
+      if (!top) throw new Error(msg('jreArchiveNoTopDir'))
       await rm(join(root, 'jre'), { recursive: true, force: true })
       await mkdir(join(root, 'jre'), { recursive: true })
       await rename(join(tmp, top, 'Contents'), join(root, 'jre', 'Contents'))
@@ -398,14 +416,14 @@ export async function bootstrapSdk(
   }
 
   if (steps.includes('cmdline-tools')) {
-    onProgress({ stage: 'cmdline-tools', message: '下载 cmdline-tools' })
+    onProgress({ stage: 'cmdline-tools', message: msg('sdkStepDownloadCmdline') })
     const archive = await fetcher(sources.cmdlineToolsUrl)
     verifyChecksum(archive, sources.cmdlineToolsSha1, 'sha1')
     const tmp = join(root, '.tmp-cmdline-tools')
     await rm(tmp, { recursive: true, force: true })
     await mkdir(tmp, { recursive: true })
     try {
-      onProgress({ stage: 'cmdline-tools', message: '解压 cmdline-tools' })
+      onProgress({ stage: 'cmdline-tools', message: msg('sdkStepExtractCmdline') })
       await unpacker(archive, tmp)
       await rm(join(root, 'cmdline-tools'), { recursive: true, force: true })
       const children = await readdir(tmp)
@@ -426,14 +444,22 @@ export async function bootstrapSdk(
     return !snapshot.emulator.present
   })
   for (const pkg of missingPackages) {
-    onProgress({ stage: pkg as SdkComponentName, percent: 0, message: `sdkmanager 安装 ${pkg}` })
+    onProgress({
+      stage: pkg as SdkComponentName,
+      percent: 0,
+      message: msg('sdkStepInstall', { pkg })
+    })
     await runner(root, [pkg], (percent) => {
-      onProgress({ stage: pkg as SdkComponentName, percent, message: `sdkmanager 安装 ${pkg}` })
+      onProgress({
+        stage: pkg as SdkComponentName,
+        percent,
+        message: msg('sdkStepInstall', { pkg })
+      })
     })
   }
 
   const done = await detectSdk(root)
-  onProgress({ stage: 'done', percent: 100, message: 'bootstrap 完成' })
+  onProgress({ stage: 'done', percent: 100, message: msg('sdkStepDone') })
   return done
 }
 

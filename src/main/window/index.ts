@@ -5,6 +5,7 @@ import { appIcon } from '../app-icon'
 import { themeWindowBackground } from '../theme'
 import { closeWizardWindow } from './wizard'
 import { closeSettingsWindow } from './settings'
+import { msg } from '../locale'
 
 // 主窗登记（devices 域 sender 白名单的判定源）：引用随窗口销毁清空
 let mainWindow: BrowserWindow | null = null
@@ -23,7 +24,7 @@ export function createMainWindow(): BrowserWindow {
     autoHideMenuBar: true,
     // macOS 原生三灯嵌入 40px 板头，hiddenInset 保留原生按钮及失焦行为。
     // 标题用于任务切换器；page-title-updated 防止页面覆写。
-    title: '多会话设备',
+    title: msg('windowTitle'),
     ...(process.platform === 'darwin'
       ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 12 } }
       : {}),

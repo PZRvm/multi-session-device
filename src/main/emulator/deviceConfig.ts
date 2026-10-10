@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path'
 import type { DeviceAdvancedSettings, DeviceMeta, DeviceConfigField } from '@shared/types'
 import { cameraConfigText } from '@shared/settings-contract'
 import { avdPaths, type AvdDirs } from './avd'
+import { msg } from '../locale'
 
 /**
  * 已有设备的配置读取与白名单编辑（plan 2026-10-08-device-config-edit）：
@@ -24,22 +25,22 @@ const errnoOf = (error: unknown): string | null =>
 
 /** 根和直接父目录均不允许链接；canonical 路径也必须为受控根的直接子目录。 */
 const checkConfigPath = async (avdName: string, dirs: AvdDirs): Promise<string> => {
-  if (!/^[A-Za-z0-9_-]+$/.test(avdName)) throw new Error('AVD 配置路径不合法')
+  if (!/^[A-Za-z0-9_-]+$/.test(avdName)) throw new Error(msg('cfgPathInvalid'))
   const path = configPathOf(avdName, dirs)
   const root = resolve(dirs.avdHome)
   for (const directory of [root, dirname(path)]) {
     const info = await lstat(directory)
-    if (info.isSymbolicLink()) throw new Error('AVD 配置目录是符号链接，已拒绝读写')
-    if (!info.isDirectory()) throw new Error('AVD 配置父路径不是目录，已拒绝读写')
+    if (info.isSymbolicLink()) throw new Error(msg('cfgDirIsSymlink'))
+    if (!info.isDirectory()) throw new Error(msg('cfgParentNotDir'))
   }
   const rootReal = await realpath(root)
   if ((await realpath(dirname(path))) !== join(rootReal, `${avdName}.avd`)) {
-    throw new Error('AVD 配置真实路径越界，已拒绝读写')
+    throw new Error(msg('cfgRealPathEscape'))
   }
   try {
     const info = await lstat(path)
-    if (info.isSymbolicLink()) throw new Error('AVD config.ini 是符号链接，已拒绝读写')
-    if (!info.isFile()) throw new Error('AVD config.ini 不是普通文件，已拒绝读写')
+    if (info.isSymbolicLink()) throw new Error(msg('cfgIsSymlink'))
+    if (!info.isFile()) throw new Error(msg('cfgNotRegularFileRW'))
   } catch (error) {
     if (errnoOf(error) !== 'ENOENT') throw error
   }
@@ -53,8 +54,8 @@ export const readAvdConfigRaw = async (avdName: string, dirs: AvdDirs): Promise<
     const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW)
     try {
       const info = await handle.stat()
-      if (!info.isFile()) throw new Error('AVD config.ini 不是普通文件')
-      if (info.size > MAX_CONFIG_BYTES) throw new Error('AVD config.ini 超过大小上限')
+      if (!info.isFile()) throw new Error(msg('cfgNotRegularFile'))
+      if (info.size > MAX_CONFIG_BYTES) throw new Error(msg('cfgTooLarge'))
       // 固定上限，避免 stat 后外部扩大的文件被无界读入。
       const buffer = Buffer.alloc(MAX_CONFIG_BYTES + 1)
       let bytesRead = 0
@@ -63,7 +64,7 @@ export const readAvdConfigRaw = async (avdName: string, dirs: AvdDirs): Promise<
         if (chunk.bytesRead === 0) break
         bytesRead += chunk.bytesRead
       }
-      if (bytesRead > MAX_CONFIG_BYTES) throw new Error('AVD config.ini 超过大小上限')
+      if (bytesRead > MAX_CONFIG_BYTES) throw new Error(msg('cfgTooLarge'))
       await checkConfigPath(avdName, dirs)
       return buffer.subarray(0, bytesRead).toString('utf8')
     } finally {
@@ -71,7 +72,9 @@ export const readAvdConfigRaw = async (avdName: string, dirs: AvdDirs): Promise<
     }
   } catch (error) {
     if (errnoOf(error) === 'ENOENT') return null
-    throw new Error(`AVD 配置读取失败：${error instanceof Error ? error.message : String(error)}`)
+    throw new Error(
+      msg('cfgReadFailed', { message: error instanceof Error ? error.message : String(error) })
+    )
   }
 }
 
@@ -82,7 +85,7 @@ export const writeAvdConfigRaw = async (
   content: string,
   expectedCurrent?: string
 ): Promise<void> => {
-  if (Buffer.byteLength(content) > MAX_CONFIG_BYTES) throw new Error('AVD config.ini 超过大小上限')
+  if (Buffer.byteLength(content) > MAX_CONFIG_BYTES) throw new Error(msg('cfgTooLarge'))
   const path = await checkConfigPath(avdName, dirs)
   const tmp = `${path}.${randomUUID()}.tmp`
   const handle = await open(
@@ -98,7 +101,7 @@ export const writeAvdConfigRaw = async (
       expectedCurrent !== undefined &&
       (await readAvdConfigRaw(avdName, dirs)) !== expectedCurrent
     ) {
-      throw new Error('config.ini 已被外部修改，本次写入已中止')
+      throw new Error(msg('cfgExternallyModified'))
     }
     await rename(tmp, path)
   } catch (error) {
@@ -208,7 +211,7 @@ export const buildConfigEditPatch = (
     }
   }
   if ('disk.dataPartition.size' in sets) {
-    throw new Error('编辑映射试图写入内部存储键，已拒绝（不可变边界）')
+    throw new Error(msg('cfgStorageKeyImmutable'))
   }
   return { sets, deletes }
 }

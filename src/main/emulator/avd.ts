@@ -1,6 +1,7 @@
 import { mkdir, readFile, rm } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
 import { spawn } from 'node:child_process'
+import { msg } from '../locale'
 
 export interface AvdDirs {
   /** 应用自有 AVD 根（ANDROID_AVD_HOME 语义） */
@@ -49,10 +50,10 @@ export async function createAvd(
 ): Promise<void> {
   const { avdName, profileId, packageName } = input
   if (!/^[A-Za-z0-9._-]+$/.test(avdName)) {
-    throw new Error(`非法 AVD 名（${avdName}）：只允许字母数字点下划线连字符`)
+    throw new Error(msg('avdInvalidNameChars', { name: avdName }))
   }
   if (await avdExists(avdName, dirs)) {
-    throw new Error(`AVD 已存在（${avdPaths(avdName, dirs).ini}）`)
+    throw new Error(msg('avdExists', { ini: avdPaths(avdName, dirs).ini }))
   }
 
   const avdmanagerBin = join(dirs.sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager')
@@ -85,7 +86,7 @@ export async function createAvd(
           if (code === 0) return resolve()
           const tail =
             Buffer.concat(err).toString('utf8').trim() || Buffer.concat(out).toString('utf8').trim()
-          reject(new Error(`avdmanager create avd 失败（exit ${code}）：${tail.slice(-500)}`))
+          reject(new Error(msg('avdCreateFailed', { code: String(code), tail: tail.slice(-500) })))
         })
       }))
 
@@ -93,7 +94,7 @@ export async function createAvd(
   await runner(args, env)
   // 落盘确认：avdmanager 静默成功但没写 ini 的情况视同失败（零部分成功的 AVD 侧）
   if (!(await avdExists(avdName, dirs))) {
-    throw new Error(`avdmanager create avd 未产出 AVD 目录（${avdPaths(avdName, dirs).ini}）`)
+    throw new Error(msg('avdCreateNoDir', { ini: avdPaths(avdName, dirs).ini }))
   }
 }
 
@@ -102,14 +103,14 @@ export async function createAvd(
  * 由 id 推导的两条路径，绝不跟随 ini 内容的外部 path。 */
 export async function deleteAvd(avdName: string, dirs: AvdDirs): Promise<void> {
   if (!/^[A-Za-z0-9._-]+$/.test(avdName)) {
-    throw new Error(`非法 AVD 名（${avdName}）`)
+    throw new Error(msg('avdInvalidName', { name: avdName }))
   }
   const paths = avdPaths(avdName, dirs)
   const root = resolve(dirs.avdHome)
   for (const target of [paths.dir, paths.ini]) {
     const resolved = resolve(target)
     if (resolved !== root && !resolved.startsWith(`${root}${sep}`)) {
-      throw new Error(`删除路径越界（${target}），已拒绝`)
+      throw new Error(msg('avdDeleteEscape', { target }))
     }
   }
   await rm(paths.dir, { recursive: true, force: true })

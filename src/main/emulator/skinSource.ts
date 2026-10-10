@@ -11,6 +11,7 @@ import {
   scanImportedSkins,
   type SkinRecord
 } from './skins'
+import { msg } from '../locale'
 
 export const SKIN_SOURCE_URL = `https://android.googlesource.com/platform/tools/adt/idea/+/${catalog.ref}/artwork/resources/device-art-resources`
 export const officialSkinName = (profileId: string): string | null =>
@@ -30,7 +31,7 @@ const verifyAliasLayout = (name: string, layout: SkinRecord['layout']): void => 
         (orientation.screenWidth === alias.screenHeight &&
           orientation.screenHeight === alias.screenWidth))
   )
-  if (!matches) throw new Error(`官方皮肤屏幕尺寸与已核验画像不符：${name}`)
+  if (!matches) throw new Error(msg('officialScreenMismatch', { name }))
 }
 
 const FILE_LIMIT = 16 * 1024 * 1024
@@ -51,24 +52,26 @@ const boundedFetch = async (url: string): Promise<string> => {
     const timedOut = signal.aborted || (cause instanceof Error && cause.name === 'TimeoutError')
     throw new Error(
       timedOut
-        ? '官方皮肤请求超时（30 秒），请检查网络或系统代理后重试'
-        : `无法连接官方皮肤源 android.googlesource.com，请检查网络或系统代理后重试（${cause instanceof Error ? cause.message : String(cause)}）`,
+        ? msg('officialRequestTimeout')
+        : msg('officialSourceUnreachable', {
+            cause: cause instanceof Error ? cause.message : String(cause)
+          }),
       { cause }
     )
   }
-  if (!response.ok) throw new Error(`官方皮肤源响应 HTTP ${response.status}，请稍后重试`)
-  if (!response.body) throw new Error('官方皮肤源返回空内容')
+  if (!response.ok) throw new Error(msg('officialHttpError', { status: response.status }))
+  if (!response.body) throw new Error(msg('officialEmptyBody'))
   const reader = response.body.getReader()
   const chunks: Uint8Array[] = []
   let size = 0
   try {
     for (;;) {
       const result = await reader.read().catch((cause: unknown) => {
-        throw new Error('官方皮肤下载中断，请检查网络或系统代理后重试', { cause })
+        throw new Error(msg('officialDownloadInterrupted'), { cause })
       })
       if (result.done) break
       size += result.value.length
-      if (size > FILE_LIMIT * 1.4) throw new Error('官方皮肤文件体积超限')
+      if (size > FILE_LIMIT * 1.4) throw new Error(msg('officialFileTooLarge'))
       chunks.push(result.value)
     }
   } finally {
@@ -92,7 +95,7 @@ export const downloadSkin = (
   deps: OfficialSkinDeps = {}
 ): Promise<SkinRecord> => {
   const canonicalName = officialSkinName(name)
-  if (canonicalName === null) return Promise.reject(new Error('该机型暂无已核实的官方皮肤'))
+  if (canonicalName === null) return Promise.reject(new Error(msg('noOfficialSkinVerified')))
   const key = `${userData}|${canonicalName}`
   const pending = inFlight.get(key)
   if (pending) return pending
@@ -149,7 +152,7 @@ const acquireSkin = async (
     entries?: Array<{ type: string; name: string; id: string }>
   }
   if (!Array.isArray(listing.entries) || listing.entries.length > 200)
-    throw new Error('官方皮肤清单核验失败')
+    throw new Error(msg('officialManifestInvalid'))
   const entries = new Map(
     listing.entries.filter((entry) => entry.type === 'blob').map((entry) => [entry.name, entry.id])
   )
@@ -157,14 +160,14 @@ const acquireSkin = async (
   const load = async (file: string): Promise<Buffer> => {
     const expected = entries.get(file)
     if (!/^[\w.-]+$/.test(file) || !expected || !/^[a-f0-9]{40}$/.test(expected))
-      throw new Error(`官方素材引用核验失败：${file}`)
+      throw new Error(msg('officialAssetRefFailed', { file }))
     let bytes: Buffer | null = null
     const studioRoot =
       deps.studioRoot ??
       '/Applications/Android Studio.app/Contents/plugins/android/resources/device-art-resources'
     try {
       const localPath = join(studioRoot, name, file)
-      if ((await stat(localPath)).size > FILE_LIMIT) throw new Error('本机资源过大')
+      if ((await stat(localPath)).size > FILE_LIMIT) throw new Error(msg('localResourceTooLarge'))
       const local = await readFile(localPath)
       if (gitBlobId(local) === expected) bytes = local
     } catch {
@@ -172,19 +175,20 @@ const acquireSkin = async (
     }
     if (bytes === null) {
       const encoded = await fetchText(`${url}/${file}?format=TEXT`)
-      if (encoded.length > FILE_LIMIT * 1.4) throw new Error('官方皮肤文件体积超限')
+      if (encoded.length > FILE_LIMIT * 1.4) throw new Error(msg('officialFileTooLarge'))
       bytes = Buffer.from(encoded, 'base64')
     }
     total += bytes.length
-    if (bytes.length > FILE_LIMIT || total > TOTAL_LIMIT) throw new Error('官方皮肤文件体积超限')
-    if (gitBlobId(bytes) !== expected) throw new Error(`官方皮肤完整性核验失败：${file}`)
+    if (bytes.length > FILE_LIMIT || total > TOTAL_LIMIT)
+      throw new Error(msg('officialFileTooLarge'))
+    if (gitBlobId(bytes) !== expected) throw new Error(msg('officialIntegrityFailed', { file }))
     return bytes
   }
   const layoutBytes = await load('layout')
   const layout = parseSkinLayout(layoutBytes.toString('utf8'))
   // 与导入/扫描/投屏同口径：零可渲染素材的官方目录直接判核验失败
   if (!layout || renderableArtFiles(layout).length === 0)
-    throw new Error('官方皮肤 layout 核验失败')
+    throw new Error(msg('officialLayoutInvalid'))
   verifyAliasLayout(name, layout)
   const id = randomUUID()
   const staging = join(userData, 'device-skins-staging', id)

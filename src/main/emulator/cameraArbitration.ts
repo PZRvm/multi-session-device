@@ -1,3 +1,4 @@
+import { msg } from '../locale'
 /** 摄像头启动仲裁（设计决定 2026-10-09，issue 复查 P2-3 / P3-4）。纯函数，IO 注入。 */
 
 /** 仲裁用摄像头绑定：webcam 资源号（webcamN）+ 可选稳定宿主身份 */
@@ -29,7 +30,7 @@ export interface CameraArbitrationResult {
   notices: string[]
 }
 
-const SLOT_LABELS = { front: '前置摄像头', rear: '后置摄像头' } as const
+const SLOT_LABELS = { front: msg('slotFront'), rear: msg('slotRear') } as const
 
 /**
  * 比较键：稳定宿主身份优先，当前枚举次之，最后退化为资源号（复查 P3-4——
@@ -63,7 +64,9 @@ export const arbitrateCameras = (input: CameraArbitrationInput): CameraArbitrati
     )
     if (holder !== undefined) {
       result[slot] = true
-      result.notices.push(`${SLOT_LABELS[slot]}被设备「${holder.name}」占用，本次以模拟画面运行`)
+      result.notices.push(
+        msg('cameraOccupiedNotice', { slot: SLOT_LABELS[slot], holder: holder.name })
+      )
       continue
     }
     if (
@@ -72,7 +75,9 @@ export const arbitrateCameras = (input: CameraArbitrationInput): CameraArbitrati
       !input.labels.has(camera.deviceId)
     ) {
       result[slot] = true
-      result.notices.push(`${SLOT_LABELS[slot]}（${camera.deviceId}）已不可用，本次以模拟画面运行`)
+      result.notices.push(
+        msg('cameraUnavailableNotice', { slot: SLOT_LABELS[slot], deviceId: camera.deviceId })
+      )
     }
   }
   return result

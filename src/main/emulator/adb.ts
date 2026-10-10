@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 import { access, constants } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { msg } from '../locale'
 
 /** 共享 adb server 锁定本机默认 endpoint——不读宿主传入的远端配置 */
 export const ADB_HOST = '127.0.0.1'
@@ -144,7 +145,7 @@ export async function runAdb(
   args: string[],
   { timeoutMs = 10_000, signal }: { timeoutMs?: number; signal?: AbortSignal } = {}
 ): Promise<AdbRunResult> {
-  if (signal?.aborted) throw new Error('ADB 操作已取消')
+  if (signal?.aborted) throw new Error(msg('adbOperationCancelled'))
   return new Promise<AdbRunResult>((resolve, reject) => {
     const child = spawn(adbPath, args, { env: scrubAdbEnv(process.env) })
     const out: Buffer[] = []
@@ -162,7 +163,7 @@ export async function runAdb(
             resolve({
               code: -1,
               stdout: Buffer.concat(out).toString('utf8'),
-              stderr: `adb ${args.join(' ')} 超时（${timeoutMs}ms，已终止）`
+              stderr: msg('adbCommandTimeout', { args: args.join(' '), ms: timeoutMs })
             })
           }, timeoutMs)
         : undefined
@@ -220,9 +221,7 @@ export async function resolveAdbExecutable(
     const resolved = await resolveCandidate(candidate)
     if (resolved) return resolved
   }
-  throw new Error(
-    '找不到可用的 adb（PATH、标准 SDK 与应用自有目录都没有可执行文件），请完成 SDK 引导'
-  )
+  throw new Error(msg('adbNotFound'))
 }
 
 export interface SharedServerDescriptor {
@@ -249,19 +248,21 @@ export async function ensureSharedServer(
   if (probe.running) {
     if (probe.protocolVersion !== exec.protocolVersion) {
       throw new Error(
-        `共享 adb server 协议版本不兼容（运行中 ${probe.protocolVersion} / 本应用 adb ${exec.protocolVersion}）。` +
-          '请关闭占用 adb server 的程序后重试；本应用不会自动重启共享 server。'
+        msg('adbProtocolIncompatible', {
+          running: probe.protocolVersion ?? -1,
+          ours: exec.protocolVersion ?? -1
+        }) + msg('adbServerOccupied')
       )
     }
     return { reused: true, protocolVersion: probe.protocolVersion }
   }
   const started = await run(exec.path, ['start-server'], { timeoutMs: 30_000 })
   if (started.code !== 0) {
-    throw new Error(`adb start-server 失败：${started.stderr || `exit ${started.code}`}`)
+    throw new Error(msg('adbStartFailed', { detail: started.stderr || `exit ${started.code}` }))
   }
   const again = await probeServer(deps)
   if (!again.running || again.protocolVersion !== exec.protocolVersion) {
-    throw new Error('adb start-server 后仍探测不到相容的共享 server（127.0.0.1:5037）')
+    throw new Error(msg('adbSharedServerMissing'))
   }
   return { reused: false, protocolVersion: again.protocolVersion }
 }
@@ -270,7 +271,7 @@ export async function ensureSharedServer(
 export async function listAdbSerials(adbPath: string): Promise<Set<string>> {
   const result = await runAdb(adbPath, ['devices'], { timeoutMs: 10_000 })
   if (result.code !== 0) {
-    throw new Error(`adb devices 失败：${result.stderr || `exit ${result.code}`}`)
+    throw new Error(msg('adbDevicesFailed', { detail: result.stderr || `exit ${result.code}` }))
   }
   const serials = new Set<string>()
   for (const line of result.stdout.split('\n')) {

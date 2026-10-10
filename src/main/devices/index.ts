@@ -25,6 +25,8 @@ import type {
   UpdateDeviceInput
 } from '@shared/types'
 import { normalizeEditedSettings, sanitizeUpdateSettings } from '@shared/settings-contract'
+import { getLocaleState } from '../locale/store'
+import { msg } from '../locale'
 import { armStoreProtection, readDeviceStore, writeDeviceMetas } from '../store'
 import { createAvd, deleteAvd, patchAvdConfig } from '../emulator/avd'
 import {
@@ -95,6 +97,9 @@ import {
 import { activePackageOp, beginPackageCreation, endPackageCreation } from '../emulator/packageOps'
 import { resetDisplayCutout } from '../emulator/displayCutout'
 import { configBaseline, configMismatchesOf } from '../emulator/configDrift'
+
+/** 底层错误自带建议从句的多语言标记（zh「请」/ zh-TW「請」/ en "please"） */
+const ADVICE_RE = /[請请]|please/i
 
 /** skinRef → 皮肤目录（sdk:* 解析 SDK skins；其余查应用库）。skinRef 已按能力
  * 枚举（skinIds 白名单）归一化校验，id 来源受信扫描（uuid/目录名），无逃逸面 */
@@ -393,7 +398,7 @@ const scanCurrent = async (): Promise<ReconcileOutcome> => {
       availabilityById: new Map(),
       orphans: [],
       unrecognizedCount: 0,
-      scanError: `检查服务异常：${messageOf(error)}`
+      scanError: msg('scanServiceError', { message: messageOf(error) })
     }
   }
 }
@@ -566,7 +571,7 @@ const performReconcile = async (): Promise<ReconcileResult> => {
       const before = changeKey()
       lastReport = {
         ...lastReport,
-        scanError: '扫描期间元数据或文件代次持续变化，本轮未完成；请稍后再次重新检查'
+        scanError: msg('reconcileChurn')
       }
       if (changeKey() !== before) broadcastChanged()
       syncReportRevision()
@@ -619,9 +624,7 @@ const rereadStore = async (): Promise<void> => {
   if (!metasEqual(read.metas, acceptedMetas)) {
     // 外部改名/重排/删行（含文件消失）：保留内存与运行设备，冻结写入，提示重启载入
     if (read.health.state === 'ok') {
-      armStoreProtection(
-        'devices.json 已被外部修改，与应用内存不一致：元数据写入已冻结；请核对文件后重启应用载入'
-      )
+      armStoreProtection(msg('storeExternalModifiedFrozen'))
     }
     storeHealth = {
       state: 'read-only',
@@ -629,8 +632,7 @@ const rereadStore = async (): Promise<void> => {
         ...read.health.issues,
         {
           code: 'metadata-changed',
-          message:
-            'devices.json 与应用最后接纳的内容不一致（外部修改）；已保留当前列表并冻结写入，重启后载入修复文件'
+          message: msg('storeExternalModifiedAtLoad')
         }
       ]
     }
@@ -695,24 +697,22 @@ const commitMetas = (mutate: (metas: DeviceMeta[]) => DeviceMeta[]): Promise<voi
       acceptedMetas !== null &&
       !metasEqual(guard.metas, acceptedMetas)
     ) {
-      armStoreProtection(
-        'devices.json 在写入前被外部修改，与应用内存不一致：写入已中止并冻结；请核对文件后重启应用载入'
-      )
+      armStoreProtection(msg('storeExternalModifiedAtWrite'))
       storeHealth = {
         state: 'read-only',
         issues: [
           ...guard.health.issues,
           {
             code: 'metadata-changed',
-            message: '写入前检测到 devices.json 外部修改，本次写入已中止；重启后载入修复文件'
+            message: msg('storeWriteAbortedV1')
           }
         ]
       }
-      throw new Error('devices.json 已被外部修改，写入已中止（元数据冻结，重启后载入）')
+      throw new Error(msg('storeExternalModifiedAborted'))
     }
     if (acceptedMetas === null) {
       // 理论不可达（error 态已被 assertMetaWritable 拦截）；防御性拒绝，不以全内存落盘
-      throw new Error('元数据无可信基线，本次写入已中止')
+      throw new Error(msg('noTrustedBaseline'))
     }
     const draft = mutate([...acceptedMetas])
     const journalDir = transactionsDir(app.getPath('userData'))
@@ -725,9 +725,7 @@ const commitMetas = (mutate: (metas: DeviceMeta[]) => DeviceMeta[]): Promise<voi
         await removeJournal(journalDir, meta.id)
         pendingJournalCleanup.delete(meta.id)
       } catch (error) {
-        throw new Error(
-          `设备「${label}」有未清理的配置事务记录，本次修改未写入（${messageOf(error)}）；请重试，或重启应用后按恢复提示处理`
-        )
+        throw new Error(msg('configJournalStale', { label, message: messageOf(error) }))
       }
     }
     await writeDeviceMetas(draft)
@@ -753,7 +751,7 @@ const broadcastChanged = (): void => {
 
 const requireDevice = (id: string): Device => {
   const device = devices.find((entry) => entry.id === id)
-  if (!device) throw new Error(`设备不存在（${id}）`)
+  if (!device) throw new Error(msg('deviceNotFound', { id }))
   return device
 }
 
@@ -761,12 +759,18 @@ const requireDevice = (id: string): Device => {
 const assertMetaWritable = (action: string): void => {
   if (storeHealth.state === 'error') {
     throw new Error(
-      `设备数据读取失败（${storeHealth.issues[0]?.message ?? '未知错误'}），不能${action}；请先修复 devices.json 后重新检查`
+      msg('storeErrorBlocked', {
+        issues: storeHealth.issues[0]?.message ?? msg('unknownError'),
+        action
+      })
     )
   }
   if (storeHealth.state === 'read-only') {
     throw new Error(
-      `元数据写入已冻结（${storeHealth.issues.map((issue) => issue.message).join('；')}），不能${action}`
+      msg('storeReadonlyBlocked', {
+        issues: storeHealth.issues.map((issue) => issue.message).join('；'),
+        action
+      })
     )
   }
 }
@@ -801,7 +805,7 @@ const handleUnexpectedExit = (
   ].filter((part): part is string => part !== null)
   const detail = parts.length > 0 ? parts.join('\n') : `exit ${info.code}`
   device.status = 'stopped'
-  device.lastError = { code: 'unexpected-exit', message: `模拟器意外退出：${detail}` }
+  device.lastError = { code: 'unexpected-exit', message: msg('unexpectedExit', { detail }) }
   device.cameraNotice = undefined
   cameraOverridesByDevice.delete(id)
   device.serial = undefined
@@ -853,9 +857,9 @@ const verifyWebcamsFor = async (
       const cause = messageOf(error)
       throw new StartBlockedError(
         'webcam-missing',
-        cause.includes('请')
-          ? `启动前无法核验摄像头：${cause}`
-          : `启动前无法核验摄像头：${cause}，请检查权限或改用模拟画面`
+        ADVICE_RE.test(cause)
+          ? msg('startCameraVerifyFailed', { cause })
+          : msg('startCameraVerifyFailedHint', { cause })
       )
     }
   }
@@ -874,7 +878,7 @@ const verifyWebcamsFor = async (
   if (missing.length > 0) {
     throw new StartBlockedError(
       'webcam-missing',
-      `宿主摄像头（${missing.join('、')}）已不可用，请重新选择摄像头后启动`
+      msg('webcamMissing', { names: missing.join('、') })
     )
   }
 }
@@ -899,7 +903,7 @@ const checkTimeoutAvailability = (): DeviceAvailability => ({
     {
       component: 'avd',
       code: 'check-timeout',
-      message: `启动前核验超时（${CHECK_TIMEOUT_MS / 1000} 秒），为安全起见未启动`,
+      message: msg('startVerifyTimeout', { seconds: CHECK_TIMEOUT_MS / 1000 }),
       severity: 'error'
     }
   ],
@@ -987,7 +991,7 @@ const runner = createRunner({
   beforeStart: async (id, runId, signal) => {
     displayArgsByDevice.delete(id)
     const device = devices.find((entry) => entry.id === id)
-    if (device === undefined) throw new Error(`设备不存在（${id}）`)
+    if (device === undefined) throw new Error(msg('deviceNotFound', { id }))
     // 真正启动前即时核验（对账设计 4）：不信任上次扫描结果；结果只落在相同代次上
     const availability = await awaitWithAbort(
       () =>
@@ -1008,7 +1012,7 @@ const runner = createRunner({
       const blocking = availability.issues.find((issue) => issue.severity === 'error')
       throw new StartBlockedError(
         availability.state === 'missing' ? 'avd-missing' : `health-${availability.state}`,
-        `启动前核验未通过：${blocking?.message ?? '设备文件状态异常'}`,
+        msg('startVerifyFailed', { message: blocking?.message ?? msg('fileStateAbnormal') }),
         availability
       )
     }
@@ -1117,13 +1121,14 @@ const runner = createRunner({
 // ---- 生命周期流程 ----
 
 const startDevice = async (id: string): Promise<DeviceSnapshot> => {
-  if (!acceptingCommands) throw new Error('应用退出清理中，暂停启动')
+  if (!acceptingCommands) throw new Error(msg('appClosingNoStart'))
   await ensureLoaded()
   const device = requireDevice(id)
-  if (editFlights.has(id)) throw new Error('该设备正在保存配置，暂不能启动')
+  if (editFlights.has(id)) throw new Error(msg('blockStartWhileSaving'))
   if (device.status === 'starting' || device.status === 'running') return snapshotNow()
-  if (device.status === 'stopping') throw new Error('设备停止中，停止完成后再启动')
-  if (device.status !== 'stopped') throw new Error(`设备当前状态不允许启动（${device.status}）`)
+  if (device.status === 'stopping') throw new Error(msg('startWhileStopping'))
+  if (device.status !== 'stopped')
+    throw new Error(msg('startStateNotAllowed', { status: device.status }))
   // 检查前同步保留 runId 并进入 starting（对账设计 4）：文件/摄像头核验移入
   // runner 准备——可取消、迟到结果不 spawn；未知检查结果不允许启动
   device.status = 'starting'
@@ -1163,9 +1168,7 @@ const stopDevice = async (id: string): Promise<DeviceSnapshot> => {
   await ensureLoaded()
   const device = requireDevice(id)
   if (device.status !== 'running' && device.status !== 'stopping') {
-    throw new Error(
-      device.status === 'starting' ? '设备启动中：请取消启动而非停止' : '设备不在运行中'
-    )
+    throw new Error(device.status === 'starting' ? msg('stopWhileStarting') : msg('stopNotRunning'))
   }
   device.status = 'stopping'
   broadcastChanged()
@@ -1174,7 +1177,10 @@ const stopDevice = async (id: string): Promise<DeviceSnapshot> => {
   } catch (error) {
     const target = requireDevice(id)
     if (target.status === 'stopping') {
-      target.lastError = { code: 'stop-failed', message: `停止失败：${messageOf(error)}` }
+      target.lastError = {
+        code: 'stop-failed',
+        message: msg('stopFailedError', { message: messageOf(error) })
+      }
       broadcastChanged()
     }
     throw error
@@ -1225,7 +1231,7 @@ const cancelStartDevice = async (id: string): Promise<DeviceSnapshot> => {
   await ensureLoaded()
   const device = requireDevice(id)
   if (device.status === 'running') {
-    throw new Error('设备已在运行，取消不再适用（可改为停止）')
+    throw new Error(msg('cancelWhileRunning'))
   }
   if (device.status !== 'starting' && device.status !== 'stopping') return snapshotNow()
   if (device.status === 'starting') {
@@ -1265,15 +1271,15 @@ const cancelStartDevice = async (id: string): Promise<DeviceSnapshot> => {
 const deleteFlow = async (id: string): Promise<DeviceSnapshot> => {
   await ensureLoaded()
   const device = requireDevice(id)
-  if (device.status === 'creating') throw new Error('设备创建中，不能删除')
-  if (editFlights.has(id)) throw new Error('该设备正在保存配置，暂不能删除')
+  if (device.status === 'creating') throw new Error(msg('deleteWhileCreating'))
+  if (editFlights.has(id)) throw new Error(msg('blockDeleteWhileSaving'))
   // 副作用前守卫（对账设计 4）：库不可写时拒绝——删了 AVD 却删不掉元数据会留幽灵记录
-  assertMetaWritable('删除设备')
+  assertMetaWritable(msg('actionDelete'))
   if (device.status === 'starting') await cancelStartDevice(id)
   else if (device.status === 'running' || device.status === 'stopping') await stopDevice(id)
-  if (requireDevice(id).status !== 'stopped') throw new Error('停止未完成，未删除')
+  if (requireDevice(id).status !== 'stopped') throw new Error(msg('deleteStopIncomplete'))
   // 停止后、FS 删除前再检查保护（停止耗时期间外部可能改坏库）
-  assertMetaWritable('删除设备')
+  assertMetaWritable(msg('actionDelete'))
   bumpAvdEpoch()
   requireDevice(id).status = 'deleting'
   broadcastChanged()
@@ -1332,7 +1338,7 @@ const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult>
   // 外观索引刷新（外框支：每次创建重读 JAR，SDK 更新自动失效；空索引不阻断）
   await ensureFrameIndex()
   // 共享初始化后先检查写保护（对账设计 4）：不可写库不进画像/能力查询
-  assertMetaWritable('创建设备')
+  assertMetaWritable(msg('actionCreate'))
   const packageName = raw.imagePackageName
   // 同包的进行中卸载/下载拒绝创建（review 2026-10-06 P2 TOCTOU：引用守卫
   // 通过后、卸载执行完的窗口内不再建出引用即将消失镜像的设备）
@@ -1363,7 +1369,7 @@ const createDeviceTransaction = async (
   const local = await scanLocalImages(sdkRoot())
   const imageRecord = local.get(packageName)
   if (imageRecord?.verified !== true) {
-    throw new Error('系统镜像未安装或安装不完整，请先在向导中下载')
+    throw new Error(msg('startImageNotInstalled'))
   }
   const profiles = await listDeviceProfiles({
     sdkRoot: sdkRoot(),
@@ -1372,23 +1378,27 @@ const createDeviceTransaction = async (
   })
   const profile = profiles.find((entry) => entry.id === raw.profileId)
   if (profile === undefined || !profile.creatable) {
-    throw new Error('设备画像已不可创建，请返回向导重新选择')
+    throw new Error(msg('profileNotCreatable'))
   }
   const { major, minor } = parseApiVersion(imageRecord.apiLevelText)
-  const verdict = assessImageCompatibility(profile, {
-    abi: imageRecord.abi,
-    services: classifyTags(imageRecord.tagIds).services,
-    api: {
-      platformSegment: splitPackageName(packageName)?.platformSegment ?? '',
-      major,
-      minor,
-      codename: null,
-      extensionLevel: imageRecord.extensionLevel,
-      baseExtension: null
-    }
-  })
+  const verdict = assessImageCompatibility(
+    profile,
+    {
+      abi: imageRecord.abi,
+      services: classifyTags(imageRecord.tagIds).services,
+      api: {
+        platformSegment: splitPackageName(packageName)?.platformSegment ?? '',
+        major,
+        minor,
+        codename: null,
+        extensionLevel: imageRecord.extensionLevel,
+        baseExtension: null
+      }
+    },
+    getLocaleState()
+  )
   if (verdict.status !== 'supported') {
-    throw new Error(`镜像与画像不兼容：${verdict.reasons.join('；')}`)
+    throw new Error(msg('compatReject', { reasons: verdict.reasons.join('；') }))
   }
   // 设置归一化（能力上下文 = 当前画像×镜像×emulator，经唯一入口补齐皮肤/摄像头
   // 枚举——review P1：与向导能力查询同源，UI 放行的设置创建侧同样放行）：
@@ -1404,15 +1414,16 @@ const createDeviceTransaction = async (
   )
   const normalized = normalizeAdvancedSettings(
     (raw.advancedSettings as CreateDeviceInput['advancedSettings']) ?? null,
-    capabilities
+    capabilities,
+    getLocaleState()
   )
   if (Object.keys(normalized.errors).length > 0) {
     const first = Object.entries(normalized.errors)[0] as [string, string]
-    throw new Error(`附加设置不合法（${first[0]}）：${first[1]}`)
+    throw new Error(msg('advancedSettingsInvalid', { field: first[0], message: first[1] }))
   }
   const advancedSettings = normalized.settings
   // 查询结束后、AVD 副作用前再次检查写保护（对账设计 4——查询窗口内库可能变坏）
-  assertMetaWritable('创建设备')
+  assertMetaWritable(msg('actionCreate'))
   const apiDisplay =
     major === null
       ? (splitPackageName(packageName)?.platformSegment ?? null)
@@ -1477,7 +1488,7 @@ const createDeviceTransaction = async (
           {
             component: 'avd',
             code: 'check-error',
-            message: `创建后核验失败（${messageOf(error)}）`,
+            message: msg('createVerifyFailed', { message: messageOf(error) }),
             severity: 'error'
           }
         ],
@@ -1505,7 +1516,11 @@ const createDeviceTransaction = async (
     if (rollbackError !== null) {
       const main = error instanceof Error ? error.message : String(error)
       throw new Error(
-        `创建失败：${main}；且回滚 AVD 失败（${rollbackError}），残留目录待清理：${join(avdHome(), `${device.id}.avd`)}`
+        msg('createFailedRollbackFailed', {
+          main,
+          rollback: rollbackError,
+          dir: join(avdHome(), `${device.id}.avd`)
+        })
       )
     }
     throw error
@@ -1516,10 +1531,10 @@ const renameDevice = async (id: string, name: string): Promise<DeviceSnapshot> =
   await ensureLoaded()
   const device = requireDevice(id)
   if (device.status === 'creating' || device.status === 'deleting') {
-    throw new Error('设备事务进行中，暂不能重命名')
+    throw new Error(msg('renameWhileBusy'))
   }
-  if (editFlights.has(id)) throw new Error('该设备正在保存配置，暂不能重命名')
-  assertMetaWritable('重命名设备')
+  if (editFlights.has(id)) throw new Error(msg('blockRenameWhileSaving'))
+  assertMetaWritable(msg('actionRename'))
   await commitMetas((metas) => metas.map((meta) => (meta.id === id ? { ...meta, name } : meta)))
   broadcastChanged()
   return snapshotNow()
@@ -1532,7 +1547,7 @@ export const assertEditorTarget = async (id: string): Promise<void> => {
   await ensureLoaded()
   const device = requireDevice(id)
   if (device.status === 'creating' || device.status === 'deleting') {
-    throw new Error('设备事务进行中，稍后再编辑配置')
+    throw new Error(msg('editWhileBusyRetry'))
   }
 }
 
@@ -1541,18 +1556,22 @@ const editSaveBlockedReason = (device: Device, includeRuntime = true): string | 
   const frozen = frozenMessages.get(device.id)
   if (frozen !== undefined) return frozen
   if (storeHealth.state === 'error') {
-    return `设备数据读取失败（${storeHealth.issues[0]?.message ?? '未知错误'}），暂不能保存配置`
+    return msg('blockSaveStoreError', {
+      issues: storeHealth.issues[0]?.message ?? msg('unknownError')
+    })
   }
   if (storeHealth.state === 'read-only') {
-    return `元数据写入已冻结（${storeHealth.issues.map((issue) => issue.message).join('；')}），暂不能保存配置`
+    return msg('blockSaveStoreFrozen', {
+      issues: storeHealth.issues.map((issue) => issue.message).join('；')
+    })
   }
   if (device.status === 'creating' || device.status === 'deleting') {
-    return '设备事务进行中，暂不能保存配置'
+    return msg('blockSaveWhileBusy')
   }
   if (includeRuntime && (device.status === 'running' || device.status === 'starting')) {
-    return '请先停止模拟器后再保存配置'
+    return msg('blockSaveWhileRunning')
   }
-  if (includeRuntime && device.status === 'stopping') return '设备停止中，停止完成后再保存'
+  if (includeRuntime && device.status === 'stopping') return msg('blockSaveWhileStopping')
   return null
 }
 
@@ -1602,14 +1621,14 @@ const buildEditDraft = (
     for (const item of mismatches) {
       notes[item.field] = {
         source: 'metadata',
-        warning: `配置为 ${item.actualLabel}，保存将以表单值为准。${item.actualSettings === null ? '原值无法识别，不能采用。' : ''}`
+        warning: `${msg('mismatchPendingNote', { label: String(item.actualLabel) })}${item.actualSettings === null ? msg('unrecognizedSuffix') : ''}`
       }
     }
     const configStorage = storageMiBFromText(configMap.get('disk.dataPartition.size'))
     if (configStorage !== null && configStorage !== stored.internalStorageMiB) {
       notes.internalStorageMiB = {
         source: 'metadata',
-        warning: `config.ini 容量与记录不一致（当前 ${configStorage} MiB），只读展示以应用记录为准且不会改写`
+        warning: msg('storageMismatch', { value: configStorage })
       }
     }
     const fields: Array<keyof DeviceAdvancedSettings> = [
@@ -1635,7 +1654,7 @@ const buildEditDraft = (
       mismatches,
       storage: {
         valueMiB: stored.internalStorageMiB,
-        note: '已有模拟器不支持修改内部存储，容量保持原配置'
+        note: msg('storageFixedNote')
       }
     }
   }
@@ -1660,13 +1679,13 @@ const buildEditDraft = (
         value: fromSchema,
         note: {
           source: 'schema',
-          warning: `原${label}未写入 config，按所装 emulator 默认值回显；实际运行值可能被自动调整`
+          warning: msg('enumNotInConfig', { label })
         }
       }
     }
     return {
       value: null,
-      note: { source: 'unknown', warning: `原${label}为自动值或无法识别，保持原配置` }
+      note: { source: 'unknown', warning: msg('enumUnknownKeep', { label }) }
     }
   }
   const cameraFrom = (
@@ -1680,12 +1699,12 @@ const buildEditDraft = (
     if (fromSchema !== null) {
       return {
         config: fromSchema,
-        note: { source: 'schema', warning: '原摄像头未写入 config，按 emulator 默认回显' }
+        note: { source: 'schema', warning: msg('cameraNotInConfig') }
       }
     }
     return {
       config: null,
-      note: { source: 'unknown', warning: '原摄像头配置未识别，保持原配置' }
+      note: { source: 'unknown', warning: msg('cameraUnrecognizedKeep') }
     }
   }
   const cpu = numberFrom('hw.cpu.ncore', 'CPU 核数')
@@ -1743,13 +1762,13 @@ const buildEditDraft = (
         },
     ...(incomplete
       ? {
-          blockedReason: '旧设备的附加设置包含自动值或未知值，当前仅支持修改名称；原配置保持不变。'
+          blockedReason: msg('settingsBlockedLegacy')
         }
       : {}),
     notes: {
       skinRef: {
         source: hasNamedSkin ? 'config' : 'legacy',
-        warning: hasNamedSkin && skinRef === null ? '旧皮肤无法识别，保持原配置' : null
+        warning: hasNamedSkin && skinRef === null ? msg('skinUnrecognizedKeep') : null
       },
       frontCamera: front.note,
       rearCamera: rear.note,
@@ -1765,8 +1784,8 @@ const buildEditDraft = (
     },
     storage:
       knownStorage === null
-        ? { valueMiB: null, note: '内部存储容量未知（保持原配置，不会改写；不以默认值补记）' }
-        : { valueMiB: knownStorage, note: '已有模拟器不支持修改内部存储，容量保持原配置' }
+        ? { valueMiB: null, note: msg('storageUnknownNote') }
+        : { valueMiB: knownStorage, note: msg('storageFixedNote') }
   }
 }
 
@@ -1877,7 +1896,7 @@ const readDeviceConfig = async (id: string): Promise<DeviceEditSnapshot> => {
   await ensureLoaded()
   const device = requireDevice(id)
   if (device.status === 'creating' || device.status === 'deleting') {
-    throw new Error('设备事务进行中，暂不能编辑配置')
+    throw new Error(msg('editWhileBusy'))
   }
   const meta = toMeta(device)
   const blocked = editSaveBlockedReason(device, false)
@@ -1905,7 +1924,7 @@ const readDeviceConfig = async (id: string): Promise<DeviceEditSnapshot> => {
       const owner = shared[field]
       if (owner === undefined) continue
       const note = draft.notes[field]
-      const hint = `该摄像头同时绑定在设备「${owner}」；两台同时运行时，后启动的一台会自动改用虚拟场景`
+      const hint = msg('cameraSharedHint', { owner })
       draft.notes[field] = {
         ...note,
         warning:
@@ -1914,11 +1933,7 @@ const readDeviceConfig = async (id: string): Promise<DeviceEditSnapshot> => {
     }
   }
   const saveBlockedReason =
-    blocked ??
-    configError ??
-    (configRaw === null
-      ? 'AVD config.ini 缺失或不可读，暂不能保存配置；请先重新检查设备文件'
-      : null)
+    blocked ?? configError ?? (configRaw === null ? msg('blockSaveNoConfig') : null)
   return {
     deviceId: id,
     identity: {
@@ -1972,7 +1987,7 @@ const verifyEditableCameras = async (
   try {
     webcams = new Map((await listWebcams(sdkRoot())).map((entry) => [entry.id, entry.deviceLabel]))
   } catch (error) {
-    throw new Error(`保存前无法核验摄像头：${messageOf(error)}`)
+    throw new Error(msg('saveCameraVerifyFailed', { message: messageOf(error) }))
   }
   for (const [field, camera] of changed) {
     if (camera.mode !== 'webcam' || camera.deviceId === null) continue
@@ -1980,9 +1995,7 @@ const verifyEditableCameras = async (
       !webcams.has(camera.deviceId) ||
       (camera.hostDeviceId !== undefined && webcams.get(camera.deviceId) !== camera.hostDeviceId)
     ) {
-      throw new Error(
-        `附加设置不合法（${field}）：摄像头 ${camera.deviceId} 已不可用，请重新选择后保存`
-      )
+      throw new Error(msg('cameraUnavailableOnSave', { field, deviceId: camera.deviceId }))
     }
   }
 }
@@ -2018,25 +2031,23 @@ const commitMetasWithConfig = (
       acceptedMetas !== null &&
       !metasEqual(guard.metas, acceptedMetas)
     ) {
-      armStoreProtection(
-        'devices.json 在写入前被外部修改，与应用内存不一致：写入已中止并冻结；请核对文件后重启应用载入'
-      )
+      armStoreProtection(msg('storeExternalModifiedAtWrite'))
       storeHealth = {
         state: 'read-only',
         issues: [
           ...guard.health.issues,
           {
             code: 'metadata-changed',
-            message: '写入前检测到 devices.json 外部修改，本次写入已中止；重启后载入修复文件'
+            message: msg('storeWriteAbortedV1')
           }
         ]
       }
-      throw new Error('devices.json 已被外部修改，写入已中止（元数据冻结，重启后载入）')
+      throw new Error(msg('storeExternalModifiedAborted'))
     }
     // 写 config 前复验原字节：外部工具改过 config 即中止，不覆盖
     const currentConfig = await readAvdConfigRaw(id, avdDirs())
     if (currentConfig !== oldConfig) {
-      throw new Error('config.ini 在写入前被外部修改，本次保存已中止；请关闭编辑窗后重新打开')
+      throw new Error(msg('blockConfigExternallyModified'))
     }
     const dir = transactionsDir(app.getPath('userData'))
     if (pendingJournalCleanup.has(id)) {
@@ -2057,12 +2068,12 @@ const commitMetasWithConfig = (
     } catch (error) {
       // config 未落成（tmp 写失败或 rename 失败）：清记录；元数据未动，无残留
       await removeJournal(dir, id).catch(() => undefined)
-      throw new Error(`写入 AVD 配置失败（${messageOf(error)}），已中止保存；设备数据未改动`)
+      throw new Error(msg('writeAvdConfigFailed', { message: messageOf(error) }))
     }
     let metaFailure: unknown = null
     try {
       if (acceptedMetas === null) {
-        throw new Error('元数据无可信基线，本次写入已中止')
+        throw new Error(msg('noTrustedBaseline'))
       }
       // 复查 P2-1：草稿基线是已提交元数据，其他事务的创建临时行不进写盘内容
       const draft = acceptedMetas.map((entry) => (entry.id === id ? newMeta : entry))
@@ -2097,16 +2108,14 @@ const updateConfigFlow = async (input: UpdateDeviceInput): Promise<DeviceSnapsho
   if (blocked !== null) throw new Error(blocked)
   const nextName = input.name !== undefined ? normalizeName(input.name) : null
   if (input.name !== undefined && nextName === null) {
-    throw new Error('设备名称需要 1–50 个字符（去首尾空格）')
+    throw new Error(msg('deviceNameLength'))
   }
   // 差异闭集守卫：存储/ABI/未知键在此拒绝（伪造载荷不进入业务）
-  const diff = sanitizeUpdateSettings(input.advancedSettings ?? {})
+  const diff = sanitizeUpdateSettings(input.advancedSettings ?? {}, getLocaleState())
   const configRaw = await readAvdConfigRaw(input.id, avdDirs())
   const meta = toMeta(device)
   if (configFingerprintOf(configRaw, meta) !== input.fingerprint) {
-    throw new Error(
-      '设备配置或状态已发生变化（外部修改或设备状态更新），本次保存已中止；请关闭编辑窗后重新打开'
-    )
+    throw new Error(msg('editFingerprintStale'))
   }
   const nameChanged = nextName !== null && nextName !== meta.name
   const pendingSync = configMismatchesOf(
@@ -2139,7 +2148,9 @@ const updateConfigFlow = async (input: UpdateDeviceInput): Promise<DeviceSnapsho
     CHECK_TIMEOUT_MS
   )
   if (health.state !== 'valid')
-    throw new Error(`保存前核验未通过：${health.issues[0]?.message ?? '设备文件状态异常'}`)
+    throw new Error(
+      msg('saveVerifyFailed', { message: health.issues[0]?.message ?? msg('fileStateAbnormal') })
+    )
   // 目标设置 = 可信原草稿 + 差异（与读取快照同一构建器，两处口径恒一致）
   const schemaDefaults = await readHardwareSchemaDefaults(sdkRoot()).catch(
     () => ({}) as Record<string, string>
@@ -2153,7 +2164,7 @@ const updateConfigFlow = async (input: UpdateDeviceInput): Promise<DeviceSnapsho
   )
   const original = draft.settings
   if (original !== null) augmentDraftWebcams(capabilities, original)
-  if (original === null) throw new Error('旧设备的附加设置无法无损识别，当前仅支持修改名称')
+  if (original === null) throw new Error(msg('settingsBlockedUnrecognized'))
   const mismatches = draft.mismatches ?? []
   const syncFields = mismatches.map((item) => item.field)
   const syncDiff = Object.fromEntries(syncFields.map((field) => [field, original[field]]))
@@ -2161,11 +2172,12 @@ const updateConfigFlow = async (input: UpdateDeviceInput): Promise<DeviceSnapsho
     original,
     { ...syncDiff, ...diff },
     capabilities,
-    syncFields
+    syncFields,
+    getLocaleState()
   )
   if (Object.keys(normalized.errors).length > 0) {
     const first = Object.entries(normalized.errors)[0] as [string, string]
-    throw new Error(`附加设置不合法（${first[0]}）：${first[1]}`)
+    throw new Error(msg('advancedSettingsInvalid', { field: first[0], message: first[1] }))
   }
   const nextSettings = normalized.settings as DeviceAdvancedSettings
   const settingsChanged = !deepEqual(original, nextSettings)
@@ -2177,7 +2189,7 @@ const updateConfigFlow = async (input: UpdateDeviceInput): Promise<DeviceSnapsho
   if (!settingsChanged && !configChanged && !nameChanged && input.resetDisplayCutout !== true)
     return snapshotNow()
   if ((settingsChanged || configChanged) && configRaw === null) {
-    throw new Error('AVD config.ini 缺失，无法保存附加设置；请先重新检查设备文件')
+    throw new Error(msg('blockSettingsNoConfig'))
   }
   if (!settingsChanged && !configChanged) {
     // 只改名：走既有元数据提交，不动 config 与快照标记（独立重命名同语义）
@@ -2227,7 +2239,7 @@ const updateDeviceConfig = (input: UpdateDeviceInput): Promise<DeviceSnapshot> =
   const flight = editFlights.get(input.id)
   if (flight) return flight
   const promise = (async (): Promise<DeviceSnapshot> => {
-    if (!acceptingCommands) throw new Error('应用退出清理中，暂停保存')
+    if (!acceptingCommands) throw new Error(msg('appClosingNoSave'))
     await ensureLoaded()
     try {
       return await updateConfigFlow(input)
@@ -2251,17 +2263,17 @@ const requireSender = (
 ): void => {
   const isMain = getMainWindow()?.webContents.id === event.sender.id
   if (scope === 'main') {
-    if (!isMain) throw new Error(`${channel}: 未登记的窗口`)
+    if (!isMain) throw new Error(`${channel}: ${msg('unregisteredWindowSuffix')}`)
     return
   }
   if (scope === 'create') {
     // create 上下文窗口（或主窗）；编辑窗不能发起创建——create/edit 隔离
     if (isMain || wizardContextOf(event.sender)?.kind === 'create') return
-    throw new Error(`${channel}: 未登记的窗口`)
+    throw new Error(`${channel}: ${msg('unregisteredWindowSuffix')}`)
   }
   const context = wizardContextOf(event.sender)
   if (context?.kind === 'edit' && context.deviceId === scope.edit) return
-  throw new Error(`${channel}: 本窗口无权读写该设备的配置`)
+  throw new Error(`${channel}: ${msg('configWindowNotAllowedSuffix')}`)
 }
 
 /** 确认已展示某签名的异常汇总（对账设计 5）：只消费当前签名的待提示态 */
@@ -2320,7 +2332,7 @@ export function registerDevicesIpc(): void {
     async (event, raw: unknown): Promise<CreateDeviceResult> => {
       requireSender(IPC_CHANNELS.devicesCreate, event, 'create')
       if (!isCreateDeviceInput(raw)) {
-        throw new Error(`${IPC_CHANNELS.devicesCreate}: 非法的入参`)
+        throw new Error(`${IPC_CHANNELS.devicesCreate}${msg('invalidPayload')}`)
       }
       return createDevice(raw)
     }
@@ -2331,10 +2343,10 @@ export function registerDevicesIpc(): void {
     async (event, raw: unknown): Promise<DeviceSnapshot> => {
       requireSender(IPC_CHANNELS.devicesRename, event, 'main')
       if (!isRenameInput(raw)) {
-        throw new Error(`${IPC_CHANNELS.devicesRename}: 非法的入参`)
+        throw new Error(`${IPC_CHANNELS.devicesRename}${msg('invalidPayload')}`)
       }
       const name = normalizeName(raw.name)
-      if (!name) throw new Error(`${IPC_CHANNELS.devicesRename}: 非法的名称`)
+      if (!name) throw new Error(`${IPC_CHANNELS.devicesRename}${msg('invalidName')}`)
       return renameDevice(raw.id, name)
     }
   )
@@ -2344,7 +2356,7 @@ export function registerDevicesIpc(): void {
     async (event, raw: unknown): Promise<DeviceSnapshot> => {
       requireSender(IPC_CHANNELS.devicesDelete, event, 'main')
       if (!isDeviceIdInput(raw)) {
-        throw new Error(`${IPC_CHANNELS.devicesDelete}: 非法的入参`)
+        throw new Error(`${IPC_CHANNELS.devicesDelete}${msg('invalidPayload')}`)
       }
       return deleteDevice(raw.id)
     }
@@ -2355,7 +2367,7 @@ export function registerDevicesIpc(): void {
     async (event, raw: unknown): Promise<DeviceSnapshot> => {
       requireSender(IPC_CHANNELS.devicesStart, event, 'main')
       if (!isDeviceIdInput(raw)) {
-        throw new Error(`${IPC_CHANNELS.devicesStart}: 非法的入参`)
+        throw new Error(`${IPC_CHANNELS.devicesStart}${msg('invalidPayload')}`)
       }
       return startDevice(raw.id)
     }
@@ -2364,7 +2376,7 @@ export function registerDevicesIpc(): void {
   ipcMain.handle(IPC_CHANNELS.devicesStop, async (event, raw: unknown): Promise<DeviceSnapshot> => {
     requireSender(IPC_CHANNELS.devicesStop, event, 'main')
     if (!isDeviceIdInput(raw)) {
-      throw new Error(`${IPC_CHANNELS.devicesStop}: 非法的入参`)
+      throw new Error(`${IPC_CHANNELS.devicesStop}${msg('invalidPayload')}`)
     }
     return stopDevice(raw.id)
   })
@@ -2374,7 +2386,7 @@ export function registerDevicesIpc(): void {
     async (event, raw: unknown): Promise<DeviceSnapshot> => {
       requireSender(IPC_CHANNELS.devicesCancelStart, event, 'main')
       if (!isDeviceIdInput(raw)) {
-        throw new Error(`${IPC_CHANNELS.devicesCancelStart}: 非法的入参`)
+        throw new Error(`${IPC_CHANNELS.devicesCancelStart}${msg('invalidPayload')}`)
       }
       return cancelStartDevice(raw.id)
     }
@@ -2386,7 +2398,7 @@ export function registerDevicesIpc(): void {
     IPC_CHANNELS.devicesReadConfig,
     async (event, raw: unknown): Promise<DeviceEditSnapshot> => {
       if (!isDeviceIdInput(raw)) {
-        throw new Error(`${IPC_CHANNELS.devicesReadConfig}: 非法的入参`)
+        throw new Error(`${IPC_CHANNELS.devicesReadConfig}${msg('invalidPayload')}`)
       }
       requireSender(IPC_CHANNELS.devicesReadConfig, event, { edit: raw.id })
       return readDeviceConfig(raw.id)
@@ -2397,7 +2409,7 @@ export function registerDevicesIpc(): void {
     IPC_CHANNELS.devicesUpdateConfig,
     async (event, raw: unknown): Promise<DeviceSnapshot> => {
       if (!isUpdateDeviceInput(raw)) {
-        throw new Error(`${IPC_CHANNELS.devicesUpdateConfig}: 非法的入参`)
+        throw new Error(`${IPC_CHANNELS.devicesUpdateConfig}${msg('invalidPayload')}`)
       }
       requireSender(IPC_CHANNELS.devicesUpdateConfig, event, { edit: raw.id })
       return updateDeviceConfig(raw)
@@ -2407,11 +2419,11 @@ export function registerDevicesIpc(): void {
   ipcMain.handle(IPC_CHANNELS.devicesCopySerial, async (event, raw: unknown): Promise<void> => {
     requireSender(IPC_CHANNELS.devicesCopySerial, event, 'main')
     if (!isDeviceIdInput(raw)) {
-      throw new Error(`${IPC_CHANNELS.devicesCopySerial}: 非法的入参`)
+      throw new Error(`${IPC_CHANNELS.devicesCopySerial}${msg('invalidPayload')}`)
     }
     const device = requireDevice(raw.id)
     if (device.status !== 'running' || !device.serial) {
-      throw new Error('设备不在运行中，没有可复制的 serial')
+      throw new Error(msg('copySerialNotRunning'))
     }
     clipboard.writeText(device.serial)
   })
@@ -2439,7 +2451,7 @@ export function registerDevicesIpc(): void {
         raw === null ||
         typeof (raw as { signature?: unknown }).signature !== 'string'
       ) {
-        throw new Error(`${IPC_CHANNELS.devicesReconciliationAck}: 非法的入参`)
+        throw new Error(`${IPC_CHANNELS.devicesReconciliationAck}${msg('invalidPayload')}`)
       }
       acknowledgeReconciliation((raw as { signature: string }).signature)
     }

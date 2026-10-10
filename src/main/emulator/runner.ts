@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { serialForPort, tcpProbe, type PortAllocator } from './ports'
 import { listAdbSerials, runAdb, scrubAdbEnv } from './adb'
 import { abortableSleep, awaitWithAbort } from './abort'
+import { msg } from '../locale'
 
 // 容错上限（非冷启动验收耗时）：PoC 实测无头冷启动 ~24s，超时裕量留给慢机器
 export const BOOT_TIMEOUT_MS = 240_000
@@ -25,7 +26,7 @@ interface StartPreparation {
 /** 主动取消是正常生命周期结果，devices 层无需弹启动失败。 */
 export class StartCancelledError extends Error {
   constructor() {
-    super('启动已取消')
+    super(msg('runnerStartCancelled'))
   }
 }
 
@@ -121,7 +122,7 @@ const defaultNow = (): number => Date.now()
 /** boot 期间进程提前退出（崩溃/端口被抢静默 exit 1）——带真实退出码走失败收口 */
 class EarlyExitError extends Error {
   constructor(readonly exitCode: number) {
-    super(`模拟器进程提前退出（exit ${exitCode}）`)
+    super(msg('runnerEarlyExit', { code: exitCode }))
   }
 }
 
@@ -138,15 +139,15 @@ export class EmulatorRunner {
    * 已在 starting/running 时幂等返回现态；stopping 拒绝（等停止收口）。
    */
   async start(id: string, runId = randomUUID()): Promise<StartResult> {
-    if (!this.#accepting) throw new Error('应用退出清理中，暂停启动')
+    if (!this.#accepting) throw new Error(msg('appClosingNoStart'))
     const preparing = this.#preparing.get(id)
     if (preparing?.phase === 'starting') return preparing.result
-    if (preparing) throw new Error('上一次停止尚未完成，稍后再启动')
+    if (preparing) throw new Error(msg('startPrevStopPending'))
     const existing = this.#entries.get(id)
     if (existing && existing.phase !== 'stopping') {
       return { runId: existing.runId, serial: existing.serial }
     }
-    if (existing) throw new Error('上一次停止尚未完成，稍后再启动')
+    if (existing) throw new Error(msg('startPrevStopPending'))
 
     const preparation: StartPreparation = {
       phase: 'starting',
@@ -170,7 +171,7 @@ export class EmulatorRunner {
       const serials = await awaitWithAbort(() => this.deps.adbSerials(), signal)
       signal.throwIfAborted()
       if (serials.has(serial)) {
-        throw new Error(`${serial} 已被占用（可能是残留的模拟器进程），请先停止该实例再启动`)
+        throw new Error(msg('runnerSerialOccupied', { serial }))
       }
       const entry: RunnerEntry = {
         id,
@@ -211,7 +212,7 @@ export class EmulatorRunner {
     }
     const entry = this.#requireEntry(id)
     if (entry.phase === 'running') {
-      throw new Error('设备已在运行，取消不再适用（可改为停止）')
+      throw new Error(msg('cancelWhileRunning'))
     }
     if (entry.phase === 'starting') {
       entry.phase = 'stopping'
@@ -222,9 +223,9 @@ export class EmulatorRunner {
 
   /** 停止运行实例；stopping 的重复/重试请求合并到同一份清理 */
   async stop(id: string): Promise<void> {
-    if (this.#preparing.has(id)) throw new Error('设备启动中：请取消启动而非停止')
+    if (this.#preparing.has(id)) throw new Error(msg('stopWhileStarting'))
     const entry = this.#requireEntry(id)
-    if (entry.phase === 'starting') throw new Error('设备启动中：请取消启动而非停止')
+    if (entry.phase === 'starting') throw new Error(msg('stopWhileStarting'))
     if (entry.phase === 'stopping' && entry.cleanup) return entry.cleanup
     entry.phase = 'stopping'
     entry.abort.abort()
@@ -265,7 +266,7 @@ export class EmulatorRunner {
 
   #requireEntry(id: string): RunnerEntry {
     const entry = this.#entries.get(id)
-    if (!entry) throw new Error('设备没有运行中的实例')
+    if (!entry) throw new Error(msg('runnerNoInstance'))
     return entry
   }
 
@@ -397,7 +398,7 @@ export class EmulatorRunner {
       if (booted) return
       await this.deps.sleep(BOOT_INTERVAL_MS, entry.abort.signal)
     }
-    throw new Error(`模拟器启动超时（${BOOT_TIMEOUT_MS / 1000}s 内 sys.boot_completed 未置 1）`)
+    throw new Error(msg('runnerBootTimeout', { seconds: BOOT_TIMEOUT_MS / 1000 }))
   }
 
   /** stop/cancel 共用：SIGTERM → 3s → SIGKILL → 限期收口；失败保留 entry 供重试 */
@@ -433,7 +434,7 @@ export class EmulatorRunner {
     if (!(await this.#closedWithin(entry, TERM_GRACE_MS))) {
       if (alive) killGroup('SIGKILL')
       if (!(await this.#closedWithin(entry, KILL_GRACE_MS))) {
-        throw new Error('停止超时：模拟器进程组未在限期内退出')
+        throw new Error(msg('runnerStopTimeout'))
       }
     }
     this.#entries.delete(entry.id)

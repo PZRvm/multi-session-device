@@ -1,5 +1,6 @@
 import { runAdb } from './adb'
 import { awaitWithAbort } from './abort'
+import { msg } from '../locale'
 
 const CUTOUT_PACKAGE = /^com\.android\.internal\.display\.cutout\.emulation\.[a-z0-9_]+$/
 export const enabledCutoutOverlays = (raw: string): string[] =>
@@ -27,30 +28,29 @@ export const resetDisplayCutout = async (
       signal
     )
     if (result.code !== 0)
-      throw new Error(`恢复安卓默认挖孔失败：${result.stderr || 'ADB 命令失败'}`)
+      throw new Error(msg('cutoutRestoreFailed', { detail: result.stderr || 'ADB' }))
     return result.stdout.trim()
   }
   const identity = await command(['emu', 'avd', 'name'])
-  if (identity.split(/\r?\n/)[0] !== avdName) throw new Error('模拟器身份已变化，未修改挖孔设置')
+  if (identity.split(/\r?\n/)[0] !== avdName) throw new Error(msg('cutoutDeviceChanged'))
   const user = await command(['shell', 'am', 'get-current-user'])
-  if (!/^\d+$/.test(user)) throw new Error('无法确认安卓当前用户，未修改挖孔设置')
+  if (!/^\d+$/.test(user)) throw new Error(msg('cutoutUserUnknown'))
   const list = (): Promise<string> => command(['shell', 'cmd', 'overlay', 'list', '--user', user])
   const overlays = enabledCutoutOverlays(await list())
   if (overlays.length === 0) return
   const bootId = await command(['shell', 'cat', '/proc/sys/kernel/random/boot_id'])
-  if (!/^[a-f0-9-]{36}$/.test(bootId)) throw new Error('无法确认安卓启动代次，未修改挖孔设置')
+  if (!/^[a-f0-9-]{36}$/.test(bootId)) throw new Error(msg('cutoutGenerationUnknown'))
   for (const overlay of overlays) {
     if ((await command(['shell', 'am', 'get-current-user'])) !== user)
-      throw new Error('安卓用户已切换，停止恢复挖孔设置')
+      throw new Error(msg('cutoutUserSwitched'))
     await command(['shell', 'cmd', 'overlay', 'disable', '--user', user, overlay])
   }
-  if (enabledCutoutOverlays(await list()).length > 0)
-    throw new Error('挖孔设置未恢复，保留请求以便下次重试')
+  if (enabledCutoutOverlays(await list()).length > 0) throw new Error(msg('cutoutNotRestored'))
   // API 32 会保留旧 inset 缓存；等待新 boot_id，不能将旧的 boot_completed=1 当成功。
   await command(['reboot'])
   const deadline = now() + 240_000
   while (now() < deadline) {
-    if (signal.aborted) throw new Error('挖孔恢复已取消')
+    if (signal.aborted) throw new Error(msg('cutoutRestoreCancelled'))
     try {
       const currentBoot = await command(['shell', 'cat', '/proc/sys/kernel/random/boot_id'])
       if (
@@ -59,8 +59,9 @@ export const resetDisplayCutout = async (
         (await command(['shell', 'getprop', 'sys.boot_completed'])) === '1'
       ) {
         if ((await command(['shell', 'am', 'get-current-user'])) !== user)
-          throw new Error('安卓用户已变化')
-        if (enabledCutoutOverlays(await list()).length > 0) throw new Error('重启后挖孔设置未恢复')
+          throw new Error(msg('cutoutUserChanged'))
+        if (enabledCutoutOverlays(await list()).length > 0)
+          throw new Error(msg('cutoutNotRestoredAfterReboot'))
         return
       }
     } catch (error) {
@@ -69,5 +70,5 @@ export const resetDisplayCutout = async (
     }
     await awaitWithAbort(() => sleep(1000), signal)
   }
-  throw new Error('恢复默认挖孔后安卓重启超时，请重试启动')
+  throw new Error(msg('cutoutRebootTimeout'))
 }
