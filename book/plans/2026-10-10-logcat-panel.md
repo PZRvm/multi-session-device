@@ -176,6 +176,7 @@ i18n 初始键（mainWindow 域）：`logcatTitle`、`logcatFilterPlaceholder`�
 - **日志窗上下文**：`logcat:context` 通道返回完整设备快照（`devices:list` 对非主窗有守卫），下拉数据源独立于 devices 域；弹出时经 URL `?device=` 传入 dock 当前设备。
 - **暂停期间批次照常 ack**（设计未言明）：不确认会让 main 侧积压丢行，暂停是纯视图行为。
 - **用户反馈迭代（同日）**：dock 改为默认固定展开（`logDockOpen` 初值 true），配套主窗默认宽 900→1200、画布保底 720→560，默认尺寸即呈三栏；独立日志窗 darwin 三灯安全区 64→80px（hiddenInset 灯组右缘约 66px，64px 起步的下拉框与之重叠）。窗口级截图核验两处修复。
+- **用户反馈迭代（同日，第二批）**：dock 改回默认收起且不持久化开合状态（每启从收起起步）；独立窗 head 区 darwin 下接管拖拽（`-webkit-app-region: drag`，select/贴回按钮 no-drag——hiddenInset 无系统标题栏，此前窗口不可拖）；新增「贴回」闭环（独立窗 header 右端按钮 → `logcat:dock-back` → main 关日志窗并广播主窗重新展开 dock）；主窗入口点击先查 `logcat:window-state`，独立窗开着即聚焦（单例 focus）而非重开 dock。真机验证 10/10（合成拖拽需辅助功能权限未自动化，拖动由 app-region 机制保证、留用户确认）。
 
 ### Phase 4：验证
 
