@@ -86,6 +86,11 @@ beforeEach(() => {
   ;(window as unknown as { api: unknown }).api = {
     dialog: { show: dialog },
     wizard: { open: vi.fn(async () => true) },
+    logcat: {
+      isWindowOpen: vi.fn(async () => false),
+      openWindow: vi.fn(async () => undefined),
+      onDockBack: () => () => {}
+    },
     devices: {
       list: vi.fn(async () => snapshot),
       reconcile: vi.fn(async () => ({ snapshot, report })),

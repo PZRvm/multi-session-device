@@ -139,4 +139,21 @@ export function registerLogcatIpc(): void {
     }
     return openLogcatWindow(deviceId)
   })
+  // 独立窗开着时主窗点击入口 = 聚焦而非重开 dock——状态由主窗在点击时查询
+  ipcMain.handle(IPC_CHANNELS.logcatWindowState, (event): boolean => {
+    if (getMainWindow()?.webContents !== event.sender) {
+      throw new Error(`${IPC_CHANNELS.logcatWindowState}: ${msg('logcatMainOnlySuffix')}`)
+    }
+    const window = logcatSession?.window
+    return window != null && !window.isDestroyed() && logcatSession?.ready === true
+  })
+  // 贴回：关日志窗并让主窗重新展开 dock（先广播后关窗，renderer 先收到再退订）
+  ipcMain.handle(IPC_CHANNELS.logcatDockBack, (event): Promise<void> => {
+    if (!isLogcatWindowSender(event.sender)) {
+      throw new Error(`${IPC_CHANNELS.logcatDockBack}: ${msg('logcatWindowOnlySuffix')}`)
+    }
+    getMainWindow()?.webContents.send(IPC_CHANNELS.logcatDockBack)
+    closeLogcatWindow()
+    return Promise.resolve()
+  })
 }

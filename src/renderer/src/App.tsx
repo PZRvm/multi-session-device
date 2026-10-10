@@ -44,9 +44,9 @@ const App = (): React.JSX.Element => {
 
   const [listWidth, setListWidth] = useState(280)
   const [rechecking, setRechecking] = useState(false)
-  // 日志 dock 默认固定在右侧（用户要求）；窗口过窄由 dockVisible 派生自动退化，
-  // 画布剩余不足 560 时点击入口直接开独立窗
-  const [logDockOpen, setLogDockOpen] = useState(true)
+  // 日志 dock 默认收起（不持久化开合状态——每次启动都从收起起步）；画布剩余
+  // 不足 560 时点击入口直接开独立窗
+  const [logDockOpen, setLogDockOpen] = useState(false)
   const [logPaneWidth, setLogPaneWidth] = useState(320)
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
 
@@ -261,12 +261,19 @@ const App = (): React.JSX.Element => {
   const logcatDevice =
     selected && selected.status === 'running' && selected.serial && selected.runId ? selected : null
 
-  // 画布剩余不足 720 时 dock 不渲染（纯派生——窗口收窄自动隐藏，回宽恢复；
-  // 该状态下点击入口直接开独立窗并复位展开位）
+  // 画布剩余不足保底 560 时 dock 不渲染（纯派生——窗口收窄自动隐藏，回宽恢复）
   const logDockFits = viewportWidth - listWidth - 5 - logPaneWidth >= LOG_CANVAS_MIN_WIDTH
   const dockVisible = logDockOpen && logDockFits
 
-  const handleToggleLogDock = (): void => {
+  // 独立日志窗开着时点入口 = 聚焦该窗（单例），不在主窗重开 dock
+  const handleToggleLogDock = async (): Promise<void> => {
+    const windowOpen = await toApiResult(window.api.logcat.isWindowOpen())
+    if (windowOpen.ok && windowOpen.data) {
+      void requestWindow('logcat', copy.openLogcatWindowFailed, () =>
+        window.api.logcat.openWindow(logcatDevice?.id)
+      )
+      return
+    }
     if (dockVisible) {
       setLogDockOpen(false)
       return
@@ -286,6 +293,9 @@ const App = (): React.JSX.Element => {
     const result = await toApiResult(window.api.logcat.openWindow(logcatDevice.id))
     if (result.ok) setLogDockOpen(false)
   }
+
+  // 独立窗「贴回」：关窗由 main 侧完成，这里只负责重新展开 dock
+  useEffect(() => window.api.logcat.onDockBack(() => setLogDockOpen(true)), [])
 
   return (
     <Wrapper lang={locale}>

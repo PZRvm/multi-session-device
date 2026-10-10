@@ -36,6 +36,7 @@ const snapshotOf = (devices: Device[]): DeviceSnapshot =>
   }) as unknown as DeviceSnapshot
 
 const openLogcatWindow = vi.fn(async () => undefined)
+const isWindowOpen = vi.fn(async () => false)
 const subscribe = vi.fn(async () => undefined)
 const unsubscribe = vi.fn(async () => undefined)
 const ack = vi.fn(async () => undefined)
@@ -75,6 +76,9 @@ describe('主窗日志 dock', () => {
       },
       logcat: {
         openWindow: openLogcatWindow,
+        isWindowOpen: isWindowOpen,
+        dockBack: vi.fn(async () => undefined),
+        onDockBack: (): (() => void) => () => {},
         subscribe,
         unsubscribe,
         ack,
@@ -91,33 +95,70 @@ describe('主窗日志 dock', () => {
 
   const toggleButton = (): HTMLElement => screen.getByTitle(copy.logcatTitle)
 
-  it('dock 默认固定展开并订阅；点击收起退订，再点展开', async () => {
+  it('dock 默认收起（不持久化）；点击展开并订阅，再点收起退订', async () => {
     render(<App />)
     const button = toggleButton()
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    expect(screen.queryByRole('log')).toBeNull()
+    fireEvent.click(button)
     expect(await screen.findByRole('log')).toBeTruthy()
     expect(subscribe).toHaveBeenCalledWith('d1')
     expect(button.getAttribute('aria-pressed')).toBe('true')
     fireEvent.click(button)
+    await act(async () => {
+      await Promise.resolve()
+    })
     expect(screen.queryByRole('log')).toBeNull()
     expect(unsubscribe).toHaveBeenCalledWith('d1')
-    fireEvent.click(button)
-    expect(await screen.findByRole('log')).toBeTruthy()
   })
 
-  it('窄窗（画布余量不足保底 560）点击入口直接开独立窗，不展开 dock', () => {
-    setViewport(1000)
+  it('独立日志窗开着时点击入口 = 聚焦该窗，不重开 dock', async () => {
+    isWindowOpen.mockResolvedValueOnce(true)
     render(<App />)
-    // 默认展开位在窄窗下由 dockVisible 派生隐藏；点击走开独立窗并复位展开位
-    expect(screen.queryByRole('log')).toBeNull()
     fireEvent.click(toggleButton())
+    await act(async () => {
+      await Promise.resolve()
+    })
     expect(openLogcatWindow).toHaveBeenCalledWith('d1')
     expect(screen.queryByRole('log')).toBeNull()
     expect(subscribe).not.toHaveBeenCalled()
   })
 
-  it('dock 展开后窗口收窄到不足时自动隐藏，回宽恢复', () => {
+  it('独立窗贴回事件到达后 dock 重新展开', async () => {
+    let dockBackListener: (() => void) | null = null
+    ;(window as unknown as { api: { logcat: { onDockBack: unknown } } }).api.logcat.onDockBack = (
+      callback: () => void
+    ): (() => void) => {
+      dockBackListener = callback
+      return () => {
+        dockBackListener = null
+      }
+    }
     render(<App />)
-    expect(screen.getByRole('log')).toBeTruthy()
+    expect(screen.queryByRole('log')).toBeNull()
+    act(() => {
+      dockBackListener?.()
+    })
+    expect(await screen.findByRole('log')).toBeTruthy()
+    expect(subscribe).toHaveBeenCalledWith('d1')
+  })
+
+  it('窄窗（画布余量不足保底 560）点击入口直接开独立窗，不展开 dock', async () => {
+    setViewport(1000)
+    render(<App />)
+    fireEvent.click(toggleButton())
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(openLogcatWindow).toHaveBeenCalledWith('d1')
+    expect(screen.queryByRole('log')).toBeNull()
+    expect(subscribe).not.toHaveBeenCalled()
+  })
+
+  it('dock 展开后窗口收窄到不足时自动隐藏，回宽恢复', async () => {
+    render(<App />)
+    fireEvent.click(toggleButton())
+    await screen.findByRole('log')
     act(() => {
       setViewport(1000)
       window.dispatchEvent(new Event('resize'))
@@ -132,6 +173,7 @@ describe('主窗日志 dock', () => {
 
   it('面板弹出：开独立窗（带目标设备）成功后 dock 收起', async () => {
     render(<App />)
+    fireEvent.click(toggleButton())
     await screen.findByRole('log')
     fireEvent.click(screen.getByTitle(copy.logcatPopOut))
     expect(openLogcatWindow).toHaveBeenCalledWith('d1')
@@ -143,6 +185,7 @@ describe('主窗日志 dock', () => {
 
   it('设备停止后入口消失、dock 保留空态（无设备订阅）', async () => {
     const { rerender } = render(<App />)
+    fireEvent.click(toggleButton())
     await screen.findByRole('log')
     const stopped = {
       ...runningDevice,
@@ -170,6 +213,7 @@ describe('主窗日志 dock', () => {
       }
     }
     render(<App />)
+    fireEvent.click(toggleButton())
     await screen.findByRole('log')
     act(() => {
       listener?.({

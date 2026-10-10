@@ -27,5 +27,17 @@ export const logcatApi = {
   context: (): Promise<DeviceSnapshot> => ipcRenderer.invoke(IPC_CHANNELS.logcatContext),
   /** 主窗调：开/聚焦独立日志窗（可带目标设备） */
   openWindow: (deviceId?: string): Promise<void> =>
-    ipcRenderer.invoke(IPC_CHANNELS.logcatWindowOpen, { deviceId })
+    ipcRenderer.invoke(IPC_CHANNELS.logcatWindowOpen, { deviceId }),
+  /** 主窗调：独立日志窗是否开着（dock 入口点击时判定聚焦 vs 开合） */
+  isWindowOpen: (): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.logcatWindowState),
+  /** 日志窗调：贴回主窗（关日志窗 + 主窗重新展开 dock） */
+  dockBack: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.logcatDockBack),
+  /** 主窗订阅贴回事件（触发 dock 重新展开），返回解绑函数 */
+  onDockBack: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on(IPC_CHANNELS.logcatDockBack, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.logcatDockBack, listener)
+    }
+  }
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { PanelLeftClose } from 'lucide-react'
 import styled from 'styled-components'
 import type { Device, DeviceSnapshot } from '@shared/types'
 import { MAIN_COPY } from '@shared/i18n'
@@ -43,6 +44,13 @@ const LogcatApp = (): React.JSX.Element => {
         : (running[0]?.id ?? null)
   const selected = running.find((device) => device.id === effectiveId) ?? null
 
+  const handleDockBack = (): void => {
+    void toApiResult(window.api.logcat.dockBack()).then((result) => {
+      // 贴回失败保留窗口并给出反馈；成功时窗口由 main 关闭，无需本地处理
+      if (!result.ok) console.error('贴回主窗失败:', result.error)
+    })
+  }
+
   return (
     <Wrapper lang={locale} $darwin={window.api.platform === 'darwin'}>
       <header className="head">
@@ -63,6 +71,15 @@ const LogcatApp = (): React.JSX.Element => {
             ))
           )}
         </select>
+        <button
+          type="button"
+          className="dock-back"
+          aria-label={copy.logcatDockBack}
+          title={copy.logcatDockBack}
+          onClick={handleDockBack}
+        >
+          <PanelLeftClose size={15} />
+        </button>
       </header>
       <LogcatPanel
         key={`${effectiveId ?? 'none'}:${selected?.runId ?? ''}`}
@@ -83,13 +100,15 @@ const Wrapper = styled.div<{ $darwin: boolean }>`
     flex: none;
     display: flex;
     align-items: center;
+    gap: 6px;
     height: 40px;
     padding: 0 12px;
     /* darwin 原生三灯安全区：hiddenInset 灯组右缘约 x=66，留 80px 起步 + 呼吸空隙
-       （64px 会与下拉框重叠） */
+       （64px 会与下拉框重叠）；hiddenInset 无系统标题栏，head 即拖拽带 */
     padding-left: ${(props) => (props.$darwin ? '80px' : '12px')};
     border-bottom: 1px solid var(--board-hairline);
     background: var(--board-bg-raised);
+    -webkit-app-region: ${(props) => (props.$darwin ? 'drag' : 'no-drag')};
 
     .device-select {
       min-width: 0;
@@ -101,9 +120,37 @@ const Wrapper = styled.div<{ $darwin: boolean }>`
       background: var(--board-bg);
       color: var(--board-ink);
       font-size: 12px;
+      -webkit-app-region: no-drag;
 
       &:disabled {
         opacity: 0.55;
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+      }
+    }
+
+    .dock-back {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      padding: 0;
+      flex: none;
+      margin-left: auto;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--board-ink);
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+      transition: background-color 0.12s;
+
+      &:hover {
+        background: var(--board-hover-veil);
       }
 
       &:focus-visible {

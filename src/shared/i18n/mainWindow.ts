@@ -141,6 +141,7 @@ const zhCN = {
   logcatDroppedLines: '已省略 {count} 行',
   logcatResumed: '—— 已跳至最新 ——',
   logcatResizeAria: '调整日志栏宽度',
+  logcatDockBack: '贴回主窗',
   logcatDeviceLabel: '设备',
   openLogcatWindowFailed: '打开日志窗口失败'
 }
@@ -278,6 +279,7 @@ const zhTW: MainWindowCopy = {
   logcatDroppedLines: '已省略 {count} 行',
   logcatResumed: '—— 已跳至最新 ——',
   logcatResizeAria: '調整日誌欄寬度',
+  logcatDockBack: '貼回主窗',
   logcatDeviceLabel: '裝置',
   openLogcatWindowFailed: '開啟日誌視窗失敗'
 }
@@ -423,6 +425,7 @@ const enUS: MainWindowCopy = {
   logcatDroppedLines: '{count} lines omitted',
   logcatResumed: '—— jumped to latest ——',
   logcatResizeAria: 'Resize log pane',
+  logcatDockBack: 'Dock back to main window',
   logcatDeviceLabel: 'Device',
   openLogcatWindowFailed: 'Failed to open the log window'
 }

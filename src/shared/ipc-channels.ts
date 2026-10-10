@@ -99,5 +99,9 @@ export const IPC_CHANNELS = {
   /** 日志窗启动上下文（仅日志窗）：当前设备快照（下拉用） */
   logcatContext: 'logcat:context',
   /** 主窗调：开/聚焦独立日志窗（单例；可带 device 查询参数） */
-  logcatWindowOpen: 'logcat:window-open'
+  logcatWindowOpen: 'logcat:window-open',
+  /** 主窗调：独立日志窗是否开着（开合 dock 前判定——开着则点击 = 聚焦） */
+  logcatWindowState: 'logcat:window-state',
+  /** 日志窗「贴回」：日志窗发 → main 关日志窗并通知主窗展开 dock */
+  logcatDockBack: 'logcat:dock-back'
 } as const

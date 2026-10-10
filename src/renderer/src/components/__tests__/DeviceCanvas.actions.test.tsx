@@ -99,6 +99,11 @@ beforeEach(() => {
   ;(window as { api?: unknown }).api = {
     screen: { input },
     dialog: { show: dialog },
+    logcat: {
+      isWindowOpen: vi.fn(async () => false),
+      openWindow: vi.fn(async () => undefined),
+      onDockBack: () => () => {}
+    },
     devices: {
       list: async () => ({
         devices: [device],
