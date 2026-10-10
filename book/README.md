@@ -139,7 +139,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-remaining-fixes-review-findings.md](notes/issue/2026-10/2026-10-09-remaining-fixes-review-findings.md) — 五项修复 review 新发现：布局归零漏释放已有按下状态，控制写失败后关闭 parser 触发未观察 ACK rejection
 - [2026-10-09-sdk-image-download-system-proxy.md](notes/issue/2026-10/2026-10-09-sdk-image-download-system-proxy.md) — SDK、镜像清单与镜像字节下载仍使用 Node fetch，代理可用但直连不可用时可能失败；本轮只修官方皮肤，其他路径另立任务
 - [2026-10-10-boardhead-toggle-review-p3s.md](notes/issue/2026-10/2026-10-10-boardhead-toggle-review-p3s.md) — 主窗左上亮暗切换钮 review 两项 P3——matchMedia 订阅与 provider 重复、切换钮用动作标签而非 aria-pressed
-- [2026-10-10-screenshot-review-p3s.md](notes/issue/2026-10/2026-10-10-screenshot-review-p3s.md) — 截屏批 Phase 5 review 五项 P3——save 并发 TOCTOU、在途 capture 与 stopped 的缓存竞态、0×0 PNG 边界、错误气泡 10s 消失、spin 动画重复
+- [2026-10-10-screenshot-review-p3s.md](notes/issue/2026-10/2026-10-10-screenshot-review-p3s.md) — 截屏批 review P3 共十项——首轮五项（save TOCTOU、缓存竞态、0×0 PNG、错误气泡时效、动画重复）+ 独立 review 追加五项（stderr 无界、oversized 绕 i18n、通道名错位、过期回调覆盖、runner 直测缺口）
 - [2026-10-10-settings-copy-dead-keys-and-learn-stale.md](notes/issue/2026-10/2026-10-10-settings-copy-dead-keys-and-learn-stale.md) — 已修复：设置窗三语字典的 title/preview 死键已删，learn 笔记「open/close 桥」表述已更正为仅 open
 - [2026-10-10-settings-window-crash-reopen.md](notes/issue/2026-10/2026-10-10-settings-window-crash-reopen.md) — P2：设置窗就绪后 renderer 崩溃未释放单例，主窗齿轮再次打开只聚焦故障窗；静态前端 review 发现，待独立修复
 

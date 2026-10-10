@@ -1,10 +1,10 @@
 ---
-description: 截屏批 Phase 5 review 五项 P3——save 并发 TOCTOU、在途 capture 与 stopped 的缓存竞态、0×0 PNG 边界、错误气泡 10s 消失、spin 动画重复
+description: 截屏批 review P3 共十项——首轮五项（save TOCTOU、缓存竞态、0×0 PNG、错误气泡时效、动画重复）+ 独立 review 追加五项（stderr 无界、oversized 绕 i18n、通道名错位、过期回调覆盖、runner 直测缺口）
 created: 2026-10-10
 tags: [review, p3, screenshot, race, clipboard, downloads]
 ---
 
-# 截屏批 review P3 ×5（只记录，未修复）
+# 截屏批 review P3（两轮共 10 项，只记录，未修复）
 
 背景：plan 2026-10-10-screenshot-clipboard-save 的 Phase 5，按八项检查单过完整 diff。无 P1/P2（授权面：双通道主窗 sender 守卫、受控写图、文件名清洗杜绝路径穿越均复核通过）。以下 P3 等后续批次或独立任务处置。
 
@@ -47,3 +47,43 @@ tags: [review, p3, screenshot, race, clipboard, downloads]
 - 边界：空 PNG/超 32MB/设备名全非法字符/重名超 99 次均有兜底并有测试。
 - 范围：`devices/index.ts` 新增 8 行只读访问器导出超出 plan 文件清单，已在 plan 实施结果中作为偏差记录（注入模式必要数据源）。
 - 复杂度：主域自包含约 230 行，renderer 三件套职责单一。
+
+---
+
+## 第二轮：独立 review 追加 P3（2026-10-10，含关闭钮追加批；均已对照源码核实）
+
+首轮为作者自查；本轮由独立 reviewer 以全新视角过 `dev...HEAD` 完整 diff（含气泡关闭钮），交叉验证后逐条核实成立。仍无 P1/P2。
+
+### P3-6：runAdbBinary 丢了 runAdb 的 stderr 4KiB 尾部上限
+
+问题：`src/main/screenshot/index.ts` 的 stderr 收集（`err.push(chunk)`）与返回（`Buffer.concat(err)`）均无上限；对照 `src/main/emulator/adb.ts` 的 `STDERR_TAIL_BYTES = 4096` 尾部截断。双 runner 分层时只照抄了结构，丢了有界化。窗口期最长 15s（超时上限），异常 adb/设备持续刷 stderr 时内存无界。
+
+建议方向：补与 runAdb 相同的 4KiB 尾部截断，一行改动。
+
+### P3-7：'screenshot oversized' 是应用自产文案却绕过 i18n
+
+问题：`src/main/screenshot/index.ts` 超限护栏 resolve `stderr: 'screenshot oversized'`（硬编码英文），该串随后作为 `detail` 拼进已本地化的 `screenshotCaptureFailed`，用户会看到「截屏失败：screenshot oversized」混语。违反本仓库「外部工具 stderr 原样保留、应用自产文案走 msg()」的约定。
+
+建议方向：errors.ts 三语加 `screenshotOversized` 键，超限路径改 `msg()`。
+
+### P3-8：requireMainSender 对 save 通道报错了 capture 的通道名
+
+问题：守卫闭包硬编码 `IPC_CHANNELS.screenshotCapture`，save handler 复用后，非主窗 invoke `screenshot:save` 的报错是「screenshot:capture: 未登记的窗口」，诊断指向错误通道。守卫功能本身正常；测试只断言含 `unregisteredWindowSuffix`，未拦住错位。
+
+建议方向：helper 接受 channel 参数。
+
+### P3-9：renderer 在途 save 的完成回调可覆盖新截屏状态
+
+问题：`useScreenshot.save()` await 返回后无条件 `setLatched`，不校验阶段仍是 `saving`；saving 期相机钮不禁用（busy 只看 capturing）。点保存后、save 返回前再点截屏，若 save 晚于新 capture 完成，旧的 saved 态（旧缩略图旧文件名）覆盖新的 copied 态约 10s。数据无损，窗口窄。对照 `DeviceCanvas` 的 input 回调有 generation 守卫，此处缺同款。
+
+建议方向：完成回调前加阶段守卫（`stateRef.current.phase !== 'saving'` 即弃），或 saving 期一并禁用相机钮。
+
+### P3-10：runAdbBinary 自身零直测；空名兜底断言偏弱
+
+问题：超时 resolve、超限 SIGKILL、spawn error reject 三条路径只经注入桩间接覆盖，无真 spawn 直测（回归如漏 `clearTimeout`、忘 kill 不会被发现）；测试 `expect(sanitizeFileSegment('   ').length).toBeGreaterThan(0)` 未断言文档承诺的 `'device'` 回退值。
+
+建议方向：补 runAdbBinary 直测（真 spawn sleep/cat 桩）；空名断言改 `toBe('device')`。
+
+### 第二轮其余检查项结论（clean）
+
+授权面、capture 互斥同步占位、子进程/timer 资源回收、React 纪律（ref 全在 effect、渲染期派生、id:runId key）、三语键集编译期一致、错误传播链路均复核通过；`invalidPayload` 无分隔符拼接为全仓既有惯例，非本批引入。
