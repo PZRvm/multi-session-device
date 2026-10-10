@@ -4,7 +4,7 @@ created: 2026-10-10
 tags: [review, p3, screenshot, race, clipboard, downloads]
 ---
 
-# 截屏批 review P3（两轮共 10 项，只记录，未修复）
+# 截屏批 review P3（两轮共 10 项，已于同日修复批全部处置）
 
 背景：plan 2026-10-10-screenshot-clipboard-save 的 Phase 5，按八项检查单过完整 diff。无 P1/P2（授权面：双通道主窗 sender 守卫、受控写图、文件名清洗杜绝路径穿越均复核通过）。以下 P3 等后续批次或独立任务处置。
 
@@ -87,3 +87,20 @@ tags: [review, p3, screenshot, race, clipboard, downloads]
 ### 第二轮其余检查项结论（clean）
 
 授权面、capture 互斥同步占位、子进程/timer 资源回收、React 纪律（ref 全在 effect、渲染期派生、id:runId key）、三语键集编译期一致、错误传播链路均复核通过；`invalidPayload` 无分隔符拼接为全仓既有惯例，非本批引入。
+
+---
+
+## 处置记录 — 2026-10-10 修复批（用户批准，全部修复）
+
+- **P3-1**：save 挂每设备互斥（`saves` Set，同步占位镜像 capture），双 invoke 第二发报新词条 `screenshotSaveBusy`；落盘改「写临时名 `.part` → 原子 `rename`」，检查名与写入之间不再有覆盖窗口，失败清理残留 `.part`。
+- **P3-2**：capture 在写剪贴板/缓存前复核 `runningDeviceRef`，设备已停则报 `screenshotDeviceNotRunning`——停止钩子清缓存后不再回填。
+- **P3-3**：解码后校验 `width/height > 0`，0×0 按 `screenshotCaptureFailed`（detail `decoded 0×0`）处理，不写剪贴板。
+- **P3-4**：error 态不再布防自动消失；收起路径 = 关闭钮、下一次截屏/保存、设备切换。copied/saved 的 10s 自动消失不变。
+- **P3-5**：新建 `styles/animations.ts` 导出 `spinKeyframes` 单源，DeviceCanvas（1.2s）与气泡（0.9s）各自时长消费，两份重复 keyframes 删除。
+- **P3-6**：`runAdbBinary` 补 `STDERR_TAIL_BYTES = 4096` 尾部截断，对齐 runAdb。
+- **P3-7**：超限路径改 `msg('screenshotOversized')`（三语新词条），不再硬编码英文。
+- **P3-8**：`requireMainSender` 改收 channel 参数，save 报错归位 `screenshot:save`；sender 测试同步强化为断言各自通道名。
+- **P3-9**：实现比原建议更强——**单调操作序号 `opSeq`** 守卫（每操作启动取 seq，完成不匹配即丢弃）。原建议的「读提交后 ref 判阶段」被测试抓出提交延迟缺陷（快速 reject 时 React 未提交 'saving'，误判丢弃会卡死 spinner）；seq 在事件回调内同步写 ref，无此问题。`save` 启动同时清自动消失计时，防保存中气泡蒸发。
+- **P3-10**：`runAdbBinary` 五条直测（正常 Buffer 透传 / stderr 尾部上限 / 超时 SIGKILL / 超限 SIGKILL / 二进制不存在 reject）；空名兜底断言改 `toBe('device')`。
+
+验证：新增测试 11 项，全量 **889 项通过（6 项原有跳过）**，typecheck/lint/prettier/build 通过；真机 CDP 冒烟 happy path（截屏→剪贴板→保存落盘）无回归。经验沉淀见 learn「exec-out 二进制流与 react-hooks 新规则」第 4 节。

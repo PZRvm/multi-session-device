@@ -171,3 +171,7 @@ i18n 初始键（mainWindow 域）：`screenshotAction`、`screenshotCopied`、`
 
 应用户要求在气泡左上角补关闭 icon（圆形 ×，lucide X，三语 aria-label「关闭」）：`ScreenshotPopover` 加 `onClose` 与常驻关闭钮；`useScreenshot` 重新暴露 `dismiss`（渲染期派生收起路径不变）；`DeviceToolbar`/`DeviceCanvas` 接线 `onScreenshotDismiss`。新增 2 项测试、全量 878 项通过，typecheck/lint/prettier 通过；真机 CDP 验证点关闭气泡即收、再截屏气泡重现（截图目检关闭钮不遮缩略图内容）。自动消失（10s）与设备离开 running 的收起路径不受影响。
 
+### 追加小批 — 2026-10-10 review P3 全量修复
+
+应用户批准，将两轮 review 的 10 项 P3 全部修复（细节逐项见 issue 笔记处置记录）。要点：main 侧 save 每设备互斥 + `.part` 临时名原子 rename（P3-1）、capture 写剪贴板/缓存前复核 running（P3-2）、0×0 拒绝（P3-3）、错误态不自动消失（P3-4）、`styles/animations.ts` 单源 spinKeyframes（P3-5）、stderr 4KiB 尾部上限（P3-6）、`screenshotOversized` 词条（P3-7）、sender 守卫通道名参数化（P3-8）；P3-9 的过期判据采用**单调操作序号 opSeq**——原建议的「读提交后 ref 判阶段」被新测试抓出提交延迟缺陷（快速 reject 卡死 spinner），learn 补第 4 节记录。P3-10 补 runAdbBinary 五条直测与 `toBe('device')` 断言。新增 11 项测试、全量 889 项通过（6 项原有跳过），typecheck/lint/prettier/build 通过；真机 CDP 冒烟 happy path 无回归。
+
