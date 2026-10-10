@@ -22,7 +22,7 @@ import {
 import { useDeviceStore } from './stores/deviceStore'
 
 /** 日志 dock 展开时画布至少保留的宽度（模拟器居中自适应的保底；不足则整栏退化） */
-const LOG_CANVAS_MIN_WIDTH = 720
+const LOG_CANVAS_MIN_WIDTH = 560
 
 const App = (): React.JSX.Element => {
   const devices = useDeviceStore((state) => state.devices)
@@ -44,8 +44,9 @@ const App = (): React.JSX.Element => {
 
   const [listWidth, setListWidth] = useState(280)
   const [rechecking, setRechecking] = useState(false)
-  // 日志 dock：右栏可拖宽（240–560），画布剩余不足 720 时整栏退化（点击直接开独立窗）
-  const [logDockOpen, setLogDockOpen] = useState(false)
+  // 日志 dock 默认固定在右侧（用户要求）；窗口过窄由 dockVisible 派生自动退化，
+  // 画布剩余不足 560 时点击入口直接开独立窗
+  const [logDockOpen, setLogDockOpen] = useState(true)
   const [logPaneWidth, setLogPaneWidth] = useState(320)
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
 

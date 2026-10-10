@@ -84,9 +84,10 @@ const Wrapper = styled.div<{ $darwin: boolean }>`
     display: flex;
     align-items: center;
     height: 40px;
-    /* darwin 原生三灯安全区（hiddenInset 14×12，同设置窗） */
     padding: 0 12px;
-    padding-left: ${(props) => (props.$darwin ? '64px' : '12px')};
+    /* darwin 原生三灯安全区：hiddenInset 灯组右缘约 x=66，留 80px 起步 + 呼吸空隙
+       （64px 会与下拉框重叠） */
+    padding-left: ${(props) => (props.$darwin ? '80px' : '12px')};
     border-bottom: 1px solid var(--board-hairline);
     background: var(--board-bg-raised);
 

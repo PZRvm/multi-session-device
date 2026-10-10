@@ -17,7 +17,9 @@ export function getMainWindow(): BrowserWindow | null {
 
 export function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
-    width: 900,
+    // 1200 使默认尺寸即可容纳「列表 280 + 日志 dock 320 + 画布保底 560」的
+    // 三栏布局（App 侧 LOG_CANVAS_MIN_WIDTH）——日志 dock 默认固定在右侧
+    width: 1200,
     height: 670,
     show: false,
     // 建窗底色即主题板面底（boot 已恢复主题），深色用户首帧不闪白
