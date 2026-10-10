@@ -10,6 +10,8 @@ tags: [review, p3, theme, a11y, boardhead]
 
 **处置记录（同日，用户批准修复）**：P3-1 按建议下沉 `theme/usePrefersDark.ts` 共享订阅，provider 改经 resolved 值响应系统翻转（第二个 matchMedia effect 删除，`resolveMode` 包装随无消费者一并移除）；P3-2 切换钮改 `role="switch"` + `aria-checked`（稳定名「亮暗模式」，title 保留动作提示），测试同步改断言。隐含约定已在 hook 注释显式化。
 
+**后续演进（同日，用户改版交互）**：板头外观入口按姊妹仓库 AppearanceEntry 模式重做——新建共用组件 `AppearanceModePicker`（设置窗通用页与板头同源），左栏宽 ≤320 为紧凑态（当前解析态单图标 + 下拉菜单 menuitemradio，当前态高亮），>320 为分段直选；P3-2 的 switch 语义随之被取代（紧凑触发钮为 menu 触发、分段为 aria-pressed 组），P3-1 的 usePrefersDark 由 picker 内部消费系统翻转。
+
 ## P3-1：matchMedia 订阅与 DeviceThemeProvider 重复
 
 问题：`BoardHead.useAppearanceToggle` 对 `(prefers-color-scheme: dark)` 自建了一份监听（让 system 模式下图标随系统翻转），与 `theme/index.tsx` provider 的同名监听各持一份。两份监听同真同假、永不冲突，但同一事实源在 renderer 出现两处订阅，后续若再加消费者会继续复制。

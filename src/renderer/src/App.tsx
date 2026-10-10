@@ -239,7 +239,11 @@ const App = (): React.JSX.Element => {
   return (
     <Wrapper lang={locale}>
       <div className="list-pane" style={{ width: listWidth }}>
-        <BoardHead count={devices.length} onOpenSettings={() => void openSettings()} />
+        <BoardHead
+          count={devices.length}
+          compact={listWidth <= 320}
+          onOpenSettings={() => void openSettings()}
+        />
         <DeviceHealthNotice
           summary={reconciliation}
           storeHealth={storeHealth}

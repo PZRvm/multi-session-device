@@ -1,36 +1,24 @@
-import { Moon, Settings, Sun } from 'lucide-react'
+import { Settings } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
-import { resolveThemeMode } from '@shared/themeSystems'
 import { useCopy } from '../hooks/useCopy'
 import { useThemeStore } from '../stores/themeStore'
-import { usePrefersDark } from '../theme/usePrefersDark'
+import AppearanceModePicker from './AppearanceModePicker'
 
 type BoardHeadProps = {
   /** 设备总数，两位补零展示，上限 99 */
   count: number
+  /** 左栏宽 ≤ 320 时外观入口转紧凑态（单图标 + 下拉），否则分段直选 */
+  compact: boolean
   onOpenSettings?: () => void
 }
 
-/** 亮暗快速切换（左上角）：当前暗 → 点击切白天；当前亮（含跟随系统解析为亮）→ 切黑夜。
- *  「跟随系统」下点击落到与当前解析结果相反的显式模式；图标随系统翻转即时跟随
- *  （解析态经共享 usePrefersDark 订阅，review P3-1 收口） */
-const useAppearanceToggle = (): { resolved: 'light' | 'dark'; toggle: () => void } => {
+/** 40px 拖拽带：原生三灯留位，左上外观选择（与设置窗通用页共用 AppearanceModePicker），
+ *  右端设置与设备计数。 */
+const BoardHead = ({ count, compact, onOpenSettings }: BoardHeadProps): React.JSX.Element => {
+  const copy = useCopy(MAIN_COPY)
   const mode = useThemeStore((state) => state.mode)
   const setMode = useThemeStore((state) => state.setMode)
-  const prefersDark = usePrefersDark()
-  const resolved = resolveThemeMode(mode, prefersDark)
-  return {
-    resolved,
-    toggle: () => setMode(resolved === 'dark' ? 'light' : 'dark')
-  }
-}
-
-/** 40px 拖拽带：原生三灯留位，左上亮暗切换，右端设置与设备计数。 */
-const BoardHead = ({ count, onOpenSettings }: BoardHeadProps): React.JSX.Element => {
-  const copy = useCopy(MAIN_COPY)
-  const { resolved, toggle } = useAppearanceToggle()
-  const toggleLabel = resolved === 'dark' ? copy.toggleLight : copy.toggleDark
   return (
     <Wrapper>
       <span className="head-left">
@@ -39,17 +27,12 @@ const BoardHead = ({ count, onOpenSettings }: BoardHeadProps): React.JSX.Element
         ) : (
           <span className="title">{copy.appName}</span>
         )}
-        {/* switch 语义（review P3-2）：aria-checked 表当前是否暗色，title 保留动作提示 */}
-        <button
-          type="button"
-          role="switch"
-          aria-label={copy.themeSwitch}
-          aria-checked={resolved === 'dark'}
-          title={toggleLabel}
-          onClick={toggle}
-        >
-          {resolved === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-        </button>
+        <AppearanceModePicker
+          mode={mode}
+          onChange={setMode}
+          compact={compact}
+          triggerLabel={copy.themeSwitch}
+        />
       </span>
       <span className="head-right">
         <button

@@ -120,30 +120,6 @@ const Wrapper = styled.section`
   input.threshold {
     width: 144px;
   }
-  .segments {
-    display: flex;
-    gap: 2px;
-    padding: 2px;
-    border: 1px solid var(--board-control-line);
-    border-radius: 4px;
-    background: var(--board-bg-raised);
-  }
-  .segments button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 27px;
-    min-height: 26px;
-    padding: 2px;
-    border: none;
-    border-radius: 2px;
-    color: var(--board-ink-dim);
-    white-space: nowrap;
-  }
-  .segments button[aria-pressed='true'] {
-    color: var(--board-tile-ink);
-    background: var(--board-segment-selected-bg);
-  }
   .swatches {
     display: flex;
     gap: 10px;
