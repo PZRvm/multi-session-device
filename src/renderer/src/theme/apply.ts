@@ -1,18 +1,11 @@
 import {
-  resolveThemeMode,
   themeCssVariables,
   type ResolvedMode,
   type ThemeModeTokens,
   type ThemeSystemId
 } from '@shared/themeSystems'
-import type { ThemeMode } from '../stores/themeStore'
 
 export type { ResolvedMode } from '@shared/themeSystems'
-
-/** 亮暗解析：跟随系统走 matchMedia（系统暗色判定的 renderer 侧来源），显式亮/暗直读 */
-export function resolveMode(mode: ThemeMode): ResolvedMode {
-  return resolveThemeMode(mode, window.matchMedia('(prefers-color-scheme: dark)').matches)
-}
 
 /** token 注入链：CSS 变量与 color-scheme 同链路切换（learn 2026-10-01 深字深底静默事故的根治路径） */
 export function applyTheme(systemId: ThemeSystemId, resolved: ResolvedMode): void {

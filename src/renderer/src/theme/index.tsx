@@ -1,8 +1,9 @@
 import { useLayoutEffect, type ReactNode } from 'react'
 import { ThemeProvider } from 'styled-components'
-import { THEME_SYSTEMS } from '@shared/themeSystems'
+import { resolveThemeMode, THEME_SYSTEMS } from '@shared/themeSystems'
 import { useThemeStore } from '../stores/themeStore'
-import { applyTheme, resolveMode, type BoardTheme } from './apply'
+import { applyTheme, type BoardTheme } from './apply'
+import { usePrefersDark } from './usePrefersDark'
 
 /**
  * styled-components 主题 Provider + token 注入链挂载。
@@ -13,20 +14,15 @@ import { applyTheme, resolveMode, type BoardTheme } from './apply'
 export function DeviceThemeProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const systemId = useThemeStore((s) => s.systemId)
   const mode = useThemeStore((s) => s.mode)
-  const resolved = resolveMode(mode)
+  const prefersDark = usePrefersDark()
+  // system 模式下系统翻转 → prefersDark 变化 → resolved 变化 → 注入 effect 重刷
+  // （旧实现是第二个 matchMedia effect 手动重放 applyTheme——订阅已下沉共享 hook）
+  const resolved = resolveThemeMode(mode, prefersDark)
 
   // useLayoutEffect：绘制前注入，深色用户首帧不闪浅色
   useLayoutEffect(() => {
     applyTheme(systemId, resolved)
   }, [systemId, resolved])
-
-  useLayoutEffect(() => {
-    if (mode !== 'system') return
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const onChange = (): void => applyTheme(systemId, resolveMode('system'))
-    media.addEventListener('change', onChange)
-    return () => media.removeEventListener('change', onChange)
-  }, [mode, systemId])
 
   const theme: BoardTheme = {
     ...THEME_SYSTEMS[systemId][resolved],
