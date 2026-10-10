@@ -156,4 +156,31 @@ export function registerLogcatIpc(): void {
     closeLogcatWindow()
     return Promise.resolve()
   })
+  // dock 展开态同步：展开时锁主窗 minWidth（dock 不会被窗口缩窄挤掉），
+  // 窗口不够宽则拉宽到 minWidth（窄窗点入口 = 黏滞右侧而非退化独立窗）；收起解锁
+  ipcMain.handle(
+    IPC_CHANNELS.logcatDockState,
+    (event, raw: unknown): Promise<void> => {
+      const window = getMainWindow()
+      if (window?.webContents !== event.sender) {
+        throw new Error(`${IPC_CHANNELS.logcatDockState}: ${msg('logcatMainOnlySuffix')}`)
+      }
+      const { expanded, minWidth } = (raw ?? {}) as { expanded?: boolean; minWidth?: number }
+      if (expanded !== true && expanded !== false) {
+        throw new Error(`${IPC_CHANNELS.logcatDockState}: ${msg('logcatInvalidPayloadSuffix')}`)
+      }
+      if (expanded) {
+        if (typeof minWidth !== 'number' || !Number.isFinite(minWidth) || minWidth <= 0) {
+          throw new Error(`${IPC_CHANNELS.logcatDockState}: ${msg('logcatInvalidPayloadSuffix')}`)
+        }
+        window.setMinimumSize(minWidth, 0)
+        if (window.getBounds().width < minWidth) {
+          window.setSize(minWidth, window.getBounds().height)
+        }
+      } else {
+        window.setMinimumSize(0, 0)
+      }
+      return Promise.resolve()
+    }
+  )
 }

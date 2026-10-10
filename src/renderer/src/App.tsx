@@ -15,6 +15,10 @@ import DeviceListPane from './components/DeviceListPane'
 import LogcatPanel from './components/LogcatPanel'
 import ResizeHandle from './components/ResizeHandle'
 import {
+  clampListWidth,
+  LIST_MAX_WIDTH
+} from './components/listWidth'
+import {
   clampLogPaneWidth,
   LOG_PANE_MAX_WIDTH,
   LOG_PANE_MIN_WIDTH
@@ -261,11 +265,26 @@ const App = (): React.JSX.Element => {
   const logcatDevice =
     selected && selected.status === 'running' && selected.serial && selected.runId ? selected : null
 
-  // 画布剩余不足保底 560 时 dock 不渲染（纯派生——窗口收窄自动隐藏，回宽恢复）
+  // 画布剩余不足保底 560 时 dock 不渲染（兜底派生——正常路径由 main 侧 minWidth
+  // 锁定与拉宽保证 dock 展开时不被窗口缩窄挤掉）
   const logDockFits = viewportWidth - listWidth - 5 - logPaneWidth >= LOG_CANVAS_MIN_WIDTH
   const dockVisible = logDockOpen && logDockFits
 
-  // 独立日志窗开着时点入口 = 聚焦该窗（单例），不在主窗重开 dock
+  // dock 展开所需的主窗最小宽（列表 + 分隔条 + 日志栏 + 画布保底）
+  const dockNeedWidth = listWidth + 5 + logPaneWidth + LOG_CANVAS_MIN_WIDTH
+
+  const expandDock = async (): Promise<void> => {
+    await toApiResult(window.api.logcat.setDockState({ expanded: true, minWidth: dockNeedWidth }))
+    setLogDockOpen(true)
+  }
+
+  const collapseDock = async (): Promise<void> => {
+    await toApiResult(window.api.logcat.setDockState({ expanded: false }))
+    setLogDockOpen(false)
+  }
+
+  // 独立日志窗开着时点入口 = 聚焦该窗（单例）；否则开合 dock（窄窗由 main
+  // 拉宽窗口让 dock 黏滞右侧，不再退化独立窗——独立窗只经面板内「弹出」产生）
   const handleToggleLogDock = async (): Promise<void> => {
     const windowOpen = await toApiResult(window.api.logcat.isWindowOpen())
     if (windowOpen.ok && windowOpen.data) {
@@ -275,27 +294,27 @@ const App = (): React.JSX.Element => {
       return
     }
     if (dockVisible) {
-      setLogDockOpen(false)
+      await collapseDock()
       return
     }
-    if (logDockFits) {
-      setLogDockOpen(true)
-      return
-    }
-    setLogDockOpen(false)
-    void requestWindow('logcat', copy.openLogcatWindowFailed, () =>
-      window.api.logcat.openWindow(logcatDevice?.id)
-    )
+    await expandDock()
   }
 
   const handlePopOutLogcat = async (): Promise<void> => {
     if (!logcatDevice) return
     const result = await toApiResult(window.api.logcat.openWindow(logcatDevice.id))
-    if (result.ok) setLogDockOpen(false)
+    if (result.ok) await collapseDock()
   }
 
-  // 独立窗「贴回」：关窗由 main 侧完成，这里只负责重新展开 dock
-  useEffect(() => window.api.logcat.onDockBack(() => setLogDockOpen(true)), [])
+  // 独立窗「贴回」：关窗由 main 侧完成，这里重新展开 dock（窄窗同样拉宽）
+  useEffect(
+    () =>
+      window.api.logcat.onDockBack(() => {
+        void expandDock()
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- expandDock 随宽度变化，事件只触发一次展开动作
+    []
+  )
 
   return (
     <Wrapper lang={locale}>
@@ -345,7 +364,18 @@ const App = (): React.JSX.Element => {
           </Button>
         </footer>
       </div>
-      <ResizeHandle width={listWidth} onResize={setListWidth} />
+      <ResizeHandle
+        width={listWidth}
+        onResize={setListWidth}
+        maxWidth={
+          dockVisible ? viewportWidth - logPaneWidth - 5 - LOG_CANVAS_MIN_WIDTH : LIST_MAX_WIDTH
+        }
+        clamp={(width) =>
+          dockVisible
+            ? clampListWidth(Math.min(width, viewportWidth - logPaneWidth - 5 - LOG_CANVAS_MIN_WIDTH))
+            : clampListWidth(width)
+        }
+      />
       <main className="canvas-area">
         {selected && selected.status === 'running' ? (
           <DeviceCanvas
@@ -384,8 +414,10 @@ const App = (): React.JSX.Element => {
             onResize={setLogPaneWidth}
             ariaLabel={copy.logcatResizeAria}
             minWidth={LOG_PANE_MIN_WIDTH}
-            maxWidth={LOG_PANE_MAX_WIDTH}
-            clamp={clampLogPaneWidth}
+            maxWidth={Math.min(LOG_PANE_MAX_WIDTH, viewportWidth - listWidth - 5 - LOG_CANVAS_MIN_WIDTH)}
+            clamp={(width) =>
+              clampLogPaneWidth(Math.min(width, viewportWidth - listWidth - 5 - LOG_CANVAS_MIN_WIDTH))
+            }
           />
           <aside className="log-pane" style={{ width: logPaneWidth }}>
             <LogcatPanel

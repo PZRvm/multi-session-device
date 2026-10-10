@@ -103,5 +103,7 @@ export const IPC_CHANNELS = {
   /** 主窗调：独立日志窗是否开着（开合 dock 前判定——开着则点击 = 聚焦） */
   logcatWindowState: 'logcat:window-state',
   /** 日志窗「贴回」：日志窗发 → main 关日志窗并通知主窗展开 dock */
-  logcatDockBack: 'logcat:dock-back'
+  logcatDockBack: 'logcat:dock-back',
+  /** 主窗调：dock 展开态同步——展开时锁主窗 minWidth（不够宽则拉宽），收起解锁 */
+  logcatDockState: 'logcat:dock-state'
 } as const

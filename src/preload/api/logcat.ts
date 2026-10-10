@@ -32,6 +32,9 @@ export const logcatApi = {
   isWindowOpen: (): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.logcatWindowState),
   /** 日志窗调：贴回主窗（关日志窗 + 主窗重新展开 dock） */
   dockBack: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.logcatDockBack),
+  /** 主窗调：同步 dock 展开态——展开锁 minWidth（不够宽拉宽），收起解锁 */
+  setDockState: (state: { expanded: boolean; minWidth?: number }): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.logcatDockState, state),
   /** 主窗订阅贴回事件（触发 dock 重新展开），返回解绑函数 */
   onDockBack: (callback: () => void): (() => void) => {
     const listener = (): void => callback()

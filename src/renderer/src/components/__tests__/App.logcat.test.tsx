@@ -37,6 +37,13 @@ const snapshotOf = (devices: Device[]): DeviceSnapshot =>
 
 const openLogcatWindow = vi.fn(async () => undefined)
 const isWindowOpen = vi.fn(async () => false)
+// main 侧「锁 minWidth + 拉宽」的真实行为在测试里模拟为：expanded 时视口拉宽
+const setDockState = vi.fn(async (state: { expanded: boolean; minWidth?: number }) => {
+  if (state.expanded && state.minWidth && window.innerWidth < state.minWidth) {
+    setViewport(state.minWidth)
+    window.dispatchEvent(new Event('resize'))
+  }
+})
 const subscribe = vi.fn(async () => undefined)
 const unsubscribe = vi.fn(async () => undefined)
 const ack = vi.fn(async () => undefined)
@@ -77,6 +84,7 @@ describe('主窗日志 dock', () => {
       logcat: {
         openWindow: openLogcatWindow,
         isWindowOpen: isWindowOpen,
+        setDockState,
         dockBack: vi.fn(async () => undefined),
         onDockBack: (): (() => void) => () => {},
         subscribe,
@@ -143,16 +151,25 @@ describe('主窗日志 dock', () => {
     expect(subscribe).toHaveBeenCalledWith('d1')
   })
 
-  it('窄窗（画布余量不足保底 560）点击入口直接开独立窗，不展开 dock', async () => {
+  it('窄窗点击入口：通知 main 锁 minWidth 并拉宽，dock 黏滞右侧展开（不退化独立窗）', async () => {
     setViewport(1000)
     render(<App />)
+    fireEvent.click(toggleButton())
+    await screen.findByRole('log')
+    expect(setDockState).toHaveBeenCalledWith({ expanded: true, minWidth: 1165 })
+    expect(openLogcatWindow).not.toHaveBeenCalled()
+  })
+
+  it('收起 dock 时通知 main 解锁 minWidth', async () => {
+    render(<App />)
+    fireEvent.click(toggleButton())
+    await screen.findByRole('log')
     fireEvent.click(toggleButton())
     await act(async () => {
       await Promise.resolve()
     })
-    expect(openLogcatWindow).toHaveBeenCalledWith('d1')
+    expect(setDockState).toHaveBeenLastCalledWith({ expanded: false })
     expect(screen.queryByRole('log')).toBeNull()
-    expect(subscribe).not.toHaveBeenCalled()
   })
 
   it('dock 展开后窗口收窄到不足时自动隐藏，回宽恢复', async () => {
