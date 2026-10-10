@@ -3136,11 +3136,53 @@ describe('皮肤只装饰外观，不能覆盖机型屏幕尺寸', () => {
   })
 
   it('读取配置失败时启动失败，不带着未经检查的皮肤继续启动', async () => {
-    mocks.readAvdConfigRaw.mockRejectedValue(new Error('AVD config.ini 读取失败'))
+    // 一次性拒绝：mockRejectedValue 会渗入后续 describe（clearAllMocks 不清实现，
+    // issue 2026-10-10-devices-test-mock-leak），Once 用完即回底层缺省实现
+    mocks.readAvdConfigRaw.mockRejectedValueOnce(new Error('AVD config.ini 读取失败'))
     const { handlerFor } = await freshDomain()
     await expect(
       handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id: 'quick-1' })
     ).rejects.toThrow('AVD config.ini 读取失败')
     expect(runnerConfig().extraArgsFor('quick-1')).not.toContain('-skin')
+  })
+})
+
+describe('runningDeviceSerial（APK 安装域注入，plan 2026-10-10-drag-apk-install）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.readDeviceMetas.mockResolvedValue([])
+    mocks.writeDeviceMetas.mockImplementation(async (metas: DeviceMeta[]) => {
+      mocks.fileMetas.current = metas
+    })
+    mocks.isPackageNameInstalled.mockResolvedValue(true)
+    mocks.createAvd.mockResolvedValue('/avd')
+    mocks.avdExists.mockResolvedValue(true)
+    mocks.getMainWindow.mockReturnValue({ webContents: { id: 7, send: vi.fn() } })
+    mocks.runnerInstance.start.mockResolvedValue({ runId: 'run-1', serial: 'emulator-5554' })
+    mocks.runnerInstance.stop.mockResolvedValue(undefined)
+    mocks.runnerInstance.cancelStart.mockResolvedValue(undefined)
+    mocks.runnerInstance.phaseOf.mockReturnValue(null)
+    // 前序 describe 的一次性 mock 会渗进来（clearAllMocks 不重置实现）——回缺省
+    mocks.readAvdConfigRaw.mockImplementation(async () => null)
+    mocks.checkDeviceHealth.mockResolvedValue({ state: 'valid', issues: [], checkedAt: 42 })
+  })
+
+  it('running 才返回 serial；未运行/不存在抛错', async () => {
+    const { handlerFor, runnerEvents } = await freshDomain()
+    // freshDomain 内部已 import('..')——同一模块实例，直接取导出
+    const domain = await import('..')
+    const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { createdId: string }
+    // 同步函数：经 async 包装断言抛错
+    await expect(async () => domain.runningDeviceSerial('missing')).rejects.toThrow()
+    // starting：无 serial
+    await expect(async () => domain.runningDeviceSerial(created.createdId)).rejects.toThrow(
+      '设备未运行，无法安装 APK'
+    )
+    await handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id: created.createdId })
+    runnerEvents().onRunning(created.createdId, 'run-1', 'emulator-5554')
+    expect(domain.runningDeviceSerial(created.createdId)).toBe('emulator-5554')
   })
 })

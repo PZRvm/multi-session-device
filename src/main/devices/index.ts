@@ -765,6 +765,16 @@ const requireDevice = (id: string): Device => {
   return device
 }
 
+/** 安装域注入用（plan 2026-10-10-drag-apk-install）：断言设备 running 并返回 serial；
+ *  未 running 抛本地化错误——与 copySerial 同一守卫口径 */
+export const runningDeviceSerial = (id: string): string => {
+  const device = requireDevice(id)
+  if (device.status !== 'running' || !device.serial) {
+    throw new Error(msg('apkDeviceNotRunning'))
+  }
+  return device.serial
+}
+
 /** 元数据写命令的副作用前守卫（对账设计 3）：error/read-only 都拒绝并说明原因 */
 const assertMetaWritable = (action: string): void => {
   if (storeHealth.state === 'error') {

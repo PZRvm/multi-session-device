@@ -16,12 +16,14 @@ import {
 } from '../screen/geometry'
 import { MAIN_COPY, format } from '@shared/i18n'
 import { useCopy } from '../hooks/useCopy'
+import { useApkInstall } from '../hooks/useApkInstall'
 import { useDeviceInput } from '../hooks/useDeviceInput'
 import { useDeviceScreen, type ScreenViewStatus } from '../hooks/useDeviceScreen'
 import { useScreenshot } from '../hooks/useScreenshot'
 import { spinKeyframes } from '../styles/animations'
 import { toApiResult } from '../api'
 import DeviceToolbar from './DeviceToolbar'
+import InstallDropOverlay from './InstallDropOverlay'
 
 type DeviceCanvasProps = {
   device: Device
@@ -253,6 +255,9 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
 
   const ready = status === 'ready' && layout !== null && layout.width > 0 && layout.height > 0
 
+  // 拖拽 APK：落在 .stage（含皮肤区），守卫与状态机在 hook，main 再校验 running/串行
+  const apkInstall = useApkInstall(device.id)
+
   useDeviceInput({
     canvasContainerRef: stageRef,
     inputProxyRef: proxyRef,
@@ -292,7 +297,7 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
 
   return (
     <Wrapper>
-      <div className="stage" ref={stageRef} onClick={focusProxy}>
+      <div className="stage" ref={stageRef} onClick={focusProxy} {...apkInstall.dragHandlers}>
         {layout ? (
           /* 装饰位于视频之下；真实皮肤前景在 canvas-slot 内遮住对应像素。 */
           layout.skin && skin ? (
@@ -417,6 +422,11 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
           className="proxy-input"
           aria-label={format(copy.inputAria, { name: device.name })}
           tabIndex={-1}
+        />
+        <InstallDropOverlay
+          phase={apkInstall.phase}
+          busyNote={apkInstall.busyNote}
+          deviceName={device.name}
         />
       </div>
       <div className="toolbar-row">

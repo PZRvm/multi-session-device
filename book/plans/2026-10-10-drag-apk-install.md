@@ -1,7 +1,8 @@
 ---
 description: 拖拽 APK 安装设计：画布拖放（webUtils 取路径）→ adb install -r → 悬停高亮与结果浮层，每设备串行
-status: in_progress
+status: completed
 created: 2026-10-10
+completed: 2026-10-10
 ---
 
 # 拖拽 APK 进画面即安装 — plan
@@ -154,3 +155,40 @@ i18n 初始键（mainWindow 域）：`apkDropHint`（含 {设备名} 占位）�
 需求与排除项填实（剪贴板另半边、拆分包、批量、确认弹层明确排除）；`webUtils` 路径中转方案与 Electron 39 约束写明；签名→词条映射表、互斥与状态机可直接进 Phase 3；stage05 步骤挂本 plan 链接且注明「APK 半边、步骤仍不勾」；book 索引构建通过。
 
 实现阶段终点（Phase 3-6 另行勾选）：真机验证拖入高亮与安装、`.apk` 守卫拒绝无效拖入、成功/各类失败文案、串行约束、设备中途停止的浮层复位。
+
+## 实施结果 — 2026-10-10（worktree feature/drag-apk-install）
+
+### Phase 3：实现
+
+- main：`src/main/apkInstall/index.ts` 新域——`runAdb`（emulator/adb 助手，scrub env + stderr 4KiB 尾界）执行 `adb -s <serial> install -r`，`timeoutMs: 0` 不硬杀；五签名（签名不一致/空间不足/版本过低/testOnly/非 APK）映射词条、原文附详情；每设备 `Set` 互斥。devices 域只加一个导出 `runningDeviceSerial`（copySerial 同口径守卫），ipc/index.ts 注入接线。
+- preload：`api/install.ts`——`resolveDropPaths`（webUtils.getPathForFile 中转，Electron 39 无 File.path）+ `install` invoke；不占 ipcMain。
+- renderer：`useApkInstall` hook（idle → dragging → installing → installed/failed 状态机、busy 4 秒提示、成功 5 秒/失败 10 秒自动清除）+ `InstallDropOverlay`（悬停全幅虚线高亮 + 右下角状态卡，pointer-events:none）+ DeviceCanvas `.stage` 挂四个拖放事件。
+- i18n：mainWindow 4 键（dropHint/installing/installed/busy）+ errors 8 键（busy 主侧互斥）×三语。
+
+### Phase 4：验证
+
+- 全量 881 项通过（6 项原有跳过），本批新增 30 项：apkInstall 域 14（sender/payload/running 守卫、-r 参数与 timeoutMs 0、串行与跨设备、七类失败映射、exit 兜底）、devices `runningDeviceSerial` 1、hook 7（高亮/子元素不收/成功失败自清/非 apk 静默/busy）、浮层 5、DeviceCanvas 接线 3。typecheck、lint、build 通过。
+
+### Phase 5：review（只记录）
+
+自检批（实现当天）：三项 P3——dragover 无法预判扩展名（平台限制，守卫移到 drop）、真机链路待冒烟、devices 测试 mock 泄漏（另记 issue，未修）。
+
+独立 review（2026-10-10，用户真机验收后）：**disposition 为 fix**，一项 P2 + 四项 P3，自检三项不重复计入。
+
+- P2：安装中再拖 APK 时 `onDragEnter` 无 phase 守卫，把 `installing` 打回 `dragging`——busyNote 分支真实会话不可达，忙被呈现为红色失败卡，随后被迟到的成功覆盖。测试因缺少 dragenter 步骤未能拦截。已登记 [issue](../notes/issue/2026-10/2026-10-10-apk-install-busy-unreachable.md)，按 workflow 留待独立修复。
+- P3 ×4（不阻塞，均记录在 review 报告）：`timeoutMs: 0` 下 adb 挂死则该设备互斥与浮层无限期滞留（plan 已接受的取舍的残余风险）；`fileNameOf` 按反斜杠切分致文件名含 `\` 时显示截断；失败浮层直出 Electron invoke 前缀（app 级既有 toApiResult 约定，非本批引入）；非法载荷错误消息缺 `': '` 分隔符（诊断可读性）。
+
+审查覆盖：并发/竞态（keyed 挂载清理干净、main 互斥无 TOCTOU）、错误路径（五签名+三重兜底完备）、边界输入（多文件/空路径/非 Files 类型均静默）、安全（sender 守卫有效、spawn 数组参数无注入）、i18n（两域三语键齐、占位一致）、侵入面（既有文件改动最小、无行为破坏）、测试（29/29 过、无断言削弱）、范围（与 plan 排除项逐项吻合）。
+
+### 状态
+
+真机冒烟已通过（2026-10-10 用户在 Pixel 8 API 32 实拖 msd-web.apk：安装成功、抽屉可见图标、启动渲染正常；启动入口 resolve-activity 与 pm list 双重确认），**plan 翻 completed**。open 项不随本批关闭：P2 busy 反馈不可达（[issue](../notes/issue/2026-10/2026-10-10-apk-install-busy-unreachable.md)，review disposition 保持 fix）与既有 P3 记录，均留待独立修复批；stage 步骤仍因剪贴板共享半边未开工而保持未勾。
+
+### 修复批 — 2026-10-10（同日，用户指示直接修复）
+
+review 的 P2 与既有 P3 issue 各修一处，均已闭环：
+
+- P2 busy 不可达：`onDragEnter` 补 phase 守卫（installing 保持 spinner + `flashBusyNote`，dragging no-op），busy 分支逻辑提取共用；测试改真实序列（drop#1 → dragenter → drop#2）并新增结果卡轮替用例。issue 已附处置记录、状态 resolved。
+- devices 测试 mock 泄漏：肇事用例改 `mockRejectedValueOnce` 源头修复，用例行为不变；issue 状态 resolved，防御性重置保留作保险。
+- 全量 882 项通过（6 项原有跳过，净增 1），typecheck/lint/build 通过。review 四项 P3 中未构成 issue 的三条（超时挂死滞留、文件名反斜杠显示、浮层 invoke 前缀）维持记录不动。
+

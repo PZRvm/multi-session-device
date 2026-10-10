@@ -724,3 +724,9 @@ export interface ScreenshotCaptureResult {
 export interface ScreenshotSaveResult {
   fileName: string
 }
+
+// ---- APK 安装域（plan 2026-10-10-drag-apk-install）----
+/** apkInstall 通道返回：安装成功的 APK 文件名（回显用；不含路径） */
+export interface ApkInstallResult {
+  fileName: string
+}

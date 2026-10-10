@@ -135,7 +135,12 @@ const zhCN = {
   screenshotCopied: '已复制到剪贴板',
   screenshotSave: '保存到下载文件夹',
   screenshotSaving: '保存中…',
-  screenshotSaved: '已保存：{fileName}'
+  screenshotSaved: '已保存：{fileName}',
+  // ---- 拖拽 APK 安装（plan 2026-10-10-drag-apk-install；浮层与悬停提示）----
+  apkDropHint: '松开安装到 {name}',
+  apkInstalling: '正在安装 {file}…',
+  apkInstalled: '已安装 {file}',
+  apkInstallBusy: '正在安装上一个 APK，请稍候'
 }
 
 export type MainWindowCopy = Record<keyof typeof zhCN, string>
@@ -265,7 +270,12 @@ const zhTW: MainWindowCopy = {
   screenshotCopied: '已複製到剪貼板',
   screenshotSave: '儲存到下載資料夾',
   screenshotSaving: '儲存中…',
-  screenshotSaved: '已儲存：{fileName}'
+  screenshotSaved: '已儲存：{fileName}',
+  // ---- 拖拽 APK 安裝（plan 2026-10-10-drag-apk-install；浮層與懸停提示）----
+  apkDropHint: '放開安裝到 {name}',
+  apkInstalling: '正在安裝 {file}…',
+  apkInstalled: '已安裝 {file}',
+  apkInstallBusy: '正在安裝上一個 APK，請稍候'
 }
 
 const enUS: MainWindowCopy = {
@@ -403,7 +413,12 @@ const enUS: MainWindowCopy = {
   screenshotCopied: 'Copied to clipboard',
   screenshotSave: 'Save to Downloads',
   screenshotSaving: 'Saving…',
-  screenshotSaved: 'Saved: {fileName}'
+  screenshotSaved: 'Saved: {fileName}',
+  // ---- Drag-and-drop APK install (plan 2026-10-10-drag-apk-install; overlay and hover hint) ----
+  apkDropHint: 'Drop to install on {name}',
+  apkInstalling: 'Installing {file}…',
+  apkInstalled: 'Installed {file}',
+  apkInstallBusy: 'Still installing the previous APK; try again shortly'
 }
 
 export const MAIN_COPY: Record<SettingsLocale, MainWindowCopy> = {

@@ -6,10 +6,12 @@ import {
   androidToolEnv,
   listDeviceNamesReferencing,
   runningDeviceRef,
+  runningDeviceSerial,
   savedDeviceSkinRef,
   registerDevicesIpc
 } from '../devices'
 import { registerSdkIpc } from '../emulator'
+import { registerApkInstallIpc } from '../apkInstall'
 import { createScrcpyManager } from '../scrcpy'
 import { registerScreenshotIpc, clearScreenshotCache } from '../screenshot'
 import { registerWizardIpc } from '../window/wizard'
@@ -32,6 +34,12 @@ export function registerIpcHandlers(): void {
   registerSdkIpc({ referencingDeviceNames: listDeviceNamesReferencing, savedDeviceSkinRef })
   // 编辑窗目标核验经注入进入向导域（开窗前 devices 域裁决，避免 wizard 反向依赖）
   registerWizardIpc({ assertEditorTarget })
+  // 拖拽 APK 安装：running/serial 断言经注入（安装域不反向依赖 devices）；仅主窗可发起
+  registerApkInstallIpc({
+    adbPath: adbBinaryPath,
+    serialOf: runningDeviceSerial,
+    isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
+  })
   registerSettingsIpc()
   registerThemeIpc()
   registerLocaleIpc()

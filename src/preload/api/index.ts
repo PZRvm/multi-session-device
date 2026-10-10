@@ -7,6 +7,7 @@ import { localeApi } from './locale'
 import { screenApi } from './screen'
 import { settingsApi } from './settings'
 import { screenshotApi } from './screenshot'
+import { installApi } from './install'
 
 export const api = {
   platform: process.platform,
@@ -18,7 +19,8 @@ export const api = {
   theme: themeApi,
   locale: localeApi,
   screen: screenApi,
-  screenshot: screenshotApi
+  screenshot: screenshotApi,
+  install: installApi
 }
 
 export type Api = typeof api

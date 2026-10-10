@@ -90,5 +90,8 @@ export const IPC_CHANNELS = {
   /** 截屏并写系统剪贴板（受控：只写本设备刚截的图，不开放任意剪贴板写入） */
   screenshotCapture: 'screenshot:capture',
   /** 用主进程缓存的最近一张写系统下载目录（不弹保存对话框） */
-  screenshotSave: 'screenshot:save'
+  screenshotSave: 'screenshot:save',
+  // ---- APK 安装域（plan 2026-10-10-drag-apk-install；仅登记主窗）----
+  /** 拖拽 APK 安装到 running 设备（每设备串行；结果一次返回，无进度推送） */
+  apkInstall: 'apk:install'
 } as const

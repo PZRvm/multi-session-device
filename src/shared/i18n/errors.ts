@@ -424,7 +424,16 @@ const zhCN = {
   screenshotSaveFailed: '保存到下载文件夹失败：{detail}',
   screenshotSaveBusy: '保存进行中，请稍候',
   screenshotOversized: '截图数据超出大小上限',
-  screenshotStale: '截图已过期（设备状态已变化），请重新截屏'
+  screenshotStale: '截图已过期（设备状态已变化），请重新截屏',
+  // ---- APK 安装域（plan 2026-10-10-drag-apk-install；detail 保留 adb 原文）----
+  apkDeviceNotRunning: '设备未运行，无法安装 APK',
+  apkInstallBusy: '该设备正在安装另一个 APK，请稍候',
+  apkInstallFailed: 'APK 安装失败：{detail}',
+  apkInstallSignatureMismatch: 'APK 安装失败：签名与设备上已装版本不一致，请先卸载旧版（{detail}）',
+  apkInstallNoSpace: 'APK 安装失败：设备存储空间不足（{detail}）',
+  apkInstallOlderSdk: 'APK 安装失败：APK 要求的系统版本高于设备当前版本（{detail}）',
+  apkInstallTestOnly: 'APK 安装失败：testOnly 包需正式签名或 adb 加 -t 安装（{detail}）',
+  apkInstallNotApk: 'APK 安装失败：文件不是有效的 APK（{detail}）'
 }
 
 export type ErrorsCopy = Record<keyof typeof zhCN, string>
@@ -824,7 +833,17 @@ const zhTW: ErrorsCopy = {
   screenshotSaveFailed: '儲存到下載資料夾失敗：{detail}',
   screenshotSaveBusy: '儲存進行中，請稍候',
   screenshotOversized: '截圖資料超出大小上限',
-  screenshotStale: '截圖已過期（裝置狀態已變化），請重新截圖'
+  screenshotStale: '截圖已過期（裝置狀態已變化），請重新截圖',
+  // ---- APK 安裝域（plan 2026-10-10-drag-apk-install；detail 保留 adb 原文）----
+  apkDeviceNotRunning: '裝置未執行，無法安裝 APK',
+  apkInstallBusy: '該裝置正在安裝另一個 APK，請稍候',
+  apkInstallFailed: 'APK 安裝失敗：{detail}',
+  apkInstallSignatureMismatch:
+    'APK 安裝失敗：簽章與裝置上已裝版本不一致，請先解除安裝舊版（{detail}）',
+  apkInstallNoSpace: 'APK 安裝失敗：裝置儲存空間不足（{detail}）',
+  apkInstallOlderSdk: 'APK 安裝失敗：APK 要求的系統版本高於裝置目前版本（{detail}）',
+  apkInstallTestOnly: 'APK 安裝失敗：testOnly 套件需正式簽章或 adb 加 -t 安裝（{detail}）',
+  apkInstallNotApk: 'APK 安裝失敗：檔案不是有效的 APK（{detail}）'
 }
 
 const enUS: ErrorsCopy = {
@@ -1271,7 +1290,18 @@ const enUS: ErrorsCopy = {
   screenshotSaveFailed: 'Saving to the Downloads folder failed: {detail}',
   screenshotSaveBusy: 'A save is already in progress',
   screenshotOversized: 'Screenshot data exceeds the size limit',
-  screenshotStale: 'The screenshot expired (device state changed); take a new one'
+  screenshotStale: 'The screenshot expired (device state changed); take a new one',
+  // ---- APK install domain (plan 2026-10-10-drag-apk-install; detail keeps adb output verbatim) ----
+  apkDeviceNotRunning: 'Device is not running; cannot install the APK',
+  apkInstallBusy: 'Another APK is installing on this device; try again shortly',
+  apkInstallFailed: 'APK install failed: {detail}',
+  apkInstallSignatureMismatch:
+    'APK install failed: signature mismatch with the installed version; uninstall the old app first ({detail})',
+  apkInstallNoSpace: 'APK install failed: device storage is full ({detail})',
+  apkInstallOlderSdk: 'APK install failed: the APK requires a newer system version ({detail})',
+  apkInstallTestOnly:
+    'APK install failed: test-only package needs a release signature or adb -t ({detail})',
+  apkInstallNotApk: 'APK install failed: file is not a valid APK ({detail})'
 }
 
 export const ERRORS_COPY: Record<SettingsLocale, ErrorsCopy> = {
