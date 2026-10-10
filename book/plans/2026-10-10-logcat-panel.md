@@ -175,6 +175,7 @@ i18n 初始键（mainWindow 域）：`logcatTitle`、`logcatFilterPlaceholder`�
 - **设备换代（runId 变化）时 renderer 以 `key={deviceId:runId}` 重挂**面板完成重订；主进程侧订阅随旧会话销毁，不自动迁移。
 - **日志窗上下文**：`logcat:context` 通道返回完整设备快照（`devices:list` 对非主窗有守卫），下拉数据源独立于 devices 域；弹出时经 URL `?device=` 传入 dock 当前设备。
 - **暂停期间批次照常 ack**（设计未言明）：不确认会让 main 侧积压丢行，暂停是纯视图行为。
+- **用户反馈迭代（同日）**：dock 改为默认固定展开（`logDockOpen` 初值 true），配套主窗默认宽 900→1200、画布保底 720→560，默认尺寸即呈三栏；独立日志窗 darwin 三灯安全区 64→80px（hiddenInset 灯组右缘约 66px，64px 起步的下拉框与之重叠）。窗口级截图核验两处修复。
 
 ### Phase 4：验证
 

@@ -22,6 +22,14 @@ CDP 真机验证想用构建产物（比 dev 稳定），用 `npx electron out/m
 
 **附带收获**：`devices:list` 对隔离目录返回空表而非报错，域守卫（requireSender）工作正常；CDP 驱动窗口时按 URL（index.html / logcat.html）识别比按 title 可靠（页面 title 初始都是 "Electron"，ready 后才变）。
 
+## 现象三：`.gitignore` 的 `*.log*` 误伤文件名含 `.log` 前缀段的源码
+
+`App.logcat.test.tsx` 恰好命中 `*.log*`（`App.log` + 任意后缀），被 git 静默忽略——`git status` 不显示、`git add .` 不收、提交历史里没有，只有 `git status --ignored` 能看到。发现时机是修 bug 后 `git status` 找不到测试文件改动。
+
+**正确姿势**：拦日志文件写 `*.log` + `*.log.*`（`log` 后必须紧跟 `.`），不写 `*.log*`。排查用 `git check-ignore -v <路径>` 定位规则；怀疑有文件漏收时跑 `git ls-files --others --ignored --exclude-standard | grep -v node_modules`。
+
+**复盘**：集成测试写了 6 个用例、跑了全绿，但从未进过版本库——「测试全绿」不等于「测试已入库」；新测试文件提交后应 `git ls-files | grep <名字>` 复核一次。
+
 ## 适用场景
 
 - Electron 应用做 CDP 自动化验证（本仓库 e2e/cdp-smoke.mjs 同款场景）。
