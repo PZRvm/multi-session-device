@@ -74,6 +74,30 @@ describe('apkInstall 通道守卫', () => {
     expect(mocks.run).not.toHaveBeenCalled()
   })
 
+  it('非 .apk 后缀：main 侧兜底拒绝（不依赖 renderer 守卫），不启动 adb', async () => {
+    const handler = handlerFor()
+    await expect(handler(MAIN_SENDER, { deviceId: 'd1', filePath: '/x/a.txt' })).rejects.toThrow(
+      'APK 安装失败：文件不是有效的 APK'
+    )
+    await expect(handler(MAIN_SENDER, { deviceId: 'd1', filePath: '/x/app' })).rejects.toThrow(
+      '文件不是有效的 APK'
+    )
+    expect(mocks.run).not.toHaveBeenCalled()
+  })
+
+  it('.APK 大写后缀放行（大小写不敏感）', async () => {
+    const handler = handlerFor()
+    mocks.run.mockResolvedValue(adbResult())
+    await expect(handler(MAIN_SENDER, { deviceId: 'd1', filePath: '/x/a.APK' })).resolves.toEqual({
+      fileName: 'a.APK'
+    })
+    expect(mocks.run).toHaveBeenCalledWith(
+      '/sdk/platform-tools/adb',
+      ['-s', 'emulator-5554', 'install', '-r', '/x/a.APK'],
+      { timeoutMs: 0 }
+    )
+  })
+
   it('设备未 running：serialOf 抛错直通，不启动 adb', async () => {
     const handler = handlerFor()
     mocks.serialOf.mockImplementation(() => {

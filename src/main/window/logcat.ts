@@ -133,7 +133,10 @@ export function openLogcatWindow(deviceId?: string): Promise<void> {
 
 // dock 展开态的最小宽钳制：不用 setMinimumSize——macOS 上 (0,0) 恢复存在窗口
 // 服务器时序竞态（偶发不清除，主窗从此缩不小）；will-resize 钳制是纯同步逻辑，
-// 解除 = 变量置零，无竞态。程序化 setSize/setBounds 不触发 will-resize，拉宽不受影响
+// 解除 = 变量置零，无竞态。程序化 setSize/setBounds 不触发 will-resize，拉宽不受影响。
+// 宽度口径：minWidth 是 renderer 按内容宽算的需求，比较与拉宽必须走 getContentBounds/
+// setContentSize——getBounds 是外框，Windows 帧差约 14-16px，用外框对比内容需求会
+// 少拉帧差宽度，内容宽不足导致 dock 不渲染且再点不再拉宽（issue P2-1）
 let dockMinWidth = 0
 /** 已挂钳制钩子的主窗 id——主窗关闭重开（macOS activate 重建）后按新窗重挂 */
 let resizeHookWindowId = -1
@@ -142,19 +145,23 @@ const attachDockResizeHook = (): void => {
   const window = getMainWindow()
   if (!window || window.id === resizeHookWindowId) return
   resizeHookWindowId = window.id
-  // 用户拖拽：will-resize 预阻止（无闪跳；macOS 支持）
+  // 用户拖拽：will-resize 预阻止（无闪跳；macOS 支持）。newBounds 是外框尺寸，
+  // 折算内容宽再比——帧差 = 当前外框宽 − 内容宽（分数缩放下可能带 .5，整数宽下不影响判定）
   window.on('will-resize', (event, newBounds) => {
-    if (dockMinWidth > 0 && newBounds.width < dockMinWidth) {
+    if (dockMinWidth <= 0) return
+    const frameDelta = window.getBounds().width - window.getContentBounds().width
+    if (newBounds.width - frameDelta < dockMinWidth) {
       event.preventDefault()
     }
   })
   // 程序化 setBounds/resizeTo（含窗口服务器异常路径）：事后回弹钳制——
-  // setSize 回到 min 后不再小于阈值，无递归。尺寸取整：macOS 分数缩放下
-  // getBounds 常返回 .5 值，setSize 只收整数（否则 native 参数转换失败抛错）
+  // 回到 min 后不再小于阈值，无递归。尺寸取整：macOS 分数缩放下 bounds
+  // 常返回 .5 值，setContentSize 只收整数（否则 native 参数转换失败抛错）
   window.on('resize', () => {
-    if (dockMinWidth > 0 && !window.isDestroyed() && window.getBounds().width < dockMinWidth) {
-      const bounds = window.getBounds()
-      window.setSize(Math.round(dockMinWidth), Math.round(bounds.height))
+    if (dockMinWidth <= 0 || window.isDestroyed()) return
+    const content = window.getContentBounds()
+    if (content.width < dockMinWidth) {
+      window.setContentSize(Math.round(dockMinWidth), Math.round(content.height))
     }
   })
 }
@@ -204,10 +211,10 @@ export function registerLogcatIpc(): void {
       }
       attachDockResizeHook()
       dockMinWidth = Math.round(minWidth)
-      const bounds = window.getBounds()
-      if (bounds.width < minWidth) {
-        // 高度取整（getBounds 在分数缩放下可能是 .5 值，setSize 只收整数）
-        window.setSize(Math.round(minWidth), Math.round(bounds.height))
+      // 比较与拉宽都在内容坐标：外框帧差不参与（else 内容宽不足，dock 不渲染）
+      const content = window.getContentBounds()
+      if (content.width < minWidth) {
+        window.setContentSize(Math.round(minWidth), Math.round(content.height))
       }
     } else {
       dockMinWidth = 0

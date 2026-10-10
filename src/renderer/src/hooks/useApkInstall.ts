@@ -17,6 +17,36 @@ const INSTALLED_AUTO_CLEAR_MS = 5_000
 const FAILED_AUTO_CLEAR_MS = 10_000
 const BUSY_NOTE_CLEAR_MS = 4_000
 
+// 安装态模块级单源（issue 2026-10-10 P2-4）：画布以 id:runId 为 key，设备切换/停止即
+// 卸载，hook 内存态随卸载丢——在途安装的重挂载画布只看到 idle，重拖被 main 互斥拒绝
+// 成失败卡、原结果无人接收。状态放模块 store 后，重挂载从 store 恢复在途态并经
+// listener 接住结局；终态保留至 auto-clear 窗口结束（短暂切走再切回仍能看到结果，
+// 超时清除——迟到重挂载不展示陈旧结果）。
+type PhaseListener = (phase: ApkInstallPhase) => void
+const phaseStore = new Map<string, ApkInstallPhase>()
+const phaseListeners = new Map<string, Set<PhaseListener>>()
+const evictTimers = new Map<string, number>()
+
+const emitPhase = (deviceId: string, next: ApkInstallPhase, retainMs: number): void => {
+  phaseStore.set(deviceId, next)
+  for (const listener of phaseListeners.get(deviceId) ?? []) listener(next)
+  window.clearTimeout(evictTimers.get(deviceId))
+  if (retainMs > 0) {
+    evictTimers.set(
+      deviceId,
+      window.setTimeout(() => phaseStore.delete(deviceId), retainMs)
+    )
+  }
+}
+
+/** 测试隔离用：清空模块级安装态（生产代码不得调用） */
+export const resetApkInstallStateForTests = (): void => {
+  phaseStore.clear()
+  phaseListeners.clear()
+  for (const timer of evictTimers.values()) window.clearTimeout(timer)
+  evictTimers.clear()
+}
+
 /** 从绝对路径取文件名（sandbox renderer 无 node:path；macOS 为主平台，兼容反斜杠） */
 export const fileNameOf = (filePath: string): string => {
   const parts = filePath.split(/[/\\]/).filter((part) => part.length > 0)
@@ -37,21 +67,14 @@ export const useApkInstall = (
     onDrop: (event: React.DragEvent) => void
   }
 } => {
-  const [phase, setPhase] = useState<ApkInstallPhase>({ phase: 'idle' })
+  const [phase, setPhase] = useState<ApkInstallPhase>(
+    () => phaseStore.get(deviceId) ?? { phase: 'idle' }
+  )
   const [busyNote, setBusyNote] = useState(false)
   const mountedRef = useRef(false)
-  const phaseRef = useRef<ApkInstallPhase>({ phase: 'idle' })
+  const phaseRef = useRef<ApkInstallPhase>(phase)
   const clearTimerRef = useRef(0)
   const busyTimerRef = useRef(0)
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-      window.clearTimeout(clearTimerRef.current)
-      window.clearTimeout(busyTimerRef.current)
-    }
-  }, [])
 
   const setPhaseBoth = useCallback((next: ApkInstallPhase): void => {
     phaseRef.current = next
@@ -68,22 +91,51 @@ export const useApkInstall = (
     [setPhaseBoth]
   )
 
+  // 订阅模块 store：本画布发起的安装经 emitPhase 回流，卸载画布的在途安装结局经
+  // listener 交接到重挂载的画布（busyNote 随终态清理——「已安装 + 正在安装上一个」
+  // 不再同屏）
+  useEffect(() => {
+    mountedRef.current = true
+    const listener: PhaseListener = (next) => {
+      if (!mountedRef.current) return
+      setPhaseBoth(next)
+      window.clearTimeout(busyTimerRef.current)
+      setBusyNote(false)
+      if (next.phase === 'installed') armAutoClear(INSTALLED_AUTO_CLEAR_MS)
+      else if (next.phase === 'failed') armAutoClear(FAILED_AUTO_CLEAR_MS)
+    }
+    let listeners = phaseListeners.get(deviceId)
+    if (!listeners) {
+      listeners = new Set()
+      phaseListeners.set(deviceId, listeners)
+    }
+    listeners.add(listener)
+    // 重挂载时若已处于终态（结局完成于卸载期间）：补本画布的自动清理
+    const stored = phaseStore.get(deviceId)
+    if (stored?.phase === 'installed') armAutoClear(INSTALLED_AUTO_CLEAR_MS)
+    else if (stored?.phase === 'failed') armAutoClear(FAILED_AUTO_CLEAR_MS)
+    return () => {
+      mountedRef.current = false
+      listeners.delete(listener)
+      window.clearTimeout(clearTimerRef.current)
+      window.clearTimeout(busyTimerRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setPhaseBoth/armAutoClear 均为稳定引用
+  }, [deviceId])
+
   const startInstall = useCallback(
     async (filePath: string): Promise<void> => {
       window.clearTimeout(clearTimerRef.current)
-      setPhaseBoth({ phase: 'installing', fileName: fileNameOf(filePath) })
+      emitPhase(deviceId, { phase: 'installing', fileName: fileNameOf(filePath) }, 0)
       const result = await toApiResult(window.api.install.install(deviceId, filePath))
-      if (!mountedRef.current) return
       if (result.ok) {
         const { fileName } = result.data as ApkInstallResult
-        setPhaseBoth({ phase: 'installed', fileName })
-        armAutoClear(INSTALLED_AUTO_CLEAR_MS)
+        emitPhase(deviceId, { phase: 'installed', fileName }, INSTALLED_AUTO_CLEAR_MS)
       } else {
-        setPhaseBoth({ phase: 'failed', message: result.error })
-        armAutoClear(FAILED_AUTO_CLEAR_MS)
+        emitPhase(deviceId, { phase: 'failed', message: result.error }, FAILED_AUTO_CLEAR_MS)
       }
     },
-    [armAutoClear, deviceId, setPhaseBoth]
+    [deviceId]
   )
 
   const flashBusyNote = useCallback((): void => {

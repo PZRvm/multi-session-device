@@ -4,6 +4,7 @@ import {
   attachDeviceStreamBridge,
   adbBinaryPath,
   androidToolEnv,
+  isRunningDevice,
   listDeviceNamesReferencing,
   listDeviceRuntimeViews,
   runningDeviceRef,
@@ -43,10 +44,12 @@ export function registerIpcHandlers(): void {
     serialOf: runningDeviceSerial,
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
   })
-  // 截屏域（plan 2026-10-10）：running 校验经注入进入 devices 域，域自身不反向依赖
+  // 截屏域（plan 2026-10-10）：running 校验经注入进入 devices 域，域自身不反向依赖；
+  // 尾段复核用同步 isRunningDevice——迟到回填与停止钩子清缓存之间零异步间隙
   registerScreenshotIpc({
     adbPath: adbBinaryPath,
     runningDevice: runningDeviceRef,
+    isRunningDevice,
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
   })
   registerSettingsIpc()

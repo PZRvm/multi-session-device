@@ -133,6 +133,23 @@ describe('日志域会话与流控', () => {
     )
   })
 
+  it('载荷通道对 null 载荷报受控错误（不抛裸 TypeError）', async () => {
+    const manager = await makeManager([deviceOf('d1', 'running', 's1', 'run-1')])
+    manager.registerIpc()
+    const event = { sender: asWebContents(contentsA) }
+    expect(() => handlerOf('logcat:subscribe')(event, null)).toThrow('logcat:subscribe')
+    expect(() => handlerOf('logcat:subscribe')(event, undefined)).toThrow(
+      'logcatInvalidPayloadSuffix'
+    )
+    expect(() => handlerOf('logcat:unsubscribe')(event, null)).toThrow('logcat:unsubscribe')
+    expect(() => handlerOf('logcat:ack')(event, null)).toThrow('logcat:ack')
+    expect(() => handlerOf('logcat:ack')(event, { deviceId: 'd1', upToSeq: 1.5 })).toThrow(
+      'logcatInvalidPayloadSuffix'
+    )
+    // 受控拒绝不产生副作用：会话未被订阅污染
+    expect(mocks.spawn).not.toHaveBeenCalled()
+  })
+
   it('订阅回放缓冲尾（replay），实时行攒满阈值即批量推送', async () => {
     const manager = await makeManager([deviceOf('d1', 'running', 'emulator-5554', 'run-1')])
     manager.ensureSession({ id: 'd1', runId: 'run-1', serial: 'emulator-5554' })

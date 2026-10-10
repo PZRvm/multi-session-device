@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useApkInstall, fileNameOf } from '../useApkInstall'
+import { useApkInstall, fileNameOf, resetApkInstallStateForTests } from '../useApkInstall'
 
 const install = vi.fn<(deviceId: string, filePath: string) => Promise<{ fileName: string }>>()
 const resolveDropPaths = vi.fn<(files: File[]) => string[]>()
@@ -8,6 +8,8 @@ const resolveDropPaths = vi.fn<(files: File[]) => string[]>()
 beforeEach(() => {
   vi.clearAllMocks()
   vi.useFakeTimers()
+  // 安装态是模块级单源（跨挂载存活）——测试间必须清空，否则状态泄漏到下个用例
+  resetApkInstallStateForTests()
   ;(window as { api?: unknown }).api = {
     install: { install, resolveDropPaths }
   }
@@ -169,6 +171,72 @@ describe('useApkInstall 状态机', () => {
     drop(target, [new File(['x'], 'b.apk')])
     expect(install).toHaveBeenCalledTimes(2)
     expect(result.current.phase).toEqual({ phase: 'installing', fileName: 'b.apk' })
+  })
+
+  it('切设备卸载后重挂载：恢复 installing 并接住结局（busy 不再误呈失败卡）', async () => {
+    let resolveInstall!: (value: { fileName: string }) => void
+    install.mockReturnValue(
+      new Promise((resolve) => {
+        resolveInstall = resolve
+      })
+    )
+    resolveDropPaths.mockReturnValue(['/tmp/app.apk'])
+    const first = renderHook(() => useApkInstall('d1'))
+    drop(mountTarget(first.result.current.dragHandlers), [apkFile()])
+    expect(first.result.current.phase.phase).toBe('installing')
+    // 切走：画布卸载（App 以 id:runId 为 key），原 hook 的 invoke 结果无人接收
+    first.unmount()
+    // 切回：全新画布从模块单源恢复 installing，而非 idle（issue P2-4）
+    const second = renderHook(() => useApkInstall('d1'))
+    expect(second.result.current.phase).toEqual({ phase: 'installing', fileName: 'app.apk' })
+    // 重挂载期间再拖入：走 busyNote（串行约束提示），不再触发第二次 install
+    dragEnter(mountTarget(second.result.current.dragHandlers))
+    expect(second.result.current.busyNote).toBe(true)
+    expect(install).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      resolveInstall({ fileName: 'app.apk' })
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(second.result.current.phase).toEqual({ phase: 'installed', fileName: 'app.apk' })
+    second.unmount()
+  })
+
+  it('卸载后安装完成：保留窗口内重挂载直接看到结果卡并自动清理，超窗不再展示', async () => {
+    install.mockResolvedValue({ fileName: 'app.apk' })
+    resolveDropPaths.mockReturnValue(['/tmp/app.apk'])
+    const first = renderHook(() => useApkInstall('d1'))
+    drop(mountTarget(first.result.current.dragHandlers), [apkFile()])
+    first.unmount()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    // 结果完成于卸载期间：保留窗口（5 秒）内切回，仍能看到结局，且照常自动清理
+    const second = renderHook(() => useApkInstall('d1'))
+    expect(second.result.current.phase).toEqual({ phase: 'installed', fileName: 'app.apk' })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000)
+    })
+    expect(second.result.current.phase.phase).toBe('idle')
+    second.unmount()
+    // 超窗清除：迟到重挂载不展示陈旧结果
+    const third = renderHook(() => useApkInstall('d1'))
+    expect(third.result.current.phase.phase).toBe('idle')
+    third.unmount()
+  })
+
+  it('安装先于 busyNote 4 秒完成：busyNote 随终态清理，不与结果卡同屏', async () => {
+    install.mockResolvedValue({ fileName: 'app.apk' })
+    resolveDropPaths.mockReturnValue(['/tmp/app.apk'])
+    const { result } = renderHook(() => useApkInstall('d1'))
+    const target = mountTarget(result.current.dragHandlers)
+    drop(target, [apkFile()])
+    dragEnter(target)
+    expect(result.current.busyNote).toBe(true)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000)
+    })
+    expect(result.current.phase).toEqual({ phase: 'installed', fileName: 'app.apk' })
+    expect(result.current.busyNote).toBe(false)
   })
 })
 

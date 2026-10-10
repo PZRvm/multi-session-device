@@ -46,7 +46,9 @@ export const useLogcatFeed = (
       if (message.deviceId !== deviceId) return
       // 暂停也回执：不确认会让 main 侧积压并开始丢行
       const last = message.lines.length > 0 ? message.lines[message.lines.length - 1].seq : null
-      if (last !== null) void window.api.logcat.ack({ deviceId, upToSeq: last })
+      if (last !== null) {
+        void window.api.logcat.ack({ deviceId, upToSeq: last }).catch(() => undefined)
+      }
       if (pausedRef.current) return
       setEntries((current) => {
         let next = message.replay
@@ -60,16 +62,33 @@ export const useLogcatFeed = (
               }))
             ]
         if (message.dropped > 0) next = [...next, { kind: 'gap', count: message.dropped }]
-        // 视图裁剪：只数日志行，超过上限从最旧整段丢弃（与 main 环形缓冲同向）
+        // 视图裁剪：超限从最旧丢弃——行与 gap 标记一并裁（持续洪泛下每个 dropped 批次
+        // 产生一个 gap，只裁行会让 gap 无限累积，违背有界设计）；丢弃边界产生的
+        // 相邻 gap 合并计数（null 是断点标记，合并后保持 null）
         let lineCount = 0
         for (const entry of next) if (entry.kind === 'line') lineCount += 1
         if (lineCount > MAX_VIEW_LINES) {
           let excess = lineCount - MAX_VIEW_LINES
-          next = next.filter((entry) => {
-            if (excess === 0 || entry.kind === 'gap') return true
-            excess -= 1
-            return false
-          })
+          const kept: LogcatViewEntry[] = []
+          for (const entry of next) {
+            if (excess > 0) {
+              if (entry.kind === 'line') excess -= 1
+              continue
+            }
+            const previous = kept[kept.length - 1]
+            if (entry.kind === 'gap' && previous?.kind === 'gap') {
+              kept[kept.length - 1] = {
+                kind: 'gap',
+                count:
+                  previous.count === null || entry.count === null
+                    ? null
+                    : previous.count + entry.count
+              }
+              continue
+            }
+            kept.push(entry)
+          }
+          next = kept
         }
         return next
       })

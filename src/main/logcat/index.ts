@@ -273,14 +273,14 @@ export function createLogcatManager(deps: LogcatManagerDeps): LogcatManager {
 
   const registerIpc = (): void => {
     ipcMain.handle(IPC_CHANNELS.logcatSubscribe, (event, raw: unknown): Promise<void> => {
-      const { deviceId } = raw as { deviceId: string }
+      const { deviceId } = (raw ?? {}) as { deviceId: string }
       if (typeof deviceId !== 'string' || deviceId.length === 0) {
         throw new Error(`${IPC_CHANNELS.logcatSubscribe}: ${msg('logcatInvalidPayloadSuffix')}`)
       }
       return Promise.resolve(subscribe(deviceId, event.sender))
     })
     ipcMain.handle(IPC_CHANNELS.logcatUnsubscribe, (event, raw: unknown): Promise<void> => {
-      const { deviceId } = raw as { deviceId: string }
+      const { deviceId } = (raw ?? {}) as { deviceId: string }
       if (typeof deviceId !== 'string') {
         throw new Error(`${IPC_CHANNELS.logcatUnsubscribe}: ${msg('logcatInvalidPayloadSuffix')}`)
       }
@@ -288,7 +288,7 @@ export function createLogcatManager(deps: LogcatManagerDeps): LogcatManager {
       return Promise.resolve()
     })
     ipcMain.handle(IPC_CHANNELS.logcatAck, (event, raw: unknown): Promise<void> => {
-      const message = raw as { deviceId?: string; upToSeq?: number }
+      const message = (raw ?? {}) as { deviceId?: string; upToSeq?: number }
       if (
         typeof message.deviceId !== 'string' ||
         typeof message.upToSeq !== 'number' ||

@@ -148,17 +148,22 @@ const App = (): React.JSX.Element => {
   }, [reconciliation, buildDetailText, copy])
 
   // main 共用加载结果；同上下文连点也只保留一个提示，直到提示关闭才允许重试。
+  // 返回是否成功（去重命中视为未成功——请求未由本次发起）
   const pendingWindowOpens = useRef(new Set<string>())
   const requestWindow = async (
     key: string,
     title: string,
     request: () => Promise<void>
-  ): Promise<void> => {
-    if (pendingWindowOpens.current.has(key)) return
+  ): Promise<boolean> => {
+    if (pendingWindowOpens.current.has(key)) return false
     pendingWindowOpens.current.add(key)
     try {
       const result = await toApiResult(request())
-      if (!result.ok) await showAlert(title, result.error)
+      if (!result.ok) {
+        await showAlert(title, result.error)
+        return false
+      }
+      return true
     } finally {
       pendingWindowOpens.current.delete(key)
     }
@@ -166,10 +171,14 @@ const App = (): React.JSX.Element => {
 
   // 创建结果经 devices:changed 快照回流。
   const openWizard = (): Promise<void> =>
-    requestWindow('create', copy.openWizardFailed, () => window.api.wizard.open())
+    requestWindow('create', copy.openWizardFailed, () => window.api.wizard.open()).then(
+      () => undefined
+    )
 
   const openSettings = (): Promise<void> =>
-    requestWindow('settings', copy.openSettingsFailed, () => window.api.settings.open())
+    requestWindow('settings', copy.openSettingsFailed, () => window.api.settings.open()).then(
+      () => undefined
+    )
 
   const handleRecheck = async (): Promise<void> => {
     setRechecking(true)
@@ -234,7 +243,9 @@ const App = (): React.JSX.Element => {
   // 打开配置编辑窗（plan 2026-10-08）：上下文在 main 侧固定；已有其他上下文
   // 向导窗打开时 main 会聚焦旧窗并报错——这里把原因反馈给用户
   const handleEdit = (id: string): Promise<void> =>
-    requestWindow(`edit:${id}`, copy.openEditorFailed, () => window.api.wizard.openEditor(id))
+    requestWindow(`edit:${id}`, copy.openEditorFailed, () => window.api.wizard.openEditor(id)).then(
+      () => undefined
+    )
 
   const selected = devices.find((device) => device.id === selectedId) ?? null
   // checking（创建中/暂缓判断）不算「文件异常」——与 main 侧报告口径一致（review P2-2）
@@ -272,10 +283,14 @@ const App = (): React.JSX.Element => {
 
   // dock 跟随设备生命周期：无 running 设备（停止/删除/选中切走）时自动收起。
   // 否则 dock 空态挂死——入口按钮随设备消失、弹出按钮无设备直接 return，
-  // dock 关不掉且 minWidth 锁残留（用户反馈「打开过 logcat 后窗口缩不小」）
-  useEffect(() => {
+  // dock 关不掉且 minWidth 锁残留（用户反馈「打开过 logcat 后窗口缩不小」）。
+  // 渲染期对齐（React「adjust state during render」模式）：状态重置不进 effect，
+  // 无 set-state-in-effect 的级联提交
+  const [prevLogcatDevice, setPrevLogcatDevice] = useState(logcatDevice)
+  if (logcatDevice !== prevLogcatDevice) {
+    setPrevLogcatDevice(logcatDevice)
     if (!logcatDevice) setLogDockOpen(false)
-  }, [logcatDevice])
+  }
 
   // 声明式同步：dock 可见 → 锁主窗 minWidth（拖宽变化跟随）；不可见（收起、
   // 弹出独立窗、外力兜底）→ 解锁——独立窗口态主窗宽度完全自由
@@ -312,8 +327,11 @@ const App = (): React.JSX.Element => {
 
   const handlePopOutLogcat = async (): Promise<void> => {
     if (!logcatDevice) return
-    const result = await toApiResult(window.api.logcat.openWindow(logcatDevice.id))
-    if (result.ok) setLogDockOpen(false)
+    // 失败弹原生 dialog（15s 超时/did-fail-load/renderer 崩溃带 detail）——不再静默
+    const ok = await requestWindow('logcat-popout', copy.openLogcatWindowFailed, () =>
+      window.api.logcat.openWindow(logcatDevice.id)
+    )
+    if (ok) setLogDockOpen(false)
   }
 
   // 独立窗「贴回」：关窗由 main 侧完成，这里重新展开 dock（窄窗同样拉宽）。

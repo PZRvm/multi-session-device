@@ -37,6 +37,7 @@ const snapshotOf = (devices: Device[]): DeviceSnapshot =>
 
 const openLogcatWindow = vi.fn(async () => undefined)
 const isWindowOpen = vi.fn(async () => false)
+const dialogShow = vi.fn(async () => ({ response: 0 }))
 // main 侧「锁 minWidth + 拉宽」的真实行为在测试里模拟为：expanded 时视口拉宽
 const setDockState = vi.fn(async (state: { expanded: boolean; minWidth?: number }) => {
   if (state.expanded && state.minWidth && window.innerWidth < state.minWidth) {
@@ -75,7 +76,7 @@ describe('主窗日志 dock', () => {
       platform: 'darwin',
       wizard: { open: vi.fn(async () => undefined), openEditor: vi.fn(async () => undefined) },
       settings: { open: vi.fn(async () => undefined) },
-      dialog: { show: vi.fn(async () => ({ response: 0 })) },
+      dialog: { show: dialogShow },
       devices: {
         list: vi.fn(async () => snapshotOf([runningDevice])),
         onChanged: () => () => {},
@@ -130,6 +131,25 @@ describe('主窗日志 dock', () => {
     expect(openLogcatWindow).toHaveBeenCalledWith('d1')
     expect(screen.queryByRole('log')).toBeNull()
     expect(subscribe).not.toHaveBeenCalled()
+  })
+
+  it('弹出独立窗失败：弹原生 dialog 报 openLogcatWindowFailed，dock 保持展开不消失', async () => {
+    openLogcatWindow.mockRejectedValueOnce(new Error('加载日志窗口超时'))
+    render(<App />)
+    fireEvent.click(toggleButton())
+    await screen.findByRole('log')
+    fireEvent.click(screen.getByTitle(copy.logcatPopOut))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(dialogShow).toHaveBeenCalledTimes(1)
+    expect(dialogShow).toHaveBeenCalledWith(
+      expect.objectContaining({ title: copy.openLogcatWindowFailed })
+    )
+    // 失败时 dock 不收起（成功路径才 setLogDockOpen(false)）
+    expect(screen.getByRole('log')).toBeTruthy()
+    expect(toggleButton().getAttribute('aria-pressed')).toBe('true')
   })
 
   it('独立窗贴回事件到达后 dock 重新展开', async () => {

@@ -85,6 +85,11 @@ export function registerApkInstallIpc(deps: ApkInstallDeps): void {
       if (!isInstallInput(raw)) {
         throw new Error(`${IPC_CHANNELS.apkInstall}${msg('invalidPayload')}`)
       }
+      // .apk 后缀守卫不能只设在 renderer 一层（hook 拦非 apk，main 对直连调用兜底）；
+      // 复用 adb 的 INSTALL_PARSE_FAILED_NOT_APK 文案，detail 带路径
+      if (!/\.apk$/i.test(raw.filePath)) {
+        throw new Error(msg('apkInstallNotApk', { detail: raw.filePath }))
+      }
       return install(raw.deviceId, raw.filePath)
     }
   )

@@ -30,6 +30,22 @@ vi.mock('electron', () => ({
   nativeImage: mocks.nativeImage
 }))
 
+// 只Mock link：注入一次性 EEXIST（跨设备同名并发撞名的确定性模拟），其余 fs 原生
+const linkFailures = vi.hoisted(() => ({ remaining: 0 }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...actual,
+    link: (async (...args: Parameters<typeof actual.link>) => {
+      if (linkFailures.remaining > 0) {
+        linkFailures.remaining -= 1
+        throw Object.assign(new Error('file exists already'), { code: 'EEXIST' })
+      }
+      return actual.link(...args)
+    }) as typeof actual.link
+  }
+})
+
 // msg 模板化会拉入 locale store——单测只需要稳定的键名拼串
 vi.mock('../../locale', () => ({
   msg: (key: string, params?: Record<string, string | number>): string =>
@@ -66,6 +82,7 @@ const setup = (options?: { running?: boolean }): Harness => {
     isMainSender: (sender) => (sender as { id: number }).id === 1,
     runningDevice: async () =>
       options?.running === false ? null : { serial: 'emulator-5554', name: '测试设备' },
+    isRunningDevice: () => options?.running !== false,
     downloadsDir: () => downloads,
     run
   })
@@ -89,6 +106,7 @@ const rejectMessage = async (promise: Promise<unknown>): Promise<string> => {
 describe('screenshot 域', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
+    linkFailures.remaining = 0
     mocks.nativeImage.createFromBuffer.mockImplementation(() => ({
       getSize: () => ({ width: 1080, height: 2340 })
     }))
@@ -132,6 +150,7 @@ describe('screenshot 域', () => {
     registerScreenshotIpc({
       adbPath: () => '/fake/adb',
       isMainSender: () => false,
+      isRunningDevice: () => true,
       runningDevice: async () => ({ serial: 's', name: 'n' })
     })
     const captureMessage = await rejectMessage(
@@ -153,6 +172,7 @@ describe('screenshot 域', () => {
     registerScreenshotIpc({
       adbPath: () => '/fake/adb',
       isMainSender: () => true,
+      isRunningDevice: () => true,
       runningDevice: async () => ({ serial: 's', name: 'n' }),
       run: (() =>
         new Promise<AdbBinaryResult>((resolve) => {
@@ -175,6 +195,7 @@ describe('screenshot 域', () => {
     registerScreenshotIpc({
       adbPath: () => '/fake/adb',
       isMainSender: () => true,
+      isRunningDevice: () => true,
       runningDevice: async () => ({ serial: 's', name: 'n' }),
       run: (async () => ({
         code: 1,
@@ -240,19 +261,53 @@ describe('screenshot 域', () => {
     await expect(first).resolves.toBeTruthy()
   })
 
+  it('save 撞名（link EEXIST）换候选重试成功，目录无 .part 残骸', async () => {
+    const h = setup()
+    await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
+    linkFailures.remaining = 1
+    const result = (await h.call(IPC_CHANNELS.screenshotSave, { id: 'd1' })) as { fileName: string }
+    const files = await readdir(downloads)
+    expect(files).toHaveLength(1)
+    expect(files[0]).toBe(result.fileName)
+    expect(files.some((name) => name.endsWith('.part'))).toBe(false)
+    expect(await readFile(join(downloads, result.fileName))).toEqual(PNG)
+  })
+
+  it('跨设备同名同秒并发保存：两文件各自落盘，互不覆盖互不串内容', async () => {
+    vi.useFakeTimers()
+    try {
+      const h = setup()
+      // 冻结时间：两设备 capturedAt 同秒 + 同名 → 基名相同（跨设备不共享 save 互斥）
+      await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
+      await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd2' })
+      const [a, b] = (await Promise.all([
+        h.call(IPC_CHANNELS.screenshotSave, { id: 'd1' }),
+        h.call(IPC_CHANNELS.screenshotSave, { id: 'd2' })
+      ])) as Array<{ fileName: string }>
+      expect(a.fileName).not.toBe(b.fileName)
+      const files = await readdir(downloads)
+      expect(files).toHaveLength(2)
+      expect(files).toContain(a.fileName)
+      expect(files).toContain(b.fileName)
+      expect(files.some((name) => name.endsWith('.part'))).toBe(false)
+      expect(await readFile(join(downloads, a.fileName))).toEqual(PNG)
+      expect(await readFile(join(downloads, b.fileName))).toEqual(PNG)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('截屏期间设备停止：capture 拒绝、不写剪贴板、不回填缓存', async () => {
     // cache 是模块级状态：先清掉之前用例截的 d1，保证「缓存为空」前提
     clearScreenshotCache('d1')
     const handlers = new Map<string, (event: unknown, raw: unknown) => Promise<unknown>>()
     mocks.ipcMain.handle.mockImplementation((channel, handler) => handlers.set(channel, handler))
-    let probes = 0
     registerScreenshotIpc({
       adbPath: () => '/fake/adb',
       isMainSender: () => true,
-      runningDevice: async () => {
-        probes += 1
-        return probes === 1 ? { serial: 's', name: 'n' } : null
-      },
+      runningDevice: async () => ({ serial: 's', name: 'n' }),
+      // 尾段复核（同步）：adb 返回后设备已停——拒绝且不回填
+      isRunningDevice: () => false,
       run: (async () => ({ code: 0, stdout: PNG, stderr: '' })) as unknown as ScreenshotDeps['run']
     })
     const message = await rejectMessage(

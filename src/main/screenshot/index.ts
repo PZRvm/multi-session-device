@@ -1,4 +1,4 @@
-import { access, constants, rename, rm, writeFile } from 'node:fs/promises'
+import { access, constants, link, rm, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { app, clipboard, ipcMain, nativeImage } from 'electron'
@@ -90,6 +90,9 @@ export interface ScreenshotDeps {
   adbPath: () => string
   isMainSender: (sender: Electron.WebContents) => boolean
   runningDevice: RunningDevice
+  /** 截屏尾段 running 复核（同步读，不触发 ensureLoaded）：与 cache.set 之间零异步间隙，
+   * 停止钩子无法插入——async 复核留一个微任务窗口，清掉的缓存会被迟到回填 */
+  isRunningDevice: (id: string) => boolean
   /** 下载目录（默认系统下载目录；测试注入临时目录） */
   downloadsDir?: () => string
   run?: typeof runAdbBinary
@@ -149,6 +152,8 @@ export const clearScreenshotCache = (deviceId: string): void => {
 export function registerScreenshotIpc(deps: ScreenshotDeps): void {
   const run = deps.run ?? runAdbBinary
   const downloadsDir = deps.downloadsDir ?? (() => app.getPath('downloads'))
+  // 临时名进程内序号：跨设备并发保存不共享 .part 路径
+  let tempSeq = 0
   const requireMainSender = (channel: string, event: Electron.IpcMainInvokeEvent): void => {
     if (!deps.isMainSender(event.sender))
       throw new Error(`${channel}: ${msg('unregisteredWindowSuffix')}`)
@@ -192,8 +197,8 @@ export function registerScreenshotIpc(deps: ScreenshotDeps): void {
             msg('screenshotCaptureFailed', { detail: `decoded ${size.width}×${size.height}` })
           )
         }
-        // 截屏期间设备可能已停止：复核 running，避免停止钩子清缓存后这里又回填
-        if (!(await deps.runningDevice(id))) throw new Error(msg('screenshotDeviceNotRunning'))
+        // 截屏期间设备可能已停止：同步复核 running，避免停止钩子清缓存后这里又回填
+        if (!deps.isRunningDevice(id)) throw new Error(msg('screenshotDeviceNotRunning'))
         // 图像进系统剪贴板是受控动作：只写本设备刚截的图（镜像 copy-serial 守卫策略）
         clipboard.writeImage(image)
         const entry: CachedShot = {
@@ -226,18 +231,28 @@ export function registerScreenshotIpc(deps: ScreenshotDeps): void {
         const cached = cache.get(id)
         if (!cached) throw new Error(msg('screenshotStale'))
         const dir = downloadsDir()
-        const fileName = await resolveFileName(dir, shotFileName(cached).replace(/\.png$/, ''))
-        // 先写临时名再原子 rename：检查名与落盘之间不再留覆盖窗口
-        const tempName = `${fileName}.part`
-        try {
-          await writeFile(join(dir, tempName), cached.buffer)
-          await rename(join(dir, tempName), join(dir, fileName))
-        } catch (error) {
-          await rm(join(dir, tempName), { force: true }).catch(() => undefined)
-          const detail = error instanceof Error ? error.message : String(error)
-          throw new Error(msg('screenshotSaveFailed', { detail }))
+        const base = shotFileName(cached).replace(/\.png$/, '')
+        // 撞名重试上限：常态 1 次成功；跨设备同名同秒连续撞名时换 -2/-3 … 递增
+        for (let attempt = 1; attempt <= 10; attempt += 1) {
+          const fileName = await resolveFileName(dir, base)
+          // 唯一临时名隔离并发写（save 互斥按设备 id，跨设备不互斥）；终名用
+          // link 原子占位——目标已存在报 EEXIST（rename 是静默覆盖，正是要根除的）
+          const tempName = `${fileName}.${process.pid}.${(tempSeq += 1)}.part`
+          try {
+            await writeFile(join(dir, tempName), cached.buffer)
+            await link(join(dir, tempName), join(dir, fileName))
+            await rm(join(dir, tempName), { force: true })
+            return { fileName }
+          } catch (error) {
+            await rm(join(dir, tempName), { force: true }).catch(() => undefined)
+            const code = (error as NodeJS.ErrnoException | null)?.code
+            if (code !== 'EEXIST' || attempt === 10) {
+              const detail = error instanceof Error ? error.message : String(error)
+              throw new Error(msg('screenshotSaveFailed', { detail }))
+            }
+          }
         }
-        return { fileName }
+        throw new Error(msg('screenshotSaveFailed', { detail: 'exhausted retries' }))
       } finally {
         saves.delete(id)
       }

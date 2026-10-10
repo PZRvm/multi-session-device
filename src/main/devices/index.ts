@@ -285,6 +285,13 @@ export const runningDeviceRef = async (
   return { serial: device.serial, name: device.name }
 }
 
+/** 截屏域迟到回填复核用：同步读 running（不 ensureLoaded——调用点设备必已加载；
+ * 与异步复核的差别是零微任务间隙，停止钩子无法插进复核与缓存回填之间） */
+export const isRunningDevice = (id: string): boolean => {
+  const device = devices.find((entry) => entry.id === id)
+  return device?.status === 'running' && !!device.serial
+}
+
 export const listDeviceNamesReferencing = (packageName: string): string[] =>
   devices.filter((device) => device.imagePackageName === packageName).map((device) => device.name)
 
