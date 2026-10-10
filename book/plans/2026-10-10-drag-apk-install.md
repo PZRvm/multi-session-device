@@ -154,3 +154,27 @@ i18n 初始键（mainWindow 域）：`apkDropHint`（含 {设备名} 占位）�
 需求与排除项填实（剪贴板另半边、拆分包、批量、确认弹层明确排除）；`webUtils` 路径中转方案与 Electron 39 约束写明；签名→词条映射表、互斥与状态机可直接进 Phase 3；stage05 步骤挂本 plan 链接且注明「APK 半边、步骤仍不勾」；book 索引构建通过。
 
 实现阶段终点（Phase 3-6 另行勾选）：真机验证拖入高亮与安装、`.apk` 守卫拒绝无效拖入、成功/各类失败文案、串行约束、设备中途停止的浮层复位。
+
+## 实施结果 — 2026-10-10（worktree feature/drag-apk-install）
+
+### Phase 3：实现
+
+- main：`src/main/apkInstall/index.ts` 新域——`runAdb`（emulator/adb 助手，scrub env + stderr 4KiB 尾界）执行 `adb -s <serial> install -r`，`timeoutMs: 0` 不硬杀；五签名（签名不一致/空间不足/版本过低/testOnly/非 APK）映射词条、原文附详情；每设备 `Set` 互斥。devices 域只加一个导出 `runningDeviceSerial`（copySerial 同口径守卫），ipc/index.ts 注入接线。
+- preload：`api/install.ts`——`resolveDropPaths`（webUtils.getPathForFile 中转，Electron 39 无 File.path）+ `install` invoke；不占 ipcMain。
+- renderer：`useApkInstall` hook（idle → dragging → installing → installed/failed 状态机、busy 4 秒提示、成功 5 秒/失败 10 秒自动清除）+ `InstallDropOverlay`（悬停全幅虚线高亮 + 右下角状态卡，pointer-events:none）+ DeviceCanvas `.stage` 挂四个拖放事件。
+- i18n：mainWindow 4 键（dropHint/installing/installed/busy）+ errors 8 键（busy 主侧互斥）×三语。
+
+### Phase 4：验证
+
+- 全量 881 项通过（6 项原有跳过），本批新增 30 项：apkInstall 域 14（sender/payload/running 守卫、-r 参数与 timeoutMs 0、串行与跨设备、七类失败映射、exit 兜底）、devices `runningDeviceSerial` 1、hook 7（高亮/子元素不收/成功失败自清/非 apk 静默/busy）、浮层 5、DeviceCanvas 接线 3。typecheck、lint、build 通过。
+
+### Phase 5：review（只记录）
+
+- P3 实现偏离：dragover 期 Chromium 不暴露文件名/扩展名（安全限制），「非 .apk 高亮不出现」无法预判——守卫移到 drop 时，非 apk 拖入会短暂高亮后静默收起（hook 注释已写明）。
+- P3 遗留：真机链路（真拖文件 → webUtils → adb install 实装）jsdom 测不了，待一次真机冒烟后再翻 completed。
+- P3 既有问题：[devices 测试 mock 实现跨 describe 泄漏](../notes/issue/2026-10/2026-10-10-devices-test-mock-leak.md) 已记 issue，未修。
+
+### 状态
+
+实现与自动化验证完成，**status 保持 in_progress**——真机拖放冒烟通过后翻 completed。
+

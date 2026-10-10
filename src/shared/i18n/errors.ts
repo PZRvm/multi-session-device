@@ -416,7 +416,16 @@ const zhCN = {
   compatApiAboveMax: '镜像 API {major} 超出画像支持上限 API {max}',
   compatApiUnparsedShort: '镜像 API 版本无法解析',
   compatMinorNote: 'API {major}.{minor} 小版本镜像，按正式 minor 版本对待',
-  compatReject: '镜像与画像不兼容：{reasons}'
+  compatReject: '镜像与画像不兼容：{reasons}',
+  // ---- APK 安装域（plan 2026-10-10-drag-apk-install；detail 保留 adb 原文）----
+  apkDeviceNotRunning: '设备未运行，无法安装 APK',
+  apkInstallBusy: '该设备正在安装另一个 APK，请稍候',
+  apkInstallFailed: 'APK 安装失败：{detail}',
+  apkInstallSignatureMismatch: 'APK 安装失败：签名与设备上已装版本不一致，请先卸载旧版（{detail}）',
+  apkInstallNoSpace: 'APK 安装失败：设备存储空间不足（{detail}）',
+  apkInstallOlderSdk: 'APK 安装失败：APK 要求的系统版本高于设备当前版本（{detail}）',
+  apkInstallTestOnly: 'APK 安装失败：testOnly 包需正式签名或 adb 加 -t 安装（{detail}）',
+  apkInstallNotApk: 'APK 安装失败：文件不是有效的 APK（{detail}）'
 }
 
 export type ErrorsCopy = Record<keyof typeof zhCN, string>
@@ -808,7 +817,17 @@ const zhTW: ErrorsCopy = {
   compatApiAboveMax: '映像 API {major} 超出畫像支援上限 API {max}',
   compatApiUnparsedShort: '映像 API 版本無法解析',
   compatMinorNote: 'API {major}.{minor} 小版本映像，按正式 minor 版本對待',
-  compatReject: '映像與畫像不相容：{reasons}'
+  compatReject: '映像與畫像不相容：{reasons}',
+  // ---- APK 安裝域（plan 2026-10-10-drag-apk-install；detail 保留 adb 原文）----
+  apkDeviceNotRunning: '裝置未執行，無法安裝 APK',
+  apkInstallBusy: '該裝置正在安裝另一個 APK，請稍候',
+  apkInstallFailed: 'APK 安裝失敗：{detail}',
+  apkInstallSignatureMismatch:
+    'APK 安裝失敗：簽章與裝置上已裝版本不一致，請先解除安裝舊版（{detail}）',
+  apkInstallNoSpace: 'APK 安裝失敗：裝置儲存空間不足（{detail}）',
+  apkInstallOlderSdk: 'APK 安裝失敗：APK 要求的系統版本高於裝置目前版本（{detail}）',
+  apkInstallTestOnly: 'APK 安裝失敗：testOnly 套件需正式簽章或 adb 加 -t 安裝（{detail}）',
+  apkInstallNotApk: 'APK 安裝失敗：檔案不是有效的 APK（{detail}）'
 }
 
 const enUS: ErrorsCopy = {
@@ -1247,7 +1266,18 @@ const enUS: ErrorsCopy = {
   compatApiAboveMax: 'Image API {major} exceeds the profile maximum API {max}',
   compatApiUnparsedShort: 'Image API version cannot be parsed',
   compatMinorNote: 'API {major}.{minor} minor image; treated as a stable minor version',
-  compatReject: 'Image incompatible with the profile: {reasons}'
+  compatReject: 'Image incompatible with the profile: {reasons}',
+  // ---- APK install domain (plan 2026-10-10-drag-apk-install; detail keeps adb output verbatim) ----
+  apkDeviceNotRunning: 'Device is not running; cannot install the APK',
+  apkInstallBusy: 'Another APK is installing on this device; try again shortly',
+  apkInstallFailed: 'APK install failed: {detail}',
+  apkInstallSignatureMismatch:
+    'APK install failed: signature mismatch with the installed version; uninstall the old app first ({detail})',
+  apkInstallNoSpace: 'APK install failed: device storage is full ({detail})',
+  apkInstallOlderSdk: 'APK install failed: the APK requires a newer system version ({detail})',
+  apkInstallTestOnly:
+    'APK install failed: test-only package needs a release signature or adb -t ({detail})',
+  apkInstallNotApk: 'APK install failed: file is not a valid APK ({detail})'
 }
 
 export const ERRORS_COPY: Record<SettingsLocale, ErrorsCopy> = {

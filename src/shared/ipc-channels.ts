@@ -85,5 +85,8 @@ export const IPC_CHANNELS = {
   /** 受控下载官方皮肤（仅向导窗） */
   sdkDownloadDeviceSkin: 'sdk:download-device-skin',
   /** 皮肤下载进度推送（main → renderer） */
-  sdkSkinProgress: 'sdk:skin-progress'
+  sdkSkinProgress: 'sdk:skin-progress',
+  // ---- APK 安装域（plan 2026-10-10-drag-apk-install；仅登记主窗）----
+  /** 拖拽 APK 安装到 running 设备（每设备串行；结果一次返回，无进度推送） */
+  apkInstall: 'apk:install'
 } as const

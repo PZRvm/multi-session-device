@@ -128,7 +128,12 @@ const zhCN = {
   renameBlockedTitle: '暂不能重命名',
   renameBlockedMessage:
     '设备元数据写入已冻结（设备数据异常），暂不能重命名；详情见左侧列表上方汇总',
-  createDisabledTitleFooter: '设备元数据写入已冻结，暂不能新建设备（详情见上方汇总）'
+  createDisabledTitleFooter: '设备元数据写入已冻结，暂不能新建设备（详情见上方汇总）',
+  // ---- 拖拽 APK 安装（plan 2026-10-10-drag-apk-install；浮层与悬停提示）----
+  apkDropHint: '松开安装到 {name}',
+  apkInstalling: '正在安装 {file}…',
+  apkInstalled: '已安装 {file}',
+  apkInstallBusy: '正在安装上一个 APK，请稍候'
 }
 
 export type MainWindowCopy = Record<keyof typeof zhCN, string>
@@ -251,7 +256,12 @@ const zhTW: MainWindowCopy = {
   renameBlockedTitle: '暫不能重新命名',
   renameBlockedMessage:
     '裝置中繼資料寫入已凍結（裝置資料異常），暫不能重新命名；詳情見左側列表上方匯總',
-  createDisabledTitleFooter: '裝置中繼資料寫入已凍結，暫不能新建裝置（詳見上方匯總）'
+  createDisabledTitleFooter: '裝置中繼資料寫入已凍結，暫不能新建裝置（詳見上方匯總）',
+  // ---- 拖拽 APK 安裝（plan 2026-10-10-drag-apk-install；浮層與懸停提示）----
+  apkDropHint: '放開安裝到 {name}',
+  apkInstalling: '正在安裝 {file}…',
+  apkInstalled: '已安裝 {file}',
+  apkInstallBusy: '正在安裝上一個 APK，請稍候'
 }
 
 const enUS: MainWindowCopy = {
@@ -382,7 +392,12 @@ const enUS: MainWindowCopy = {
   renameBlockedMessage:
     'Device metadata writes are frozen (device data issues); renaming is unavailable. See the summary above the list',
   createDisabledTitleFooter:
-    'Device metadata writes are frozen; creating devices is unavailable (see the summary above)'
+    'Device metadata writes are frozen; creating devices is unavailable (see the summary above the list)',
+  // ---- Drag-and-drop APK install (plan 2026-10-10-drag-apk-install; overlay and hover hint) ----
+  apkDropHint: 'Drop to install on {name}',
+  apkInstalling: 'Installing {file}…',
+  apkInstalled: 'Installed {file}',
+  apkInstallBusy: 'Still installing the previous APK; try again shortly'
 }
 
 export const MAIN_COPY: Record<SettingsLocale, MainWindowCopy> = {
