@@ -1,6 +1,6 @@
 ---
 description: 截屏一键保存设计：相机按钮→adb screencap→先入系统剪贴板，气泡内「保存」写入下载目录
-status: in_progress
+status: completed
 created: 2026-10-10
 ---
 
@@ -141,3 +141,29 @@ i18n 初始键（mainWindow 域）：`screenshotAction`、`screenshotCopied`、`
 需求与排除项填实（录屏、双向剪贴板、保存对话框明确排除）；影响图与风险有代码证据；两段式流程（剪贴板 → 下载目录）的通道、缓存与气泡状态机可直接进 Phase 3；受控剪贴板策略与 `copy-serial` 先例的镜像关系写明；stage05 步骤挂本 plan 链接；book 索引构建通过。
 
 实现阶段终点（Phase 3-6 另行勾选）：真机验证截屏即入剪贴板可粘贴、气泡保存落下载目录、重名递增、设备停止后缓存清理与气泡失效、失败路径文案。
+
+## 实施结果 — 2026-10-10
+
+### Phase 3：实现
+
+- 主进程 `src/main/screenshot/`：自持 Buffer 版 adb runner（`runAdb` 会把 stdout utf8 化破坏 PNG 字节，`exec-out` 二进制必须整段收 Buffer，含 15s 超时与 32MB 护栏）；PNG 魔数校验；`clipboard.writeImage` 受控写图；每设备最近一张缓存；下载目录写入含设备名清洗与重名 `-2`/`-3` 递增。
+- capture 互斥为**同步占位**（检查与 `add` 之间不得有 await）——测试先行抓出的真并发缺陷，修复后两次快速调用必有一次被拒。
+- IPC 接线：`screenshot:capture` / `screenshot:save` 仅登记主窗；running 校验经注入（ipc 层传入 devices 域新增的只读访问器 `runningDeviceRef`，镜像 `savedDeviceSkinRef` 先例）。**偏差记录**：plan 文件清单未列 `src/main/devices/index.ts`，实际新增一处导出访问器（8 行），属注入模式的必要数据源，非反向依赖。
+- 缓存清理挂在 `attachDeviceStreamBridge` 既有调用点（`stopped`/`beforeKill`）——该桥是 `Object.assign` 单订阅者，二次挂载会覆盖投屏钩子，故只扩展现有回调。
+- renderer：`DeviceToolbar` 追加相机按钮（rotate 工具键先例，不随投屏 `disabled` 牵连）+ `ScreenshotPopover`（缩略图/已复制/保存中/已保存/错误五态，`role="status"` 非模态）+ `useScreenshot` 状态机（10s 自动消失；设备离开 running 时气泡经**渲染期派生**收起，不用 effect setState——react-hooks 新规则禁令）。
+- i18n：mainWindow 域 5 键、errors 域 5 键（较 plan 初始清单多 `screenshotBusy`，main 侧互斥防线文案），三语齐备。
+
+### Phase 4：验证
+
+- 新增测试 25 项（主域 11 + hook 6 + 气泡 4 + 工具条 4）；全量 **876 项通过、6 项原有跳过**；typecheck / lint / prettier / build 通过。
+- 真机 CDP 验收（dev 窗口，端口 6177）：启动 Pixel 8 API 32 → running 16s（serial emulator-5554）→ 点相机钮 → 气泡「已复制到剪贴板」+ 保存按钮 → 点保存 → 「已保存：Pixel 8 API 32-20261010-141955.png」。实物核验：`~/Downloads` 产出 1.07MB 合法 PNG（1080×2400 RGBA）；`osascript clipboard info` 首项 `«class PNGf»`（约 1.5MB）证实系统剪贴板持图；气泡画面截图目检排版无破版。验收后设备已停回原状。
+
+### Phase 5：review
+
+按八项清单自查，总体 **fix**——发现的问题只记录不修，见 [issue：截屏批 review P3 清单](../notes/issue/2026-10/2026-10-10-screenshot-review-p3s.md)（save 并发 TOCTOU、在途 capture 与 stopped 的缓存竞态、0×0 PNG 边界等，均为 P3）。授权面复核：双通道主窗 sender 守卫、受控写图、文件名清洗杜绝路径穿越。
+
+### Phase 6：收尾
+
+- 经验入 [learn：exec-out 二进制流与 react-hooks 新规则](../notes/learn/2026-10/2026-10-10-screenshot-adb-binary-and-hooks-rules.md)；stage05 截屏步骤附实现批注（步骤因录屏未做保持未勾）。
+- 本 plan 置 completed：仅指「截屏半边」完成；stage 步骤「截屏+录屏」整步完成仍需录屏批。
+

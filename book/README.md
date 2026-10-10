@@ -139,6 +139,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-remaining-fixes-review-findings.md](notes/issue/2026-10/2026-10-09-remaining-fixes-review-findings.md) — 五项修复 review 新发现：布局归零漏释放已有按下状态，控制写失败后关闭 parser 触发未观察 ACK rejection
 - [2026-10-09-sdk-image-download-system-proxy.md](notes/issue/2026-10/2026-10-09-sdk-image-download-system-proxy.md) — SDK、镜像清单与镜像字节下载仍使用 Node fetch，代理可用但直连不可用时可能失败；本轮只修官方皮肤，其他路径另立任务
 - [2026-10-10-boardhead-toggle-review-p3s.md](notes/issue/2026-10/2026-10-10-boardhead-toggle-review-p3s.md) — 主窗左上亮暗切换钮 review 两项 P3——matchMedia 订阅与 provider 重复、切换钮用动作标签而非 aria-pressed
+- [2026-10-10-screenshot-review-p3s.md](notes/issue/2026-10/2026-10-10-screenshot-review-p3s.md) — 截屏批 Phase 5 review 五项 P3——save 并发 TOCTOU、在途 capture 与 stopped 的缓存竞态、0×0 PNG 边界、错误气泡 10s 消失、spin 动画重复
 - [2026-10-10-settings-copy-dead-keys-and-learn-stale.md](notes/issue/2026-10/2026-10-10-settings-copy-dead-keys-and-learn-stale.md) — 已修复：设置窗三语字典的 title/preview 死键已删，learn 笔记「open/close 桥」表述已更正为仅 open
 - [2026-10-10-settings-window-crash-reopen.md](notes/issue/2026-10/2026-10-10-settings-window-crash-reopen.md) — P2：设置窗就绪后 renderer 崩溃未释放单例，主窗齿轮再次打开只聚焦故障窗；静态前端 review 发现，待独立修复
 
@@ -204,6 +205,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-remaining-issue-fixes.md](notes/learn/2026-10/2026-10-09-remaining-issue-fixes.md) — 工具环境要显式注入、画布要区分流与布局就绪、scrcpy 回包要用与 writer 一致的解析器
 - [2026-10-10-compact-appearance-menu.md](notes/learn/2026-10/2026-10-10-compact-appearance-menu.md) — styled 后代 button 仍会影响子组件，外观模式图标须读所选值，窄栏菜单须用真实排版验收
 - [2026-10-10-electron-settings-static-preview.md](notes/learn/2026-10/2026-10-10-electron-settings-static-preview.md) — 设置静态前端的只读边界与验收：展示模型留在 renderer，多语样例独立验证，截图需核对渲染状态和 DIP
+- [2026-10-10-screenshot-adb-binary-and-hooks-rules.md](notes/learn/2026-10/2026-10-10-screenshot-adb-binary-and-hooks-rules.md) — 截屏批三个实现经验——exec-out 二进制必须 Buffer 版 runner（runAdb utf8 化毁字节）、互斥检查与占位间不得夹 await、react-hooks 新规则用渲染期派生替代 effect setState
 - [2026-10-10-styled-single-wrapper-refactor.md](notes/learn/2026-10/2026-10-10-styled-single-wrapper-refactor.md) — styled 单 Wrapper 全局重排的执行经验——影响表和施工批次必须对账、并行 agent 的集中验证纪律、后代类选择器特异性升档的前提
 
 ### notes/task/
@@ -298,4 +300,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 208 documents -->
+<!-- 210 documents -->
