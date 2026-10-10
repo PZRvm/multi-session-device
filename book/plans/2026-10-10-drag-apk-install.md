@@ -184,3 +184,11 @@ i18n 初始键（mainWindow 域）：`apkDropHint`（含 {设备名} 占位）�
 
 真机冒烟已通过（2026-10-10 用户在 Pixel 8 API 32 实拖 msd-web.apk：安装成功、抽屉可见图标、启动渲染正常；启动入口 resolve-activity 与 pm list 双重确认），**plan 翻 completed**。open 项不随本批关闭：P2 busy 反馈不可达（[issue](../notes/issue/2026-10/2026-10-10-apk-install-busy-unreachable.md)，review disposition 保持 fix）与既有 P3 记录，均留待独立修复批；stage 步骤仍因剪贴板共享半边未开工而保持未勾。
 
+### 修复批 — 2026-10-10（同日，用户指示直接修复）
+
+review 的 P2 与既有 P3 issue 各修一处，均已闭环：
+
+- P2 busy 不可达：`onDragEnter` 补 phase 守卫（installing 保持 spinner + `flashBusyNote`，dragging no-op），busy 分支逻辑提取共用；测试改真实序列（drop#1 → dragenter → drop#2）并新增结果卡轮替用例。issue 已附处置记录、状态 resolved。
+- devices 测试 mock 泄漏：肇事用例改 `mockRejectedValueOnce` 源头修复，用例行为不变；issue 状态 resolved，防御性重置保留作保险。
+- 全量 882 项通过（6 项原有跳过，净增 1），typecheck/lint/build 通过。review 四项 P3 中未构成 issue 的三条（超时挂死滞留、文件名反斜杠显示、浮层 invoke 前缀）维持记录不动。
+

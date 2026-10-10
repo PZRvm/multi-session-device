@@ -1,6 +1,6 @@
 ---
-description: P2：安装中再拖 APK 时 onDragEnter 无 phase 守卫，把 installing 打回 dragging——busyNote 分支真实会话不可达，忙被呈现为红色失败卡
-status: open
+description: P2（已修复）：安装中再拖 APK 时 onDragEnter 无 phase 守卫，把 installing 打回 dragging——busyNote 分支真实会话不可达，忙被呈现为红色失败卡
+status: resolved
 priority: P2
 tags: [apk, install, react, drag-drop, state-machine, review]
 created: 2026-10-10
@@ -46,3 +46,12 @@ plan 需求表「安装中再拖 → 浮层提示『正在安装，请稍候』�
 
 - `onDragEnter` 补 phase 守卫：当前为 `installing` 时不改写 phase（保持 spinner），可直接顺手置 busyNote；当前已是 `dragging` 时为 no-op（顺带修掉结果卡被清的次生问题）。
 - 补一条真实序列测试：drop#1（挂起 install promise）→ dragenter → drop#2，断言全程 `installing` 保持、busyNote 出现且 4 秒消失、无失败卡、drop#1 完成后转 `installed`。
+
+## 处置记录 — 2026-10-10（修复批）
+
+按建议方向修复：
+
+- `useApkInstall.ts` 的 `onDragEnter` 补 phase 守卫：当前 `installing` 时不改写 phase（spinner 保持），直接 `flashBusyNote()`（从 `onDrop` busy 分支提取的共用 4 秒提示）；当前 `dragging` 时 no-op（顺带修掉结果卡被 dragenter 清掉的次生问题）；`onDrop` 依赖数组同步补 `flashBusyNote`。
+- 测试改真实序列并加强：原「连续两次 drop」用例重写为 drop#1（挂起 install promise）→ dragenter → drop#2，断言全程 `installing` 保持、`install` 仅调用一次、busyNote 出现且 4 秒消失、最终转 `installed`（无失败卡）；另补「结果卡展示中拖入新文件」用例（installed → dragenter → dragging → 新 drop 正常发起第二轮安装）。
+
+全量 882 项通过（6 项原有跳过），typecheck/lint/build 通过。

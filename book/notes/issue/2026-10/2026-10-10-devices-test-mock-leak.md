@@ -1,6 +1,6 @@
 ---
-description: P3：devices 测试 Quick Boot 组的 readAvdConfigRaw.mockRejectedValue 未恢复，clearAllMocks 不清实现，后追加的 describe 被渗入导致顺序敏感
-status: open
+description: P3（已修复）：devices 测试 Quick Boot 组的 readAvdConfigRaw.mockRejectedValue 未恢复，clearAllMocks 不清实现，后追加的 describe 被渗入导致顺序敏感
+status: resolved
 priority: P3
 tags: [test, vitest, mock, devices, ordering]
 created: 2026-10-10
@@ -34,3 +34,7 @@ mocks.readAvdConfigRaw.mockRejectedValue(new Error('AVD config.ini 读取失败'
 
 - Quick Boot 该用例结尾 `mockRestore` / 恢复缺省实现；
 - 或把「全量 hoisted mock 回缺省」抽成共享 `resetMocksToDefaults()`，各组 beforeEach 统一先调它再叠自己的覆写（根治顺序敏感）。
+
+## 处置记录 — 2026-10-10（修复批）
+
+按建议方向其一（源头修复）处理：Quick Boot 组肇事用例的 `readAvdConfigRaw.mockRejectedValue(...)` 改为 `mockRejectedValueOnce(...)`——一次性拒绝用完即回 hoisted 缺省实现（`async () => null`），渗漏不再发生；用例行为不变（该流程只读一次配置，单跑与全量均通过）。`runningDeviceSerial` describe 的防御性 beforeEach 重置保留，作为对未来新肇事者的保险；未做全文件 `resetMocksToDefaults()` 集中化（churn 大，留待测试文件下次大改时一并考虑）。

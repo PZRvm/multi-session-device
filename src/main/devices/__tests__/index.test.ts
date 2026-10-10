@@ -3136,7 +3136,9 @@ describe('皮肤只装饰外观，不能覆盖机型屏幕尺寸', () => {
   })
 
   it('读取配置失败时启动失败，不带着未经检查的皮肤继续启动', async () => {
-    mocks.readAvdConfigRaw.mockRejectedValue(new Error('AVD config.ini 读取失败'))
+    // 一次性拒绝：mockRejectedValue 会渗入后续 describe（clearAllMocks 不清实现，
+    // issue 2026-10-10-devices-test-mock-leak），Once 用完即回底层缺省实现
+    mocks.readAvdConfigRaw.mockRejectedValueOnce(new Error('AVD config.ini 读取失败'))
     const { handlerFor } = await freshDomain()
     await expect(
       handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id: 'quick-1' })

@@ -86,15 +86,32 @@ export const useApkInstall = (
     [armAutoClear, deviceId, setPhaseBoth]
   )
 
+  const flashBusyNote = useCallback((): void => {
+    window.clearTimeout(busyTimerRef.current)
+    setBusyNote(true)
+    busyTimerRef.current = window.setTimeout(() => {
+      if (mountedRef.current) setBusyNote(false)
+    }, BUSY_NOTE_CLEAR_MS)
+  }, [])
+
   const onDragEnter = useCallback(
     (event: React.DragEvent): void => {
       // 悬停期拿不到文件名（安全限制），无法预判 .apk——先高亮，松开时再守卫
       if (!event.dataTransfer.types.includes('Files')) return
       event.preventDefault()
+      const current = phaseRef.current
+      // 安装中再拖入：保持 spinner 不打断（真实拖放序列 dragenter 先于 drop，
+      // issue 2026-10-10-apk-install-busy-unreachable），以 busyNote 提示串行约束
+      if (current.phase === 'installing') {
+        flashBusyNote()
+        return
+      }
+      // 已在高亮会话中：no-op，避免清掉 installed/failed 结果卡
+      if (current.phase === 'dragging') return
       window.clearTimeout(clearTimerRef.current)
       setPhaseBoth({ phase: 'dragging' })
     },
-    [setPhaseBoth]
+    [flashBusyNote, setPhaseBoth]
   )
 
   const onDragOver = useCallback(
@@ -127,11 +144,7 @@ export const useApkInstall = (
       const current = phaseRef.current
       if (current.phase === 'installing') {
         // 安装中再拖入：不排队，4 秒提示后回到原状态
-        window.clearTimeout(busyTimerRef.current)
-        setBusyNote(true)
-        busyTimerRef.current = window.setTimeout(() => {
-          if (mountedRef.current) setBusyNote(false)
-        }, BUSY_NOTE_CLEAR_MS)
+        flashBusyNote()
         return
       }
       const files = Array.from(event.dataTransfer.files)
@@ -147,7 +160,7 @@ export const useApkInstall = (
       }
       void startInstall(filePath)
     },
-    [setPhaseBoth, startInstall]
+    [flashBusyNote, setPhaseBoth, startInstall]
   )
 
   return { phase, busyNote, dragHandlers: { onDragEnter, onDragOver, onDragLeave, onDrop } }

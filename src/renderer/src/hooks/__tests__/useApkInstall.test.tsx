@@ -120,7 +120,7 @@ describe('useApkInstall 状态机', () => {
     expect(install).not.toHaveBeenCalled()
   })
 
-  it('安装中再拖入：不排队，busyNote 4 秒后消失', async () => {
+  it('安装中再拖入（真实序列 dragenter→drop）：不打断 spinner，busyNote 4 秒后消失，无失败卡', async () => {
     let resolveInstall!: (value: { fileName: string }) => void
     install.mockReturnValue(
       new Promise((resolve) => {
@@ -131,19 +131,44 @@ describe('useApkInstall 状态机', () => {
     const { result } = renderHook(() => useApkInstall('d1'))
     const target = mountTarget(result.current.dragHandlers)
     drop(target, [apkFile()])
-    drop(target, [apkFile()])
+    expect(result.current.phase).toEqual({ phase: 'installing', fileName: 'app.apk' })
+    // 真实拖放序列：dragenter 必然先于 drop（issue 2026-10-10-apk-install-busy-unreachable）
+    dragEnter(target)
+    expect(result.current.phase).toEqual({ phase: 'installing', fileName: 'app.apk' })
     expect(result.current.busyNote).toBe(true)
+    drop(target, [apkFile()])
     expect(install).toHaveBeenCalledTimes(1)
     expect(result.current.phase).toEqual({ phase: 'installing', fileName: 'app.apk' })
+    expect(result.current.busyNote).toBe(true)
     await act(async () => {
       await vi.advanceTimersByTimeAsync(4_000)
     })
     expect(result.current.busyNote).toBe(false)
+    expect(result.current.phase.phase).toBe('installing')
     await act(async () => {
       resolveInstall({ fileName: 'app.apk' })
       await vi.advanceTimersByTimeAsync(0)
     })
     expect(result.current.phase.phase).toBe('installed')
+  })
+
+  it('结果卡展示中拖入新文件：进入新一轮高亮，不残留旧结果', async () => {
+    install.mockResolvedValue({ fileName: 'a.apk' })
+    resolveDropPaths.mockReturnValue(['/tmp/a.apk'])
+    const { result } = renderHook(() => useApkInstall('d1'))
+    const target = mountTarget(result.current.dragHandlers)
+    drop(target, [apkFile()])
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(result.current.phase).toEqual({ phase: 'installed', fileName: 'a.apk' })
+    dragEnter(target)
+    expect(result.current.phase.phase).toBe('dragging')
+    // 新一轮 drop 正常发起新安装
+    resolveDropPaths.mockReturnValue(['/tmp/b.apk'])
+    drop(target, [new File(['x'], 'b.apk')])
+    expect(install).toHaveBeenCalledTimes(2)
+    expect(result.current.phase).toEqual({ phase: 'installing', fileName: 'b.apk' })
   })
 })
 
