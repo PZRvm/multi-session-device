@@ -730,3 +730,39 @@ export interface ScreenshotSaveResult {
 export interface ApkInstallResult {
   fileName: string
 }
+
+// ---- 日志域（plan 2026-10-10-logcat-panel；任意窗口可订阅，与投屏域仅主窗不同）----
+
+export interface LogcatLine {
+  /** 会话内单调递增；renderer 据此排序与去重 */
+  seq: number
+  text: string
+}
+
+export interface LogcatBatchMessage {
+  deviceId: string
+  /** 会话代次：设备重启重建会话后变化；replay 首包到达即整体重置视图 */
+  runId: string
+  /** 订阅首包 = 环形缓冲尾回放；后续 false 为增量 */
+  replay: boolean
+  lines: LogcatLine[]
+  /** 流控丢弃的最旧行数（>0 时 renderer 标记「已省略 N 行」） */
+  dropped: number
+}
+
+export interface LogcatAckMessage {
+  deviceId: string
+  /** 已确认到的最大 seq（含） */
+  upToSeq: number
+}
+
+/** 窗口上下文窄视图（logcatContext 等返回）：只暴露下拉/订阅所需字段子集，
+ *  不含健康详情、镜像、附加设置等全量快照字段（plan 2026-10-10-logcat-panel review P3） */
+export interface DeviceRuntimeView {
+  id: string
+  name: string
+  status: Device['status']
+  /** running 发布的 adb serial；停止清空 */
+  serial?: string
+  runId?: string
+}

@@ -1,12 +1,13 @@
 ---
 description: 日志面板设计：右侧可拖宽 dock + 独立日志窗、主进程会话与环形缓冲、批量+ack 流控与多窗口订阅
-status: in_progress
+status: completed
 created: 2026-10-10
+completed: 2026-10-10
 ---
 
 # 日志面板 — plan
 
-设计阶段（Step 0 / Phase 1 / Phase 2）已完成，实现未开始。位置与形态沿用 2026-10-10 与用户定下的方向：主窗右侧可拖宽 dock，可切换为独立日志窗；日志会话与环形缓冲归主进程持有，任意窗口按设备订阅。
+设计（Step 0 / Phase 1 / Phase 2）与实现（Phase 3–6）均已完成。位置与形态沿用 2026-10-10 与用户定下的方向：主窗右侧可拖宽 dock，可切换为独立日志窗；日志会话与环形缓冲归主进程持有，任意窗口按设备订阅。实现细节与设计的出入见文末「实施结果」。
 
 依据：[stage05](../stage/05-功能完善.md) 步骤「日志面板」、[workflow](../guidelines/workflow.md) 前三阶段、[PRD](../docs/PRD.md) 一期成功标准。
 
@@ -160,4 +161,42 @@ i18n 初始键（mainWindow 域）：`logcatTitle`、`logcatFilterPlaceholder`�
 
 需求与排除项填实；影响图与风险有代码证据；通道/类型/文件清单可直接进 Phase 3；三个「与投屏域的刻意差异」（多窗订阅、可丢最旧、无回放滚动加载）已在类型注释与本文写明；stage05 步骤挂本 plan 链接；book 索引构建通过。
 
-实现阶段终点（Phase 3-6 另行勾选）：真机验证实时流、过滤、暂停/继续、拖宽、弹窗切窗不丢行、设备停止后会话回收、退出无残留进程。
+实现阶段终点（Phase 3-6）：真机验证实时流、过滤、暂停/继续、拖宽、弹窗切窗不丢行、设备停止后会话回收、退出无残留进程。——已达成，见下。
+
+## 实施结果 — 2026-10-10
+
+### Phase 3：实现
+
+与设计的主要出入（其余按设计落地）：
+
+- **订阅回放不补发 pending**：设计阶段曾考虑「回放后补发攒批行」，实现确认同步流程无间隙可补（pending 行已在环形缓冲），改为订阅前先 `flushNow` 给既有订阅者、回放即缓冲尾——避免回放与 flush 重复。
+- **ResizeHandle 泛化 `edge` 属性**：右栏把手方向反转（向左拖变宽）、键盘步进随之镜像；`listWidth.ts` 先例复制为 `logPaneWidth.ts`（240–560）。
+- **窄窗退化用纯派生而非 effect 收起**：`dockVisible = logDockOpen && 画布余量 ≥ 720`，窗口收窄即时隐藏、回宽恢复，不落额外 state（react-hooks v6 `set-state-in-effect` 规则下也更干净）。
+- **设备换代（runId 变化）时 renderer 以 `key={deviceId:runId}` 重挂**面板完成重订；主进程侧订阅随旧会话销毁，不自动迁移。
+- **日志窗上下文**：`logcat:context` 通道返回完整设备快照（`devices:list` 对非主窗有守卫），下拉数据源独立于 devices 域；弹出时经 URL `?device=` 传入 dock 当前设备。
+- **暂停期间批次照常 ack**（设计未言明）：不确认会让 main 侧积压丢行，暂停是纯视图行为。
+- **用户反馈迭代（同日）**：dock 改为默认固定展开（`logDockOpen` 初值 true），配套主窗默认宽 900→1200、画布保底 720→560，默认尺寸即呈三栏；独立日志窗 darwin 三灯安全区 64→80px（hiddenInset 灯组右缘约 66px，64px 起步的下拉框与之重叠）。窗口级截图核验两处修复。
+- **用户反馈迭代（同日，第二批）**：dock 改回默认收起且不持久化开合状态（每启从收起起步）；独立窗 head 区 darwin 下接管拖拽（`-webkit-app-region: drag`，select/贴回按钮 no-drag——hiddenInset 无系统标题栏，此前窗口不可拖）；新增「贴回」闭环（独立窗 header 右端按钮 → `logcat:dock-back` → main 关日志窗并广播主窗重新展开 dock）；主窗入口点击先查 `logcat:window-state`，独立窗开着即聚焦（单例 focus）而非重开 dock。真机验证 10/10（合成拖拽需辅助功能权限未自动化，拖动由 app-region 机制保证、留用户确认）。
+- **用户反馈迭代（同日，第三批）**：dock 展开时窗口缩窄不再隐藏 dock——新增 `logcat:dock-state` 通道，展开时 main 锁主窗 `setMinimumSize`（列表+分隔条+日志栏+画布保底的实际值），收起/弹出解锁；窄窗点入口不再退化独立窗，改为 main 自动拉宽窗口让 dock 黏滞右侧（独立窗只经面板内「弹出」产生）；列表与日志栏拖宽把手加动态上限（dock 展开时拖不到挤爆画布的宽度）。真机验证：renderer 通路触发 main 拉宽（1400→2000 实测）、够宽不动作；minWidth 锁定行为由 setMinimumSize 语义保证（合成拖拽无法自动化），留用户确认。
+- **用户反馈迭代（同日，第四批）**：minWidth 锁定改声明式跟随——effect 以 `dockVisible` 为源同步 `dock-state`（可见锁、不可见解锁），`dockNeedWidth` 随拖宽自动跟随重锁；收起/弹出简化为纯 `setLogDockOpen(false)`，解锁由 effect 统一保证。独立窗口态主窗宽度完全自由；贴回窄窗按需拉宽（与入口展开共用 expandDock 通路），新增窄窗贴回与弹出解锁两组单测断言。882 项测试通过（6 项原有跳过），typecheck/lint/build 通过。
+- **用户反馈迭代（同日，第五批）**：用户真机仍报「独立窗后主窗缩不小」（隔离验证 main/renderer 通路均正常，单测亦绿——判断为未定位的时序路径）。工程兜底：`openLogcatWindow` 的 ready-to-show 回调里 main 直接清主窗 minWidth 锁（独立窗出现 ⇒ 主窗自由成为 main 侧硬保证，renderer effect 降级为冗余保险）。真机验证最坏情况（绕过 React 直调 IPC）：锁定 1165 → 开独立窗 → resizeTo(900) 成功。另修 onDockBack 订阅闭包捕获过期 dockNeedWidth（改经 ref 取最新值）。
+- **用户反馈迭代（同日，第六批）**：真因定位两处——① `setMinimumSize(0,0)` 在 macOS 存在窗口服务器时序竞态，偶发不清除系统级最小宽（真机三轮循环复现一次），即用户所见「打开过 logcat 后就有 min-width」；② 设备停止后 dock 空态挂死（入口按钮随设备消失、弹出按钮无设备直接 return），锁无法解除。修复：宽度钳制整体弃用 setMinimumSize，改 will-resize 预阻止（用户拖拽，无闪跳）+ resize 事后回弹（程序化路径兜底）双层纯同步变量方案——窗口系统层面从未设置过 min，结构性根除残留；设备停止时 dock 自动收起（跟随设备生命周期，翻转会话「保留空态」旧行为）。renderer 测试同步翻转断言。
+- **用户反馈迭代（同日，第七批）**：用户报「页面小时点 logcat 按钮，`logcat:dock-state` handler 抛 conversion failure」——真因：macOS 分数缩放下 `getBounds().height` 常带 .5 值，`setSize` 只收整数、native 参数转换直接抛错（拉宽分支一旦走到就炸）。修复：两处 `setSize` 的宽高均 `Math.round`（handler 拉宽 + resize 回弹），minWidth 同步取整。真机验证 native 报错归零、分数高度下展开拉宽正常。另记验证工具局限：Chromium 对 renderer `resizeTo` 有调用节流（连续多次后降级、与 main 侧 setSize 竞争），不能用它稳定模拟用户拖拽——拖拽行为由 will-resize 原生拦截保证，自动化验证止步于此、留用户手动确认。
+- **review 修复批（同日，第八批）**：五项全部落地——P2 钳制钩子改按主窗 id 挂载（重开自动重挂）；注释订正；全量快照导出收窄为 `DeviceRuntimeView` 窄视图（devices/logcat 域/context 通道/LogcatApp 同步收窄）；`?device=` 提模块常量；spawn 失败改订阅 reject（`logcatSpawnFailed` 词条三语 + 单测）。三个 issue 文档附处置记录并关闭。883 项测试通过（6 项原有跳过），typecheck/lint/build 通过；真机抽验锁/解锁、窄视图 context、下拉空态正常。
+
+### Phase 4：验证
+
+- 全量测试 878 通过、6 项原有跳过；本批新增 main logcat 域 11 项 + LogcatPanel 10 项 + App dock 集成 6 项。typecheck、lint、build 通过。
+- 真机验证（构建产物 + CDP 驱动，真实启动 Pixel 8 API 32 模拟器）18/18 通过：宽窗 dock 展开收行（1296 行）、默认 320px、关键字过滤、暂停视图停更、恢复断点标记、窄窗隐藏/回宽恢复、窄窗点击开独立窗且 dock 收起、独立窗对准目标设备并持续收行、独立过滤、设备停止后退空态、`adb logcat` 进程零残留。
+
+### Phase 5：review
+
+自审发现并修复一处 P1：会话销毁原先按 deviceId 裁决，设备快速换代（runId 变化）时旧进程的迟到 exit 回调会误杀新会话——已改为按会话身份裁决（`destroySessionOf`），补回归测试「旧进程 exit 迟到不误杀换代后的新会话」。另发现 spawn 同步失败时保留空会话、订阅者只见空态无错误提示，按 workflow 记 [issue](../notes/issue/2026-10/2026-10-10-logcat-spawn-fail-silent.md)。
+
+**正式 review 轮（全部七批反馈落地后，diff dev...HEAD 约 2350 行）**：检查覆盖守卫与权限（订阅/退订/ack 任意窗口为设计、context 仅日志窗、open/dock-state 仅主窗——与通道注释一致）、会话生命周期与进程回收（桥接三事件、destroyAll 入 shutdownStreams、SIGTERM→SIGKILL 兜底、destroyed 自动退订）、竞态（换代身份裁决、订阅前 flush、设备停止自动收）、资源有界（ring/单行/backlog/视图上限）、词条复用（wizardLoadTimeout 等文案通用无错位，settings 先例）、测试覆盖（main 11 + panel 10 + App 10 + 旧文件 stub）。发现并记录：[P2：主窗重开后钳制钩子不随新窗挂载](../notes/issue/2026-10/2026-10-10-logcat-resize-hook-window-recreate.md)（第六批引入的防重复 flag 未考虑主窗换代，will-resize 拦截失效、有 dockVisible 兜底降级）与 [P3 备忘三项](../notes/issue/2026-10/2026-10-10-logcat-review-p3-misc.md)（过时注释、快照导出面、URL 参数重复解析）。总体 disposition 为 **fix**（P2 待独立修复任务），按 workflow 只记录不修复。
+
+### Phase 6：文档与记录
+
+- stage05 步骤「日志面板」勾选完成（一期边界：不做导出与按 app 过滤）。
+- 记录 [format 脚本参数陷阱与 Electron 直启 userData 隔离](../notes/learn/2026-10/2026-10-10-logcat-verify-pitfalls.md)。
+- 本 plan 状态翻 completed。

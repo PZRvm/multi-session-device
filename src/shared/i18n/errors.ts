@@ -433,7 +433,15 @@ const zhCN = {
   apkInstallNoSpace: 'APK 安装失败：设备存储空间不足（{detail}）',
   apkInstallOlderSdk: 'APK 安装失败：APK 要求的系统版本高于设备当前版本（{detail}）',
   apkInstallTestOnly: 'APK 安装失败：testOnly 包需正式签名或 adb 加 -t 安装（{detail}）',
-  apkInstallNotApk: 'APK 安装失败：文件不是有效的 APK（{detail}）'
+  apkInstallNotApk: 'APK 安装失败：文件不是有效的 APK（{detail}）',
+  // ---- 日志域（plan 2026-10-10-logcat-panel）----
+  logcatWindowTitle: '日志',
+  loadLogcatFailed: '加载日志窗口失败：{detail}',
+  logcatMainOnlySuffix: '仅主窗可打开日志窗',
+  logcatWindowOnlySuffix: '仅日志窗可调用',
+  logcatDeviceNotRunning: '设备未运行，无法订阅日志',
+  logcatSpawnFailed: '日志进程启动失败：{message}',
+  logcatInvalidPayloadSuffix: '非法的日志请求载荷'
 }
 
 export type ErrorsCopy = Record<keyof typeof zhCN, string>
@@ -843,7 +851,15 @@ const zhTW: ErrorsCopy = {
   apkInstallNoSpace: 'APK 安裝失敗：裝置儲存空間不足（{detail}）',
   apkInstallOlderSdk: 'APK 安裝失敗：APK 要求的系統版本高於裝置目前版本（{detail}）',
   apkInstallTestOnly: 'APK 安裝失敗：testOnly 套件需正式簽章或 adb 加 -t 安裝（{detail}）',
-  apkInstallNotApk: 'APK 安裝失敗：檔案不是有效的 APK（{detail}）'
+  apkInstallNotApk: 'APK 安裝失敗：檔案不是有效的 APK（{detail}）',
+  // ---- 日誌域 ----
+  logcatWindowTitle: '日誌',
+  loadLogcatFailed: '載入日誌視窗失敗：{detail}',
+  logcatMainOnlySuffix: '僅主窗可開啟日誌視窗',
+  logcatWindowOnlySuffix: '僅日誌視窗可呼叫',
+  logcatDeviceNotRunning: '裝置未執行，無法訂閱日誌',
+  logcatSpawnFailed: '日誌程序啟動失敗：{message}',
+  logcatInvalidPayloadSuffix: '非法的日誌請求載荷'
 }
 
 const enUS: ErrorsCopy = {
@@ -1301,7 +1317,15 @@ const enUS: ErrorsCopy = {
   apkInstallOlderSdk: 'APK install failed: the APK requires a newer system version ({detail})',
   apkInstallTestOnly:
     'APK install failed: test-only package needs a release signature or adb -t ({detail})',
-  apkInstallNotApk: 'APK install failed: file is not a valid APK ({detail})'
+  apkInstallNotApk: 'APK install failed: file is not a valid APK ({detail})',
+  // ---- Logcat domain ----
+  logcatWindowTitle: 'Logs',
+  loadLogcatFailed: 'Failed to load the log window: {detail}',
+  logcatMainOnlySuffix: 'only the main window may open the log window',
+  logcatWindowOnlySuffix: 'only the log window may call this',
+  logcatDeviceNotRunning: 'device is not running; cannot subscribe to logs',
+  logcatSpawnFailed: 'failed to start the log process: {message}',
+  logcatInvalidPayloadSuffix: 'invalid logcat request payload'
 }
 
 export const ERRORS_COPY: Record<SettingsLocale, ErrorsCopy> = {

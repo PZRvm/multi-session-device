@@ -5,17 +5,20 @@ import {
   adbBinaryPath,
   androidToolEnv,
   listDeviceNamesReferencing,
+  listDeviceRuntimeViews,
   runningDeviceRef,
   runningDeviceSerial,
   savedDeviceSkinRef,
   registerDevicesIpc
 } from '../devices'
+import { createLogcatManager } from '../logcat'
 import { registerSdkIpc } from '../emulator'
 import { registerApkInstallIpc } from '../apkInstall'
 import { createScrcpyManager } from '../scrcpy'
 import { registerScreenshotIpc, clearScreenshotCache } from '../screenshot'
 import { registerWizardIpc } from '../window/wizard'
 import { registerSettingsIpc } from '../window/settings'
+import { registerLogcatIpc, isLogcatWindowSender } from '../window/logcat'
 import { registerThemeIpc } from '../theme'
 import { registerLocaleIpc } from '../locale'
 import { getMainWindow } from '../window'
@@ -40,7 +43,14 @@ export function registerIpcHandlers(): void {
     serialOf: runningDeviceSerial,
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
   })
+  // 截屏域（plan 2026-10-10）：running 校验经注入进入 devices 域，域自身不反向依赖
+  registerScreenshotIpc({
+    adbPath: adbBinaryPath,
+    runningDevice: runningDeviceRef,
+    isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
+  })
   registerSettingsIpc()
+  registerLogcatIpc()
   registerThemeIpc()
   registerLocaleIpc()
 
@@ -51,28 +61,36 @@ export function registerIpcHandlers(): void {
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
   })
   scrcpy.registerIpc()
-  streamShutdown = () => scrcpy.destroyAll()
 
-  // 截屏域（plan 2026-10-10）：running 校验经注入进入 devices 域，域自身不反向依赖
-  registerScreenshotIpc({
+  const logcat = createLogcatManager({
     adbPath: adbBinaryPath,
-    runningDevice: runningDeviceRef,
-    isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
+    toolEnv: androidToolEnv,
+    runtimeViews: listDeviceRuntimeViews,
+    isLogcatWindow: isLogcatWindowSender
   })
+  logcat.registerIpc()
 
-  // runner 事件 → 流会话生命周期：running 建会话，停止/崩溃/清理销毁（beforeKill 先释放投屏资源）。
-  // 截屏缓存同桥收尾：设备停止/清理时最近一张作废（save 拒绝 stale，不留残留图）
+  // 扫尾流会话：投屏与日志两域并行销毁（截屏缓存无进程，靠桥按设备清理）
+  streamShutdown = () =>
+    Promise.all([scrcpy.destroyAll(), logcat.destroyAll()]).then(() => undefined)
+
+  // runner 事件 → 流会话生命周期：running 建会话，停止/崩溃/清理销毁（beforeKill 先释放
+  // 投屏与日志资源）。截屏缓存同桥收尾：设备停止/清理时最近一张作废（save 拒绝 stale）
   attachDeviceStreamBridge({
     running: (id, runId, serial) => {
       void scrcpy.ensureSession({ id, runId, serial }).catch(() => undefined)
+      logcat.ensureSession({ id, runId, serial })
     },
     stopped: (id) => {
       clearScreenshotCache(id)
       void scrcpy.destroySession(id)
+      void logcat.destroySession(id)
     },
     beforeKill: (id) => {
       clearScreenshotCache(id)
-      return scrcpy.destroySession(id)
+      return Promise.all([scrcpy.destroySession(id), logcat.destroySession(id)]).then(
+        () => undefined
+      )
     }
   })
 }

@@ -5,6 +5,7 @@ import { appIcon } from '../app-icon'
 import { themeWindowBackground } from '../theme'
 import { closeWizardWindow } from './wizard'
 import { closeSettingsWindow } from './settings'
+import { closeLogcatWindow } from './logcat'
 import { msg } from '../locale'
 
 // 主窗登记（devices 域 sender 白名单的判定源）：引用随窗口销毁清空
@@ -16,7 +17,9 @@ export function getMainWindow(): BrowserWindow | null {
 
 export function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
-    width: 900,
+    // 1200 使默认尺寸即可容纳「列表 280 + 日志 dock 320 + 画布保底 560」的三栏
+    // 布局（App 侧 LOG_CANVAS_MIN_WIDTH）——dock 默认收起，展开/贴回时窄窗拉宽到该宽
+    width: 1200,
     height: 670,
     show: false,
     // 建窗底色即主题板面底（boot 已恢复主题），深色用户首帧不闪白
@@ -42,6 +45,7 @@ export function createMainWindow(): BrowserWindow {
     // 向导窗与主窗无父子关系（2026-10-06 去 parent）——主窗关闭时显式带走，不留孤儿窗口
     closeWizardWindow()
     closeSettingsWindow()
+    closeLogcatWindow()
   })
 
   window.on('ready-to-show', () => {

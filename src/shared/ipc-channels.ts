@@ -93,5 +93,25 @@ export const IPC_CHANNELS = {
   screenshotSave: 'screenshot:save',
   // ---- APK 安装域（plan 2026-10-10-drag-apk-install；仅登记主窗）----
   /** 拖拽 APK 安装到 running 设备（每设备串行；结果一次返回，无进度推送） */
-  apkInstall: 'apk:install'
+  apkInstall: 'apk:install',
+  // ---- 日志域（plan 2026-10-10-logcat-panel）----
+  // 与投屏域的刻意差异：任意窗口可订阅（非仅主窗）、流控允许丢最旧保最新（非不可丢）。
+  /** 窗口订阅设备日志（回放缓冲尾 500 行 + 实时）；任意窗口可调 */
+  logcatSubscribe: 'logcat:subscribe',
+  /** 窗口退订单设备（关窗由 main 侧 destroyed 钩子统一清理） */
+  logcatUnsubscribe: 'logcat:unsubscribe',
+  /** main → 各窗：批量日志行（250ms 或 200 行触发 flush；dropped 为流控丢弃计数） */
+  logcatBatch: 'logcat:batch',
+  /** 窗口 → main：批次回执（流控，镜像 screenAck；按 upToSeq 确认） */
+  logcatAck: 'logcat:ack',
+  /** 日志窗启动上下文（仅日志窗）：当前设备快照（下拉用） */
+  logcatContext: 'logcat:context',
+  /** 主窗调：开/聚焦独立日志窗（单例；可带 device 查询参数） */
+  logcatWindowOpen: 'logcat:window-open',
+  /** 主窗调：独立日志窗是否开着（开合 dock 前判定——开着则点击 = 聚焦） */
+  logcatWindowState: 'logcat:window-state',
+  /** 日志窗「贴回」：日志窗发 → main 关日志窗并通知主窗展开 dock */
+  logcatDockBack: 'logcat:dock-back',
+  /** 主窗调：dock 展开态同步——展开时锁主窗 minWidth（不够宽则拉宽），收起解锁 */
+  logcatDockState: 'logcat:dock-state'
 } as const

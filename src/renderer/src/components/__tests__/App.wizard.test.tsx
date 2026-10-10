@@ -42,6 +42,12 @@ beforeEach(() => {
     wizard: { open, openEditor },
     settings: { open: openSettings },
     dialog: { show: dialog },
+    logcat: {
+      isWindowOpen: vi.fn(async () => false),
+      openWindow: vi.fn(async () => undefined),
+      onDockBack: () => () => {},
+      setDockState: vi.fn(async () => undefined)
+    },
     devices: {
       list: vi.fn(async () => ({
         revision: 1,
