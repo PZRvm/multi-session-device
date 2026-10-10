@@ -128,7 +128,21 @@ const zhCN = {
   renameBlockedTitle: '暂不能重命名',
   renameBlockedMessage:
     '设备元数据写入已冻结（设备数据异常），暂不能重命名；详情见左侧列表上方汇总',
-  createDisabledTitleFooter: '设备元数据写入已冻结，暂不能新建设备（详情见上方汇总）'
+  createDisabledTitleFooter: '设备元数据写入已冻结，暂不能新建设备（详情见上方汇总）',
+  // ---- 日志面板（plan 2026-10-10-logcat-panel；dock 与独立日志窗共用）----
+  logcatTitle: '日志',
+  logcatFilterPlaceholder: '过滤关键字…',
+  logcatPause: '暂停',
+  logcatResume: '继续',
+  logcatClear: '清空',
+  logcatPopOut: '弹出独立窗口',
+  logcatEmpty: '暂无日志',
+  logcatNoDevice: '设备未运行',
+  logcatDroppedLines: '已省略 {count} 行',
+  logcatResumed: '—— 已跳至最新 ——',
+  logcatResizeAria: '调整日志栏宽度',
+  logcatDeviceLabel: '设备',
+  openLogcatWindowFailed: '打开日志窗口失败'
 }
 
 export type MainWindowCopy = Record<keyof typeof zhCN, string>
@@ -251,7 +265,21 @@ const zhTW: MainWindowCopy = {
   renameBlockedTitle: '暫不能重新命名',
   renameBlockedMessage:
     '裝置中繼資料寫入已凍結（裝置資料異常），暫不能重新命名；詳情見左側列表上方匯總',
-  createDisabledTitleFooter: '裝置中繼資料寫入已凍結，暫不能新建裝置（詳見上方匯總）'
+  createDisabledTitleFooter: '裝置中繼資料寫入已凍結，暫不能新建裝置（詳見上方匯總）',
+  // ---- 日誌面板 ----
+  logcatTitle: '日誌',
+  logcatFilterPlaceholder: '過濾關鍵字…',
+  logcatPause: '暫停',
+  logcatResume: '繼續',
+  logcatClear: '清空',
+  logcatPopOut: '彈出獨立視窗',
+  logcatEmpty: '暫無日誌',
+  logcatNoDevice: '裝置未執行',
+  logcatDroppedLines: '已省略 {count} 行',
+  logcatResumed: '—— 已跳至最新 ——',
+  logcatResizeAria: '調整日誌欄寬度',
+  logcatDeviceLabel: '裝置',
+  openLogcatWindowFailed: '開啟日誌視窗失敗'
 }
 
 const enUS: MainWindowCopy = {
@@ -382,7 +410,21 @@ const enUS: MainWindowCopy = {
   renameBlockedMessage:
     'Device metadata writes are frozen (device data issues); renaming is unavailable. See the summary above the list',
   createDisabledTitleFooter:
-    'Device metadata writes are frozen; creating devices is unavailable (see the summary above)'
+    'Device metadata writes are frozen; creating devices is unavailable (see the summary above)',
+  // ---- Log panel ----
+  logcatTitle: 'Logs',
+  logcatFilterPlaceholder: 'Filter keyword…',
+  logcatPause: 'Pause',
+  logcatResume: 'Resume',
+  logcatClear: 'Clear',
+  logcatPopOut: 'Open in window',
+  logcatEmpty: 'No logs yet',
+  logcatNoDevice: 'No running device',
+  logcatDroppedLines: '{count} lines omitted',
+  logcatResumed: '—— jumped to latest ——',
+  logcatResizeAria: 'Resize log pane',
+  logcatDeviceLabel: 'Device',
+  openLogcatWindowFailed: 'Failed to open the log window'
 }
 
 export const MAIN_COPY: Record<SettingsLocale, MainWindowCopy> = {

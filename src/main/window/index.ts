@@ -5,6 +5,7 @@ import { appIcon } from '../app-icon'
 import { themeWindowBackground } from '../theme'
 import { closeWizardWindow } from './wizard'
 import { closeSettingsWindow } from './settings'
+import { closeLogcatWindow } from './logcat'
 import { msg } from '../locale'
 
 // 主窗登记（devices 域 sender 白名单的判定源）：引用随窗口销毁清空
@@ -42,6 +43,7 @@ export function createMainWindow(): BrowserWindow {
     // 向导窗与主窗无父子关系（2026-10-06 去 parent）——主窗关闭时显式带走，不留孤儿窗口
     closeWizardWindow()
     closeSettingsWindow()
+    closeLogcatWindow()
   })
 
   window.on('ready-to-show', () => {

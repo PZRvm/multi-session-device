@@ -749,6 +749,9 @@ const broadcastChanged = (): void => {
   }
 }
 
+/** 当前快照读取（窗口上下文域经注入消费——日志窗下拉等；各域自行守卫 sender） */
+export const currentDeviceSnapshot = (): DeviceSnapshot => snapshotNow()
+
 const requireDevice = (id: string): Device => {
   const device = devices.find((entry) => entry.id === id)
   if (!device) throw new Error(msg('deviceNotFound', { id }))

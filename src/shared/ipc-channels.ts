@@ -85,5 +85,19 @@ export const IPC_CHANNELS = {
   /** 受控下载官方皮肤（仅向导窗） */
   sdkDownloadDeviceSkin: 'sdk:download-device-skin',
   /** 皮肤下载进度推送（main → renderer） */
-  sdkSkinProgress: 'sdk:skin-progress'
+  sdkSkinProgress: 'sdk:skin-progress',
+  // ---- 日志域（plan 2026-10-10-logcat-panel）----
+  // 与投屏域的刻意差异：任意窗口可订阅（非仅主窗）、流控允许丢最旧保最新（非不可丢）。
+  /** 窗口订阅设备日志（回放缓冲尾 500 行 + 实时）；任意窗口可调 */
+  logcatSubscribe: 'logcat:subscribe',
+  /** 窗口退订单设备（关窗由 main 侧 destroyed 钩子统一清理） */
+  logcatUnsubscribe: 'logcat:unsubscribe',
+  /** main → 各窗：批量日志行（250ms 或 200 行触发 flush；dropped 为流控丢弃计数） */
+  logcatBatch: 'logcat:batch',
+  /** 窗口 → main：批次回执（流控，镜像 screenAck；按 upToSeq 确认） */
+  logcatAck: 'logcat:ack',
+  /** 日志窗启动上下文（仅日志窗）：当前设备快照（下拉用） */
+  logcatContext: 'logcat:context',
+  /** 主窗调：开/聚焦独立日志窗（单例；可带 device 查询参数） */
+  logcatWindowOpen: 'logcat:window-open'
 } as const

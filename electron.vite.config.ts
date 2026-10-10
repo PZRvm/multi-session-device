@@ -22,11 +22,12 @@ export default defineConfig({
     plugins: [react()],
     build: {
       rollupOptions: {
-        // 三个独立入口：主窗、设备向导、设置窗。
+        // 四个独立入口：主窗、设备向导、设置窗、日志窗。
         input: {
           index: resolve('src/renderer/index.html'),
           wizard: resolve('src/renderer/wizard.html'),
-          settings: resolve('src/renderer/settings.html')
+          settings: resolve('src/renderer/settings.html'),
+          logcat: resolve('src/renderer/logcat.html')
         }
       }
     }

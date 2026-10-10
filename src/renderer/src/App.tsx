@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, ScrollText } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
 import type { Device, ReconcileReport, RuntimeErrorMessage } from '@shared/types'
@@ -12,8 +12,17 @@ import CanvasPlaceholder from './components/CanvasPlaceholder'
 import DeviceCanvas from './components/DeviceCanvas'
 import DeviceHealthNotice from './components/DeviceHealthNotice'
 import DeviceListPane from './components/DeviceListPane'
+import LogcatPanel from './components/LogcatPanel'
 import ResizeHandle from './components/ResizeHandle'
+import {
+  clampLogPaneWidth,
+  LOG_PANE_MAX_WIDTH,
+  LOG_PANE_MIN_WIDTH
+} from './components/logPaneWidth'
 import { useDeviceStore } from './stores/deviceStore'
+
+/** 日志 dock 展开时画布至少保留的宽度（模拟器居中自适应的保底；不足则整栏退化） */
+const LOG_CANVAS_MIN_WIDTH = 720
 
 const App = (): React.JSX.Element => {
   const devices = useDeviceStore((state) => state.devices)
@@ -35,6 +44,16 @@ const App = (): React.JSX.Element => {
 
   const [listWidth, setListWidth] = useState(280)
   const [rechecking, setRechecking] = useState(false)
+  // 日志 dock：右栏可拖宽（240–560），画布剩余不足 720 时整栏退化（点击直接开独立窗）
+  const [logDockOpen, setLogDockOpen] = useState(false)
+  const [logPaneWidth, setLogPaneWidth] = useState(320)
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
+
+  useEffect(() => {
+    const onResize = (): void => setViewportWidth(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   const showAlert = async (title: string, message: string): Promise<void> => {
     await toApiResult(window.api.dialog.show({ title, message, buttons: [copy.ok] }))
@@ -236,6 +255,37 @@ const App = (): React.JSX.Element => {
     void load()
   }
 
+  // ---- 日志 dock（plan 2026-10-10-logcat-panel）----
+
+  const logcatDevice =
+    selected && selected.status === 'running' && selected.serial && selected.runId ? selected : null
+
+  // 画布剩余不足 720 时 dock 不渲染（纯派生——窗口收窄自动隐藏，回宽恢复；
+  // 该状态下点击入口直接开独立窗并复位展开位）
+  const logDockFits = viewportWidth - listWidth - 5 - logPaneWidth >= LOG_CANVAS_MIN_WIDTH
+  const dockVisible = logDockOpen && logDockFits
+
+  const handleToggleLogDock = (): void => {
+    if (dockVisible) {
+      setLogDockOpen(false)
+      return
+    }
+    if (logDockFits) {
+      setLogDockOpen(true)
+      return
+    }
+    setLogDockOpen(false)
+    void requestWindow('logcat', copy.openLogcatWindowFailed, () =>
+      window.api.logcat.openWindow(logcatDevice?.id)
+    )
+  }
+
+  const handlePopOutLogcat = async (): Promise<void> => {
+    if (!logcatDevice) return
+    const result = await toApiResult(window.api.logcat.openWindow(logcatDevice.id))
+    if (result.ok) setLogDockOpen(false)
+  }
+
   return (
     <Wrapper lang={locale}>
       <div className="list-pane" style={{ width: listWidth }}>
@@ -302,7 +352,40 @@ const App = (): React.JSX.Element => {
             createDisabled={!metaWritable}
           />
         )}
+        {logcatDevice ? (
+          <button
+            type="button"
+            className="log-toggle"
+            aria-label={copy.logcatTitle}
+            aria-pressed={dockVisible}
+            title={copy.logcatTitle}
+            onClick={handleToggleLogDock}
+          >
+            <ScrollText size={16} />
+          </button>
+        ) : null}
       </main>
+      {dockVisible ? (
+        <>
+          <ResizeHandle
+            edge="left"
+            width={logPaneWidth}
+            onResize={setLogPaneWidth}
+            ariaLabel={copy.logcatResizeAria}
+            minWidth={LOG_PANE_MIN_WIDTH}
+            maxWidth={LOG_PANE_MAX_WIDTH}
+            clamp={clampLogPaneWidth}
+          />
+          <aside className="log-pane" style={{ width: logPaneWidth }}>
+            <LogcatPanel
+              key={`${logcatDevice?.id ?? 'none'}:${logcatDevice?.runId ?? ''}`}
+              deviceId={logcatDevice?.id ?? null}
+              runId={logcatDevice?.runId ?? null}
+              onPopOut={() => void handlePopOutLogcat()}
+            />
+          </aside>
+        </>
+      ) : null}
     </Wrapper>
   )
 }
@@ -342,6 +425,43 @@ const Wrapper = styled.div`
     align-items: center;
     justify-content: center;
     background: var(--board-bg);
+    position: relative;
+  }
+
+  /* 日志 dock 入口（画布右上角，与设置齿轮同侧约定）；仅运行中设备出现 */
+  .log-toggle {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--board-hairline);
+    border-radius: 8px;
+    background: var(--board-bg-raised);
+    color: var(--board-ink);
+    cursor: pointer;
+    transition: background-color 0.12s;
+
+    &:hover {
+      background: var(--board-hover-veil);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+  }
+
+  .log-pane {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
   }
 `
 

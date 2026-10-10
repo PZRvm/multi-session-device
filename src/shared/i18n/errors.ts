@@ -416,7 +416,14 @@ const zhCN = {
   compatApiAboveMax: '镜像 API {major} 超出画像支持上限 API {max}',
   compatApiUnparsedShort: '镜像 API 版本无法解析',
   compatMinorNote: 'API {major}.{minor} 小版本镜像，按正式 minor 版本对待',
-  compatReject: '镜像与画像不兼容：{reasons}'
+  compatReject: '镜像与画像不兼容：{reasons}',
+  // ---- 日志域（plan 2026-10-10-logcat-panel）----
+  logcatWindowTitle: '日志',
+  loadLogcatFailed: '加载日志窗口失败：{detail}',
+  logcatMainOnlySuffix: '仅主窗可打开日志窗',
+  logcatWindowOnlySuffix: '仅日志窗可调用',
+  logcatDeviceNotRunning: '设备未运行，无法订阅日志',
+  logcatInvalidPayloadSuffix: '非法的日志请求载荷'
 }
 
 export type ErrorsCopy = Record<keyof typeof zhCN, string>
@@ -808,7 +815,14 @@ const zhTW: ErrorsCopy = {
   compatApiAboveMax: '映像 API {major} 超出畫像支援上限 API {max}',
   compatApiUnparsedShort: '映像 API 版本無法解析',
   compatMinorNote: 'API {major}.{minor} 小版本映像，按正式 minor 版本對待',
-  compatReject: '映像與畫像不相容：{reasons}'
+  compatReject: '映像與畫像不相容：{reasons}',
+  // ---- 日誌域 ----
+  logcatWindowTitle: '日誌',
+  loadLogcatFailed: '載入日誌視窗失敗：{detail}',
+  logcatMainOnlySuffix: '僅主窗可開啟日誌視窗',
+  logcatWindowOnlySuffix: '僅日誌視窗可呼叫',
+  logcatDeviceNotRunning: '裝置未執行，無法訂閱日誌',
+  logcatInvalidPayloadSuffix: '非法的日誌請求載荷'
 }
 
 const enUS: ErrorsCopy = {
@@ -1247,7 +1261,14 @@ const enUS: ErrorsCopy = {
   compatApiAboveMax: 'Image API {major} exceeds the profile maximum API {max}',
   compatApiUnparsedShort: 'Image API version cannot be parsed',
   compatMinorNote: 'API {major}.{minor} minor image; treated as a stable minor version',
-  compatReject: 'Image incompatible with the profile: {reasons}'
+  compatReject: 'Image incompatible with the profile: {reasons}',
+  // ---- Logcat domain ----
+  logcatWindowTitle: 'Logs',
+  loadLogcatFailed: 'Failed to load the log window: {detail}',
+  logcatMainOnlySuffix: 'only the main window may open the log window',
+  logcatWindowOnlySuffix: 'only the log window may call this',
+  logcatDeviceNotRunning: 'device is not running; cannot subscribe to logs',
+  logcatInvalidPayloadSuffix: 'invalid logcat request payload'
 }
 
 export const ERRORS_COPY: Record<SettingsLocale, ErrorsCopy> = {
