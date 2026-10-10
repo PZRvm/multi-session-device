@@ -128,7 +128,13 @@ const zhCN = {
   renameBlockedTitle: '暂不能重命名',
   renameBlockedMessage:
     '设备元数据写入已冻结（设备数据异常），暂不能重命名；详情见左侧列表上方汇总',
-  createDisabledTitleFooter: '设备元数据写入已冻结，暂不能新建设备（详情见上方汇总）'
+  createDisabledTitleFooter: '设备元数据写入已冻结，暂不能新建设备（详情见上方汇总）',
+  // ---- 截屏（plan 2026-10-10-screenshot-clipboard-save）----
+  screenshotAction: '截屏',
+  screenshotCopied: '已复制到剪贴板',
+  screenshotSave: '保存到下载文件夹',
+  screenshotSaving: '保存中…',
+  screenshotSaved: '已保存：{fileName}'
 }
 
 export type MainWindowCopy = Record<keyof typeof zhCN, string>
@@ -251,7 +257,13 @@ const zhTW: MainWindowCopy = {
   renameBlockedTitle: '暫不能重新命名',
   renameBlockedMessage:
     '裝置中繼資料寫入已凍結（裝置資料異常），暫不能重新命名；詳情見左側列表上方匯總',
-  createDisabledTitleFooter: '裝置中繼資料寫入已凍結，暫不能新建裝置（詳見上方匯總）'
+  createDisabledTitleFooter: '裝置中繼資料寫入已凍結，暫不能新建裝置（詳見上方匯總）',
+  // ---- 截屏（plan 2026-10-10-screenshot-clipboard-save）----
+  screenshotAction: '截圖',
+  screenshotCopied: '已複製到剪貼板',
+  screenshotSave: '儲存到下載資料夾',
+  screenshotSaving: '儲存中…',
+  screenshotSaved: '已儲存：{fileName}'
 }
 
 const enUS: MainWindowCopy = {
@@ -382,7 +394,13 @@ const enUS: MainWindowCopy = {
   renameBlockedMessage:
     'Device metadata writes are frozen (device data issues); renaming is unavailable. See the summary above the list',
   createDisabledTitleFooter:
-    'Device metadata writes are frozen; creating devices is unavailable (see the summary above)'
+    'Device metadata writes are frozen; creating devices is unavailable (see the summary above)',
+  // ---- Screenshot (plan 2026-10-10-screenshot-clipboard-save) ----
+  screenshotAction: 'Screenshot',
+  screenshotCopied: 'Copied to clipboard',
+  screenshotSave: 'Save to Downloads',
+  screenshotSaving: 'Saving…',
+  screenshotSaved: 'Saved: {fileName}'
 }
 
 export const MAIN_COPY: Record<SettingsLocale, MainWindowCopy> = {

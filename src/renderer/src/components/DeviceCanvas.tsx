@@ -18,6 +18,7 @@ import { MAIN_COPY, format } from '@shared/i18n'
 import { useCopy } from '../hooks/useCopy'
 import { useDeviceInput } from '../hooks/useDeviceInput'
 import { useDeviceScreen, type ScreenViewStatus } from '../hooks/useDeviceScreen'
+import { useScreenshot } from '../hooks/useScreenshot'
 import { toApiResult } from '../api'
 import DeviceToolbar from './DeviceToolbar'
 
@@ -60,6 +61,8 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
     retry,
     paintsRef
   } = useDeviceScreen(device)
+  // 截屏状态机：设备切换/停止时气泡自动收起（hook 内 effect 守卫）
+  const shot = useScreenshot(device)
   const proxyRef = useRef<HTMLInputElement | null>(null)
   const stageRef = useRef<HTMLDivElement | null>(null)
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
@@ -427,6 +430,14 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
           }}
           onRotate={() => {
             void rotate()
+          }}
+          screenshotBusy={shot.busy}
+          screenshotState={shot.state}
+          onScreenshot={() => {
+            void shot.capture()
+          }}
+          onScreenshotSave={() => {
+            void shot.save()
           }}
         />
       </div>

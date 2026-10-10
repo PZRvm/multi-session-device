@@ -711,3 +711,16 @@ export interface DeviceSkinPresentation {
   landscape: DeviceSkinOrientation | null
   images: Array<{ file: string; url: string }>
 }
+
+// ---- 截屏域（plan 2026-10-10-screenshot-clipboard-save）----
+/** capture 结果：图像本体已由主进程写系统剪贴板；base64 只供缩略图展示 */
+export interface ScreenshotCaptureResult {
+  pngBase64: string
+  width: number
+  height: number
+}
+
+/** save 结果：写入系统下载目录的文件名（含扩展名，不含目录） */
+export interface ScreenshotSaveResult {
+  fileName: string
+}

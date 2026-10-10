@@ -85,5 +85,10 @@ export const IPC_CHANNELS = {
   /** 受控下载官方皮肤（仅向导窗） */
   sdkDownloadDeviceSkin: 'sdk:download-device-skin',
   /** 皮肤下载进度推送（main → renderer） */
-  sdkSkinProgress: 'sdk:skin-progress'
+  sdkSkinProgress: 'sdk:skin-progress',
+  // ---- 截屏域（plan 2026-10-10-screenshot-clipboard-save；仅登记主窗）----
+  /** 截屏并写系统剪贴板（受控：只写本设备刚截的图，不开放任意剪贴板写入） */
+  screenshotCapture: 'screenshot:capture',
+  /** 用主进程缓存的最近一张写系统下载目录（不弹保存对话框） */
+  screenshotSave: 'screenshot:save'
 } as const

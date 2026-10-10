@@ -274,6 +274,16 @@ export const savedDeviceSkinRef = async (id: string): Promise<string | null> => 
   return requireDevice(id).advancedSettings?.skinRef ?? null
 }
 
+/** 截屏域经注入消费：running 设备的 serial 与名称；未运行返回 null（由调用方决定文案） */
+export const runningDeviceRef = async (
+  id: string
+): Promise<{ serial: string; name: string } | null> => {
+  await ensureLoaded()
+  const device = requireDevice(id)
+  if (device.status !== 'running' || !device.serial) return null
+  return { serial: device.serial, name: device.name }
+}
+
 export const listDeviceNamesReferencing = (packageName: string): string[] =>
   devices.filter((device) => device.imagePackageName === packageName).map((device) => device.name)
 

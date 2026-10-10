@@ -416,7 +416,13 @@ const zhCN = {
   compatApiAboveMax: '镜像 API {major} 超出画像支持上限 API {max}',
   compatApiUnparsedShort: '镜像 API 版本无法解析',
   compatMinorNote: 'API {major}.{minor} 小版本镜像，按正式 minor 版本对待',
-  compatReject: '镜像与画像不兼容：{reasons}'
+  compatReject: '镜像与画像不兼容：{reasons}',
+  // ---- 截屏域（plan 2026-10-10-screenshot-clipboard-save）----
+  screenshotDeviceNotRunning: '设备不在运行中，无法截屏',
+  screenshotBusy: '截屏进行中，请稍候',
+  screenshotCaptureFailed: '截屏失败：{detail}',
+  screenshotSaveFailed: '保存到下载文件夹失败：{detail}',
+  screenshotStale: '截图已过期（设备状态已变化），请重新截屏'
 }
 
 export type ErrorsCopy = Record<keyof typeof zhCN, string>
@@ -808,7 +814,13 @@ const zhTW: ErrorsCopy = {
   compatApiAboveMax: '映像 API {major} 超出畫像支援上限 API {max}',
   compatApiUnparsedShort: '映像 API 版本無法解析',
   compatMinorNote: 'API {major}.{minor} 小版本映像，按正式 minor 版本對待',
-  compatReject: '映像與畫像不相容：{reasons}'
+  compatReject: '映像與畫像不相容：{reasons}',
+  // ---- 截屏域（plan 2026-10-10-screenshot-clipboard-save）----
+  screenshotDeviceNotRunning: '裝置不在執行中，無法截圖',
+  screenshotBusy: '截圖進行中，請稍候',
+  screenshotCaptureFailed: '截圖失敗：{detail}',
+  screenshotSaveFailed: '儲存到下載資料夾失敗：{detail}',
+  screenshotStale: '截圖已過期（裝置狀態已變化），請重新截圖'
 }
 
 const enUS: ErrorsCopy = {
@@ -1247,7 +1259,13 @@ const enUS: ErrorsCopy = {
   compatApiAboveMax: 'Image API {major} exceeds the profile maximum API {max}',
   compatApiUnparsedShort: 'Image API version cannot be parsed',
   compatMinorNote: 'API {major}.{minor} minor image; treated as a stable minor version',
-  compatReject: 'Image incompatible with the profile: {reasons}'
+  compatReject: 'Image incompatible with the profile: {reasons}',
+  // ---- Screenshot domain (plan 2026-10-10-screenshot-clipboard-save) ----
+  screenshotDeviceNotRunning: 'The device is not running; a screenshot is not possible',
+  screenshotBusy: 'A screenshot is already in progress',
+  screenshotCaptureFailed: 'Screenshot failed: {detail}',
+  screenshotSaveFailed: 'Saving to the Downloads folder failed: {detail}',
+  screenshotStale: 'The screenshot expired (device state changed); take a new one'
 }
 
 export const ERRORS_COPY: Record<SettingsLocale, ErrorsCopy> = {

@@ -5,11 +5,13 @@ import {
   adbBinaryPath,
   androidToolEnv,
   listDeviceNamesReferencing,
+  runningDeviceRef,
   savedDeviceSkinRef,
   registerDevicesIpc
 } from '../devices'
 import { registerSdkIpc } from '../emulator'
 import { createScrcpyManager } from '../scrcpy'
+import { registerScreenshotIpc, clearScreenshotCache } from '../screenshot'
 import { registerWizardIpc } from '../window/wizard'
 import { registerSettingsIpc } from '../window/settings'
 import { registerThemeIpc } from '../theme'
@@ -43,14 +45,26 @@ export function registerIpcHandlers(): void {
   scrcpy.registerIpc()
   streamShutdown = () => scrcpy.destroyAll()
 
-  // runner 事件 → 流会话生命周期：running 建会话，停止/崩溃/清理销毁（beforeKill 先释放投屏资源）
+  // 截屏域（plan 2026-10-10）：running 校验经注入进入 devices 域，域自身不反向依赖
+  registerScreenshotIpc({
+    adbPath: adbBinaryPath,
+    runningDevice: runningDeviceRef,
+    isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
+  })
+
+  // runner 事件 → 流会话生命周期：running 建会话，停止/崩溃/清理销毁（beforeKill 先释放投屏资源）。
+  // 截屏缓存同桥收尾：设备停止/清理时最近一张作废（save 拒绝 stale，不留残留图）
   attachDeviceStreamBridge({
     running: (id, runId, serial) => {
       void scrcpy.ensureSession({ id, runId, serial }).catch(() => undefined)
     },
     stopped: (id) => {
+      clearScreenshotCache(id)
       void scrcpy.destroySession(id)
     },
-    beforeKill: (id) => scrcpy.destroySession(id)
+    beforeKill: (id) => {
+      clearScreenshotCache(id)
+      return scrcpy.destroySession(id)
+    }
   })
 }

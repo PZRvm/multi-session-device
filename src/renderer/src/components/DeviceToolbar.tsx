@@ -1,8 +1,19 @@
-import { ChevronLeft, Home, Power, RotateCw, SquareStack, Volume1, Volume2 } from 'lucide-react'
+import {
+  Camera,
+  ChevronLeft,
+  Home,
+  Power,
+  RotateCw,
+  SquareStack,
+  Volume1,
+  Volume2
+} from 'lucide-react'
 import styled from 'styled-components'
 import type { ScreenToolbarButton } from '@shared/types'
 import { useCopy } from '../hooks/useCopy'
 import { MAIN_COPY } from '@shared/i18n'
+import type { ScreenshotState } from '../hooks/useScreenshot'
+import ScreenshotPopover from './ScreenshotPopover'
 
 type DeviceToolbarProps = {
   disabled: boolean
@@ -10,15 +21,24 @@ type DeviceToolbarProps = {
   onButton: (button: ScreenToolbarButton) => void
   onPower: () => void
   onRotate: () => void
+  /** 截屏（plan 2026-10-10）：走 adb，不依赖投屏流，故不受 disabled 牵连 */
+  screenshotBusy: boolean
+  screenshotState: ScreenshotState
+  onScreenshot: () => void
+  onScreenshotSave: () => void
 }
 
-/** 物理键工具条：返回/主页/概览/电源/音量加减 + 旋转；本地化可访问名 + 焦点样式 + 禁用态 */
+/** 物理键工具条：返回/主页/概览/电源/音量加减 + 旋转 + 截屏；本地化可访问名 + 焦点样式 + 禁用态 */
 const DeviceToolbar = ({
   disabled,
   powerDisabled,
   onButton,
   onPower,
-  onRotate
+  onRotate,
+  screenshotBusy,
+  screenshotState,
+  onScreenshot,
+  onScreenshotSave
 }: DeviceToolbarProps): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
   const buttons: Array<{
@@ -58,6 +78,25 @@ const DeviceToolbar = ({
       >
         <RotateCw size={16} />
       </button>
+      {/* 截屏走 adb 独立链路：busy 只由截屏进行中决定；气泡锚定在本钮上方 */}
+      <div className="shot-anchor">
+        <button
+          className="tool-btn"
+          type="button"
+          aria-label={copy.screenshotAction}
+          title={copy.screenshotAction}
+          disabled={screenshotBusy}
+          onClick={onScreenshot}
+        >
+          <Camera size={16} />
+        </button>
+        {screenshotState.phase === 'copied' ||
+        screenshotState.phase === 'saving' ||
+        screenshotState.phase === 'saved' ||
+        screenshotState.phase === 'error' ? (
+          <ScreenshotPopover state={screenshotState} onSave={onScreenshotSave} />
+        ) : null}
+      </div>
     </Wrapper>
   )
 }
@@ -70,6 +109,11 @@ const Wrapper = styled.div`
   border-radius: 8px;
   background: var(--board-bg-raised);
   border: 1px solid var(--board-hairline);
+
+  .shot-anchor {
+    position: relative;
+    display: flex;
+  }
 
   .tool-btn {
     display: inline-flex;
