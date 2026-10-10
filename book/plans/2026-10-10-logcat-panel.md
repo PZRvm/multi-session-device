@@ -1,12 +1,13 @@
 ---
 description: 日志面板设计：右侧可拖宽 dock + 独立日志窗、主进程会话与环形缓冲、批量+ack 流控与多窗口订阅
-status: in_progress
+status: completed
 created: 2026-10-10
+completed: 2026-10-10
 ---
 
 # 日志面板 — plan
 
-设计阶段（Step 0 / Phase 1 / Phase 2）已完成，实现未开始。位置与形态沿用 2026-10-10 与用户定下的方向：主窗右侧可拖宽 dock，可切换为独立日志窗；日志会话与环形缓冲归主进程持有，任意窗口按设备订阅。
+设计（Step 0 / Phase 1 / Phase 2）与实现（Phase 3–6）均已完成。位置与形态沿用 2026-10-10 与用户定下的方向：主窗右侧可拖宽 dock，可切换为独立日志窗；日志会话与环形缓冲归主进程持有，任意窗口按设备订阅。实现细节与设计的出入见文末「实施结果」。
 
 依据：[stage05](../stage/05-功能完善.md) 步骤「日志面板」、[workflow](../guidelines/workflow.md) 前三阶段、[PRD](../docs/PRD.md) 一期成功标准。
 
@@ -160,4 +161,32 @@ i18n 初始键（mainWindow 域）：`logcatTitle`、`logcatFilterPlaceholder`�
 
 需求与排除项填实；影响图与风险有代码证据；通道/类型/文件清单可直接进 Phase 3；三个「与投屏域的刻意差异」（多窗订阅、可丢最旧、无回放滚动加载）已在类型注释与本文写明；stage05 步骤挂本 plan 链接；book 索引构建通过。
 
-实现阶段终点（Phase 3-6 另行勾选）：真机验证实时流、过滤、暂停/继续、拖宽、弹窗切窗不丢行、设备停止后会话回收、退出无残留进程。
+实现阶段终点（Phase 3-6）：真机验证实时流、过滤、暂停/继续、拖宽、弹窗切窗不丢行、设备停止后会话回收、退出无残留进程。——已达成，见下。
+
+## 实施结果 — 2026-10-10
+
+### Phase 3：实现
+
+与设计的主要出入（其余按设计落地）：
+
+- **订阅回放不补发 pending**：设计阶段曾考虑「回放后补发攒批行」，实现确认同步流程无间隙可补（pending 行已在环形缓冲），改为订阅前先 `flushNow` 给既有订阅者、回放即缓冲尾——避免回放与 flush 重复。
+- **ResizeHandle 泛化 `edge` 属性**：右栏把手方向反转（向左拖变宽）、键盘步进随之镜像；`listWidth.ts` 先例复制为 `logPaneWidth.ts`（240–560）。
+- **窄窗退化用纯派生而非 effect 收起**：`dockVisible = logDockOpen && 画布余量 ≥ 720`，窗口收窄即时隐藏、回宽恢复，不落额外 state（react-hooks v6 `set-state-in-effect` 规则下也更干净）。
+- **设备换代（runId 变化）时 renderer 以 `key={deviceId:runId}` 重挂**面板完成重订；主进程侧订阅随旧会话销毁，不自动迁移。
+- **日志窗上下文**：`logcat:context` 通道返回完整设备快照（`devices:list` 对非主窗有守卫），下拉数据源独立于 devices 域；弹出时经 URL `?device=` 传入 dock 当前设备。
+- **暂停期间批次照常 ack**（设计未言明）：不确认会让 main 侧积压丢行，暂停是纯视图行为。
+
+### Phase 4：验证
+
+- 全量测试 878 通过、6 项原有跳过；本批新增 main logcat 域 11 项 + LogcatPanel 10 项 + App dock 集成 6 项。typecheck、lint、build 通过。
+- 真机验证（构建产物 + CDP 驱动，真实启动 Pixel 8 API 32 模拟器）18/18 通过：宽窗 dock 展开收行（1296 行）、默认 320px、关键字过滤、暂停视图停更、恢复断点标记、窄窗隐藏/回宽恢复、窄窗点击开独立窗且 dock 收起、独立窗对准目标设备并持续收行、独立过滤、设备停止后退空态、`adb logcat` 进程零残留。
+
+### Phase 5：review
+
+自审发现并修复一处 P1：会话销毁原先按 deviceId 裁决，设备快速换代（runId 变化）时旧进程的迟到 exit 回调会误杀新会话——已改为按会话身份裁决（`destroySessionOf`），补回归测试「旧进程 exit 迟到不误杀换代后的新会话」。另发现 spawn 同步失败时保留空会话、订阅者只见空态无错误提示，按 workflow 记 [issue](../notes/issue/2026-10/2026-10-10-logcat-spawn-fail-silent.md)，不在本批修复。
+
+### Phase 6：文档与记录
+
+- stage05 步骤「日志面板」勾选完成（一期边界：不做导出与按 app 过滤）。
+- 记录 [format 脚本参数陷阱与 Electron 直启 userData 隔离](../notes/learn/2026-10/2026-10-10-logcat-verify-pitfalls.md)。
+- 本 plan 状态翻 completed。
