@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
+import { LANGUAGE_OPTIONS, type SettingsLocale } from '@shared/i18n'
 import { THEME_SYSTEM_IDS, THEME_SYSTEMS } from '@shared/themeSystems'
-import { LANGUAGE_OPTIONS } from './copy'
 import SettingsParts, { type SettingsPaneProps } from './SettingsParts'
 
 const MODES = [
@@ -21,10 +21,10 @@ const PaneGeneral = ({ model, copy }: SettingsPaneProps): React.JSX.Element => (
           <button
             key={mode}
             type="button"
-            disabled
             aria-label={copy[mode]}
             title={copy[mode]}
             aria-pressed={mode === model.appearance.mode}
+            onClick={() => model.appearance.onModeChange(mode)}
           >
             <Icon size={16} aria-hidden="true" />
           </button>
@@ -41,11 +41,11 @@ const PaneGeneral = ({ model, copy }: SettingsPaneProps): React.JSX.Element => (
           <button
             key={id}
             type="button"
-            disabled
             aria-label={copy[id]}
             title={copy[id]}
             aria-pressed={id === model.appearance.systemId}
             style={{ '--swatch': THEME_SYSTEMS[id].swatch } as CSSProperties}
+            onClick={() => model.appearance.onSystemIdChange(id)}
           >
             {id === model.appearance.systemId ? <Check size={15} aria-hidden="true" /> : null}
           </button>
@@ -60,7 +60,11 @@ const PaneGeneral = ({ model, copy }: SettingsPaneProps): React.JSX.Element => (
         <p className="description">{copy.languageHint}</p>
       </div>
       <div className="controls">
-        <select id="settings-language" disabled value={model.locale}>
+        <select
+          id="settings-language"
+          value={model.locale}
+          onChange={(event) => model.onLocaleChange(event.target.value as SettingsLocale)}
+        >
           {LANGUAGE_OPTIONS.map(({ value, label }) => (
             <option key={value} value={value}>
               {label}

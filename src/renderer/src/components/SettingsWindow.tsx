@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { AlertTriangle, Command, Info, Monitor, Settings } from 'lucide-react'
 import styled from 'styled-components'
-import { SETTINGS_COPY } from './settings/copy'
+import { SETTINGS_COPY } from '@shared/i18n'
 import type { SettingsPaneId, SettingsViewModel } from './settings/model'
 import PaneGeneral from './settings/PaneGeneral'
 import PaneEmulator from './settings/PaneEmulator'
@@ -89,7 +89,8 @@ const Wrapper = styled.div`
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 32px 8px 10px;
+    /* 顶部让位原生三灯（14×12）：分类首行沉到三灯下方，不与红灯贴脸 */
+    padding: 46px 8px 10px;
     border-right: 1px solid var(--board-hairline);
     background: var(--board-bg-raised);
   }

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import styled from 'styled-components'
-import type { SettingsCopy } from './copy'
+import type { SettingsCopy } from '@shared/i18n'
 import type { SettingsViewModel } from './model'
 
 export interface SettingsPaneProps {
