@@ -1,3 +1,4 @@
+import type { SettingsLocale } from './i18n/locale'
 import type { ThemeSystemId } from './themeSystems'
 
 /** 应用与原生窗口共用的亮暗选择 */
@@ -13,6 +14,14 @@ export interface ThemeSelection {
 export interface ThemeInitialState extends ThemeSelection {
   fresh: boolean
 }
+
+/** 语言选择快照——locale.json 落盘与 IPC 传输的载荷（单字段对象：未来加字段不破协议） */
+export interface LocaleSelection {
+  locale: SettingsLocale
+}
+
+/** boot 同步下发的语言初值：与主题初值对齐的命名；语言无 legacy 存量，无 fresh 附加字段 */
+export type LocaleInitialState = LocaleSelection
 
 /** 原生对话框入参——Electron MessageBoxOptions 的白名单子集 */
 export interface DialogOptions {

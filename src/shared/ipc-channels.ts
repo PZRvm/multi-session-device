@@ -7,6 +7,12 @@ export const IPC_CHANNELS = {
   themeSetSystemId: 'theme:set-system-id',
   /** 主题变更推送（main → 各窗）：set 落盘前广播，各窗 store 直写跟随（跨窗同步） */
   themeChanged: 'theme:changed',
+  // ---- 界面语言域（plan 2026-10-10-i18n-and-appearance 批 1；三件套镜像 theme）----
+  localeSet: 'locale:set',
+  /** 语言初值同步下发（preload sendSync 取值；sync 通道走 on + returnValue） */
+  localeGetSync: 'locale:get-sync',
+  /** 语言变更推送（main → 各窗）：set 落盘前广播，各窗 store 直写跟随（跨窗同步） */
+  localeChanged: 'locale:changed',
   devicesList: 'devices:list',
   devicesCreate: 'devices:create',
   devicesRename: 'devices:rename',

@@ -13,6 +13,7 @@ import { createScrcpyManager } from '../scrcpy'
 import { registerWizardIpc } from '../window/wizard'
 import { registerSettingsIpc } from '../window/settings'
 import { registerThemeIpc } from '../theme'
+import { registerLocaleIpc } from '../locale'
 import { getMainWindow } from '../window'
 
 // 退出清理的接缝：main/index 在 before-quit 时调用（先 devices 停实例，再扫尾流会话）
@@ -31,6 +32,7 @@ export function registerIpcHandlers(): void {
   registerWizardIpc({ assertEditorTarget })
   registerSettingsIpc()
   registerThemeIpc()
+  registerLocaleIpc()
 
   const scrcpy = createScrcpyManager({
     adbPath: adbBinaryPath,

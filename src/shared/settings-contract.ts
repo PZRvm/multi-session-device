@@ -6,6 +6,7 @@ import type {
   UpdateDeviceSettings,
   WizardCapabilities
 } from './types'
+import { ERRORS_COPY, format, type SettingsLocale } from './i18n'
 
 /**
  * 设置契约的纯函数层（main 与 renderer 共用单源）：枚举表、归一化校验、
@@ -141,18 +142,20 @@ const normalizeCamera = (value: unknown, capabilities: WizardCapabilities): Came
  */
 export const normalizeAdvancedSettings = (
   raw: DeviceAdvancedSettings | null,
-  capabilities: WizardCapabilities
+  capabilities: WizardCapabilities,
+  locale: SettingsLocale = 'zh-CN'
 ): NormalizedSettings => {
   if (raw === null) return { settings: null, errors: {} }
   const errors: Record<string, string> = {}
+  const m = ERRORS_COPY[locale]
 
   const intIn = (field: string, value: number, min: number, max: number, label: string): number => {
     if (!Number.isInteger(value) || Number.isNaN(value)) {
-      errors[field] = `${label}需要整数`
+      errors[field] = format(m.needInt, { label })
       return value
     }
     if (value < min || value > max) {
-      errors[field] = `${label}需在 ${min}–${max} 之间`
+      errors[field] = format(m.outOfRange, { label, min, max })
     }
     return value
   }
@@ -162,7 +165,7 @@ export const normalizeAdvancedSettings = (
     raw.internalStorageMiB,
     capabilities.fields.internalStorageMiB.min ?? 0,
     capabilities.fields.internalStorageMiB.max ?? Number.MAX_SAFE_INTEGER,
-    '内部存储（MiB）'
+    m.labelStorage
   )
 
   const ram = intIn(
@@ -170,39 +173,39 @@ export const normalizeAdvancedSettings = (
     raw.ramMiB,
     capabilities.fields.ramMiB.min ?? 0,
     capabilities.fields.ramMiB.max ?? Number.MAX_SAFE_INTEGER,
-    'RAM（MiB）'
+    m.labelRam
   )
   const heap = intIn(
     'vmHeapMiB',
     raw.vmHeapMiB,
     capabilities.fields.vmHeapMiB.min ?? 0,
     capabilities.fields.vmHeapMiB.max ?? Number.MAX_SAFE_INTEGER,
-    'VM heap（MiB）'
+    m.labelHeap
   )
   if (Number.isFinite(ram) && Number.isFinite(heap) && heap > Math.floor(ram / 2)) {
-    errors.vmHeapMiB = `VM heap 不能超过 RAM 的一半（${Math.floor(ram / 2)} MiB）`
+    errors.vmHeapMiB = format(m.heapExceedsRam, { half: Math.floor(ram / 2) })
   }
   const cpu = intIn(
     'cpuCores',
     raw.cpuCores,
     capabilities.fields.cpuCores.min ?? 1,
     capabilities.fields.cpuCores.max ?? Number.MAX_SAFE_INTEGER,
-    'CPU 核数'
+    m.labelCpu
   )
 
   const frontCamera = normalizeCamera(raw.frontCamera, capabilities)
   if (frontCamera === null) {
-    errors.frontCamera = '前摄像头取值不合法（none/emulated/virtualScene/webcam<枚举 id>）'
+    errors.frontCamera = m.frontCameraInvalid
   }
   const rearCamera = normalizeCamera(raw.rearCamera, capabilities)
   if (rearCamera === null) {
-    errors.rearCamera = '后摄像头取值不合法（none/emulated/virtualScene/webcam<枚举 id>）'
+    errors.rearCamera = m.rearCameraInvalid
   }
 
-  if (!isGpuMode(raw.graphics)) errors.graphics = 'GPU 模式取值不合法'
+  if (!isGpuMode(raw.graphics)) errors.graphics = m.gpuInvalid
   if (raw.orientation !== null) {
     if (raw.orientation !== 'portrait' && raw.orientation !== 'landscape') {
-      errors.orientation = '初始朝向取值不合法'
+      errors.orientation = m.orientationInvalid
     } else if (capabilities.fields.orientation?.disabledReason != null) {
       // main 复核字段禁用态（review P3）：wear/tv 等不支持固定朝向的形态，
       // 伪造入参不写进 config
@@ -210,13 +213,13 @@ export const normalizeAdvancedSettings = (
     }
   }
   if (raw.networkSpeed !== null && !isNetworkSpeed(raw.networkSpeed)) {
-    errors.networkSpeed = '网络速度取值不合法'
+    errors.networkSpeed = m.netSpeedInvalid
   }
   if (raw.networkLatency !== null && !isNetworkDelay(raw.networkLatency)) {
-    errors.networkLatency = '网络延迟取值不合法'
+    errors.networkLatency = m.netDelayInvalid
   }
   if (raw.preferredAbi !== 'optimal' && raw.preferredAbi !== 'arm64-v8a') {
-    errors.preferredAbi = 'ABI 取值不合法'
+    errors.preferredAbi = m.abiInvalid
   }
   // Quick 未开放：强制回落 Cold（UI 已禁用，这里兜底防伪造入参）
   const bootMode: 'cold' | 'quick' =
@@ -224,7 +227,7 @@ export const normalizeAdvancedSettings = (
 
   // 皮肤：必须在能力枚举内（sdk:* / imported:* / downloaded:*），否则拒绝
   if (raw.skinRef !== null && !capabilities.skinIds.includes(raw.skinRef)) {
-    errors.skinRef = '皮肤不在可用清单中，请重新选择'
+    errors.skinRef = m.skinNotAvailable
   }
 
   return {
@@ -329,7 +332,8 @@ export const normalizeEditedSettings = (
   original: DeviceAdvancedSettings,
   diff: UpdateDeviceSettings,
   capabilities: WizardCapabilities,
-  syncFields: readonly (keyof UpdateDeviceSettings)[] = []
+  syncFields: readonly (keyof UpdateDeviceSettings)[] = [],
+  locale: SettingsLocale = 'zh-CN'
 ): NormalizedSettings => {
   const changed = EDITABLE_SETTING_KEYS.filter(
     (key) =>
@@ -338,7 +342,7 @@ export const normalizeEditedSettings = (
   )
   if (changed.length === 0) return { settings: original, errors: {} }
   const merged = { ...original, ...diff }
-  const normalized = normalizeAdvancedSettings(merged, capabilities)
+  const normalized = normalizeAdvancedSettings(merged, capabilities, locale)
   const checked = new Set<string>(changed)
   if (checked.has('ramMiB') || checked.has('vmHeapMiB')) {
     checked.add('ramMiB')
@@ -384,17 +388,21 @@ const isUpdateCamera = (value: unknown): value is CameraConfig => {
  * 形状逐键校验；存储/ABI 键出现即拒绝（即使值与原值相同——闭集不接受协商），
  * 未知键一律拒绝。返回原样定型的差异对象。
  */
-export const sanitizeUpdateSettings = (raw: unknown): UpdateDeviceSettings => {
+export const sanitizeUpdateSettings = (
+  raw: unknown,
+  locale: SettingsLocale = 'zh-CN'
+): UpdateDeviceSettings => {
+  const m = ERRORS_COPY[locale]
   if (typeof raw !== 'object' || raw === null) {
-    throw new Error('附加设置载荷不合法')
+    throw new Error(m.payloadInvalid)
   }
   const diff: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     if (key === 'internalStorageMiB' || key === 'preferredAbi') {
-      throw new Error(key === 'internalStorageMiB' ? '内部存储不允许修改' : '应用 ABI 不允许修改')
+      throw new Error(key === 'internalStorageMiB' ? m.storageReadOnly : m.abiReadOnly)
     }
     if (!(EDITABLE_SETTING_KEYS as readonly string[]).includes(key)) {
-      throw new Error(`附加设置包含非法字段（${key}）`)
+      throw new Error(format(m.unknownField, { key }))
     }
     let valid = false
     switch (key) {
@@ -426,7 +434,7 @@ export const sanitizeUpdateSettings = (raw: unknown): UpdateDeviceSettings => {
         valid = isGpuMode(value)
         break
     }
-    if (!valid) throw new Error(`附加设置字段取值不合法（${key}）`)
+    if (!valid) throw new Error(format(m.invalidField, { key }))
     diff[key] = value
   }
   return diff as UpdateDeviceSettings

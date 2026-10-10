@@ -4,7 +4,9 @@ import { createMainWindow } from './window'
 import { registerIpcHandlers, shutdownStreams } from './ipc'
 import { prepareAppShutdown, resumeAfterShutdown } from './devices'
 import { restoreTheme } from './theme'
+import { restoreLocale } from './locale'
 import { appIcon } from './app-icon'
+import { msg } from './locale'
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron')
@@ -22,9 +24,9 @@ app.whenReady().then(() => {
     }
   })
 
-  // 主题恢复先于建窗：nativeTheme.themeSource 与建窗 backgroundColor 都依赖读盘结果
-  // （loadThemeState 不抛错，读盘失败按缺省起步——详见 theme/store）
-  void restoreTheme().then(() => createMainWindow())
+  // 主题与语言恢复先于建窗：nativeTheme.themeSource 与建窗 backgroundColor 依赖主题读盘；
+  // 主进程可见文案依赖语言内存态（两者 load 均不抛错，失败按缺省起步——详见各 store）
+  void Promise.all([restoreTheme(), restoreLocale()]).then(() => createMainWindow())
 })
 
 app.on('window-all-closed', () => {
@@ -49,11 +51,10 @@ app.on('before-quit', (event) => {
     }
     const result = await dialog.showMessageBox({
       type: 'warning',
-      title: '退出前清理未完成',
-      message: `有 ${leftovers.length} 台模拟器实例未能在限期内停止`,
-      detail:
-        '可以留在应用重试退出；强制退出会留下仍在运行的模拟器进程（它们占用的端口与 AVD 锁会让下次启动被拦截）。',
-      buttons: ['留在应用', '强制退出'],
+      title: msg('quitCleanupTitle'),
+      message: msg('quitCleanupMessage', { count: leftovers.length }),
+      detail: msg('quitCleanupDetail'),
+      buttons: [msg('quitStayButton'), msg('quitForceButton')],
       cancelId: 0,
       icon: appIcon
     })
