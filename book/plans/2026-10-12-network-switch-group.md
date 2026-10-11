@@ -1,6 +1,6 @@
 ---
 description: 断网开关组：工具条并排三开关——飞行模式总开关（真断网）+ Wi-Fi/移动数据分 radio（场景测试）；1s 轮询读回、变化才推、设备为唯一事实源
-status: in_progress
+status: completed
 created: 2026-10-12
 ---
 
@@ -191,4 +191,9 @@ i18n 初始键（mainWindow 域）：`networkAirplaneToggle`、`networkWifiToggl
 
 - 经验入 [learn：挂载期订阅的 mock 联动 / vi.fn 参数类型 / 轮询器不复活](../notes/learn/2026-10/2026-10-12-app-mount-subscription-test-mock-shape.md)；stage05 步骤附实现批注（真机验收未做，保持未勾）。
 - 本 plan 保持 in_progress：验收清单 ①–⑦ 全过后翻 completed。
+
+### 验收与追加批 — 2026-10-12
+
+- 用户真机验收通过（「验收完毕，可以用」）：验收清单 ①–⑦ 走查通过；stage05 步骤勾选，本 plan 翻 **completed**。
+- 追加修复批（用户批准）：存量 [issue DeviceWizard effect 内 setState lint error](../notes/issue/2026-10/2026-10-12-devicewizard-setstate-in-effect-lint.md) 已修——按同文件 391 行「依赖驱动不级联」豁免先例处理，并写明不改渲染期派生的语义理由（选中须持久，纯派生会随条件消失丢选择）；lint 全仓归零、41 项向导测试通过、无行为变化。
 

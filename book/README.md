@@ -150,6 +150,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-10-three-features-merge-code-review.md](notes/issue/2026-10/2026-10-10-three-features-merge-code-review.md) — 一期收尾三功能（APK 拖拽安装/截屏/日志面板）合并 dev 复核 review——4 项 P2、7 项 P3；同日修复批全量处置
 - [2026-10-11-sdk-source-shared-wizard-guide-and-journal-corruption.md](notes/issue/2026-10/2026-10-11-sdk-source-shared-wizard-guide-and-journal-corruption.md) — 共享 Studio SDK 模式四个遗留——向导缺包引导 UI 未做、journal 损坏无接管、ANDROID_USER_HOME/EMULATOR_HOME 落共享根内、source-adopt/source-migrate 缺 Studio 路径服务端复验（伪造载荷可把 Studio 根当可写自选根）
 - [2026-10-12-devicewizard-setstate-in-effect-lint.md](notes/issue/2026-10/2026-10-12-devicewizard-setstate-in-effect-lint.md) — DeviceWizard.tsx:458 存量 lint error——react-hooks 规则报 effect 内同步 setState 可触发级联渲染；dev 基线即有，非断网开关批引入
+- [2026-10-12-network-switch-code-review.md](notes/issue/2026-10/2026-10-12-network-switch-code-review.md) — 断网开关批 code review（八项清单）——总体 pass；新记 3 项 P3（三键缺一即整体失效的解析边界、词条超 plan 清单、mock 形状四重复制），另两项已在 plan Phase 5 登记
 
 ### notes/learn/
 
@@ -317,4 +318,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 227 documents -->
+<!-- 228 documents -->
