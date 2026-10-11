@@ -161,6 +161,11 @@ const zhCN = {
   // ---- 镜像表 ----
   filterAllServices: '全部服务',
   serviceFilterAria: '服务筛选',
+  sharedModeImagesHint:
+    '共享 Android Studio SDK：已装镜像 {count} 个——安装 / 删除请到 Android Studio',
+  sharedModeFilteredProfiles: '已按已装镜像过滤（隐藏 {count} 个不匹配画像）',
+  sharedModeNoImages:
+    '共享 SDK 中没有已安装镜像：请在 Android Studio 的 SDK Manager 安装系统镜像，或到设置切换 SDK 来源',
   fullList: '完整列表',
   unsupportedToggle: '不支持项',
   headService: '服务',
@@ -344,6 +349,11 @@ const zhTW: WizardCopy = {
   ffUnknown: '其他',
   filterAllServices: '全部服務',
   serviceFilterAria: '服務篩選',
+  sharedModeImagesHint:
+    '共享 Android Studio SDK：已安裝映像 {count} 個——安裝 / 刪除請到 Android Studio',
+  sharedModeFilteredProfiles: '已按已安裝映像過濾（隱藏 {count} 個不符畫像）',
+  sharedModeNoImages:
+    '共享 SDK 中沒有已安裝映像：請在 Android Studio 的 SDK Manager 安裝系統映像，或到設定切換 SDK 來源',
   fullList: '完整清單',
   unsupportedToggle: '不支援項目',
   headService: '服務',
@@ -536,6 +546,11 @@ const enUS: WizardCopy = {
   ffUnknown: 'Other',
   filterAllServices: 'All services',
   serviceFilterAria: 'Service filter',
+  sharedModeImagesHint:
+    'Shared Android Studio SDK: {count} image(s) installed — install or remove them in Android Studio',
+  sharedModeFilteredProfiles: 'Filtered by installed images ({count} unmatched profiles hidden)',
+  sharedModeNoImages:
+    'The shared SDK has no installed system images. Install them via the Android Studio SDK Manager, or switch the SDK source in Settings',
   fullList: 'Full list',
   unsupportedToggle: 'Unsupported',
   headService: 'Service',

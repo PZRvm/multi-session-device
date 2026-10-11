@@ -37,6 +37,9 @@ export interface ImageTableProps {
   onUninstall: ((image: ImageEntry) => void) | null
   /** 正在卸载的包名（该行显示 spinner，其余行禁用）；null = 无卸载任务 */
   uninstallingPackage: string | null
+  /** 共享 Studio SDK 态（plan 2026-10-12）：仅列 已装∧supported 行，隐藏筛选
+   *  开关与下载/卸载按钮；仅一行时的自动选中由 DeviceWizard 层负责 */
+  sharedMode?: boolean
 }
 
 const ImageTable = ({
@@ -51,30 +54,35 @@ const ImageTable = ({
   onCancelDownload,
   downloadBusy,
   onUninstall,
-  uninstallingPackage
+  uninstallingPackage,
+  sharedMode = false
 }: ImageTableProps): React.JSX.Element => {
   const copy = useCopy(WIZARD_COPY)
   const window = recommendedWindow(images)
   // roving tabindex（review 遗留精修）：整个表格一个 Tab 停留点——焦点行 0、
   // 其余行 -1；行内操作钮只在焦点行可 Tab。↑↓ 行间移动，Tab 不再逐行穿越
   const [rovingIndex, setRovingIndex] = useState(0)
-  const rows = images.filter((image) => {
-    const verdict = verdicts.get(image.packageName)
-    const status = verdict?.status ?? 'unknown'
-    const formal = image.api.codename === null
-    if (status === 'unsupported' && !filters.showUnsupported) return false
-    if (!formal && !filters.showPreview) return false
-    if (filters.service !== 'all' && !image.services.includes(filters.service)) return false
-    // 推荐视图只看最近五个正式（非扩展）major；扩展平台与窗口外版本都走完整列表开关
-    if (
-      !filters.showFullList &&
-      formal &&
-      (image.api.extensionLevel !== null || !window.has(image.api.major ?? -1))
-    ) {
-      return false
-    }
-    return true
-  })
+  const rows = sharedMode
+    ? images.filter(
+        (image) => image.installed && verdicts.get(image.packageName)?.status === 'supported'
+      )
+    : images.filter((image) => {
+        const verdict = verdicts.get(image.packageName)
+        const status = verdict?.status ?? 'unknown'
+        const formal = image.api.codename === null
+        if (status === 'unsupported' && !filters.showUnsupported) return false
+        if (!formal && !filters.showPreview) return false
+        if (filters.service !== 'all' && !image.services.includes(filters.service)) return false
+        // 推荐视图只看最近五个正式（非扩展）major；扩展平台与窗口外版本都走完整列表开关
+        if (
+          !filters.showFullList &&
+          formal &&
+          (image.api.extensionLevel !== null || !window.has(image.api.major ?? -1))
+        ) {
+          return false
+        }
+        return true
+      })
   const safeRovingIndex = rows.length === 0 ? 0 : Math.min(rovingIndex, rows.length - 1)
 
   const moveRovingFocus = (fromIndex: number, delta: number): void => {
@@ -97,57 +105,64 @@ const ImageTable = ({
 
   return (
     <Layout>
-      <div className="toolbar">
-        <select
-          className="service-select"
-          value={filters.service}
-          aria-label={copy.serviceFilterAria}
-          onChange={(event) =>
-            onFiltersChange({ ...filters, service: event.target.value as ImageFilters['service'] })
-          }
-        >
-          {serviceOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <div className="switch-row">
-          <div className="switch">
-            <input
-              id="wizard-images-full"
-              type="checkbox"
-              checked={filters.showFullList}
-              onChange={(event) =>
-                onFiltersChange({ ...filters, showFullList: event.target.checked })
-              }
-            />
-            <label htmlFor="wizard-images-full">{copy.fullList}</label>
-          </div>
-          <div className="switch">
-            <input
-              id="wizard-images-preview"
-              type="checkbox"
-              checked={filters.showPreview}
-              onChange={(event) =>
-                onFiltersChange({ ...filters, showPreview: event.target.checked })
-              }
-            />
-            <label htmlFor="wizard-images-preview">Preview</label>
-          </div>
-          <div className="switch">
-            <input
-              id="wizard-images-unsupported"
-              type="checkbox"
-              checked={filters.showUnsupported}
-              onChange={(event) =>
-                onFiltersChange({ ...filters, showUnsupported: event.target.checked })
-              }
-            />
-            <label htmlFor="wizard-images-unsupported">{copy.unsupportedToggle}</label>
+      {sharedMode ? (
+        <p className="shared-hint">{format(copy.sharedModeImagesHint, { count: rows.length })}</p>
+      ) : (
+        <div className="toolbar">
+          <select
+            className="service-select"
+            value={filters.service}
+            aria-label={copy.serviceFilterAria}
+            onChange={(event) =>
+              onFiltersChange({
+                ...filters,
+                service: event.target.value as ImageFilters['service']
+              })
+            }
+          >
+            {serviceOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <div className="switch-row">
+            <div className="switch">
+              <input
+                id="wizard-images-full"
+                type="checkbox"
+                checked={filters.showFullList}
+                onChange={(event) =>
+                  onFiltersChange({ ...filters, showFullList: event.target.checked })
+                }
+              />
+              <label htmlFor="wizard-images-full">{copy.fullList}</label>
+            </div>
+            <div className="switch">
+              <input
+                id="wizard-images-preview"
+                type="checkbox"
+                checked={filters.showPreview}
+                onChange={(event) =>
+                  onFiltersChange({ ...filters, showPreview: event.target.checked })
+                }
+              />
+              <label htmlFor="wizard-images-preview">Preview</label>
+            </div>
+            <div className="switch">
+              <input
+                id="wizard-images-unsupported"
+                type="checkbox"
+                checked={filters.showUnsupported}
+                onChange={(event) =>
+                  onFiltersChange({ ...filters, showUnsupported: event.target.checked })
+                }
+              />
+              <label htmlFor="wizard-images-unsupported">{copy.unsupportedToggle}</label>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="scroller">
         <div className="head-row">
@@ -225,7 +240,7 @@ const ImageTable = ({
                           ? copy.installedUnknownCompat
                           : copy.installedIncompatible}
                     </span>
-                    {onUninstall !== null ? (
+                    {onUninstall !== null && !sharedMode ? (
                       <span
                         className="uninstall-btn"
                         role="button"
@@ -328,6 +343,13 @@ const ImageTable = ({
 const GRID_COLUMNS = 'minmax(200px, 1.6fr) minmax(110px, 1fr) 84px 76px 132px'
 
 const Layout = styled.div`
+  /* 共享态提示行（plan 2026-10-12） */
+  .shared-hint {
+    margin: 0 0 10px;
+    font-size: 11px;
+    color: var(--board-ink-dim);
+  }
+
   display: flex;
   flex-direction: column;
   min-height: 0;

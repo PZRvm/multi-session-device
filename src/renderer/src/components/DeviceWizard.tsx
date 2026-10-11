@@ -7,10 +7,11 @@ import type {
   DeviceFormFactor,
   DeviceProfile,
   ImageEntry,
-  WizardCapabilities
+  WizardCapabilities,
+  SdkSourceMode
 } from '@shared/types'
 import { WIZARD_COPY, format } from '@shared/i18n'
-import { assessImageCompatibility } from '@shared/compatibility'
+import { assessImageCompatibility, profileHasSupportedImage } from '@shared/compatibility'
 import { normalizeAdvancedSettings } from '@shared/settings-contract'
 import Button from './Button'
 import Input from './Input'
@@ -132,6 +133,8 @@ const DeviceWizard = ({
   const [showDeprecated] = useState(false)
   // 配置页
   const [tab, setTab] = useState<WizardTab>('device')
+  // SDK 来源（镜像清单响应附带，plan 2026-10-12 共享态收窄的分支依据）
+  const [sdkSource, setSdkSource] = useState<SdkSourceMode | null>(null)
   const [imageFilters, setImageFilters] = useState<ImageFilters>({
     service: 'all',
     showFullList: false,
@@ -167,6 +170,8 @@ const DeviceWizard = ({
       download: catalog.activeDownload,
       uninstall: catalog.activeUninstall
     }
+    // 来源标记（plan 2026-10-12）：main 按 sdk.json 填充；未填（旧桩/注入数据）按非共享
+    if (catalog.sdkSource !== undefined) setSdkSource(catalog.sdkSource)
     return catalog.images
   }, [])
   const { resource: images, reload: reloadImages } = useCatalogResource<ImageEntry>(
@@ -430,6 +435,29 @@ const DeviceWizard = ({
   const selectedVerdict =
     selectedImage === null ? null : (verdicts.get(selectedImage.packageName) ?? null)
 
+  // 共享态收窄（plan 2026-10-12）：画像只留「有已装∧supported 镜像」者；镜像表
+  // 仅列已装行（ImageTable sharedMode 分支）；managed/custom 分支零改动
+  const sharedMode = sdkSource === 'shared-studio' && images.phase === 'ready'
+  const profilesReady = profiles.phase === 'ready'
+  const eligibleProfiles = useMemo(
+    () =>
+      sharedMode && profilesReady
+        ? profiles.data.filter((entry) => profileHasSupportedImage(entry, images.data, locale))
+        : profiles.data,
+    [sharedMode, profilesReady, profiles.data, images.data, locale]
+  )
+  const hiddenProfileCount = sharedMode ? profiles.data.length - eligibleProfiles.length : 0
+  const sharedNoImages = sharedMode && images.data.length === 0
+
+  // 共享态单镜像自动选中（设计轴 3）：省一次点击；managed 不自动选
+  useEffect(() => {
+    if (!sharedMode || selectedProfile === null || image !== null) return
+    const eligible = images.data.filter(
+      (entry) => entry.installed && verdicts.get(entry.packageName)?.status === 'supported'
+    )
+    if (eligible.length === 1) setImage(eligible[0])
+  }, [sharedMode, selectedProfile, image, images.data, verdicts])
+
   // 独立窗体（无 X 按钮）：Esc 是键盘关闭路径，原生红绿灯/底部取消是另两条
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -558,7 +586,7 @@ const DeviceWizard = ({
         copy.refreshingProfiles,
         copy.profilesEmpty,
         <ProfilePage
-          profiles={profiles.data}
+          profiles={sharedMode ? eligibleProfiles : profiles.data}
           category={category}
           onCategoryChange={changeCategory}
           search={search}
@@ -566,6 +594,13 @@ const DeviceWizard = ({
           showDeprecated={showDeprecated}
           selectedId={selectedProfile?.id ?? null}
           onSelect={selectProfile}
+          hideEmptyCategories={sharedMode}
+          filterNote={
+            sharedMode && !sharedNoImages && hiddenProfileCount > 0
+              ? format(copy.sharedModeFilteredProfiles, { count: hiddenProfileCount })
+              : null
+          }
+          emptyNote={sharedNoImages ? copy.sharedModeNoImages : null}
         />
       )
     }
@@ -643,6 +678,7 @@ const DeviceWizard = ({
                 downloadBusy={downloading !== null}
                 onUninstall={(entry) => void uninstall(entry)}
                 uninstallingPackage={uninstallingPackage}
+                sharedMode={sharedMode}
               />
             </div>
           ) : (

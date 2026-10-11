@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ImageApiVersion, ImageEntry } from '@shared/types'
 import {
   classifyTags,
@@ -292,5 +292,52 @@ describe('fetchImageCatalog（离线与部分失败）', () => {
     expect(result.offline).toBe(false)
     expect(result.sourceWarnings.some((w) => w.includes('android-wear'))).toBe(true)
     expect(result.images.length).toBeGreaterThan(0)
+  })
+})
+
+describe('fetchImageCatalog localOnly（共享只读态，plan 2026-10-12）', () => {
+  const localImage: LocalImageRecord = {
+    packageName: 'system-images;android-34;google_apis;arm64-v8a',
+    apiLevelText: '34',
+    extensionLevel: null,
+    tagIds: ['google_apis'],
+    abi: 'arm64-v8a',
+    displayName: 'Android 34 (Google APIs)',
+    revision: null,
+    verified: true
+  }
+
+  it('不触 manifest fetcher（离线可用）；结果只含本地核验条目且 installed 取核验值', async () => {
+    const fetcher = vi.fn(async () => {
+      throw new Error('should not fetch')
+    })
+    const dirs = new Map<string, string[]>([
+      ['/sdk/system-images', ['android-34']],
+      ['/sdk/system-images/android-34', ['google_apis']],
+      ['/sdk/system-images/android-34/google_apis', ['arm64-v8a']]
+    ])
+    const result = await fetchImageCatalog(
+      '/sdk',
+      {
+        fetcher,
+        readdir: async (path: string) => {
+          const names = dirs.get(path)
+          if (names === undefined) throw new Error('no dir')
+          return names
+        },
+        readFile: async (path: string) => {
+          if (!path.endsWith('package.xml')) throw new Error('no file')
+          return `<repository><localPackage path="system-images;android-34;google_apis;arm64-v8a"><display-name>Android 34 (Google APIs)</display-name><type-details><api-level>34</api-level><tag><id>google_apis</id></tag></type-details></localPackage></repository>`
+        },
+        exists: async (path: string) =>
+          path.endsWith('system.img') || path.endsWith('source.properties')
+      },
+      { localOnly: true }
+    )
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(result.offline).toBe(false)
+    expect(result.sourceWarnings).toEqual([])
+    expect(result.images.map((entry) => entry.packageName)).toEqual([localImage.packageName])
+    expect(result.images[0].installed).toBe(true)
   })
 })

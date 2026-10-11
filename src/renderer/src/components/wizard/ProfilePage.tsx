@@ -33,6 +33,12 @@ export interface ProfilePageProps {
   showDeprecated: boolean
   selectedId: string | null
   onSelect: (profile: DeviceProfile) => void
+  /** 共享 Studio SDK 态（plan 2026-10-12）：隐藏零画像类别 */
+  hideEmptyCategories?: boolean
+  /** 共享态过滤提示行（含隐藏计数）；null = 不渲染 */
+  filterNote?: string | null
+  /** 共享根无任何已装镜像的整页空态引导；非 null 时替代导航/搜索/表格 */
+  emptyNote?: string | null
 }
 
 const ProfilePage = ({
@@ -43,7 +49,10 @@ const ProfilePage = ({
   onSearchChange,
   showDeprecated,
   selectedId,
-  onSelect
+  onSelect,
+  hideEmptyCategories = false,
+  filterNote = null,
+  emptyNote = null
 }: ProfilePageProps): React.JSX.Element => {
   const copy = useCopy(WIZARD_COPY)
   const counts = new Map<DeviceFormFactor, number>()
@@ -69,108 +78,126 @@ const ProfilePage = ({
 
   return (
     <Layout>
-      <nav className="nav" aria-label={copy.profileCategoryAria}>
-        {CATEGORY_ORDER.map((formFactor) => (
-          <button
-            key={formFactor}
-            type="button"
-            className="nav-button"
-            aria-pressed={formFactor === category}
-            onClick={() => onCategoryChange(formFactor)}
-          >
-            <span className="nav-label">{formFactorLabel(copy, formFactor)}</span>
-            <span className="nav-count">{counts.get(formFactor) ?? 0}</span>
-          </button>
-        ))}
-        {/* 官方源暂无弃用信号（types 注释在案）——开关随布局保留但禁用并说明，
+      {emptyNote !== null ? (
+        <div className="shared-empty" role="status">
+          <p>{emptyNote}</p>
+        </div>
+      ) : (
+        <>
+          <nav className="nav" aria-label={copy.profileCategoryAria}>
+            {(hideEmptyCategories
+              ? CATEGORY_ORDER.filter((formFactor) => (counts.get(formFactor) ?? 0) > 0)
+              : CATEGORY_ORDER
+            ).map((formFactor) => (
+              <button
+                key={formFactor}
+                type="button"
+                className="nav-button"
+                aria-pressed={formFactor === category}
+                onClick={() => onCategoryChange(formFactor)}
+              >
+                <span className="nav-label">{formFactorLabel(copy, formFactor)}</span>
+                <span className="nav-count">{counts.get(formFactor) ?? 0}</span>
+              </button>
+            ))}
+            {/* 官方源暂无弃用信号（types 注释在案）——开关随布局保留但禁用并说明，
             不冒充可用功能（review P3：死 UI 处置） */}
-        <div className="deprecated-toggle" title={copy.deprecatedToggleTitle}>
-          <input
-            id="wizard-show-deprecated"
-            type="checkbox"
-            disabled
-            checked={showDeprecated}
-            readOnly
-          />
-          <label htmlFor="wizard-show-deprecated">{copy.showDeprecated}</label>
-        </div>
-      </nav>
+            <div className="deprecated-toggle" title={copy.deprecatedToggleTitle}>
+              <input
+                id="wizard-show-deprecated"
+                type="checkbox"
+                disabled
+                checked={showDeprecated}
+                readOnly
+              />
+              <label htmlFor="wizard-show-deprecated">{copy.showDeprecated}</label>
+            </div>
+          </nav>
 
-      <div className="list-area">
-        <div className="search-row">
-          <Search size={14} aria-hidden="true" className="search-icon" />
-          <input
-            type="search"
-            className="search-input"
-            value={search}
-            placeholder={copy.searchPlaceholder}
-            aria-label={copy.searchAria}
-            onChange={(event) => onSearchChange(event.target.value)}
-          />
-        </div>
+          <div className="list-area">
+            {filterNote !== null ? <p className="filter-note">{filterNote}</p> : null}
+            <div className="search-row">
+              <Search size={14} aria-hidden="true" className="search-icon" />
+              <input
+                type="search"
+                className="search-input"
+                value={search}
+                placeholder={copy.searchPlaceholder}
+                aria-label={copy.searchAria}
+                onChange={(event) => onSearchChange(event.target.value)}
+              />
+            </div>
 
-        <div className="scroller">
-          <div className="head-row" role="row">
-            <div className="head-cell">{copy.headName}</div>
-            <div className="head-cell num">Play</div>
-            <div className="head-cell num">API</div>
-            <div className="head-cell num">{copy.headWidth}</div>
-            <div className="head-cell num">{copy.headHeight}</div>
-            <div className="head-cell num">{copy.headDensity}</div>
-          </div>
-          <div
-            role="group"
-            aria-label={format(copy.categoryAria, { category: formFactorLabel(copy, category) })}
-            onKeyDown={(event) => {
-              if (event.key === 'ArrowDown') {
-                event.preventDefault()
-                moveFocus(1)
-              } else if (event.key === 'ArrowUp') {
-                event.preventDefault()
-                moveFocus(-1)
-              }
-            }}
-          >
-            {rows.map((profile) => (
+            <div className="scroller">
+              <div className="head-row" role="row">
+                <div className="head-cell">{copy.headName}</div>
+                <div className="head-cell num">Play</div>
+                <div className="head-cell num">API</div>
+                <div className="head-cell num">{copy.headWidth}</div>
+                <div className="head-cell num">{copy.headHeight}</div>
+                <div className="head-cell num">{copy.headDensity}</div>
+              </div>
               <div
-                key={profile.id}
-                className="row"
-                role="button"
-                tabIndex={0}
-                data-profile-id={profile.id}
-                aria-pressed={profile.id === selectedId}
-                onClick={() => onSelect(profile)}
+                role="group"
+                aria-label={format(copy.categoryAria, {
+                  category: formFactorLabel(copy, category)
+                })}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
+                  if (event.key === 'ArrowDown') {
                     event.preventDefault()
-                    onSelect(profile)
+                    moveFocus(1)
+                  } else if (event.key === 'ArrowUp') {
+                    event.preventDefault()
+                    moveFocus(-1)
                   }
                 }}
               >
-                <div className="row-name">
-                  {profile.name}
-                  {profile.creatable ? null : <span className="row-tag">{copy.notCreatable}</span>}
-                  {profile.deprecated ? <span className="row-tag">{copy.deprecated}</span> : null}
-                </div>
-                <div className="row-cell num">
-                  {profile.playSupported === null ? '—' : profile.playSupported ? '✓' : '—'}
-                </div>
-                <div className="row-cell num">{apiRangeDisplay(profile)}</div>
-                <div className="row-cell num">
-                  {profile.screen.widthPx === null ? '—' : profile.screen.widthPx}
-                </div>
-                <div className="row-cell num">
-                  {profile.screen.heightPx === null ? '—' : profile.screen.heightPx}
-                </div>
-                <div className="row-cell num">
-                  {profile.screen.logicalDpi === null ? '—' : profile.screen.logicalDpi}
-                </div>
+                {rows.map((profile) => (
+                  <div
+                    key={profile.id}
+                    className="row"
+                    role="button"
+                    tabIndex={0}
+                    data-profile-id={profile.id}
+                    aria-pressed={profile.id === selectedId}
+                    onClick={() => onSelect(profile)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        onSelect(profile)
+                      }
+                    }}
+                  >
+                    <div className="row-name">
+                      {profile.name}
+                      {profile.creatable ? null : (
+                        <span className="row-tag">{copy.notCreatable}</span>
+                      )}
+                      {profile.deprecated ? (
+                        <span className="row-tag">{copy.deprecated}</span>
+                      ) : null}
+                    </div>
+                    <div className="row-cell num">
+                      {profile.playSupported === null ? '—' : profile.playSupported ? '✓' : '—'}
+                    </div>
+                    <div className="row-cell num">{apiRangeDisplay(profile)}</div>
+                    <div className="row-cell num">
+                      {profile.screen.widthPx === null ? '—' : profile.screen.widthPx}
+                    </div>
+                    <div className="row-cell num">
+                      {profile.screen.heightPx === null ? '—' : profile.screen.heightPx}
+                    </div>
+                    <div className="row-cell num">
+                      {profile.screen.logicalDpi === null ? '—' : profile.screen.logicalDpi}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+              {rows.length === 0 ? <p className="empty-hint">{copy.emptyCategory}</p> : null}
+            </div>
           </div>
-          {rows.length === 0 ? <p className="empty-hint">{copy.emptyCategory}</p> : null}
-        </div>
-      </div>
+        </>
+      )}
     </Layout>
   )
 }
@@ -179,6 +206,30 @@ const Layout = styled.div`
   display: flex;
   min-height: 0;
   flex: 1;
+
+  /* 共享态收窄（plan 2026-10-12）：过滤提示行与无镜像空态 */
+  .filter-note {
+    margin: 0 0 10px;
+    font-size: 11px;
+    color: var(--board-ink-dim);
+  }
+
+  .shared-empty {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+
+    p {
+      margin: 0;
+      max-width: 420px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--board-ink-dim);
+      line-height: 1.7;
+    }
+  }
 
   .nav {
     display: flex;

@@ -569,11 +569,24 @@ export const mergeCatalog = (
   )
 }
 
-/** 拉取六源 manifest + 本地核验合并；部分源失败保留其余并给警告 */
+/** 拉取六源 manifest + 本地核验合并；部分源失败保留其余并给警告。
+ *  localOnly（共享只读态，plan 2026-10-12）：跳过远程目录只做本地核验——离线可用。 */
 export async function fetchImageCatalog(
   sdkRoot: string,
-  deps: ImageCatalogDeps = {}
+  deps: ImageCatalogDeps = {},
+  options: { localOnly?: boolean } = {}
 ): Promise<ImageCatalogResult> {
+  if (options.localOnly === true) {
+    const local = await scanLocalImages(sdkRoot, deps)
+    return {
+      images: mergeCatalog([], local),
+      sourceWarnings: [],
+      offline: false,
+      fetchedAt: Date.now(),
+      activeDownload: null,
+      activeUninstall: null
+    }
+  }
   const fetcher =
     deps.fetcher ??
     (async (url: string): Promise<string> => {
@@ -623,9 +636,10 @@ export async function fetchImageCatalog(
 /** 组合入口（devices 域与向导共用）：保留旧名，语义为 fetchImageCatalog */
 export async function listImagesWithState(
   sdkRoot: string,
-  deps: ImageCatalogDeps = {}
+  deps: ImageCatalogDeps = {},
+  options: { localOnly?: boolean } = {}
 ): Promise<ImageCatalogResult> {
-  return fetchImageCatalog(sdkRoot, deps)
+  return fetchImageCatalog(sdkRoot, deps, options)
 }
 
 /** 按包名核验完整安装（创建守卫用，免拉 manifest） */

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { assessImageCompatibility } from '@shared/compatibility'
+import { assessImageCompatibility, profileHasSupportedImage } from '@shared/compatibility'
 
 /** 画像/镜像的最小可判定形状（assessImageCompatibility 的 Pick 签名） */
 type ProfileArg = Parameters<typeof assessImageCompatibility>[0]
@@ -141,5 +141,47 @@ describe('assessImageCompatibility', () => {
     expect(assessImageCompatibility(profile({ creatable: false }), image()).status).toBe(
       'unsupported'
     )
+  })
+})
+
+describe('profileHasSupportedImage（共享态画像可用性，plan 2026-10-12）', () => {
+  const images = (...overs: Partial<ImageArg>[]): Array<ImageArg & { installed: boolean }> =>
+    overs.map((entry) => ({ ...image(entry), installed: true }))
+
+  it('已装 ∧ 匹配镜像 → true；未装的同镜像不算', () => {
+    expect(profileHasSupportedImage(profile(), [{ ...image(), installed: true }])).toBe(true)
+    expect(profileHasSupportedImage(profile(), [{ ...image(), installed: false }])).toBe(false)
+  })
+
+  it('形态不匹配（手机画像 × wear 镜像）→ false；wear 画像 × wear 镜像 → true', () => {
+    const wearImage = image({ services: ['wear'] })
+    expect(profileHasSupportedImage(profile(), images({ services: ['wear'] }))).toBe(false)
+    expect(
+      profileHasSupportedImage(profile({ formFactor: 'wear' }), [{ ...wearImage, installed: true }])
+    ).toBe(true)
+  })
+
+  it('已装 x86_64 / Preview / API 超画像范围 → 均不可用（沿用 assess 全维度）', () => {
+    expect(profileHasSupportedImage(profile(), images({ abi: 'x86_64' }))).toBe(false)
+    expect(
+      profileHasSupportedImage(
+        profile(),
+        images({
+          api: {
+            platformSegment: 'android-36',
+            major: 36,
+            minor: null,
+            codename: 'Baklava',
+            extensionLevel: null,
+            baseExtension: null
+          }
+        })
+      )
+    ).toBe(false)
+    expect(profileHasSupportedImage(profile({ apiMax: 30 }), images())).toBe(false)
+  })
+
+  it('镜像数组为空 → false（共享根无镜像时空态分支）', () => {
+    expect(profileHasSupportedImage(profile(), [])).toBe(false)
   })
 })

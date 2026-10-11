@@ -10,6 +10,7 @@ import type {
   WizardCapabilities
 } from '@shared/types'
 import DeviceWizard from '../DeviceWizard'
+import { formFactorLabel } from '../wizard/shared'
 
 // UI 文案断言经字典取词（zh-CN 基准）；夹具输入（注入错误、用户输入）保持字面量
 const copy = WIZARD_COPY['zh-CN']
@@ -112,14 +113,16 @@ const IMAGES: ImageEntry[] = [
 const catalogOf = (
   images: ImageEntry[],
   activeDownload: ImageCatalogResult['activeDownload'] = null,
-  activeUninstall: ImageCatalogResult['activeUninstall'] = null
+  activeUninstall: ImageCatalogResult['activeUninstall'] = null,
+  sdkSource: ImageCatalogResult['sdkSource'] = undefined
 ): ImageCatalogResult => ({
   images,
   sourceWarnings: [],
   offline: false,
   fetchedAt: 0,
   activeDownload,
-  activeUninstall
+  activeUninstall,
+  sdkSource
 })
 
 /** 固定能力样本（与 main buildCapabilities 的默认形态对齐；Quick 关闭） */
@@ -1147,5 +1150,78 @@ describe('取消皮肤操作不是失败（review P3：null 哨兵静默早退�
     expect(
       (screen.getByRole('button', { name: copy.importArchive }) as HTMLButtonElement).disabled
     ).toBe(false)
+  })
+})
+
+describe('DeviceWizard 共享 Studio SDK 收窄（plan 2026-10-12）', () => {
+  const OLD_NEXUS = profile({ id: 'old_nexus', name: 'Old Nexus', apiMax: 30 })
+  const SHARED_PROFILES = [PROFILES[0], OLD_NEXUS]
+  const sharedCatalog = (images: ImageEntry[]): ImageCatalogResult =>
+    catalogOf(images, null, null, 'shared-studio')
+  const SHARED_IMAGES = [
+    image({ apiMajor: 36, installed: false }),
+    image({ apiMajor: 34, installed: true })
+  ]
+
+  it('画像页：不匹配画像（API 超范围）隐藏 + 提示行含隐藏计数 + 零类别导航隐藏', async () => {
+    installSdkStub({
+      profiles: vi.fn(async () => SHARED_PROFILES),
+      images: vi.fn(async () => sharedCatalog(SHARED_IMAGES))
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText('Pixel 8')
+    expect(screen.queryByText('Old Nexus')).toBeNull()
+    expect(screen.getByText(format(copy.sharedModeFilteredProfiles, { count: 1 }))).toBeTruthy()
+    // 两个可用画像均为 phone：共享态隐藏零画像类别（tablet 不出现）
+    expect(screen.getByLabelText(copy.profileCategoryAria)).toBeTruthy()
+    expect(screen.queryByText(formFactorLabel(copy, 'tablet'))).toBeNull()
+  })
+
+  it('镜像页：无服务筛选/三开关/下载/卸载入口，仅列已装行且单行自动选中', async () => {
+    installSdkStub({
+      profiles: vi.fn(async () => SHARED_PROFILES),
+      images: vi.fn(async () => sharedCatalog(SHARED_IMAGES))
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText(format(copy.sharedModeFilteredProfiles, { count: 1 }))
+    gotoConfigure()
+    // 仅 API 34 已装：API 36（未装）不出现（自动选中后摘要区也带出 API 34——多处出现）
+    await waitFor(() => {
+      expect(screen.getAllByText('API 34').length).toBeGreaterThan(0)
+    })
+    expect(screen.queryByText('API 36')).toBeNull()
+    // 共享提示行替代筛选工具条
+    expect(screen.getByText(format(copy.sharedModeImagesHint, { count: 1 }))).toBeTruthy()
+    expect(screen.queryByLabelText(copy.serviceFilterAria)).toBeNull()
+    expect(screen.queryByLabelText(copy.fullList)).toBeNull()
+    expect(screen.queryByLabelText('Preview')).toBeNull()
+    expect(screen.queryByLabelText(copy.unsupportedToggle)).toBeNull()
+    expect(screen.queryByRole('button', { name: downloadAria('34') })).toBeNull()
+    expect(screen.queryByRole('button', { name: uninstallAria('34') })).toBeNull()
+    // 单一可用镜像自动选中（设计轴 3）：名称输入框带出「Pixel 8 API 34」
+    expect((screen.getByLabelText(copy.nameLabel) as HTMLInputElement).value).toBe('Pixel 8 API 34')
+  })
+
+  it('共享根无任何已装镜像：画像页整页空态引导，无类别导航', async () => {
+    installSdkStub({
+      profiles: vi.fn(async () => SHARED_PROFILES),
+      images: vi.fn(async () => sharedCatalog([]))
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText(copy.sharedModeNoImages)
+    expect(screen.queryByPlaceholderText(copy.searchPlaceholder)).toBeNull()
+    expect(screen.queryByText('Pixel 8')).toBeNull()
+  })
+
+  it('managed（清单未带来源标记）行为不变：未装镜像可见且带下载入口', async () => {
+    installSdkStub({
+      profiles: vi.fn(async () => SHARED_PROFILES),
+      images: vi.fn(async () => catalogOf(IMAGES))
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByText('Old Nexus')
+    gotoConfigure()
+    expect(await screen.findByText('API 36')).toBeTruthy()
+    expect(screen.getByLabelText(copy.serviceFilterAria)).toBeTruthy()
   })
 })

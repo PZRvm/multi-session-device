@@ -103,3 +103,19 @@ export const assessImageCompatibility = (
 
   return supported(reasons)
 }
+
+/**
+ * 共享态画像可用性（plan 2026-10-12-shared-mode-wizard-installed-only）：
+ * 存在「已装 ∧ 兼容 supported」的镜像——向导画像页据此收窄（managed/custom
+ * 全量展示不走此判定）。判定与逐镜像 assessImageCompatibility 同源，不另造语义。
+ */
+export const profileHasSupportedImage = (
+  profile: Pick<DeviceProfile, 'formFactor' | 'apiMin' | 'apiMax' | 'creatable'>,
+  images: Array<Pick<ImageEntry, 'abi' | 'services' | 'api' | 'installed'>>,
+  locale: SettingsLocale = 'zh-CN'
+): boolean =>
+  images.some(
+    (image) =>
+      image.installed === true &&
+      assessImageCompatibility(profile, image, locale).status === 'supported'
+  )
