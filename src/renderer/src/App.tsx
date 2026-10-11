@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, ScrollText } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
-import type { Device, ReconcileReport, RuntimeErrorMessage } from '@shared/types'
+import type { Device, RuntimeErrorMessage } from '@shared/types'
 import { toApiResult } from './api'
 import { useCopy } from './hooks/useCopy'
 import { useLocaleStore } from './stores/localeStore'
 import BoardHead from './components/BoardHead'
 import Button from './components/Button'
 import CanvasPlaceholder from './components/CanvasPlaceholder'
+import ReconcileReportModal from './components/ReconcileReportModal'
 import DeviceCanvas from './components/DeviceCanvas'
 import DeviceHealthNotice from './components/DeviceHealthNotice'
 import DeviceListPane from './components/DeviceListPane'
@@ -45,6 +46,8 @@ const App = (): React.JSX.Element => {
 
   const [listWidth, setListWidth] = useState(280)
   const [rechecking, setRechecking] = useState(false)
+  // 对账完整报告面板开合（plan 2026-10-12）
+  const [reportOpen, setReportOpen] = useState(false)
   // 日志 dock 默认收起（不持久化开合状态——每次启动都从收起起步）；画布剩余
   // 不足 560 时点击入口直接开独立窗
   const [logDockOpen, setLogDockOpen] = useState(false)
@@ -80,41 +83,6 @@ const App = (): React.JSX.Element => {
     [copy]
   )
 
-  /** 报告详情文本：库异常、设备健康、孤立组与保留策略（不提供自动清理） */
-  const buildDetailText = useCallback(async (): Promise<string> => {
-    const result = await toApiResult(window.api.devices.reconciliationReport())
-    if (!result.ok || result.data === null) return copy.noReconcileReport
-    const report: ReconcileReport = result.data
-    const lines: string[] = []
-    if (report.checkedAt !== null)
-      lines.push(format(copy.lastChecked, { time: new Date(report.checkedAt).toLocaleString() }))
-    for (const issue of report.storeHealth.issues) {
-      lines.push(format(copy.metadataIssue, { message: issue.message }))
-    }
-    if (report.storeHealth.state === 'error' && report.storeHealth.issues.length === 0) {
-      lines.push(copy.metadataReadFailed)
-    }
-    for (const entry of report.deviceIssues) {
-      for (const issue of entry.availability.issues) {
-        lines.push(
-          format(copy.deviceIssueLine, {
-            name: entry.name,
-            component: issue.component === 'image' ? copy.componentImage : copy.componentAvd,
-            message: issue.message
-          })
-        )
-      }
-    }
-    for (const orphan of report.orphanEntries) {
-      lines.push(format(copy.orphanGroup, { id: orphan.id, detail: orphan.detail }))
-    }
-    if (report.unrecognizedCount > 0) {
-      lines.push(format(copy.unrecognizedFiles, { count: report.unrecognizedCount }))
-    }
-    if (report.scanError !== null) lines.push(format(copy.scanIssue, { message: report.scanError }))
-    return lines.length > 0 ? lines.join('\n') : copy.noAbnormalRecords
-  }, [copy])
-
   // 对账异常汇总：pendingNotification 变化时弹一次原生 dialog，成功展示后确认；
   // seen 只在成功展示后登记（review P3——失败/中途取消不压制后续重试），异常清零时
   // 复位 seen：同内容异常复发时重新提示（与 main 侧 acknowledged 复位对称）
@@ -128,24 +96,24 @@ const App = (): React.JSX.Element => {
     if (!pendingNotification) return
     if (seenSignatures.current.has(signature)) return
     void (async () => {
-      const detail = await buildDetailText()
-      // 拉详情后再核对一次（review P3——首个 await 前的核对与闭包同 tick 恒等无效）：
-      // 已被新检查替换的异常不再展示，迟到确认也不消费新签名
+      // 摘要式原生通知（plan 2026-10-12 设计轴 1）：完整明细走应用内面板，
+      // 弹窗只报概况——按钮常在屏内，「查看详情」直接开面板
       const current = useDeviceStore.getState().reconciliation
       if (current.signature !== signature || !current.pendingNotification) return
       const shown = await toApiResult(
         window.api.dialog.show({
           title: copy.reconcileSummaryTitle,
           message: copy.reconcileSummaryMessage,
-          detail,
-          buttons: [copy.ok]
+          buttons: [copy.reconcileSummaryView, copy.reconcileSummaryAck],
+          cancelId: 1
         })
       )
       if (!shown.ok) return // 展示失败不登记 seen，待下次推送重试
       seenSignatures.current.add(signature)
       await toApiResult(window.api.devices.acknowledgeReconciliation(signature))
+      if (shown.data.response === 0) setReportOpen(true)
     })()
-  }, [reconciliation, buildDetailText, copy])
+  }, [reconciliation, copy])
 
   // main 共用加载结果；同上下文连点也只保留一个提示，直到提示关闭才允许重试。
   // 返回是否成功（去重命中视为未成功——请求未由本次发起）
@@ -187,15 +155,9 @@ const App = (): React.JSX.Element => {
     if (!result.ok) await showAlert(copy.recheckFailed, result.error)
   }
 
-  const handleViewDetail = async (): Promise<void> => {
-    const detail = await buildDetailText()
-    await toApiResult(
-      window.api.dialog.show({
-        title: copy.reconcileDetailTitle,
-        message: detail,
-        buttons: [copy.ok]
-      })
-    )
+  // 汇总条「查看详情」：应用内完整面板（plan 2026-10-12；原长文本弹窗退役）
+  const handleViewDetail = (): void => {
+    setReportOpen(true)
   }
 
   const handleRename = async (id: string, name: string): Promise<void> => {
@@ -355,6 +317,7 @@ const App = (): React.JSX.Element => {
 
   return (
     <Wrapper lang={locale}>
+      {reportOpen ? <ReconcileReportModal onClose={() => setReportOpen(false)} /> : null}
       <div className="list-pane" style={{ width: listWidth }}>
         <BoardHead
           count={devices.length}

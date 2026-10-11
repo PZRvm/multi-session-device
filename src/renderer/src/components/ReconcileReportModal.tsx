@@ -1,0 +1,185 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import styled from 'styled-components'
+import { MAIN_COPY, format } from '@shared/i18n'
+import type { ReconcileReport } from '@shared/types'
+import { useCopy } from '../hooks/useCopy'
+import BaseModal from './BaseModal'
+import Button from './Button'
+
+type ReportPhase =
+  | { phase: 'loading' }
+  | { phase: 'ready'; report: ReconcileReport | null }
+  | { phase: 'error'; message: string }
+
+export interface ReconcileReportModalProps {
+  onClose: () => void
+  /** 测试注入的报告通道（缺省走 preload 桥） */
+  fetchReport?: () => Promise<ReconcileReport | null>
+}
+
+/**
+ * 对账报告完整查看面板（plan 2026-10-12-reconcile-report-panel）：打开即拉一次
+ * 完整报告、分组滚动渲染——超长明细不再受原生弹窗 40 行截断限制（截断防线
+ * 仍服务其他弹窗）。只读（设计轴 2）：重新检查在汇总条，重开面板即新报告。
+ */
+const ReconcileReportModal = ({
+  onClose,
+  fetchReport
+}: ReconcileReportModalProps): React.JSX.Element => {
+  const copy = useCopy(MAIN_COPY)
+  const [state, setState] = useState<ReportPhase>({ phase: 'loading' })
+  const generationRef = useRef(0)
+
+  const load = useCallback(async (): Promise<void> => {
+    const generation = generationRef.current + 1
+    generationRef.current = generation
+    setState({ phase: 'loading' })
+    try {
+      const api = fetchReport ?? window.api.devices.reconciliationReport
+      const report = await api()
+      if (generationRef.current !== generation) return
+      setState({ phase: 'ready', report })
+    } catch (cause) {
+      if (generationRef.current !== generation) return
+      setState({
+        phase: 'error',
+        message: cause instanceof Error ? cause.message : String(cause)
+      })
+    }
+  }, [fetchReport])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  return (
+    <BaseModal title={copy.reconcileDetailTitle} onClose={onClose}>
+      {state.phase === 'loading' ? (
+        <p className="report-line">{copy.reportLoading}</p>
+      ) : state.phase === 'error' ? (
+        <div role="alert">
+          <p className="report-line report-error">
+            {format(copy.reportLoadFailed, { message: state.message })}
+          </p>
+          <Button variant="ghost" onClick={() => void load()}>
+            {copy.reportRetry}
+          </Button>
+        </div>
+      ) : state.report === null || !hasAnyIssue(state.report) ? (
+        <p className="report-line">{copy.noAbnormalRecords}</p>
+      ) : (
+        <ReportBody report={state.report} />
+      )}
+    </BaseModal>
+  )
+}
+
+const hasAnyIssue = (report: ReconcileReport): boolean =>
+  report.storeHealth.state !== 'ok' ||
+  report.storeHealth.issues.length > 0 ||
+  report.deviceIssues.some((entry) => entry.availability.issues.length > 0) ||
+  report.orphanEntries.length > 0 ||
+  report.unrecognizedCount > 0 ||
+  report.scanError !== null
+
+const ReportBody = ({ report }: { report: ReconcileReport }): React.JSX.Element => {
+  const copy = useCopy(MAIN_COPY)
+  return (
+    <ReportLayout>
+      {report.checkedAt !== null ? (
+        <p className="report-line report-meta">
+          {format(copy.lastChecked, {
+            time: new Date(report.checkedAt).toLocaleString()
+          })}
+        </p>
+      ) : null}
+
+      {report.storeHealth.state !== 'ok' || report.storeHealth.issues.length > 0 ? (
+        <section>
+          <h3>{copy.reportGroupMetadata}</h3>
+          {report.storeHealth.state !== 'ok' && report.storeHealth.issues.length === 0 ? (
+            <p className="report-line">{copy.metadataReadFailed}</p>
+          ) : (
+            report.storeHealth.issues.map((issue, index) => (
+              <p className="report-line" key={`${issue.code}-${index}`}>
+                {format(copy.metadataIssue, { message: issue.message })}
+              </p>
+            ))
+          )}
+        </section>
+      ) : null}
+
+      {report.deviceIssues.some((entry) => entry.availability.issues.length > 0) ? (
+        <section>
+          <h3>{copy.reportGroupDevices}</h3>
+          {report.deviceIssues.map((entry) =>
+            entry.availability.issues.map((issue, index) => (
+              <p className="report-line" key={`${entry.id}-${issue.component}-${index}`}>
+                {format(copy.deviceIssueLine, {
+                  name: entry.name,
+                  component: issue.component === 'image' ? copy.componentImage : copy.componentAvd,
+                  message: issue.message
+                })}
+              </p>
+            ))
+          )}
+        </section>
+      ) : null}
+
+      {report.orphanEntries.length > 0 ? (
+        <section>
+          <h3>{copy.reportGroupOrphans}</h3>
+          {report.orphanEntries.map((orphan) => (
+            <p className="report-line" key={orphan.id}>
+              {format(copy.orphanGroup, { id: orphan.id, detail: orphan.detail })}
+            </p>
+          ))}
+        </section>
+      ) : null}
+
+      {report.unrecognizedCount > 0 || report.scanError !== null ? (
+        <section>
+          <h3>{copy.reportGroupOther}</h3>
+          {report.unrecognizedCount > 0 ? (
+            <p className="report-line">
+              {format(copy.unrecognizedFiles, { count: report.unrecognizedCount })}
+            </p>
+          ) : null}
+          {report.scanError !== null ? (
+            <p className="report-line">{format(copy.scanIssue, { message: report.scanError })}</p>
+          ) : null}
+        </section>
+      ) : null}
+    </ReportLayout>
+  )
+}
+
+const ReportLayout = styled.div`
+  section {
+    margin: 0 0 14px;
+  }
+
+  h3 {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--board-ink-dim);
+  }
+
+  .report-line {
+    margin: 3px 0;
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+
+  .report-meta {
+    color: var(--board-ink-dim);
+  }
+
+  .report-error {
+    color: var(--danger);
+  }
+`
+
+export default ReconcileReportModal

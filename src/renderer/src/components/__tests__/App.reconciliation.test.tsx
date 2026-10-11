@@ -109,13 +109,20 @@ afterEach(() => {
 })
 
 describe('App 对账汇总提示（plan 设计 5）', () => {
-  it('首载异常：拉报告弹一次原生 dialog，成功展示后确认签名', async () => {
+  it('首载异常：摘要式 dialog（无长 detail、按钮 查看详情/知道了），确认签名后选「查看详情」开完整面板', async () => {
     render(<App />)
     await waitFor(() => expect(dialog).toHaveBeenCalled())
-    const shown = dialog.mock.calls[0] as unknown as [{ title: string; detail: string }]
+    const shown = dialog.mock.calls[0] as unknown as [
+      { title: string; detail?: string; buttons: string[] }
+    ]
     expect(shown[0]).toMatchObject({ title: copy.reconcileSummaryTitle })
-    expect(shown[0].detail).toContain('缺少 d1.ini')
+    // 摘要式（plan 2026-10-12）：不携带长文本 detail，按钮常在屏内
+    expect(shown[0].detail).toBeUndefined()
+    expect(shown[0].buttons).toEqual([copy.reconcileSummaryView, copy.reconcileSummaryAck])
     await waitFor(() => expect(acknowledgeReconciliation).toHaveBeenCalledWith('sig-anomaly-1'))
+    // response=0（查看详情，dialog mock 默认）→ 完整报告面板打开并渲染明细
+    expect(await screen.findByRole('dialog', { name: copy.reconcileDetailTitle })).toBeTruthy()
+    expect(screen.getAllByText(/缺少 d1\.ini/).length).toBeGreaterThan(0)
   })
 
   it('无待提示（pendingNotification=false）：不弹、不确认', async () => {
