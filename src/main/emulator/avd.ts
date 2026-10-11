@@ -10,6 +10,8 @@ export interface AvdDirs {
   sdkRoot: string
   /** JAVA_HOME 覆盖（共享 Studio SDK 时传 Studio JBR；缺省用 SDK 内置 JRE 布局） */
   javaHome?: string
+  /** ANDROID_USER_HOME/EMULATOR_HOME 覆盖（恒定应用数据目录；缺省用 SDK 根内旧布局） */
+  userHome?: string
 }
 
 export const avdPaths = (avdName: string, dirs: AvdDirs): { ini: string; dir: string } => ({
@@ -65,8 +67,8 @@ export async function createAvd(
     ANDROID_SDK_ROOT: dirs.sdkRoot,
     ANDROID_HOME: dirs.sdkRoot,
     ANDROID_AVD_HOME: dirs.avdHome,
-    ANDROID_USER_HOME: join(dirs.sdkRoot, 'android-user'),
-    ANDROID_EMULATOR_HOME: join(dirs.sdkRoot, 'android-user')
+    ANDROID_USER_HOME: dirs.userHome ?? join(dirs.sdkRoot, 'android-user'),
+    ANDROID_EMULATOR_HOME: dirs.userHome ?? join(dirs.sdkRoot, 'android-user')
   }
   const args = ['create', 'avd', '-n', avdName, '-k', packageName, '-d', profileId]
 

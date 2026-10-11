@@ -1,7 +1,9 @@
 ---
 description: 删除运行中设备不先停机、不做运行态拦截——mock 阶段合理，stage 04 接真实 emulator 前必须补
+status: resolved
 ---
 
+> 2026-10-12 核销（fix/issue-audit 批）：devices 删除流已含 running/stopping → await stopDevice(id) 先停机再删（index.ts:1337），并有 deleteFlights 互斥。
 # 删除运行中设备不先停机
 
 - **Observed**: 2026-10-03 stage 03 Phase 5 review 发现：运行中的设备可以直接走删除流程（确认框 → `devices:delete`），主进程不检查 `status`。mock 阶段无真实进程，语义无害；stage 04 接真实 emulator 后，这条路径意味着「emulator 子进程还活着，AVD 目录却被删了」。

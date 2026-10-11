@@ -100,6 +100,7 @@ import { activePackageOp, beginPackageCreation, endPackageCreation } from '../em
 import { resetDisplayCutout } from '../emulator/displayCutout'
 import { configBaseline, configMismatchesOf } from '../emulator/configDrift'
 import { javaHomeFor, resolveSdkRoot } from '../emulator/sdkSource'
+import { androidUserHomeFor } from '../emulator/androidUserHome'
 
 /** 底层错误自带建议从句的多语言标记（zh「请」/ zh-TW「請」/ en "please"） */
 const ADVICE_RE = /[請请]|please/i
@@ -117,11 +118,13 @@ const skinDirectoryFor = (skinRef: string): string => {
 // SDK 根经 sdkSource 统一解析（managed/custom/shared-studio；avd-home 恒在应用数据目录）
 const sdkRoot = (): string => resolveSdkRoot()
 const avdHome = (): string => join(app.getPath('userData'), 'avd-home')
-const avdDirs = (): { avdHome: string; sdkRoot: string; javaHome: string } => ({
+const avdDirs = (): { avdHome: string; sdkRoot: string; javaHome: string; userHome: string } => ({
   avdHome: avdHome(),
   sdkRoot: sdkRoot(),
-  // 共享 Studio SDK 时 avdmanager 跑在 Studio JBR 上（plan 2026-10-11）
-  javaHome: javaHomeFor(sdkRoot())
+  // 共享 Studio SDK 时 avdmanager 跑在 Studio JBR 上（plan 2026-10-11）；
+  // android-user 恒定应用数据目录（issue 2026-10-11 问题三）
+  javaHome: javaHomeFor(sdkRoot()),
+  userHome: androidUserHomeFor()
 })
 /** 对账受控根：avd-home + SDK 根 + 应用皮肤库（skin.path 越界判定用） */
 const reconcileDirs = (): ReconcileDirs => ({
@@ -193,8 +196,8 @@ export const androidToolEnv = (): NodeJS.ProcessEnv =>
     ANDROID_SDK_ROOT: sdkRoot(),
     ANDROID_HOME: sdkRoot(),
     ANDROID_AVD_HOME: avdHome(),
-    ANDROID_USER_HOME: join(sdkRoot(), 'android-user'),
-    ANDROID_EMULATOR_HOME: join(sdkRoot(), 'android-user')
+    ANDROID_USER_HOME: androidUserHomeFor(),
+    ANDROID_EMULATOR_HOME: androidUserHomeFor()
   })
 
 const ports = new PortAllocator({
@@ -1032,6 +1035,7 @@ const assertSdkDomainOpen = (): void => {
 const runner = createRunner({
   sdkRoot,
   avdHome,
+  userHome: androidUserHomeFor,
   emulatorPath: () => join(sdkRoot(), 'emulator', 'emulator'),
   adbPath: () => adbExecutable?.path ?? join(sdkRoot(), 'platform-tools', 'adb'),
   ports,
@@ -1428,6 +1432,7 @@ const createDeviceTransaction = async (
   const profiles = await listDeviceProfiles({
     sdkRoot: sdkRoot(),
     javaHome: javaHomeFor(sdkRoot()),
+    userHome: androidUserHomeFor(),
     avdmanagerPath: avdmanagerPathFor(sdkRoot()),
     jarPath: sdklibJarPathFor(sdkRoot())
   })
@@ -1853,6 +1858,7 @@ const buildEditCapabilities = async (meta: DeviceMeta): Promise<WizardCapabiliti
     const profiles = await listDeviceProfiles({
       sdkRoot: sdkRoot(),
       javaHome: javaHomeFor(sdkRoot()),
+      userHome: androidUserHomeFor(),
       avdmanagerPath: avdmanagerPathFor(sdkRoot()),
       jarPath: sdklibJarPathFor(sdkRoot())
     })

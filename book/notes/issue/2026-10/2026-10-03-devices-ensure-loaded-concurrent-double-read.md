@@ -1,7 +1,9 @@
 ---
 description: devices 域 ensureLoaded 无互斥——首个命令与并发 IPC 同窗口时可能双读落盘文件，后者覆盖前者
+status: resolved
 ---
 
+> 2026-10-12 核销（fix/issue-audit 批）：ensureLoaded 已用 loadPromise 单飞（index.ts:221/354），并发首命令共享同一次装载。
 # devices ensureLoaded 并发双读竞态
 
 - **Observed**: 2026-10-03 stage 03 Phase 5 review 发现：`src/main/devices/index.ts` 的 `ensureLoaded` 用模块级 `loaded` 布尔做单次加载，无互斥。两个 IPC handler 在首载窗口内并发进入（如多窗口同时 `devices:list`，或 list 与 create 同帧到达），都会看到 `loaded === false` 并各自 `readDeviceMetas()`，后完成者以自己的读结果整体覆盖 `devices`——若第一个 handler 已在其读结果上叠加了变更，该变更会被第二个 handler 的覆盖卷走。

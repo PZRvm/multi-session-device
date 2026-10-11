@@ -55,6 +55,8 @@ export interface RunnerEntry {
 export interface RunnerDeps {
   sdkRoot: () => string
   avdHome: () => string
+  /** ANDROID_USER_HOME/EMULATOR_HOME（恒定应用数据目录）；缺省用 SDK 根内旧布局 */
+  userHome?: () => string
   emulatorPath: () => string
   adbPath: () => string
   ports: PortAllocator
@@ -286,8 +288,8 @@ export class EmulatorRunner {
           ANDROID_SDK_ROOT: this.deps.sdkRoot(),
           ANDROID_HOME: this.deps.sdkRoot(),
           ANDROID_AVD_HOME: this.deps.avdHome(),
-          ANDROID_USER_HOME: join(this.deps.sdkRoot(), 'android-user'),
-          ANDROID_EMULATOR_HOME: join(this.deps.sdkRoot(), 'android-user')
+          ANDROID_USER_HOME: this.deps.userHome?.() ?? join(this.deps.sdkRoot(), 'android-user'),
+          ANDROID_EMULATOR_HOME: this.deps.userHome?.() ?? join(this.deps.sdkRoot(), 'android-user')
         })
       }
     )

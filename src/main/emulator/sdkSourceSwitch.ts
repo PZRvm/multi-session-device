@@ -70,6 +70,19 @@ const activeRootOf = (state: ReturnType<typeof getSdkSourceState>): string => {
   return managedSdkRoot()
 }
 
+/**
+ * 服务端复验（issue 2026-10-11 问题四处置）：目标路径不得是 Studio 实际 SDK。
+ * switchSource 的矩阵判定先行挡住正常 UI 流程，但 adopt/migrate 通道收 renderer
+ * 载荷——伪造 {customPath: <Studio SDK>} 可把共享根变成可写自选根（此后卸载/下载
+ * 会真写真删 Studio 目录）。与 studio-path-use-shared 同口径，双保险。
+ */
+async function assertNotStudioRoot(toRoot: string, deps: SwitchDeps): Promise<void> {
+  const detection = deps.detection() ?? (await deps.runDetection())
+  if (detection.sdkCandidate !== null && (await isStudioSdk(toRoot, detection))) {
+    throw new Error('target path is the Android Studio SDK; use the shared source instead')
+  }
+}
+
 /** 非目标的应用自有根中有可识别 SDK 内容者（落选/迁移来源）——含当前活动根：
  *  从托管/自选切走时，活动根就是要被迁移或二选一处置的那一份 */
 async function appOwnedLosers(excludeRoot: string, deps: SwitchDeps): Promise<string[]> {
@@ -220,6 +233,7 @@ export async function startSourceMigration(
   if (typeof toRoot !== 'string' || toRoot.trim().length === 0) {
     throw new Error('custom path required')
   }
+  await assertNotStudioRoot(toRoot, deps)
   const losers = await appOwnedLosers(toRoot, deps)
   if (losers.length === 0) throw new Error('no sdk to migrate')
   const planResult = await planMigration(
@@ -317,6 +331,7 @@ export async function adoptSourceSwitch(
   if ((await classifyRoot(toRoot, deps.migration)) !== 'sdk') {
     throw new Error('target has no recognizable sdk')
   }
+  await assertNotStudioRoot(toRoot, deps)
   const losers = await appOwnedLosers(toRoot, deps)
   const loserRoot = losers[0]
   const state = getSdkSourceState()

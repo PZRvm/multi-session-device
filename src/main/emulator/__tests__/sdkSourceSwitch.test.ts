@@ -366,3 +366,35 @@ describe('startSourceMigration / cancelSourceMigration（编排收尾）', () =>
     expect(fs.exists(`${MANAGED}/platform-tools/adb`)).toBe(true)
   })
 })
+describe('伪造载荷兜底（issue 2026-10-11 问题四处置）', () => {
+  let fs: FakeFs
+  beforeEach(() => {
+    fs = new FakeFs()
+    resetSdkSourceStateForTest()
+  })
+
+  it('source-migrate 指向 Studio SDK：服务端拒绝，不建 journal 不动来源', async () => {
+    seedManaged(fs)
+    seedSourceInto(fs, STUDIO_SDK)
+    const deps = buildDeps(fs)
+    await expect(
+      startSourceMigration({ target: 'custom', customPath: STUDIO_SDK, replace: true }, deps)
+    ).rejects.toThrow('Android Studio SDK')
+    expect(await loadMigrationJournal(deps.migration)).toBeNull()
+    expect(getSdkSourceState().source).toBe('managed')
+    expect(fs.exists(`${MANAGED}/platform-tools/adb`)).toBe(true)
+  })
+
+  it('source-adopt 指向 Studio SDK：服务端拒绝，不翻 source、不删落选根', async () => {
+    seedManaged(fs)
+    seedSourceInto(fs, STUDIO_SDK)
+    const deps = buildDeps(fs)
+    await expect(
+      adoptSourceSwitch({ target: 'custom', customPath: STUDIO_SDK }, deps)
+    ).rejects.toThrow('Android Studio SDK')
+    expect(getSdkSourceState().source).toBe('managed')
+    // 落选根（托管）原封未动——adopt 的 rmTree 未执行
+    expect(fs.exists(`${MANAGED}/licenses/android-sdk-license`)).toBe(true)
+    expect(fs.exists(`${MANAGED}/jre/Contents/Home/bin/java`)).toBe(true)
+  })
+})

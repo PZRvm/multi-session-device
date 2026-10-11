@@ -1,7 +1,9 @@
 ---
 description: openWizardWindow 单例判断无互斥——极窄窗口内两次 wizard:open 可开两扇模态窗且第一扇引用被覆盖
+status: resolved
 ---
 
+> 2026-10-12 核销（fix/issue-audit 批）：openWizardWindow 已是会话 Promise 单例（构造前占位 session，与设置窗同款），双开窗口竞态关闭。
 # 向导窗单例 open 竞态
 
 - **Observed**: 2026-10-04 优化轮 Phase 5 review 发现：`main/window/wizard.ts` 的 `openWizardWindow` 用模块级 `wizardWindow` 引用做单例判断，无互斥。同一次事件循环内（如程序化连发）两个 `wizard:open` 都会看到引用为空并各自建窗，第二扇覆盖引用，第一扇变成无主窗口（仍随父窗销毁，但不再受「重复点击=聚焦」治理）。

@@ -43,6 +43,46 @@ const input = {
   packageName: 'system-images;android-36;google_apis;arm64-v8a'
 }
 
+describe('createAvd env（android-user 单源，issue 2026-10-11 问题三）', () => {
+  it('userHome 覆盖生效：ANDROID_USER_HOME/EMULATOR_HOME 指向应用数据目录而非 SDK 根', async () => {
+    const avdHome = await makeTmp()
+    await createAvd(
+      input,
+      { avdHome, sdkRoot: '/studio-sdk', userHome: '/userdata/android-user' },
+      {
+        runner: async (_args, env) => {
+          await writeFile(
+            join(avdHome, 'mst-it-1.ini'),
+            `avd.ini.encoding=UTF-8\npath=${join(avdHome, 'mst-it-1.avd')}\n`,
+            'utf8'
+          )
+          expect(env.ANDROID_USER_HOME).toBe('/userdata/android-user')
+          expect(env.ANDROID_EMULATOR_HOME).toBe('/userdata/android-user')
+          expect(env.ANDROID_SDK_ROOT).toBe('/studio-sdk')
+        }
+      }
+    )
+  })
+
+  it('缺省回落 SDK 根内旧布局（向后兼容）', async () => {
+    const avdHome = await makeTmp()
+    await createAvd(
+      input,
+      { avdHome, sdkRoot: '/sdk-root' },
+      {
+        runner: async (_args, env) => {
+          await writeFile(
+            join(avdHome, 'mst-it-1.ini'),
+            `avd.ini.encoding=UTF-8\npath=${join(avdHome, 'mst-it-1.avd')}\n`,
+            'utf8'
+          )
+          expect(env.ANDROID_USER_HOME).toBe(join('/sdk-root', 'android-user'))
+        }
+      }
+    )
+  })
+})
+
 describe('createAvd（avdmanager 子进程，注入执行器）', () => {
   it('参数/env 正确，落 .ini 后视为成功', async () => {
     const avdHome = await makeTmp()

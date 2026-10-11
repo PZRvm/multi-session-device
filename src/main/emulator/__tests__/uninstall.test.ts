@@ -1,7 +1,11 @@
 // @vitest-environment node
+import { tmpdir } from 'node:os'
 import { describe, expect, it, vi } from 'vitest'
 import { assertUninstallable } from '../uninstall'
 import type { ImageEntry } from '@shared/types'
+
+// androidUserHome 单源引入 electron app（issue 2026-10-11 问题三）——node 环境补桩
+vi.mock('electron', () => ({ app: { getPath: () => tmpdir() } }))
 
 const image = (overrides: Partial<ImageEntry> = {}): ImageEntry => ({
   packageName: 'system-images;android-36;google_apis_playstore;arm64-v8a',

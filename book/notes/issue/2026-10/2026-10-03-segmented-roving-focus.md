@@ -1,7 +1,9 @@
 ---
 description: SegmentedControl 方向键切换后 DOM 焦点未随 roving tabindex 移到新选中瓣——键盘用户连按方向键无效
+status: resolved
 ---
 
+> 2026-10-12 核销（fix/issue-audit 批）：SegmentedControl 已显式 focus 新选中瓣（组件注释引用本 issue），测试在案。
 # SegmentedControl roving tabindex 缺焦点搬运
 
 - **Observed**: 2026-10-03 stage 02 Phase 5 review 发现：`src/renderer/src/components/SegmentedControl.tsx` 方向键只改 store 值（`onChange`），`tabIndex` 虽随 `value` 移动（新选中瓣 tabIndex 0），但 DOM 焦点仍停在旧瓣上——旧瓣此刻 tabIndex 已变 -1，Tab 键再按会跳出控件，键盘用户连按方向键只有第一次生效后的焦点错位。

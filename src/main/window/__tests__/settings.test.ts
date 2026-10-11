@@ -102,6 +102,21 @@ describe('设置窗口边界', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('就绪后 renderer 崩溃：销毁残窗并释放单例，再次打开重建新窗（P2 处置）', async () => {
+    const first = module!.openSettingsWindow()
+    windows[0].emit('ready-to-show')
+    await first
+    windows[0].webContents.emit('render-process-gone', {}, { reason: 'crashed' })
+    expect(windows[0].destroy).toHaveBeenCalledTimes(1)
+    const second = module!.openSettingsWindow()
+    expect(windows).toHaveLength(2)
+    windows[1].emit('ready-to-show')
+    await second
+    expect(windows[1].show).toHaveBeenCalledTimes(1)
+    // 旧窗只在就绪时聚焦过一次——崩溃后的再次打开没有聚焦死窗
+    expect(windows[0].focus).toHaveBeenCalledTimes(1)
+  })
+
   it.each(['loadURL', 'loadFile'] as const)(
     '%s 失败释放会话，迟到事件不影响重试',
     async (method) => {

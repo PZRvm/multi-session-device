@@ -115,6 +115,15 @@ export function openSettingsWindow(): Promise<void> {
       if (isMainFrame) fail(new Error(`${description}（${code}）`))
     })
     window.webContents.on('render-process-gone', (_event, details) => {
+      // 就绪前崩溃走加载失败收口（reject 给 open 调用方）；就绪后崩溃（issue
+      // 2026-10-10-settings-window-crash-reopen P2）：settled 已置位，fail 早退
+      // 不释放——死窗留在单例上，齿轮再点只聚焦残窗。改为释放单例并销毁残窗，
+      // 下次 openSettingsWindow 重建。
+      if (session.ready || session.settled) {
+        release()
+        if (!window.isDestroyed()) window.destroy()
+        return
+      }
       fail(new Error(msg('wizardRendererExit', { reason: details.reason })))
     })
     timeout = setTimeout(() => fail(new Error(msg('wizardLoadTimeout'))), 15_000)

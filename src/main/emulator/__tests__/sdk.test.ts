@@ -12,6 +12,9 @@ import {
   ANDROID_SDK_LICENSE_HASHES
 } from '../sdk'
 import { createHash } from 'node:crypto'
+
+// androidUserHome 单源引入 electron app（issue 2026-10-11 问题三）——node 环境补桩
+vi.mock('electron', () => ({ app: { getPath: () => tmpdir() } }))
 const sha256 = (data: string): string => createHash('sha256').update(data).digest('hex')
 const sha1 = (data: string): string => createHash('sha1').update(data).digest('hex')
 

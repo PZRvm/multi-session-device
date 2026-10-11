@@ -1,7 +1,9 @@
 ---
 description: npm run lint 被 .zcode/.agents 的 skills 目录污染出 1.6 万条问题，src/ 干净也过不了全仓关卡
+status: resolved
 ---
 
+> 2026-10-12 核销（fix/issue-audit 批）：.gitignore 已含 .zcode/、.agents/，eslint ignores 同步覆盖；当前全仓 lint 常绿。
 # 全仓 eslint 被 skills 目录污染，lint 关卡失真
 
 - **Observed**: 2026-10-01 stage 01 收尾时，`npm run lint`（`eslint --cache .`）报 15445 problems（1645 errors），但 `npx eslint src` 全绿。全部问题来自 `.zcode/skills/` 与 `.agents/skills/` 下的脚本文件——`out/` 已在 eslint.config.mjs ignores 里，skills 目录没有。

@@ -1,7 +1,9 @@
 ---
 description: DeviceRow 行内重命名只有鼠标双击一条入口，键盘用户（F2/Enter 二次）无法发起重命名
+status: resolved
 ---
 
+> 2026-10-12 核销（fix/issue-audit 批）：DeviceRow 已有 双击/F2/选中态 Enter 三个重命名入口（aria-keyshortcuts="F2"）。
 # 行内重命名无键盘路径
 
 - **Observed**: 2026-10-03 stage 03 Phase 5 review 发现：`DeviceRow` 的重命名入口只有 `onDoubleClick`。行本身可 Tab 聚焦、Enter 可选中，但从键盘无法发起重命名——纯键盘用户（或将来的辅助技术用户）改不了名。
