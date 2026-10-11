@@ -293,19 +293,27 @@ const DeviceWizard = ({
   const uninstall = async (entry: ImageEntry): Promise<void> => {
     if (uninstallingPackage !== null) return
     if (typeof window.api?.dialog?.show === 'function') {
-      const result = await window.api.dialog.show({
-        title: copy.uninstallImageTitle,
-        message: format(copy.uninstallImageConfirm, {
-          api: apiDisplay(entry),
-          service: serviceLabel(entry)
-        }),
-        detail: format(copy.uninstallImageDetail, {
-          packageName: entry.packageName,
-          size: formatSize(entry.sizeBytes, copy)
-        }),
-        buttons: [copy.delete, copy.cancel],
-        cancelId: 1
-      })
+      // 确认框也会 reject（main 守卫拒绝，如迁移中）——与执行段同口径展示，
+      // 不留 unhandled rejection（issue 2026-10-01-dialog-unhandled-rejection）
+      let result: Awaited<ReturnType<typeof window.api.dialog.show>>
+      try {
+        result = await window.api.dialog.show({
+          title: copy.uninstallImageTitle,
+          message: format(copy.uninstallImageConfirm, {
+            api: apiDisplay(entry),
+            service: serviceLabel(entry)
+          }),
+          detail: format(copy.uninstallImageDetail, {
+            packageName: entry.packageName,
+            size: formatSize(entry.sizeBytes, copy)
+          }),
+          buttons: [copy.delete, copy.cancel],
+          cancelId: 1
+        })
+      } catch (error) {
+        setUninstallError(messageOf(error))
+        return
+      }
       if (result.response !== 0) return
     }
     setUninstallingPackage(entry.packageName)

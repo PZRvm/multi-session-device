@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import type { SdkComponentName, SdkProgress, SdkSnapshot } from '@shared/types'
 import { msg } from '../locale'
 import { androidUserHomeFor } from './androidUserHome'
+import { netFetch } from './netFetch'
 
 // ---- 钉版下载源（升级 = 显式改这里 + 重跑真机集成）----
 
@@ -170,7 +171,8 @@ export interface BootstrapDeps {
 }
 
 const defaultFetcher = async (url: string): Promise<Buffer> => {
-  const response = await fetch(url)
+  // netFetch：系统代理下的引导下载（issue 2026-10-09）；接缝注入不变
+  const response = await netFetch(url)
   if (!response.ok) throw new Error(msg('downloadHttpFailed', { status: response.status, url }))
   return Buffer.from(await response.arrayBuffer())
 }

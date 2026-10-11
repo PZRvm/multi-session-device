@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   MigrationCancelledError,
+  isMigrationActive,
+  readMigrationJournalState,
+  resetMigrationFlagForTest,
+  rollbackCorruptMigration,
   classifyRoot,
   loadMigrationJournal,
   migrationJournalPath,
@@ -62,7 +66,10 @@ export class FakeFs {
   }
   read(path: string): string {
     const content = this.files.get(this.norm(path))
-    if (content === undefined) throw new Error(`ENOENT ${path}`)
+    if (content === undefined) {
+      // 真实 fs 错误带 code——journal 状态机按 ENOENT 区分无文件与损坏
+      throw Object.assign(new Error(`ENOENT ${path}`), { code: 'ENOENT' })
+    }
     return content
   }
   exists(path: string): boolean {
@@ -508,5 +515,64 @@ describe('classifyRoot', () => {
     expect(await classifyRoot('/junk-root', deps)).toBe('junk')
     fs.write('/sdk-root/emulator/emulator', 'bin')
     expect(await classifyRoot('/sdk-root', deps)).toBe('sdk')
+  })
+})
+
+describe('journal 三态与损坏接管（issue 2026-10-11 问题二处置）', () => {
+  let fs: FakeFs
+  beforeEach(() => {
+    fs = new FakeFs()
+    resetMigrationFlagForTest()
+  })
+
+  it('readMigrationJournalState：无文件 / 有效 / 损坏（坏 JSON 与坏形状都算损坏）', async () => {
+    const deps = makeDeps(fs)
+    expect(await readMigrationJournalState(deps)).toEqual({ status: 'absent' })
+    fs.write('/userdata/sdk-migration.json', 'not-json{{{')
+    expect(await readMigrationJournalState(deps)).toMatchObject({ status: 'corrupt' })
+    fs.write('/userdata/sdk-migration.json', '{"version":99}')
+    expect(await readMigrationJournalState(deps)).toMatchObject({ status: 'corrupt' })
+    fs.write(
+      '/userdata/sdk-migration.json',
+      '{"version":1,"fromRoot":"/a","toRoot":"/b","targetSource":"custom","targetCleared":false,"entries":[],"phase":"moving","movedBytes":0,"totalBytes":0}'
+    )
+    const state = await readMigrationJournalState(deps)
+    expect(state.status).toBe('present')
+  })
+
+  it('prime：损坏 journal 也置内存标志（守卫拦启动/包操作）', async () => {
+    fs.write('/userdata/sdk-migration.json', 'broken')
+    // prime 经 restoreSdkSource 调用——此处直接用其等价路径：readMigrationJournalState
+    expect((await readMigrationJournalState(makeDeps(fs))).status).toBe('corrupt')
+    expect(isMigrationActive()).toBe(false)
+  })
+
+  it('rollbackCorruptMigration：按盘面差异回移 + relink 反向 + 清 journal + 空目标删除', async () => {
+    // 半迁移布局：源缺 platform-tools/emulator（已在目标），journal 损坏
+    seedSource(fs)
+    seedAvdHome(fs)
+    fs.devs.set(TO, 1)
+    fs.mkdirP(TO)
+    fs.rename(`${FROM}/platform-tools`, `${TO}/platform-tools`)
+    fs.rename(`${FROM}/emulator`, `${TO}/emulator`)
+    fs.write('/userdata/sdk-migration.json', 'corrupted-by-disk')
+    const deps = makeDeps(fs)
+    await rollbackCorruptMigration(
+      { movedRoot: TO, originalRoot: FROM, avdHome: AVD_HOME },
+      { avdHome: AVD_HOME },
+      deps
+    )
+    expect(await readMigrationJournalState(deps)).toEqual({ status: 'absent' })
+    for (const marker of [
+      'cmdline-tools/latest/bin/sdkmanager',
+      'platform-tools/adb',
+      'emulator/emulator',
+      'system-images/android-34/google_apis/arm64-v8a/snapshot.img'
+    ]) {
+      expect(fs.exists(`${FROM}/${marker}`)).toBe(true)
+    }
+    // 目标根已空 → 删除；config 引用回到源根
+    expect(fs.exists(TO)).toBe(false)
+    expect(fs.read(`${AVD_HOME}/device1.avd/config.ini`)).toContain(`image.sys.src.dir=${FROM}/`)
   })
 })

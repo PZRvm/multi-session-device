@@ -14,6 +14,8 @@ import { getStudioDetection, isStudioSdk, runStudioDetection } from './studioDet
 import {
   MigrationCancelledError,
   classifyRoot,
+  readMigrationJournalState,
+  rollbackCorruptMigration,
   countAvdConfigsBoundTo,
   createMigrationDeps,
   discardMigrationJournal,
@@ -294,6 +296,9 @@ async function runMigrationToCompletion(
 }
 
 /** sdk:source-migrate-cancel：取消 = 回滚（在途先 abort 等收尾再回滚；崩溃横幅同入口） */
+/** sdk:source-migrate-cancel：取消 = 回滚（在途先 abort 等收尾再回滚；崩溃横幅同入口）。
+ *  journal 损坏（issue 2026-10-11 问题二）时 entries 不可信——探测式回滚：按盘面
+ *  把迁移目标根上源根缺失的条目移回，方向由「活动根 + 非活动有内容的应用自有根」判定。 */
 export async function cancelSourceMigration(
   deps: SwitchDeps = createSwitchDeps()
 ): Promise<'done'> {
@@ -304,6 +309,39 @@ export async function cancelSourceMigration(
       if (!(error instanceof MigrationCancelledError)) throw error
     })
     activeRun = null
+  }
+  const journalState = await readMigrationJournalState(deps.migration)
+  if (journalState.status === 'corrupt') {
+    const state = getSdkSourceState()
+    const originalRoot = activeRootOf(state)
+    // 目标根线索：半损 JSON 里 toRoot 字段常仍可读（形状坏≠全文坏）；
+    // 提不出再退「非活动且有内容的应用自有根」。managed→custom 半迁移时
+    // customPath 尚未写入 sdk.json——没有这条线索就找不到目标根（测试抓出）。
+    const toRootHint = /"toRoot"\s*:\s*"([^"]+)"/.exec(journalState.raw)?.[1]
+    const candidates = [
+      ...(toRootHint !== undefined ? [toRootHint] : []),
+      managedSdkRoot(),
+      state.customPath
+    ]
+    let movedRoot: string | undefined
+    for (const root of candidates) {
+      if (root === null || resolve(root) === resolve(originalRoot)) continue
+      const names = await deps.migration.listDir(root).catch(() => [] as string[])
+      if (names.some((name) => name !== '.migrating')) {
+        movedRoot = root
+        break
+      }
+    }
+    if (movedRoot === undefined) {
+      throw new Error('corrupt journal: no second app-owned root to roll back into')
+    }
+    await rollbackCorruptMigration(
+      { movedRoot, originalRoot, avdHome: deps.avdHome() },
+      { avdHome: deps.avdHome(), onProgress: progressWiring(deps) },
+      deps.migration
+    )
+    deps.broadcast(IPC_CHANNELS.sdkSourceChanged, {})
+    return 'done'
   }
   await rollbackMigration(
     { avdHome: deps.avdHome(), onProgress: progressWiring(deps) },

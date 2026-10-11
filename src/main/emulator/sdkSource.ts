@@ -5,9 +5,9 @@ import type { SdkRetainedRoot, SdkSourceMode, SdkSourceSnapshot } from '@shared/
 import { getStudioDetection, runStudioDetection } from './studioDetect'
 import {
   classifyRoot,
+  readMigrationJournalState,
   countAvdConfigsBoundTo,
   createMigrationDeps,
-  loadMigrationJournal,
   primeMigrationJournalFlag,
   toSdkMigrationView,
   treeSize
@@ -133,7 +133,8 @@ export function javaBinFor(root: string = resolveSdkRoot()): string {
 /** sdk:source-get 快照（检测读缓存不触发扫描；附迁移视图与共享态保留根清单） */
 export async function getSdkSourceSnapshot(): Promise<SdkSourceSnapshot> {
   const migrationDeps = createMigrationDeps(() => app.getPath('userData'))
-  const journal = await loadMigrationJournal(migrationDeps)
+  const journalState = await readMigrationJournalState(migrationDeps)
+  const journal = journalState.status === 'present' ? journalState.journal : null
   // 保留根清单只在共享态计算（不变量：非共享态无保留根；全树 walk 有 IO 成本）
   const retainedRoots: SdkRetainedRoot[] = []
   if (state.source === 'shared-studio') {
@@ -155,6 +156,7 @@ export async function getSdkSourceSnapshot(): Promise<SdkSourceSnapshot> {
     sharedPath: state.sharedPath,
     detection: getStudioDetection(),
     migration: journal === null ? null : toSdkMigrationView(journal),
+    journalCorrupt: journalState.status === 'corrupt',
     retainedRoots
   }
 }
