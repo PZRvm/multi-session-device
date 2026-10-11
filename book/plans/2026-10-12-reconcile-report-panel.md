@@ -1,6 +1,6 @@
 ---
 description: 对账报告完整查看面板设计——主窗首个自绘弹层（BaseModal 原语 + 分组滚动明细），汇总条「查看详情」与摘要式原生通知双入口打开，原生长文本弹窗退役；关闭 issue 2026-10-12-reconcile-report-full-view
-status: draft
+status: completed
 created: 2026-10-12
 ---
 
@@ -108,3 +108,9 @@ created: 2026-10-12
 - [recommended — confirm or reject] 后台通知保留为**摘要式原生 dialog**（发现 N 类异常 + [查看详情][知道了]），而非完全去掉通知只靠汇总条——后台异常可能发生在用户未看列表时。
 - [recommended — confirm or reject] 面板**只读**：不带「重新检查」（汇总条已有，重开面板即新报告）。
 - [recommended — confirm or reject] Esc 与遮罩点击**都可关闭**（纯浏览无丢失风险）；Tab 收口做最小实现（无表单，不做完整 trap）。
+
+## 实施记录 — 2026-10-12（四步完成，同日）
+
+- 三设计轴批复后落地：BaseModal 原语（遮罩/Esc/aria/focus 还原/body 滚动锁，3 测试）→ ReconcileReportModal 分组滚动面板（加载/失败重试/空态，120 条明细全渲染回归锚，4 测试）→ App 接线（汇总条「查看详情」与摘要式通知 [查看详情/知道了] 双入口开面板，删长文本弹窗路径）→ mainWindow 域 7 新键 + SummaryMessage 摘要化 ×3 语 + DESIGN.md 弹层一节。
+- 对账集成测试改写为摘要契约（无 detail、按钮组、选查看开面板并渲染明细）。
+- 验证：1070 项测试全绿（+7）、typecheck/lint/build 通过。
