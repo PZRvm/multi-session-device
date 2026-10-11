@@ -159,25 +159,24 @@ const Wrapper = styled.section`
   .sdk-option .description {
     display: block;
   }
+  /* 来源板块与下方内容的发丝线隔离（2026-10-12） */
+  .block-divider {
+    border-top: 1px solid var(--board-hairline);
+    padding-top: 12px;
+  }
+
+  /* 选中来源的行内路径与入口（原 SDK 目录板块并入，2026-10-12） */
+  .path-line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+  }
   input[type='radio'] {
     flex: none;
     margin: 4px 0 0;
     accent-color: var(--board-tile-ink);
-  }
-  .directory {
-    padding: 12px 0;
-    border-top: 1px solid var(--board-hairline);
-    border-bottom: 1px solid var(--board-hairline);
-  }
-  .directory-line {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 6px;
-  }
-  .directory-line .path {
-    flex: 1;
-    min-width: 0;
   }
   .path {
     overflow-wrap: anywhere;
@@ -290,6 +289,59 @@ const Wrapper = styled.section`
     border-color: var(--danger);
     color: var(--danger);
   }
+  /* SDK 来源交互块（plan 2026-10-11）：确认卡 / 二选一卡 / 进度 / 崩溃恢复横幅 / 保留根 */
+  .action-card {
+    margin: 14px 0;
+    padding: 12px 14px;
+    border: 1px solid var(--board-control-line);
+    border-radius: 6px;
+  }
+  .action-card.warn {
+    border-color: var(--danger);
+  }
+  .card-title {
+    margin: 0 0 8px;
+    font-weight: 600;
+  }
+  .card-line {
+    margin: 4px 0;
+    font-size: 12px;
+    color: var(--board-ink-dim);
+    overflow-wrap: anywhere;
+  }
+  .card-actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .inline-action {
+    min-height: 26px;
+    margin-left: 8px;
+    padding: 2px 10px;
+    font-size: 12px;
+  }
+  .progress-track {
+    height: 6px;
+    margin: 8px 0;
+    border: 1px solid var(--board-control-line);
+    border-radius: 3px;
+    background: var(--board-bg-raised);
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    /* --swatch 是通用页色样按钮的行内局部变量（PaneGeneral 逐个注入），此处
+       作用域外不可达会解析为空——填充用全局主题强调色（fix 2026-10-12） */
+    background: var(--accent);
+  }
+  .error-line {
+    margin: 10px 0 0;
+    color: var(--danger);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
   @media (max-width: 700px) {
     .row {
       align-items: flex-start;
@@ -298,10 +350,6 @@ const Wrapper = styled.section`
     }
     .controls {
       max-width: 100%;
-    }
-    .directory-line {
-      align-items: flex-start;
-      flex-direction: column;
     }
   }
 `

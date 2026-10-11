@@ -1,8 +1,8 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LANGUAGE_OPTIONS, SETTINGS_COPY } from '@shared/i18n'
 import SettingsWindow from '../SettingsWindow'
-import { SETTINGS_PREVIEW, type SdkMode, type SettingsViewModel } from '../settings/model'
+import { SETTINGS_PREVIEW, type SettingsViewModel } from '../settings/model'
 
 afterEach(cleanup)
 
@@ -21,12 +21,21 @@ const previewModel = (overrides: Partial<SettingsViewModel> = {}): SettingsViewM
 })
 
 describe('设置窗静态边界与语言切换', () => {
-  it.each(LANGUAGE_OPTIONS)('$value 字典齐全，未接版面仍只读，不调用业务 API', ({ value }) => {
+  it.each(LANGUAGE_OPTIONS)('$value 字典齐全，浏览各版面不调用业务写 API', ({ value }) => {
     const write = vi.fn()
     const onLocaleChange = vi.fn()
+    const off = vi.fn()
     ;(window as unknown as { api: unknown }).api = {
       theme: { setMode: write, setSystemId: write },
-      sdk: { bootstrap: write, downloadImage: write },
+      dialog: { show: vi.fn() },
+      sdk: {
+        bootstrap: write,
+        downloadImage: write,
+        detectStudio: vi.fn(async () => null),
+        sourceGet: vi.fn(async () => null),
+        onSourceChanged: vi.fn(() => off),
+        onMigrateProgress: vi.fn(() => off)
+      },
       devices: { delete: write }
     }
     const copy = SETTINGS_COPY[value]
@@ -42,8 +51,8 @@ describe('设置窗静态边界与语言切换', () => {
       expect(screen.getByRole('button', { name: copy[pane] }).getAttribute('aria-current')).toBe(
         'page'
       )
-      // 通用版面的外观两行与语言行已接通（批 1/批 4）；其余版面控件仍禁用
-      if (pane === 'general') {
+      // 通用与模拟器版面已接通（批 1/4 与 SDK 来源批）；快捷键/关于/危险区仍只读
+      if (pane === 'general' || pane === 'emulator') {
         for (const control of container.querySelectorAll('main button, main select')) {
           expect(control.matches(':disabled')).toBe(false)
         }
@@ -106,25 +115,55 @@ describe('设置窗静态边界与语言切换', () => {
     expect(onLocaleChange).toHaveBeenCalledWith(next)
   })
 
-  it.each(['managed', 'shared-studio', 'custom'] as SdkMode[])(
-    '%s 样例不伪造路径或内存阈值',
-    (mode) => {
-      render(
-        <SettingsWindow
-          model={previewModel({ sdk: { mode, path: null, detection: 'not-checked' } })}
-          platform="darwin"
-        />
-      )
-      fireEvent.click(screen.getByRole('button', { name: '模拟器' }))
-      expect((screen.getByLabelText('内存水位阈值') as HTMLInputElement).value).toBe('')
-      const radios = screen.getAllByRole('radio') as HTMLInputElement[]
-      expect(radios.filter((input) => input.checked).map((input) => input.value)).toEqual([mode])
-      expect(
-        screen.getByText(mode === 'managed' ? '应用数据目录中的 AndroidSDK 文件夹' : '尚未检测')
-      ).toBeTruthy()
-      if (mode === 'custom') expect(screen.getByText(/默认路径示例/)).toBeTruthy()
+  it('SDK 版面接通数据面：快照渲染三态与路径，内存阈值仍占位不伪造', async () => {
+    const snapshot = {
+      source: 'custom',
+      managedRoot: '/data/AndroidSDK',
+      customPath: '/vol/sdk',
+      sharedPath: null,
+      detection: {
+        studioFound: true,
+        studioAppPath: '/Applications/Android Studio.app',
+        jbrHome: null,
+        sdkCandidate: '/Users/t/Library/Android/sdk',
+        candidateSource: 'default-dir',
+        defaultSdkPath: '/Users/t/Library/Android/sdk'
+      },
+      migration: null,
+      retainedRoots: []
     }
-  )
+    const off = vi.fn()
+    ;(window as unknown as { api: unknown }).api = {
+      dialog: { show: vi.fn() },
+      sdk: {
+        detectStudio: vi.fn(async () => snapshot.detection),
+        sourceGet: vi.fn(async () => snapshot),
+        sourceSet: vi.fn(),
+        sourceMigrate: vi.fn(),
+        sourceAdopt: vi.fn(),
+        sourceMigrateCancel: vi.fn(),
+        sourceClearRetained: vi.fn(),
+        chooseCustomRoot: vi.fn(),
+        onSourceChanged: vi.fn(() => off),
+        onMigrateProgress: vi.fn(() => off)
+      }
+    }
+    render(<SettingsWindow model={previewModel()} platform="darwin" />)
+    fireEvent.click(screen.getByRole('button', { name: '模拟器' }))
+    await waitFor(() => {
+      expect(
+        (screen.getByRole('radio', { name: '自选 SDK 路径' }) as HTMLInputElement).checked
+      ).toBe(true)
+    })
+    expect(screen.getByText('/vol/sdk')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '更换路径…' }).matches(':disabled')).toBe(false)
+    // Studio 在场 → 共享可选；内存阈值仍为占位
+    expect(
+      screen.getByRole('radio', { name: '共享 Android Studio SDK' }).matches(':disabled')
+    ).toBe(false)
+    expect((screen.getByLabelText('内存水位阈值') as HTMLInputElement).value).toBe('')
+    delete (window as unknown as { api?: unknown }).api
+  })
 
   it('窗口控制归系统原生：renderer 不自绘控件，darwin 才有拖拽带；占位保留', () => {
     const { container, unmount } = render(
