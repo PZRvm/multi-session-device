@@ -4,6 +4,7 @@ import type {
   CreateDeviceResult,
   Device,
   DeviceSnapshot,
+  NetworkState,
   ReconciliationSummary,
   StoreHealth
 } from '@shared/types'
@@ -13,6 +14,21 @@ import { toApiResult, type ApiResult } from '../api'
 const normalizeSelection = (devices: Device[], selectedId: string | null): string | null => {
   if (selectedId !== null && devices.some((device) => device.id === selectedId)) return selectedId
   return devices[0]?.id ?? null
+}
+
+/** 网络态键清理：快照里消失的设备删键；无过期键时返回原引用（避免无谓重渲染） */
+const pruneNetwork = (
+  devices: Device[],
+  network: Record<string, NetworkState>
+): Record<string, NetworkState> => {
+  const ids = new Set(devices.map((device) => device.id))
+  const stale = Object.keys(network).filter((id) => !ids.has(id))
+  if (stale.length === 0) return network
+  const next: Record<string, NetworkState> = {}
+  for (const [id, state] of Object.entries(network)) {
+    if (ids.has(id)) next[id] = state
+  }
+  return next
 }
 
 const OK_STORE_HEALTH: StoreHealth = { state: 'ok', issues: [] }
@@ -35,6 +51,8 @@ interface DeviceState {
   loadError: string | null
   storeHealth: StoreHealth
   reconciliation: ReconciliationSummary
+  /** 设备网络态（plan 2026-10-12）：deviceId → 最新读回；设备是唯一事实源 */
+  network: Record<string, NetworkState>
   load: () => Promise<void>
   /** 人工重查（重新检查）：成功时应用合并快照，失败返回错误 */
   reconcile: () => Promise<ApiResult<DeviceSnapshot>>
@@ -47,6 +65,8 @@ interface DeviceState {
   setSelected: (id: string) => void
   /** 主进程 changed 推送与命令响应共用的快照入口（按 revision 幂等） */
   applySnapshot: (snapshot: DeviceSnapshot) => void
+  /** 网络态变化入口：networkChanged 推送与 networkSet 读回共用（直写键） */
+  applyNetworkState: (deviceId: string, state: NetworkState) => void
 }
 
 export const useDeviceStore = create<DeviceState>()((set, get) => {
@@ -58,7 +78,8 @@ export const useDeviceStore = create<DeviceState>()((set, get) => {
       revision: snapshot.revision,
       selectedId: normalizeSelection(snapshot.devices, state.selectedId),
       storeHealth: snapshot.storeHealth ?? state.storeHealth,
-      reconciliation: snapshot.reconciliation ?? state.reconciliation
+      reconciliation: snapshot.reconciliation ?? state.reconciliation,
+      network: pruneNetwork(snapshot.devices, state.network)
     }))
   }
 
@@ -78,6 +99,7 @@ export const useDeviceStore = create<DeviceState>()((set, get) => {
     loadError: null,
     storeHealth: OK_STORE_HEALTH,
     reconciliation: EMPTY_SUMMARY,
+    network: {},
     load: async () => {
       const result = await toApiResult(window.api.devices.list())
       if (result.ok) {
@@ -106,6 +128,8 @@ export const useDeviceStore = create<DeviceState>()((set, get) => {
     stop: (id) => runCommand(() => window.api.devices.stop(id)),
     cancelStart: (id) => runCommand(() => window.api.devices.cancelStart(id)),
     setSelected: (id) => set({ selectedId: id }),
-    applySnapshot: apply
+    applySnapshot: apply,
+    applyNetworkState: (deviceId, state) =>
+      set((current) => ({ network: { ...current.network, [deviceId]: state } }))
   }
 })

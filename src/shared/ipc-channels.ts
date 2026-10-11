@@ -115,6 +115,11 @@ export const IPC_CHANNELS = {
   // ---- APK 安装域（plan 2026-10-10-drag-apk-install；仅登记主窗）----
   /** 拖拽 APK 安装到 running 设备（每设备串行；结果一次返回，无进度推送） */
   apkInstall: 'apk:install',
+  // ---- 网络开关域（plan 2026-10-12-network-switch-group；仅登记主窗）----
+  /** 下发飞行模式/Wi-Fi/移动数据开关（命令成功后立即读回；以读回为准，不做乐观态） */
+  networkSet: 'network:set',
+  /** main → 主窗：网络态变化推送（1s 轮询 + 下发读回，值变化才推） */
+  networkChanged: 'network:changed',
   // ---- 日志域（plan 2026-10-10-logcat-panel）----
   // 与投屏域的刻意差异：任意窗口可订阅（非仅主窗）、流控允许丢最旧保最新（非不可丢）。
   /** 窗口订阅设备日志（回放缓冲尾 500 行 + 实时）；任意窗口可调 */

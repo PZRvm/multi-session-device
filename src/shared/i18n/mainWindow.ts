@@ -136,6 +136,12 @@ const zhCN = {
   screenshotSave: '保存到下载文件夹',
   screenshotSaving: '保存中…',
   screenshotSaved: '已保存：{fileName}',
+  // ---- 网络开关组（plan 2026-10-12-network-switch-group；工具条三开关）----
+  networkGroupAria: '网络开关',
+  networkAirplaneToggle: '断网（飞行模式）',
+  networkWifiToggle: 'Wi-Fi',
+  networkDataToggle: '移动数据',
+  networkToggleFailed: '网络开关操作失败',
   // ---- 拖拽 APK 安装（plan 2026-10-10-drag-apk-install；浮层与悬停提示）----
   apkDropHint: '松开安装到 {name}',
   apkInstalling: '正在安装 {file}…',
@@ -286,6 +292,12 @@ const zhTW: MainWindowCopy = {
   screenshotSave: '儲存到下載資料夾',
   screenshotSaving: '儲存中…',
   screenshotSaved: '已儲存：{fileName}',
+  // ---- 網路開關組（plan 2026-10-12-network-switch-group；工具列三開關）----
+  networkGroupAria: '網路開關',
+  networkAirplaneToggle: '斷網（飛行模式）',
+  networkWifiToggle: 'Wi-Fi',
+  networkDataToggle: '行動數據',
+  networkToggleFailed: '網路開關操作失敗',
   // ---- 拖拽 APK 安裝（plan 2026-10-10-drag-apk-install；浮層與懸停提示）----
   apkDropHint: '放開安裝到 {name}',
   apkInstalling: '正在安裝 {file}…',
@@ -444,6 +456,12 @@ const enUS: MainWindowCopy = {
   screenshotSave: 'Save to Downloads',
   screenshotSaving: 'Saving…',
   screenshotSaved: 'Saved: {fileName}',
+  // ---- Network switches (plan 2026-10-12-network-switch-group; toolbar trio) ----
+  networkGroupAria: 'Network switches',
+  networkAirplaneToggle: 'Airplane mode',
+  networkWifiToggle: 'Wi-Fi',
+  networkDataToggle: 'Mobile data',
+  networkToggleFailed: 'Network toggle failed',
   // ---- Drag-and-drop APK install (plan 2026-10-10-drag-apk-install; overlay and hover hint) ----
   apkDropHint: 'Drop to install on {name}',
   apkInstalling: 'Installing {file}…',

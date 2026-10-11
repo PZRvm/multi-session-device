@@ -82,6 +82,10 @@ describe('主窗日志 dock', () => {
         onChanged: () => () => {},
         onRuntimeError: () => () => {}
       },
+      network: {
+        set: vi.fn(async () => ({ state: null })),
+        onChanged: () => () => {}
+      },
       logcat: {
         openWindow: openLogcatWindow,
         isWindowOpen: isWindowOpen,

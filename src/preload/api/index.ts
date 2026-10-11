@@ -8,6 +8,7 @@ import { screenApi } from './screen'
 import { settingsApi } from './settings'
 import { screenshotApi } from './screenshot'
 import { installApi } from './install'
+import { networkApi } from './network'
 import { logcatApi } from './logcat'
 
 export const api = {
@@ -22,6 +23,7 @@ export const api = {
   screen: screenApi,
   screenshot: screenshotApi,
   install: installApi,
+  network: networkApi,
   logcat: logcatApi
 }
 

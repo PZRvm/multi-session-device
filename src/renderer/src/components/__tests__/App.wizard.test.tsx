@@ -57,6 +57,10 @@ beforeEach(() => {
       })),
       onChanged: () => () => {},
       onRuntimeError: () => () => {}
+    },
+    network: {
+      set: vi.fn(async () => ({ state: null })),
+      onChanged: () => () => {}
     }
   }
   dialog.mockResolvedValue({ response: 0 })

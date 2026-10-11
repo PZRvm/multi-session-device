@@ -856,6 +856,28 @@ export interface ApkInstallResult {
   fileName: string
 }
 
+// ---- 网络开关域（plan 2026-10-12-network-switch-group）----
+/** 开关目标：airplane = 飞行模式（真断网总闸）；wifi/data = 分 radio 场景开关 */
+export type NetworkTarget = 'airplane' | 'wifi' | 'data'
+
+/** 设备网络态（以设备读回为唯一事实源；单关任一 radio 不断网——另一路接管） */
+export interface NetworkState {
+  airplane: boolean
+  wifi: boolean
+  data: boolean
+}
+
+/** networkSet 返回：命令成功后的读回态；读回暂不可用为 null（渲染层等待轮询补推） */
+export interface NetworkSetResult {
+  state: NetworkState | null
+}
+
+/** networkChanged 推送载荷：设备网络态发生变化 */
+export interface NetworkChangedMessage {
+  deviceId: string
+  state: NetworkState
+}
+
 // ---- 日志域（plan 2026-10-10-logcat-panel；任意窗口可订阅，与投屏域仅主窗不同）----
 
 export interface LogcatLine {

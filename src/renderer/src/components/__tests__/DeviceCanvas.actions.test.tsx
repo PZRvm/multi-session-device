@@ -127,6 +127,10 @@ beforeEach(() => {
       acknowledgeReconciliation: async () => {},
       onChanged: () => () => {},
       onRuntimeError: () => () => {}
+    },
+    network: {
+      set: vi.fn(async () => ({ state: null })),
+      onChanged: () => () => {}
     }
   }
 })

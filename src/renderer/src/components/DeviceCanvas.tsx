@@ -20,6 +20,7 @@ import { useApkInstall } from '../hooks/useApkInstall'
 import { useDeviceInput } from '../hooks/useDeviceInput'
 import { useDeviceScreen, type ScreenViewStatus } from '../hooks/useDeviceScreen'
 import { useScreenshot } from '../hooks/useScreenshot'
+import { useNetworkSwitch } from '../hooks/useNetworkSwitch'
 import { spinKeyframes } from '../styles/animations'
 import { toApiResult } from '../api'
 import DeviceToolbar from './DeviceToolbar'
@@ -66,6 +67,8 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
   } = useDeviceScreen(device)
   // 截屏状态机：设备切换/停止时气泡自动收起（hook 内 effect 守卫）
   const shot = useScreenshot(device)
+  // 网络开关组（plan 2026-10-12）：态跟随 store 推送，toggle busy 至读回确认
+  const net = useNetworkSwitch(device)
   const proxyRef = useRef<HTMLInputElement | null>(null)
   const stageRef = useRef<HTMLDivElement | null>(null)
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
@@ -451,6 +454,11 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
             void shot.save()
           }}
           onScreenshotDismiss={shot.dismiss}
+          networkState={device.status === 'running' ? net.state : null}
+          networkBusy={net.busyTarget}
+          onNetworkToggle={(target) => {
+            void net.toggle(target)
+          }}
         />
       </div>
     </Wrapper>

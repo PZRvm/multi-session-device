@@ -164,4 +164,31 @@ i18n 初始键（mainWindow 域）：`networkAirplaneToggle`、`networkWifiToggl
 6. 快速连点 → busy、串行、无双发竞态。
 7. 三语词条与 aria-label 正确；全量测试、typecheck / lint / build 通过。
 
-## 实施结果 — Phase 3-6（实现后回填）
+## 实施结果 — 2026-10-12（worktree feature/network-switch-group，基于 dev 文档批）
+
+### Phase 3：实现
+
+- 主进程 `src/main/network/`：`registerNetworkIpc(deps)` 返回 `{ startWatch, clearWatch }` 句柄（轮询态随每次 register 闭包重建，测试免手工复位）——命令分发（`cmd connectivity airplane-mode` / `svc wifi` / `svc data`）、合并单发读回（`settings get` ×3 一发三行，`wifi_on=2` 映射开）、1s 轮询（首拍立即执行、在途不叠发、读失败本轮放弃）、变化才推 `networkChanged`、`networkSet` 同步占位互斥 + 成功即读回（读回 null 不判错，轮询 1s 补推）。
+- 生命周期接线：`attachDeviceStreamBridge` 的 `running`（serial 直取）启轮询、`stopped`/`beforeKill` 退订（与 `clearScreenshotCache` 并排）。
+- preload `api/network.ts`（set + onChanged 订阅）；`deviceStore` 增 `network` 切片（applyNetworkState 直写、快照剪除消失设备键、无过期键保引用）；`useNetworkSwitch`（toggle busy 至读回确认、失败原生 dialog）；`DeviceToolbar` 三开关（分组 aria + aria-pressed 承载态 + 断网开启危险色）；`DeviceCanvas` 接线并做**渲染期派生**（非 running 一律置 null——store 残留态不点亮开关，镜像 useScreenshot 先例）；App 挂载期订阅 onChanged。
+- i18n：mainWindow 域 5 键 + errors 域 3 键，三语齐备；PRD 80 行同步扩容（分 radio 口径与断网语义）。
+- **偏差记录 1**：plan 文件清单未列 4 个既有测试文件——App 挂载期新增订阅使 App.logcat/reconciliation/wizard 与 DeviceCanvas.actions 的 `window.api` mock 缺 `network` 键连环挂 22 项，逐文件补 mock 形状（[learn](../notes/learn/2026-10/2026-10-12-app-mount-subscription-test-mock-shape.md)）。
+- **偏差记录 2（自纠）**：Phase 3 首版 `networkState={net.state}` 直传，自审发现违反本 plan Boundaries「仅 running 可用」——设备停止后 store 残留态会让开关保持可点，改为渲染期派生后补跑测试。
+
+### Phase 4：验证
+
+- 新增测试 30 项（域 19 + store 3 + 工具条 3 + hook 5）；全量 **1085 项通过、6 项原有跳过**；typecheck 0 错；lint 与 dev 基线一致（余 1 条存量 error 见下）；build 通过。
+- 真机/模拟器端到端验收**未做**：本机应用库当前 devices.json 为空（无已配置设备），向导自动化建设备超出本批范围。命令/读回/同步语义已由调研批在真实模拟器上全量实测（think-report 两轮记录），应用内链路待有设备后按验收清单 ①–⑦ 执行。
+
+### Phase 5：review（只记录不修）
+
+- P3-1：renderer 刷新（Ctrl+R / dev reload）后初值不可达——推送仅变化才发，刷新后开关禁用直到设备态变化或重启设备。一期接受（刷新属 dev 行为）；后续可加 `networkGet` 按需读通道。
+- P3-2：飞行模式开启时推 Wi-Fi 开，读回 `wifi_on=2` 显示为开——「意愿态」展示，飞行关闭后系统按意愿拉起（语义已在 PRD 写明）；如需区分「意愿/实际」需换 dumpsys 级读回，成本不值。
+- P3-3：`applyNetworkState` 不校验设备存在——未知 id 推送会挂 stale 键，下一次快照剪除自愈；无实际触达路径（推送仅来自本应用启动的 watch）。
+- 存量发现：`DeviceWizard.tsx:458` effect 内同步 setState lint error（dev 基线即有，非本批引入），记 [issue](../notes/issue/2026-10/2026-10-12-devicewizard-setstate-in-effect-lint.md)。
+
+### Phase 6：收尾
+
+- 经验入 [learn：挂载期订阅的 mock 联动 / vi.fn 参数类型 / 轮询器不复活](../notes/learn/2026-10/2026-10-12-app-mount-subscription-test-mock-shape.md)；stage05 步骤附实现批注（真机验收未做，保持未勾）。
+- 本 plan 保持 in_progress：验收清单 ①–⑦ 全过后翻 completed。
+

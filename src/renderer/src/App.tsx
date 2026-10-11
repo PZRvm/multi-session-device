@@ -34,6 +34,7 @@ const App = (): React.JSX.Element => {
   const load = useDeviceStore((state) => state.load)
   const reconcile = useDeviceStore((state) => state.reconcile)
   const applySnapshot = useDeviceStore((state) => state.applySnapshot)
+  const applyNetworkState = useDeviceStore((state) => state.applyNetworkState)
   const renameDevice = useDeviceStore((state) => state.rename)
   const removeDevice = useDeviceStore((state) => state.remove)
   const startDevice = useDeviceStore((state) => state.start)
@@ -65,6 +66,13 @@ const App = (): React.JSX.Element => {
     void load()
     return window.api.devices.onChanged(applySnapshot)
   }, [load, applySnapshot])
+
+  // 网络态变化推送（plan 2026-10-12）：1s 轮询 + 下发读回，值变化才推；直写 store 键
+  useEffect(
+    () =>
+      window.api.network.onChanged((message) => applyNetworkState(message.deviceId, message.state)),
+    [applyNetworkState]
+  )
 
   // 后台运行故障按 eventId 去重弹原生 dialog；行内 lastError 常驻。
   // copy 入依赖：语言切换后重建订阅，后续弹窗即新语言（已弹出的不追溯）
