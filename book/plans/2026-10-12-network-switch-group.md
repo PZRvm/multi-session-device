@@ -143,7 +143,7 @@ DeviceToolbar [✈][Wi-Fi][▮▮] --toggle--> preload networkApi.set(deviceId, 
 | `src/shared/i18n/mainWindow.ts`、`errors.ts` | 词条 append |
 | `book/docs/PRD.md:80` | 补一句分 radio 口径（含「单关不断网、飞行/双关才断」语义） |
 
-i18n 初始键（mainWindow 域）：`networkAirplaneToggle`、`networkWifiToggle`、`networkDataToggle`（aria-label 含开关态）；（errors 域）：`networkDeviceNotRunning`、`networkCommandFailed`、`networkBusy`。
+i18n 键（mainWindow 域 5）：`networkAirplaneToggle`、`networkWifiToggle`、`networkDataToggle`、`networkGroupAria`（分组可访问名）、`networkToggleFailed`（失败弹窗标题）——后两键为实现必需的合理增补（review P3-B 对齐记录）；（errors 域 3）：`networkDeviceNotRunning`、`networkCommandFailed`、`networkBusy`。
 
 ### 6. 测试面（Phase 4）
 
@@ -196,4 +196,5 @@ i18n 初始键（mainWindow 域）：`networkAirplaneToggle`、`networkWifiToggl
 
 - 用户真机验收通过（「验收完毕，可以用」）：验收清单 ①–⑦ 走查通过；stage05 步骤勾选，本 plan 翻 **completed**。
 - 追加修复批（用户批准）：存量 [issue DeviceWizard effect 内 setState lint error](../notes/issue/2026-10/2026-10-12-devicewizard-setstate-in-effect-lint.md) 已修——按同文件 391 行「依赖驱动不级联」豁免先例处理，并写明不改渲染期派生的语义理由（选中须持久，纯派生会随条件消失丢选择）；lint 全仓归零、41 项向导测试通过、无行为变化。
+- review P3 修复批（用户批准，[review 记录](../notes/issue/2026-10/2026-10-12-network-switch-code-review.md)）：P3-A 解析按键级降级（`'null'` 行 → 该键 false，wifi-only 画像不再整域失效）；P3-1 新增 `network:get` 通道（main 返回 lastStates 内存快照）+ store `applyNetworkStates` 批量合并剪枝 + App 挂载拉快照——renderer 刷新后初值 ≤1s 恢复；P3-C 提炼 `networkApiMock` helper（4 个 App 级测试换用）；P3-B 本清单对齐。P3-2（飞行下意愿态展示）与 P3-3（applyNetworkState 不校验设备存在）**不修**——前者是批复语义（PRD 写明），后者加守卫会引入「推送被丢后不再补发」的真故障模式，劣于现状的快照自愈。新增 2 项测试、全量 1087 项通过，typecheck/lint/build 通过。
 

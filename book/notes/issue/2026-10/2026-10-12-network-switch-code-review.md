@@ -1,7 +1,7 @@
 ---
-description: 断网开关批 code review（八项清单）——总体 pass；新记 3 项 P3（三键缺一即整体失效的解析边界、词条超 plan 清单、mock 形状四重复制），另两项已在 plan Phase 5 登记
+description: 断网开关批 code review（八项清单）——总体 pass；3 项 P3 已修复（解析降级/networkGet 刷新初值/mock helper）、2 项批复语义不修，处置记录在内
 created: 2026-10-12
-status: open
+status: closed
 ---
 
 # 断网开关批 code review（含 DeviceWizard 追加修复）
@@ -38,3 +38,13 @@ status: open
 ## 结论
 
 **pass**（3 项新 P3 + 3 项已登记 P3，均不阻塞合并；发现只记录，处置等用户指示）。
+
+## 处置记录（2026-10-12，用户批准「修复掉这些问题」）
+
+- **P3-A 已修**：`parseNetworkState` 的 `toBool` 增加显式分支——settings 键未设输出 `'null'` 映射为该键 false，垃圾值（非数字非 'null'）仍整体放弃（保住「读失败不清态」的护栏）；解析测试两案更新（`'0/null/1'`、`'0/1/null'`）。
+- **P3-1 已修**：新通道 `network:get`（仅主窗，返回 main 内存 `lastStates` 快照，不触 adb）+ preload `getAll` + store `applyNetworkStates`（合并后按当前设备表剪枝）+ App 挂载拉快照——renderer 刷新后初值 ≤1s 恢复。域单测 +1（快照返回/不触 adb/非主窗拒绝）、store 单测 +1（合并剪枝）。修复中踩一坑：get handler 首版同步函数直调时同步抛出（Electron 会包成 reject、vitest 直调不会）——改 async 对齐 set 通道。
+- **P3-B 已修**：plan i18n 键清单对齐实际（mainWindow 5 键含 `networkGroupAria`/`networkToggleFailed`）。
+- **P3-C 已修**：提炼 `src/renderer/src/components/__tests__/networkApiMock.ts`（含 getAll），4 个 App 级测试换用，后续 mock 扩键只改一处。
+- **P3-2 不修**：飞行模式开启时 wifi 意愿态显示为开是批复语义（PRD 80 行与 think-report 写明「意愿排队，系统托管」）；改区分「意愿/实际」需换 dumpsys 级读回，成本不值且偏离批复。
+- **P3-3 不修**：给 `applyNetworkState` 加设备存在性守卫会引入「推送早于快照被丢后不再补发（仅变化才推）」的真故障模式，劣于现状「stale 键下次快照剪除自愈」；且无实际触达路径（推送仅来自本应用 watch 的 running 设备）。
+- 验证：新增 2 项测试、全量 **1087 项通过**（6 项原有跳过）、typecheck 0 错、lint 归零、build 通过。

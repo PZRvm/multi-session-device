@@ -85,8 +85,9 @@ describe('parseNetworkState（三行 settings 读回）', () => {
     expect(parseNetworkState('1\n2\n0\n')).toEqual({ airplane: true, wifi: true, data: false })
   })
 
-  it("settings 未设键输出 'null'（非数字）→ 整体放弃返回 null", () => {
-    expect(parseNetworkState('0\nnull\n1\n')).toBeNull()
+  it("键未设输出 'null'（wifi-only 画像等）按该键关闭，不判整体失败（P3-A）", () => {
+    expect(parseNetworkState('0\nnull\n1\n')).toEqual({ airplane: false, wifi: false, data: true })
+    expect(parseNetworkState('0\n1\nnull\n')).toEqual({ airplane: false, wifi: true, data: false })
   })
 
   it('行数不足或垃圾值 → null', () => {
@@ -220,6 +221,23 @@ describe('networkSet 通道', () => {
       )
     )
     expect(message).toContain('unregisteredWindowSuffix')
+    const getMessage = await rejectMessage(
+      handlers.get(IPC_CHANNELS.networkGet)!({ sender: { id: 99 } }, undefined)
+    )
+    expect(getMessage).toContain('unregisteredWindowSuffix')
+  })
+
+  it('networkGet：返回 lastStates 快照（renderer 刷新恢复初值，P3-1）；不触 adb', async () => {
+    const harness = setup()
+    expect(await harness.call(IPC_CHANNELS.networkGet, undefined)).toEqual({})
+    await harness.call(IPC_CHANNELS.networkSet, { id: 'd1', target: 'wifi', enabled: false })
+    harness.run.mockClear()
+    const snapshot = (await harness.call(IPC_CHANNELS.networkGet, undefined)) as Record<
+      string,
+      { airplane: boolean; wifi: boolean; data: boolean }
+    >
+    expect(snapshot).toEqual({ d1: { airplane: false, wifi: true, data: true } })
+    expect(harness.run).not.toHaveBeenCalled()
   })
 })
 

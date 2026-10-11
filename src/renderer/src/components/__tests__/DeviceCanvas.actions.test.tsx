@@ -6,6 +6,7 @@ import DeviceCanvas from '../DeviceCanvas'
 import App from '../../App'
 import { useDeviceStore } from '../../stores/deviceStore'
 import { MAIN_COPY } from '@shared/i18n'
+import { networkApiMock } from './networkApiMock'
 const copy = MAIN_COPY['zh-CN']
 
 const mocks = vi.hoisted(() => ({
@@ -128,10 +129,7 @@ beforeEach(() => {
       onChanged: () => () => {},
       onRuntimeError: () => () => {}
     },
-    network: {
-      set: vi.fn(async () => ({ state: null })),
-      onChanged: () => () => {}
-    }
+    network: networkApiMock()
   }
 })
 afterEach(() => {

@@ -270,4 +270,21 @@ describe('deviceStore 网络态切片（plan 2026-10-12-network-switch-group）'
     useDeviceStore.getState().applySnapshot(snapshot([device()], 1))
     expect(useDeviceStore.getState().network).toBe(network)
   })
+
+  it('applyNetworkStates：批量合并（刷新初值恢复）并按当前设备表剪枝（P3-1）', () => {
+    useDeviceStore.setState({
+      devices: [device(), device({ id: 'd2' })],
+      network: { d1: { airplane: true, wifi: false, data: false } }
+    })
+    useDeviceStore.getState().applyNetworkStates({
+      d1: { airplane: false, wifi: true, data: true },
+      d2: { airplane: false, wifi: true, data: true },
+      d3: { airplane: true, wifi: true, data: true }
+    })
+    // d1 被批量值覆盖、d2 新增、d3 不在设备表被剪除
+    expect(useDeviceStore.getState().network).toEqual({
+      d1: { airplane: false, wifi: true, data: true },
+      d2: { airplane: false, wifi: true, data: true }
+    })
+  })
 })

@@ -35,6 +35,7 @@ const App = (): React.JSX.Element => {
   const reconcile = useDeviceStore((state) => state.reconcile)
   const applySnapshot = useDeviceStore((state) => state.applySnapshot)
   const applyNetworkState = useDeviceStore((state) => state.applyNetworkState)
+  const applyNetworkStates = useDeviceStore((state) => state.applyNetworkStates)
   const renameDevice = useDeviceStore((state) => state.rename)
   const removeDevice = useDeviceStore((state) => state.remove)
   const startDevice = useDeviceStore((state) => state.start)
@@ -67,12 +68,16 @@ const App = (): React.JSX.Element => {
     return window.api.devices.onChanged(applySnapshot)
   }, [load, applySnapshot])
 
-  // 网络态变化推送（plan 2026-10-12）：1s 轮询 + 下发读回，值变化才推；直写 store 键
-  useEffect(
-    () =>
-      window.api.network.onChanged((message) => applyNetworkState(message.deviceId, message.state)),
-    [applyNetworkState]
-  )
+  // 网络态变化推送（plan 2026-10-12）：1s 轮询 + 下发读回，值变化才推；直写 store 键。
+  // 挂载时先拉一次快照恢复初值（review P3-1：仅变化才推，刷新后不拉则开关禁用到下次变化）
+  useEffect(() => {
+    void toApiResult(window.api.network.getAll()).then((result) => {
+      if (result.ok) applyNetworkStates(result.data)
+    })
+    return window.api.network.onChanged((message) =>
+      applyNetworkState(message.deviceId, message.state)
+    )
+  }, [applyNetworkState, applyNetworkStates])
 
   // 后台运行故障按 eventId 去重弹原生 dialog；行内 lastError 常驻。
   // copy 入依赖：语言切换后重建订阅，后续弹窗即新语言（已弹出的不追溯）

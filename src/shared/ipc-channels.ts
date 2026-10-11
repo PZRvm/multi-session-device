@@ -120,6 +120,8 @@ export const IPC_CHANNELS = {
   networkSet: 'network:set',
   /** main → 主窗：网络态变化推送（1s 轮询 + 下发读回，值变化才推） */
   networkChanged: 'network:changed',
+  /** 主窗拉当前网络态快照（main 内存 lastStates；刷新后恢复初值用，review P3-1） */
+  networkGet: 'network:get',
   // ---- 日志域（plan 2026-10-10-logcat-panel）----
   // 与投屏域的刻意差异：任意窗口可订阅（非仅主窗）、流控允许丢最旧保最新（非不可丢）。
   /** 窗口订阅设备日志（回放缓冲尾 500 行 + 实时）；任意窗口可调 */

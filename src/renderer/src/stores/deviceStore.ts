@@ -67,6 +67,8 @@ interface DeviceState {
   applySnapshot: (snapshot: DeviceSnapshot) => void
   /** 网络态变化入口：networkChanged 推送与 networkSet 读回共用（直写键） */
   applyNetworkState: (deviceId: string, state: NetworkState) => void
+  /** 网络态批量入口：networkGet 快照（renderer 刷新后恢复初值，review P3-1）；合并后按当前设备表剪枝 */
+  applyNetworkStates: (batch: Record<string, NetworkState>) => void
 }
 
 export const useDeviceStore = create<DeviceState>()((set, get) => {
@@ -130,6 +132,10 @@ export const useDeviceStore = create<DeviceState>()((set, get) => {
     setSelected: (id) => set({ selectedId: id }),
     applySnapshot: apply,
     applyNetworkState: (deviceId, state) =>
-      set((current) => ({ network: { ...current.network, [deviceId]: state } }))
+      set((current) => ({ network: { ...current.network, [deviceId]: state } })),
+    applyNetworkStates: (batch) =>
+      set((current) => ({
+        network: pruneNetwork(current.devices, { ...current.network, ...batch })
+      }))
   }
 })

@@ -21,7 +21,9 @@ export const READ_ALL_COMMAND =
   'settings get global airplane_mode_on; settings get global wifi_on; settings get global mobile_data'
 
 /**
- * 三行 settings 输出 → NetworkState；行数不足或出现非数字返回 null（本轮放弃）。
+ * 三行 settings 输出 → NetworkState；行数不足或垃圾值返回 null（本轮放弃）。
+ * 键未设时 settings 输出 'null'（如 wifi-only 画像的 mobile_data）——按该键关闭，
+ * 不判整体失败（review P3-A：避免单键缺设令三开关永久禁用）。
  * wifi_on 的 '2' 是飞行模式下推 enable 后的「开启中」瞬态（实测），映射为开。
  */
 export const parseNetworkState = (stdout: string): NetworkState | null => {
@@ -31,6 +33,7 @@ export const parseNetworkState = (stdout: string): NetworkState | null => {
     .filter((line) => line.length > 0)
   if (lines.length < 3) return null
   const toBool = (value: string): boolean | null => {
+    if (value === 'null') return false
     if (!/^\d+$/.test(value)) return null
     return value !== '0'
   }
@@ -156,6 +159,14 @@ export function registerNetworkIpc(deps: NetworkDeps): NetworkWatchHandle {
       }
     }
   )
+
+  ipcMain.handle(IPC_CHANNELS.networkGet, async (event): Promise<Record<string, NetworkState>> => {
+    if (!deps.isMainSender(event.sender)) {
+      throw new Error(`${IPC_CHANNELS.networkGet}${msg('unregisteredWindowSuffix')}`)
+    }
+    // 内存快照即可：lastStates 由轮询持续刷新（≤1s 旧），不再触 adb
+    return Object.fromEntries(lastStates)
+  })
 
   const startWatch = (id: string, serial: string): void => {
     const existing = watches.get(id)
