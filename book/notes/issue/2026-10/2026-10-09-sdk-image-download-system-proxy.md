@@ -14,3 +14,5 @@ tags: [network, proxy, sdk, download]
 - **范围**：此轮只修官方皮肤请求，其他下载源码未改。见 [皮肤修复计划](../../../plans/2026-10-09-skin-download-system-proxy.md)。
 
 > 2026-10-12（fix/issue-audit 批评估）：留置排期——SDK bootstrap 三条下载路径（JRE/cmdline-tools 钉版直连）与镜像 manifest/zip 全量改走系统代理涉及 Electron session 代理或 undici dispatcher 选型，独立成批；与「干净机器验收」同窗口做。
+
+> **2026-10-12 resolved（fix/issue-audit 第二批）**：sdk.ts 引导 fetcher、catalog.ts manifest fetcher、downloader.ts zip 下载三处默认实现换 Electron net.fetch（单源模块 emulator/netFetch.ts，走 Chromium 网络栈吃系统代理；注入接缝与全部单测不变，app ready 后调用天然满足）。真机代理环境验收见 stage。

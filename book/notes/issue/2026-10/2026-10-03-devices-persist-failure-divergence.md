@@ -1,6 +1,9 @@
 ---
 description: devices 变更先改内存再落盘，写盘失败时内存与磁盘分叉且 renderer 无感知——零部分成功在该路径不成立
+status: resolved
 ---
+
+> 2026-10-12 核销（fix/issue-audit 批）：commitMetas 已是写盘先行——`await writeDeviceMetas(draft)` 成功后才 `devices = rebuildWithPendingRows(draft)` 提交内存（index.ts:756 起，注释明示「写盘成功才改内存」），写盘失败抛错、内存不动、renderer 收到拒绝；另有外部改动对账（guard 比对 + 只读保护）。
 
 # devices 落盘失败时内存/磁盘分叉
 

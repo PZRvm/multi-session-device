@@ -1,6 +1,9 @@
 ---
 description: 手写 config 的 AVD 在快照恢复路径原生崩溃（SIGABRT）——PoC 固定 -no-snapshot 冷启动，快照加速在 v1.1 前需先解决
+status: resolved
 ---
+
+> 2026-10-12 处置（fix/issue-audit 批）：触发条件已消失——崩溃复现于「手写 config」的 AVD，2026-10-05 起创建已切回官方 avdmanager 路径；且一期恒冷启动（-no-snapshot）继续挡着快照路径。降级为 Quick Boot/快照加速（v1.1）开放前的重验项，届时以官方 config 复测。
 
 # 模拟器快照恢复原生崩溃
 

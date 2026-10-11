@@ -19,6 +19,8 @@ main 侧守卫已闭环：`sdkDownloadImage`/`sdkUninstallImage`/`sdkBootstrap` 
 
 ## 问题二：journal 文件损坏时无接管（P3）
 
+> **2026-10-12 resolved（fix/issue-audit 第二批）**：readMigrationJournalState 拆三态（absent/present/corrupt 带 raw）；prime 对 corrupt 置位（守卫拦启动/包操作）；快照带 journalCorrupt、设置页横幅仅回滚；回滚走探测式（toRoot 线索正则提取优先——managed→custom 半迁移时 customPath 未写入 sdk.json，测试抓出后补；退唯一非活动有内容根），盘面差异条目移回 + 反向 relink。以下为此前评估，留档：
+>
 > 2026-10-12（fix/issue-audit 批评估）：**留置**。修复面涉及 loadMigrationJournal 的 null
 > 语义拆分（无文件 vs 损坏）+ boot 校准与 source-get 快照两处暴露 + 回滚兜底路径，超出
 > 本小修批范围；真实发生率低（运行态记账文件损坏需盘故障/手改）。排期：SDK 来源批真机
