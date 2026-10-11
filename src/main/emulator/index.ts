@@ -16,6 +16,7 @@ import { readSkinPresentation } from './skinPresentation'
 import { readCameraSnapshot, requestCameraPermission } from './cameras'
 import { getMainWindow } from '../window'
 import { wizardOwns } from '../window/wizard'
+import { settingsOwns } from '../window/settings'
 import { assertUninstallable } from './uninstall'
 import { activePackageOp, beginPackageOp, endPackageOp, isPackageCreating } from './packageOps'
 import type {
@@ -23,19 +24,37 @@ import type {
   DeviceSkinSummary,
   ImageCatalogResult,
   SdkSkinProgress,
+  SdkSourceSnapshot,
   SdkUninstallState,
+  StudioSdkDetection,
   WizardCapabilities
 } from '@shared/types'
 import { msg } from '../locale'
-
-/** 应用自有 SDK 根（PRD E：userData/AndroidSDK；设置自定义路径属 stage 05） */
-export const defaultSdkRoot = (): string => join(app.getPath('userData'), 'AndroidSDK')
+import {
+  getSdkSourceSnapshot,
+  getSdkSourceState,
+  isSharedReadOnly,
+  javaBinFor,
+  javaHomeFor,
+  resolveSdkRoot
+} from './sdkSource'
+import { runStudioDetection } from './studioDetect'
+import { isMigrationActive } from './sdkMigration'
+import {
+  adoptSourceSwitch,
+  cancelSourceMigration,
+  clearRetainedRoot,
+  startSourceMigration,
+  switchSource
+} from './sdkSourceSwitch'
+import type { SdkSourceMode } from '@shared/types'
 
 /** 应用自有 AVD 根（ANDROID_AVD_HOME 语义） */
 export const defaultAvdHome = (): string => join(app.getPath('userData'), 'avd-home')
 
 const resolveRoot = (raw: unknown): string => {
-  if (raw === undefined || raw === null) return defaultSdkRoot()
+  // 缺省走 sdkSource 统一解析（managed/custom/shared-studio 活动根）
+  if (raw === undefined || raw === null) return resolveSdkRoot()
   if (typeof raw === 'string' && raw.length > 0) return raw
   throw new Error(`sdk: ${msg('sdkInvalidRoot')}`)
 }
@@ -84,6 +103,7 @@ const profilesCached = async (root: string): Promise<DeviceProfile[]> => {
   }
   const profiles = await listDeviceProfiles({
     sdkRoot: root,
+    javaHome: javaHomeFor(root),
     avdmanagerPath: avdmanagerPathFor(root),
     jarPath: sdklibJarPathFor(root)
   })
@@ -138,10 +158,52 @@ const requireWizardSender = (channel: string, event: Electron.IpcMainInvokeEvent
   }
 }
 
+/** 设置窗专用通道的 sender 守卫（SDK 来源域 plan 2026-10-11）：非设置窗调用直接拒绝 */
+const requireSettingsSender = (channel: string, event: Electron.IpcMainInvokeEvent): void => {
+  if (!settingsOwns(event.sender)) {
+    throw new Error(`${channel}${msg('settingsCallerNotAllowed')}`)
+  }
+}
+
+/**
+ * SDK 写操作守卫（plan §6/预检双闸）：共享 Studio SDK 只读——包安装/卸载/bootstrap
+ * 全拒；迁移在途（journal 内存标志）SDK 域只读。同步零 await——守卫不给调用方加
+ * 异步跳数。皮肤下载只写应用数据目录，仅拦迁移。
+ */
+const assertSdkWritable = (channel: string, sharedAlso = true): void => {
+  if (sharedAlso && isSharedReadOnly()) {
+    throw new Error(`${channel}: ${msg('sdkSharedReadOnly')}`)
+  }
+  if (isMigrationActive()) {
+    throw new Error(`${channel}: ${msg('sdkMigrationBusy')}`)
+  }
+}
+
+/** 来源切换载荷守卫：target 闭集 + customPath 可选字符串（renderer 载荷不可信） */
+const readSourceTargetInput = (raw: unknown): { target: SdkSourceMode; customPath?: string } => {
+  if (typeof raw !== 'object' || raw === null) throw new Error(msg('invalidPayload'))
+  const input = raw as Record<string, unknown>
+  const target = input.target
+  if (target !== 'managed' && target !== 'custom' && target !== 'shared-studio') {
+    throw new Error(msg('invalidPayload'))
+  }
+  if (input.customPath !== undefined && typeof input.customPath !== 'string') {
+    throw new Error(msg('invalidPayload'))
+  }
+  return { target, customPath: input.customPath as string | undefined }
+}
+
 const requireSdkReady = async (root: string): Promise<void> => {
   const snapshot = await detectSdk(root)
-  if (!snapshot.cmdlineTools.present || !snapshot.jre.present) {
-    throw new Error(msg('sdkNotReady'))
+  // Java 按实际运行来源判定（javaBinFor 单源）：managed/custom = SDK 内置 JRE；
+  // shared = Studio JBR——Studio SDK 根没有 <root>/jre 布局，按 detectSdk 的
+  // jre 标记判共享态必为「未就绪」（investigate 2026-10-11 根因）
+  const javaReady = await stat(javaBinFor(root)).then(
+    () => true,
+    () => false
+  )
+  if (!snapshot.cmdlineTools.present || !javaReady) {
+    throw new Error(isSharedReadOnly() ? msg('sdkSharedNotReady') : msg('sdkNotReady'))
   }
 }
 
@@ -156,7 +218,69 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     detectSdk(resolveRoot(raw))
   )
 
+  // ---- SDK 来源域（plan 2026-10-11-sdk-source-switching；仅设置窗）----
+
+  ipcMain.handle(IPC_CHANNELS.sdkSourceGet, (event): Promise<SdkSourceSnapshot> => {
+    requireSettingsSender(IPC_CHANNELS.sdkSourceGet, event)
+    return getSdkSourceSnapshot()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.sdkDetectStudio, (event): Promise<StudioSdkDetection> => {
+    requireSettingsSender(IPC_CHANNELS.sdkDetectStudio, event)
+    return runStudioDetection()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.sdkSourceSet, (event, raw: unknown) => {
+    requireSettingsSender(IPC_CHANNELS.sdkSourceSet, event)
+    return switchSource(readSourceTargetInput(raw))
+  })
+
+  ipcMain.handle(IPC_CHANNELS.sdkSourceMigrate, async (event, raw: unknown) => {
+    requireSettingsSender(IPC_CHANNELS.sdkSourceMigrate, event)
+    const input = readSourceTargetInput(raw)
+    const replace =
+      typeof (raw as Record<string, unknown> | null)?.replace === 'boolean'
+        ? ((raw as Record<string, unknown>).replace as boolean)
+        : false
+    return startSourceMigration({ ...input, replace })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.sdkSourceAdopt, (event, raw: unknown) => {
+    requireSettingsSender(IPC_CHANNELS.sdkSourceAdopt, event)
+    return adoptSourceSwitch(readSourceTargetInput(raw))
+  })
+
+  ipcMain.handle(IPC_CHANNELS.sdkSourceMigrateCancel, (event) => {
+    requireSettingsSender(IPC_CHANNELS.sdkSourceMigrateCancel, event)
+    return cancelSourceMigration()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.sdkSourceClearRetained, (event, raw: unknown) => {
+    requireSettingsSender(IPC_CHANNELS.sdkSourceClearRetained, event)
+    if (
+      typeof raw !== 'object' ||
+      raw === null ||
+      typeof (raw as Record<string, unknown>).root !== 'string'
+    ) {
+      throw new Error(msg('invalidPayload'))
+    }
+    return clearRetainedRoot({ root: (raw as Record<string, unknown>).root as string })
+  })
+
+  // 原生目录选择器（自选 SDK 根）：null = 用户取消，不走错误通道
+  ipcMain.handle(IPC_CHANNELS.sdkChooseCustomRoot, async (event): Promise<string | null> => {
+    requireSettingsSender(IPC_CHANNELS.sdkChooseCustomRoot, event)
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (window === null) throw new Error(msg('loadSettingsFailed', { detail: 'window gone' }))
+    const picked = await dialog.showOpenDialog(window, {
+      title: msg('chooseSdkRootTitle'),
+      properties: ['openDirectory', 'createDirectory']
+    })
+    return picked.canceled || picked.filePaths.length === 0 ? null : picked.filePaths[0]
+  })
+
   ipcMain.handle(IPC_CHANNELS.sdkBootstrap, async (_event, raw: unknown): Promise<SdkSnapshot> => {
+    assertSdkWritable(IPC_CHANNELS.sdkBootstrap)
     const root = resolveRoot(raw)
     const snapshot = await detectSdk(root)
     if (!snapshot.licensed) await confirmLicenses()
@@ -185,12 +309,15 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
             ? { packageName: activeOp.packageName }
             : null
       }
+      // 共享只读态清单本地化（plan 2026-10-12）：跳过六源 manifest，离线可用；
+      // sdkSource 每次新鲜填充（缓存命中也按当前 sdk.json 出，不随缓存陈旧）
+      const shared = isSharedReadOnly()
       if (imagesCache && imagesCache.root === root && now - imagesCache.at < IMAGES_CACHE_MS) {
-        return { ...imagesCache.result, ...live }
+        return { ...imagesCache.result, ...live, sdkSource: getSdkSourceState().source }
       }
-      const result = await listImagesWithState(root)
+      const result = await listImagesWithState(root, {}, { localOnly: shared })
       imagesCache = { at: now, root, result }
-      return { ...result, ...live }
+      return { ...result, ...live, sdkSource: getSdkSourceState().source }
     }
   )
 
@@ -251,7 +378,7 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
       throw new Error(msg('invalidDeviceId'))
     if (!deps.savedDeviceSkinRef) throw new Error(msg('skinQueryNotWired'))
     const ref = await deps.savedDeviceSkinRef((raw as { deviceId: string }).deviceId)
-    return readSkinPresentation(ref, defaultSdkRoot(), app.getPath('userData'))
+    return readSkinPresentation(ref, resolveSdkRoot(), app.getPath('userData'))
   })
   ipcMain.handle(IPC_CHANNELS.sdkCameraAccess, async (event, raw: unknown) => {
     requireWizardSender(IPC_CHANNELS.sdkCameraAccess, event)
@@ -262,7 +389,7 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     )
       throw new Error(msg('invalidCameraAction'))
     if ((raw as { request: boolean }).request) await requestCameraPermission()
-    return readCameraSnapshot(defaultSdkRoot())
+    return readCameraSnapshot(resolveSdkRoot())
   })
   ipcMain.handle(IPC_CHANNELS.sdkCameraSettings, async (event) => {
     requireWizardSender(IPC_CHANNELS.sdkCameraSettings, event)
@@ -313,6 +440,8 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
       if (typeof raw !== 'object' || raw === null) {
         throw new Error(`${IPC_CHANNELS.sdkDownloadDeviceSkin}${msg('invalidPayload')}`)
       }
+      // 皮肤写入应用数据目录（不动 SDK 根）：共享只读不拦，迁移在途拦
+      assertSdkWritable(IPC_CHANNELS.sdkDownloadDeviceSkin, false)
       const skinName = (raw as Record<string, unknown>).skinName
       if (typeof skinName !== 'string' || officialSkinName(skinName) === null) {
         throw new Error(`${IPC_CHANNELS.sdkDownloadDeviceSkin}: ${msg('invalidSkinName')}`)
@@ -362,6 +491,7 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     ) {
       throw new Error(`${IPC_CHANNELS.sdkUninstallImage}${msg('invalidPayload')}`)
     }
+    assertSdkWritable(IPC_CHANNELS.sdkUninstallImage)
     const packageName = (raw as Record<string, unknown>).packageName as string
     const root = resolveRoot(undefined)
     await requireSdkReady(root)
@@ -427,6 +557,7 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     ) {
       throw new Error(`${IPC_CHANNELS.sdkDownloadImage}${msg('invalidPayload')}`)
     }
+    assertSdkWritable(IPC_CHANNELS.sdkDownloadImage)
     const packageName = (raw as Record<string, unknown>).packageName as string
     // 守卫从固定正则升级为可信目录核验：包必须出现在当前 manifest/本地扫描结果里
     const root = resolveRoot(undefined)

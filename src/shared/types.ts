@@ -543,6 +543,125 @@ export interface SdkProgress {
   message: string
 }
 
+// ---- SDK 来源域（plan 2026-10-11-sdk-source-switching）----
+
+/** SDK 来源三态：托管（默认，应用数据目录）/ 共享 Studio SDK（只读）/ 自选路径（应用可写根） */
+export type SdkSourceMode = 'managed' | 'custom' | 'shared-studio'
+
+/** Android Studio / SDK 检测结果（检测链逐级核验；studioFound 驱动共享选项禁用态） */
+export interface StudioSdkDetection {
+  /** Studio 本体是否在场（/Applications 扫描 + mdfind 兜底） */
+  studioFound: boolean
+  studioAppPath: string | null
+  /** Studio 自带 JRE 家目录（jbr/Contents/Home；bin/java 在场才算）——共享模式 Java 来源 */
+  jbrHome: string | null
+  /** 已核验 SDK 候选路径；null = 四级链（配置文件→env→默认目录→PATH adb）均未定位 */
+  sdkCandidate: string | null
+  candidateSource: 'studio-config' | 'env' | 'default-dir' | 'path-adb' | null
+  /** 平台默认 SDK 路径（自选路径预填用） */
+  defaultSdkPath: string
+}
+
+/** 共享模式下的保留应用根（非活动、有可识别 SDK 内容；清除入口数据源） */
+export interface SdkRetainedRoot {
+  root: string
+  bytes: number
+  /** config.ini 镜像引用仍指向该根的设备数（清除警告口径） */
+  boundDevices: number
+}
+
+/** sdk:source-get 快照：来源态 + 三根 + 检测缓存（读缓存不触发扫描） */
+export interface SdkSourceSnapshot {
+  source: SdkSourceMode
+  managedRoot: string
+  customPath: string | null
+  sharedPath: string | null
+  detection: StudioSdkDetection | null
+  /** 未收尾迁移的 journal 视图（崩溃恢复横幅用）；null = 无在途/中断迁移 */
+  migration: SdkMigrationView | null
+  /** 共享模式下的保留应用根清单（非共享态按不变量为空数组） */
+  retainedRoots: SdkRetainedRoot[]
+}
+
+/** sdk:source-set 矩阵判定结果（direct 分支已执行并返回新快照） */
+export type SdkSourceSwitchEvaluation =
+  | { action: 'direct'; snapshot: SdkSourceSnapshot }
+  | {
+      action: 'needs-migration'
+      fromRoot: string
+      toRoot: string
+      bytes: number
+      boundDevices: number
+    }
+  | {
+      action: 'needs-choice'
+      targetRoot: string
+      targetBytes: number
+      loserRoot: string
+      loserBytes: number
+      loserBoundDevices: number
+    }
+  | {
+      action: 'rejected'
+      code:
+        | 'no-change'
+        | 'running-sessions'
+        | 'journal-pending'
+        | 'busy'
+        | 'studio-not-found'
+        | 'studio-sdk-not-located'
+        | 'target-junk'
+        | 'custom-path-required'
+        | 'studio-path-use-shared'
+    }
+
+// ---- SDK 迁移域（plan 2026-10-11-sdk-source-switching §3）----
+
+/** 迁移 journal 的顶层条目（每完成一条落盘） */
+export interface SdkMigrationEntry {
+  name: string
+  bytes: number
+  files: number
+  done: boolean
+}
+
+/** userData/sdk-migration.json 载荷：逐条目记账，崩溃后据此续跑或回滚 */
+export interface SdkMigrationJournalFile {
+  version: 1
+  fromRoot: string
+  toRoot: string
+  targetSource: 'managed' | 'custom'
+  /** 迁移替换分支：目标原有内容是否已删（恢复不重复删） */
+  targetCleared: boolean
+  entries: SdkMigrationEntry[]
+  phase: 'scan' | 'moving' | 'relink' | 'done' | 'failed'
+  movedBytes: number
+  totalBytes: number
+  error?: string
+}
+
+/** renderer 可见的迁移视图（sdk:source-get 附带；进度经 sdk:migrate-progress 推送） */
+export interface SdkMigrationView {
+  fromRoot: string
+  toRoot: string
+  targetSource: 'managed' | 'custom'
+  phase: SdkMigrationJournalFile['phase']
+  doneEntries: number
+  totalEntries: number
+  movedBytes: number
+  totalBytes: number
+}
+
+/** 迁移进度事件（100ms 节流推送；复刻 sdk:progress 形态） */
+export interface SdkMigrationProgress {
+  phase: 'scan' | 'moving' | 'relink' | 'cleanup' | 'done' | 'failed' | 'cancelled'
+  percent: number
+  movedBytes: number
+  totalBytes: number
+  currentEntry: string | null
+  error?: string
+}
+
 /** 卸载终态广播（main → renderer）：完成（error 空）或失败；发起窗口可能已关 */
 export interface SdkUninstallState {
   packageName: string
@@ -622,6 +741,12 @@ export interface ImageCatalogResult {
   sourceWarnings: string[]
   offline: boolean
   fetchedAt: number
+  /**
+   * 镜像清单所属的 SDK 来源（plan 2026-10-12-shared-mode-wizard-installed-only）：
+   * 由 sdk:images handler 按 sdk.json 填充，renderer 据此做共享态收窄；catalog
+   * 模块本身模式无关（未填 = undefined，按非共享处理）。
+   */
+  sdkSource?: SdkSourceMode
   /**
    * 当前进行中的镜像下载任务（main 实时快照；null = 无）。向导重开时由此
    * 恢复下载状态——关闭向导不取消后台下载（plan 设计 3/9），后续进度走事件流。

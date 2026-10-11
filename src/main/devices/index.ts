@@ -76,6 +76,7 @@ import {
   type ReconcileOutcome
 } from '../emulator/reconcile'
 import { awaitWithAbort } from '../emulator/abort'
+import { isMigrationActive } from '../emulator/sdkMigration'
 import {
   ensureSharedServer,
   candidateAdbPaths,
@@ -98,6 +99,7 @@ import {
 import { activePackageOp, beginPackageCreation, endPackageCreation } from '../emulator/packageOps'
 import { resetDisplayCutout } from '../emulator/displayCutout'
 import { configBaseline, configMismatchesOf } from '../emulator/configDrift'
+import { javaHomeFor, resolveSdkRoot } from '../emulator/sdkSource'
 
 /** 底层错误自带建议从句的多语言标记（zh「请」/ zh-TW「請」/ en "please"） */
 const ADVICE_RE = /[請请]|please/i
@@ -112,12 +114,14 @@ const skinDirectoryFor = (skinRef: string): string => {
   return join(importedSkinsRoot(app.getPath('userData')), id)
 }
 
-// 应用自有目录（与 emulator IPC 层同源：userData/AndroidSDK + userData/avd-home）
-const sdkRoot = (): string => join(app.getPath('userData'), 'AndroidSDK')
+// SDK 根经 sdkSource 统一解析（managed/custom/shared-studio；avd-home 恒在应用数据目录）
+const sdkRoot = (): string => resolveSdkRoot()
 const avdHome = (): string => join(app.getPath('userData'), 'avd-home')
-const avdDirs = (): { avdHome: string; sdkRoot: string } => ({
+const avdDirs = (): { avdHome: string; sdkRoot: string; javaHome: string } => ({
   avdHome: avdHome(),
-  sdkRoot: sdkRoot()
+  sdkRoot: sdkRoot(),
+  // 共享 Studio SDK 时 avdmanager 跑在 Studio JBR 上（plan 2026-10-11）
+  javaHome: javaHomeFor(sdkRoot())
 })
 /** 对账受控根：avd-home + SDK 根 + 应用皮肤库（skin.path 越界判定用） */
 const reconcileDirs = (): ReconcileDirs => ({
@@ -1014,6 +1018,17 @@ const applyCameraFallbackOverride = (
   else args.push(flag, 'emulated')
 }
 
+/** 运行会话数（starting/running/stopping 全算）——迁移与来源切换的预检口径 */
+export const runningDeviceCount = (): number => runner.activeIds().length
+
+/** 迁移期间 SDK 域只读：journal 内存标志在场即阻断创建/启动（同步零 await——
+ *  创建事务的用例对入口节拍敏感，真实 fs 读会扰动时序） */
+const assertSdkDomainOpen = (): void => {
+  if (isMigrationActive()) {
+    throw new Error(msg('sdkMigrationBusy'))
+  }
+}
+
 const runner = createRunner({
   sdkRoot,
   avdHome,
@@ -1412,6 +1427,7 @@ const createDeviceTransaction = async (
   }
   const profiles = await listDeviceProfiles({
     sdkRoot: sdkRoot(),
+    javaHome: javaHomeFor(sdkRoot()),
     avdmanagerPath: avdmanagerPathFor(sdkRoot()),
     jarPath: sdklibJarPathFor(sdkRoot())
   })
@@ -1836,6 +1852,7 @@ const buildEditCapabilities = async (meta: DeviceMeta): Promise<WizardCapabiliti
   try {
     const profiles = await listDeviceProfiles({
       sdkRoot: sdkRoot(),
+      javaHome: javaHomeFor(sdkRoot()),
       avdmanagerPath: avdmanagerPathFor(sdkRoot()),
       jarPath: sdklibJarPathFor(sdkRoot())
     })
@@ -2373,6 +2390,7 @@ export function registerDevicesIpc(): void {
       if (!isCreateDeviceInput(raw)) {
         throw new Error(`${IPC_CHANNELS.devicesCreate}${msg('invalidPayload')}`)
       }
+      assertSdkDomainOpen()
       return createDevice(raw)
     }
   )
@@ -2408,6 +2426,7 @@ export function registerDevicesIpc(): void {
       if (!isDeviceIdInput(raw)) {
         throw new Error(`${IPC_CHANNELS.devicesStart}${msg('invalidPayload')}`)
       }
+      assertSdkDomainOpen()
       return startDevice(raw.id)
     }
   )

@@ -86,6 +86,27 @@ export const IPC_CHANNELS = {
   sdkDownloadDeviceSkin: 'sdk:download-device-skin',
   /** 皮肤下载进度推送（main → renderer） */
   sdkSkinProgress: 'sdk:skin-progress',
+  // ---- SDK 来源域（plan 2026-10-11-sdk-source-switching；仅设置窗）----
+  /** 来源快照：source/三根路径/检测缓存/保留根清单/迁移视图（读缓存不触发扫描） */
+  sdkSourceGet: 'sdk:source-get',
+  /** 跑 Studio/SDK 检测链并刷新缓存（设置页打开的自动检测与「重新检测」共用） */
+  sdkDetectStudio: 'sdk:detect-studio',
+  /** 矩阵判定：direct（已执行）/ needs-migration / needs-choice / rejected */
+  sdkSourceSet: 'sdk:source-set',
+  /** 开始迁移（journal 在场 = 崩溃恢复继续；预检服务端重验） */
+  sdkSourceMigrate: 'sdk:source-migrate',
+  /** 直接使用分支：翻 source + relink + 删落选根（确认在 UI 完成） */
+  sdkSourceAdopt: 'sdk:source-adopt',
+  /** 取消 = 回滚（在途 abort 后回滚；崩溃恢复横幅同入口） */
+  sdkSourceMigrateCancel: 'sdk:source-migrate-cancel',
+  /** 清除保留根（仅共享模式；原生确认在 UI 完成） */
+  sdkSourceClearRetained: 'sdk:source-clear-retained',
+  /** 原生目录选择器选自选 SDK 根（仅设置窗；null = 用户取消） */
+  sdkChooseCustomRoot: 'sdk:choose-custom-root',
+  /** 来源变化广播（main → 各窗） */
+  sdkSourceChanged: 'sdk:source-changed',
+  /** 迁移进度推送（main → 各窗；100ms 节流 + 阶段切换必推） */
+  sdkMigrateProgress: 'sdk:migrate-progress',
   // ---- 截屏域（plan 2026-10-10-screenshot-clipboard-save；仅登记主窗）----
   /** 截屏并写系统剪贴板（受控：只写本设备刚截的图，不开放任意剪贴板写入） */
   screenshotCapture: 'screenshot:capture',

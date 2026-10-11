@@ -21,6 +21,17 @@ export function closeSettingsWindow(): void {
   if (window && !window.isDestroyed()) window.close()
 }
 
+/** 设置窗 sender 判定（SDK 来源域等仅设置窗可调的通道守卫；沿 wizardOwns 先例） */
+export function settingsOwns(sender: Electron.WebContents): boolean {
+  const window = settingsSession?.window
+  return (
+    window !== null &&
+    window !== undefined &&
+    !window.isDestroyed() &&
+    window.webContents === sender
+  )
+}
+
 export function openSettingsWindow(): Promise<void> {
   const current = settingsSession
   if (current && !current.window?.isDestroyed()) {

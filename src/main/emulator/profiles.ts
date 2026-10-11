@@ -21,8 +21,10 @@ import { msg } from '../locale'
 export interface ProfileListDeps {
   /** 执行器接缝：默认 spawn avdmanager list device；单测注入固定输出 */
   runner?: (avdmanagerPath: string) => Promise<string>
-  /** 当前应用选择的托管 SDK；Java 与 Android 用户目录不从宿主环境猜测 */
+  /** 当前应用选择的 SDK 根；Java 与 Android 用户目录不从宿主环境猜测 */
   sdkRoot: string
+  /** JAVA_HOME 覆盖（共享 Studio SDK 时传 Studio JBR；缺省用 SDK 内置 JRE 布局） */
+  javaHome?: string
   avdmanagerPath: string
   /** sdklib.core.jar 路径；缺省按 sdklibJarPathFor(sdkRoot) 推导 */
   jarPath?: string
@@ -30,8 +32,12 @@ export interface ProfileListDeps {
   metaSource?: (jarPath: string) => RawProfileMeta[]
 }
 
-const defaultRunner = async (avdmanagerPath: string, sdkRoot: string): Promise<string> => {
-  const javaHome = join(sdkRoot, 'jre', 'Contents', 'Home')
+const defaultRunner = async (
+  avdmanagerPath: string,
+  sdkRoot: string,
+  javaHomeOverride?: string
+): Promise<string> => {
+  const javaHome = javaHomeOverride ?? join(sdkRoot, 'jre', 'Contents', 'Home')
   const javaBin = join(javaHome, 'bin', 'java')
   const androidUserHome = join(sdkRoot, 'android-user')
   const repairHint = msg('profilesQueryFailed', { javaBin })
@@ -104,7 +110,7 @@ export const avdmanagerPathFor = (sdkRoot: string): string =>
 export async function listDeviceProfiles(deps: ProfileListDeps): Promise<DeviceProfile[]> {
   const output = deps.runner
     ? await deps.runner(deps.avdmanagerPath)
-    : await defaultRunner(deps.avdmanagerPath, deps.sdkRoot)
+    : await defaultRunner(deps.avdmanagerPath, deps.sdkRoot, deps.javaHome)
   const avdEntries = parseAvdDeviceEntries(output)
   const jarPath = deps.jarPath ?? sdklibJarPathFor(deps.sdkRoot)
   const metas = deps.metaSource ? deps.metaSource(jarPath) : readJarProfileMetas(jarPath)

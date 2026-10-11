@@ -5,6 +5,7 @@ import { registerIpcHandlers, shutdownStreams } from './ipc'
 import { prepareAppShutdown, resumeAfterShutdown } from './devices'
 import { restoreTheme } from './theme'
 import { restoreLocale } from './locale'
+import { restoreSdkSource } from './emulator/sdkSource'
 import { appIcon } from './app-icon'
 import { msg } from './locale'
 
@@ -24,9 +25,12 @@ app.whenReady().then(() => {
     }
   })
 
-  // 主题与语言恢复先于建窗：nativeTheme.themeSource 与建窗 backgroundColor 依赖主题读盘；
-  // 主进程可见文案依赖语言内存态（两者 load 均不抛错，失败按缺省起步——详见各 store）
-  void Promise.all([restoreTheme(), restoreLocale()]).then(() => createMainWindow())
+  // 主题/语言/SDK 来源恢复先于建窗：nativeTheme.themeSource 与建窗 backgroundColor 依赖
+  // 主题读盘；主进程可见文案依赖语言内存态；SDK 活动根在建窗前就绪（IPC 根解析不落到缺省）。
+  // 三者 load 均不抛错，失败按缺省起步——详见各 store
+  void Promise.all([restoreTheme(), restoreLocale(), restoreSdkSource()]).then(() =>
+    createMainWindow()
+  )
 })
 
 app.on('window-all-closed', () => {

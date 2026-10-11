@@ -161,7 +161,12 @@ const zhCN = {
   wizardCreateLabel: '新建设备',
   wizardEditLabel: '编辑设备',
   wizardCallerNotAllowed: '非向导窗调用',
+  settingsCallerNotAllowed: '非设置窗调用',
+  sdkSharedReadOnly:
+    '共享 Android Studio SDK 只读：不安装/不升级/不卸载 SDK 包，缺包请回 Android Studio 安装或切换来源',
+  sdkMigrationBusy: 'SDK 迁移进行中，此操作暂不可用——请到设置的 SDK 来源页继续或回滚',
   wizardCallerNotFound: '无法定位调用方窗口',
+  chooseSdkRootTitle: '选择 SDK 根目录',
   editorMainOnly: '仅主窗可打开编辑窗',
   // ---- 元数据 store 健康 ----
   storeExternalModifiedAtLoad:
@@ -199,6 +204,8 @@ const zhCN = {
   licenseRejected: '用户拒绝 Android SDK 许可，bootstrap 中止',
   sdkNotReady: 'SDK 尚未就绪（缺 cmdline-tools 或 JRE），先完成 SDK 引导',
   sdkInvalidRoot: '非法的 SDK 根',
+  sdkSharedNotReady:
+    '共享 SDK 缺少可用组件（cmdline-tools 或 Android Studio 的 Java）：请在 Android Studio 的 SDK Manager 补装命令行工具，或到设置的 SDK 来源页重新检测/切换来源',
   skinQueryNotWired: '设备皮肤查询未接入',
   wizardWindowClosed: '向导窗已关闭',
   skinResourceMainOnly: '皮肤资源仅主窗可读',
@@ -588,7 +595,12 @@ const zhTW: ErrorsCopy = {
   wizardCreateLabel: '新建裝置',
   wizardEditLabel: '編輯裝置',
   wizardCallerNotAllowed: '非精靈視窗呼叫',
+  settingsCallerNotAllowed: '非設定視窗呼叫',
+  sdkSharedReadOnly:
+    '共享 Android Studio SDK 唯讀：不安裝/不升級/不解除安裝 SDK 套件，缺套件請回 Android Studio 安裝或切換來源',
+  sdkMigrationBusy: 'SDK 遷移進行中，此操作暫不可用——請到設定的 SDK 來源頁繼續或回復',
   wizardCallerNotFound: '無法定位呼叫方視窗',
+  chooseSdkRootTitle: '選擇 SDK 根目錄',
   editorMainOnly: '僅主窗可開啟編輯視窗',
   storeExternalModifiedAtLoad:
     'devices.json 與應用程式最後接納的內容不一致（外部修改）；已保留目前列表並凍結寫入，重新啟動後載入修復檔案',
@@ -626,6 +638,8 @@ const zhTW: ErrorsCopy = {
   licenseRejected: '使用者拒絕 Android SDK 授權，bootstrap 中止',
   sdkNotReady: 'SDK 尚未就緒（缺 cmdline-tools 或 JRE），先完成 SDK 引導',
   sdkInvalidRoot: '非法的 SDK 根',
+  sdkSharedNotReady:
+    '共享 SDK 缺少可用元件（cmdline-tools 或 Android Studio 的 Java）：請在 Android Studio 的 SDK Manager 補裝命令列工具，或到設定的 SDK 來源頁重新偵測/切換來源',
   skinQueryNotWired: '裝置皮膚查詢未接入',
   wizardWindowClosed: '精靈視窗已關閉',
   skinResourceMainOnly: '皮膚資源僅主窗可讀',
@@ -1023,6 +1037,12 @@ const enUS: ErrorsCopy = {
   wizardCreateLabel: 'New device',
   wizardEditLabel: 'Edit device',
   wizardCallerNotAllowed: 'caller is not the wizard window',
+  settingsCallerNotAllowed: 'caller is not the settings window',
+  sdkSharedReadOnly:
+    'The shared Android Studio SDK is read-only: packages cannot be installed, upgraded or uninstalled here. Install missing packages in Android Studio or switch the SDK source',
+  sdkMigrationBusy:
+    'An SDK migration is in progress and this operation is unavailable. Continue or roll it back on the SDK source page in Settings',
+  chooseSdkRootTitle: 'Choose the SDK root folder',
   wizardCallerNotFound: 'cannot locate the calling window',
   editorMainOnly: 'only the main window may open the editor',
   storeExternalModifiedAtLoad:
@@ -1065,6 +1085,8 @@ const enUS: ErrorsCopy = {
   licenseRejected: 'User declined the Android SDK license; bootstrap aborted',
   sdkNotReady: 'SDK is not ready (missing cmdline-tools or JRE); finish SDK bootstrap first',
   sdkInvalidRoot: 'Illegal SDK root',
+  sdkSharedNotReady:
+    'The shared SDK is missing usable components (cmdline-tools or the Android Studio Java runtime): install the command-line tools from the Android Studio SDK Manager, or re-detect/switch the source on the SDK source page in Settings',
   skinQueryNotWired: 'Device skin query is not wired',
   wizardWindowClosed: 'The wizard window is closed',
   skinResourceMainOnly: 'Skin resources are readable by the main window only',

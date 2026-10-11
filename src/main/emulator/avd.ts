@@ -6,8 +6,10 @@ import { msg } from '../locale'
 export interface AvdDirs {
   /** 应用自有 AVD 根（ANDROID_AVD_HOME 语义） */
   avdHome: string
-  /** 应用自有 SDK 根（ANDROID_SDK_ROOT/ANDROID_HOME 语义） */
+  /** 当前活动 SDK 根（ANDROID_SDK_ROOT/ANDROID_HOME 语义） */
   sdkRoot: string
+  /** JAVA_HOME 覆盖（共享 Studio SDK 时传 Studio JBR；缺省用 SDK 内置 JRE 布局） */
+  javaHome?: string
 }
 
 export const avdPaths = (avdName: string, dirs: AvdDirs): { ini: string; dir: string } => ({
@@ -59,7 +61,7 @@ export async function createAvd(
   const avdmanagerBin = join(dirs.sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager')
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    JAVA_HOME: join(dirs.sdkRoot, 'jre', 'Contents', 'Home'),
+    JAVA_HOME: dirs.javaHome ?? join(dirs.sdkRoot, 'jre', 'Contents', 'Home'),
     ANDROID_SDK_ROOT: dirs.sdkRoot,
     ANDROID_HOME: dirs.sdkRoot,
     ANDROID_AVD_HOME: dirs.avdHome,
@@ -163,4 +165,48 @@ export async function patchAvdConfig(
   await write(tmpPath, next)
   const { rename } = await import('node:fs/promises')
   await rename(tmpPath, configPath)
+}
+
+export interface ConfigPrefixRewrite {
+  content: string
+  rewritten: { key: string; from: string; to: string }[]
+}
+
+/**
+ * config.ini 路径键前缀改写（plan 2026-10-11-sdk-source-switching §4 迁移 relink）：
+ * 值以 fromRoot 为前缀的绝对路径键改写到 toRoot；targetExists(relative) 为真才改
+ * （同相对路径在目标根在场——不在场保留原引用，该设备绑定在保留根上随其存亡）。
+ * 谓词可异步（引擎侧 existence 探测走 fs）；同键多行全部重写（沿 patchAvdConfig
+ * 的 properties 末次读取语义）；注释行不动。
+ */
+export const rewriteConfigPathPrefixes = async (
+  content: string,
+  fromRoot: string,
+  toRoot: string,
+  targetExists: (relativePath: string) => boolean | Promise<boolean>
+): Promise<ConfigPrefixRewrite> => {
+  const prefix = fromRoot.endsWith(sep) ? fromRoot : `${fromRoot}${sep}`
+  const rewritten: ConfigPrefixRewrite['rewritten'] = []
+  const lines: string[] = []
+  for (const line of content.split('\n')) {
+    const match = line.match(/^([A-Za-z0-9._-]+)=(.*)$/)
+    if (match === null) {
+      lines.push(line)
+      continue
+    }
+    const [, key, value] = match
+    if (!value.startsWith(prefix)) {
+      lines.push(line)
+      continue
+    }
+    const relative = value.slice(prefix.length)
+    if (!(await targetExists(relative))) {
+      lines.push(line)
+      continue
+    }
+    const to = join(toRoot, relative)
+    rewritten.push({ key, from: value, to })
+    lines.push(`${key}=${to}`)
+  }
+  return { content: lines.join('\n'), rewritten }
 }
