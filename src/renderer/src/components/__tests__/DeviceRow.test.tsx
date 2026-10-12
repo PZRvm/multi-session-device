@@ -502,6 +502,18 @@ describe('DeviceRow（review 修复轮）', () => {
         screen.getByRole('button', { name: format(copy.stopAria, { name: 'Pixel 8 API 34' }) }) as HTMLButtonElement
       ).disabled
     ).toBe(false)
+    // review P2-1：跨桶运行设备恢复「查看配置」——编辑钮可用（保存由主进程跨桶守卫拦）
+    expect(
+      (
+        screen.getByRole('button', { name: format(copy.editAria, { name: 'Pixel 8 API 34' }) }) as HTMLButtonElement
+      ).disabled
+    ).toBe(false)
+    // 删除仍是修改行为：跨桶运行设备禁用
+    expect(
+      (
+        screen.getByRole('button', { name: format(copy.deleteAria, { name: 'Pixel 8 API 34' }) }) as HTMLButtonElement
+      ).disabled
+    ).toBe(true)
   })
 
   it('出身徽标：shared-studio 出身显示（aria/tooltip 三语全称）；app-owned 与缺席不显示', () => {

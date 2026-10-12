@@ -419,3 +419,30 @@ export async function clearRetainedRoot(
   deps.broadcast(IPC_CHANNELS.sdkSourceChanged, {})
   return getSdkSourceSnapshot()
 }
+
+/** 清除级联的设备删除结果（devices 域注入；编排见 clearRetainedWithCascade） */
+export interface PurgeAppOwnedResult {
+  deleted: Array<{ id: string; name: string }>
+  failures: Array<{ name: string; message: string }>
+}
+
+export interface ClearCascadeDeps extends SwitchDeps {
+  /** 清除保留根后的设备级联（devices 域注入；缺席则只清 SDK 不动设备） */
+  purgeAppOwnedDevices?: () => Promise<PurgeAppOwnedResult>
+}
+
+/**
+ * 清除保留根 + 设备级联（用户 2026-10-12 批复，review P2-3 自 ipc handler 下沉
+ * 以便域测）：主操作（清 SDK）先行完成，级联逐台 best-effort——失败聚合返回由
+ * 调用方本地化上报（failures 非空时 SDK 已删、部分设备残留）。顺序是语义：
+ * 级联失败不回滚 SDK 删除（用户确认的主操作优先成立）。
+ */
+export async function clearRetainedWithCascade(
+  input: { root: string },
+  deps: ClearCascadeDeps = createSwitchDeps()
+): Promise<{ snapshot: SdkSourceSnapshot; failures: PurgeAppOwnedResult['failures'] }> {
+  const snapshot = await clearRetainedRoot(input, deps)
+  if (deps.purgeAppOwnedDevices === undefined) return { snapshot, failures: [] }
+  const purged = await deps.purgeAppOwnedDevices()
+  return { snapshot, failures: purged.failures }
+}

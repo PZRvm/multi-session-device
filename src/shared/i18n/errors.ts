@@ -204,7 +204,6 @@ const zhCN = {
     '这些组件受 Android SDK 许可协议约束：\n· android-sdk-license（两版）\n· android-sdk-preview-license\n\n同意后本应用将在自有目录内写入许可确认文件并下载组件（数百 MB，仅此一次）。你拒绝则不下载、不写任何文件。',
   licenseAccept: '同意并继续',
   licenseReject: '拒绝',
-  licenseRejected: '用户拒绝 Android SDK 许可，bootstrap 中止',
   sdkNotReady: 'SDK 尚未就绪（缺 cmdline-tools 或 JRE），先完成 SDK 引导',
   sdkInvalidRoot: '非法的 SDK 根',
   sdkClearPurgeFailed: '保留 SDK 已清除，但部分项目自有设备删除失败（{failures}）；残留设备可切回对应来源后手动删除',
@@ -650,7 +649,6 @@ const zhTW: ErrorsCopy = {
     '這些元件受 Android SDK 授權協議約束：\n· android-sdk-license（兩版）\n· android-sdk-preview-license\n\n同意後本應用程式將在自有目錄內寫入授權確認檔案並下載元件（數百 MB，僅此一次）。你拒絕則不下載、不寫任何檔案。',
   licenseAccept: '同意並繼續',
   licenseReject: '拒絕',
-  licenseRejected: '使用者拒絕 Android SDK 授權，bootstrap 中止',
   sdkNotReady: 'SDK 尚未就緒（缺 cmdline-tools 或 JRE），先完成 SDK 引導',
   sdkInvalidRoot: '非法的 SDK 根',
   sdkClearPurgeFailed: '保留 SDK 已清除，但部分專案自有裝置刪除失敗（{failures}）；殘留裝置可切回對應來源後手動刪除',
@@ -1110,7 +1108,6 @@ const enUS: ErrorsCopy = {
     'These components are covered by the Android SDK license agreements:\n· android-sdk-license (two versions)\n· android-sdk-preview-license\n\nIf you agree, this app will write a license confirmation file into its own directory and download the components (hundreds of MB, once). If you decline, nothing is downloaded or written.',
   licenseAccept: 'Agree and continue',
   licenseReject: 'Decline',
-  licenseRejected: 'User declined the Android SDK license; bootstrap aborted',
   sdkNotReady: 'SDK is not ready (missing cmdline-tools or JRE); finish SDK bootstrap first',
   sdkInvalidRoot: 'Illegal SDK root',
   sdkClearPurgeFailed:

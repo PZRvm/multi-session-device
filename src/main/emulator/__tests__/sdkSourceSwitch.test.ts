@@ -18,6 +18,7 @@ import {
   adoptSourceSwitch,
   cancelSourceMigration,
   clearRetainedRoot,
+  clearRetainedWithCascade,
   createSwitchDeps,
   onSdkSourceChanged,
   startSourceMigration,
@@ -279,6 +280,84 @@ describe('clearRetainedRoot（仅共享模式）', () => {
     expect(snapshot.source).toBe('shared-studio')
     expect(fs.exists(MANAGED)).toBe(false)
     await expect(clearRetainedRoot({ root: '/other' }, buildDeps(fs))).rejects.toThrow('retained')
+  })
+})
+
+describe('clearRetainedWithCascade（清除级联编排，review P2-3）', () => {
+  let fs: FakeFs
+  beforeEach(() => {
+    fs = new FakeFs()
+    sentBroadcasts.length = 0
+    resetSdkSourceStateForTest()
+    resetMigrationFlagForTest()
+  })
+
+  const sharedDeps = () => {
+    seedSourceInto(fs, MANAGED)
+    setSdkSourceState({
+      version: 1,
+      source: 'shared-studio',
+      customPath: null,
+      sharedPath: STUDIO_SDK
+    })
+    return buildDeps(fs)
+  }
+
+  it('顺序：先清 SDK 后级联 purge；成功路径 failures 为空', async () => {
+    const order: string[] = []
+    const base = sharedDeps()
+    const deps = {
+      ...base,
+      migration: {
+        ...base.migration,
+        rmTree: async (path: string) => {
+          order.push(`rm:${path}`)
+          return base.migration.rmTree(path)
+        }
+      },
+      purgeAppOwnedDevices: async () => {
+        order.push('purge')
+        return { deleted: [{ id: 'd1', name: '自有机' }], failures: [] }
+      }
+    }
+    const result = await clearRetainedWithCascade({ root: MANAGED }, deps)
+    expect(result.snapshot.source).toBe('shared-studio')
+    expect(result.failures).toEqual([])
+    expect(order).toEqual([`rm:${MANAGED}`, 'purge'])
+    expect(fs.exists(MANAGED)).toBe(false)
+  })
+
+  it('级联失败聚合返回不抛（SDK 已删、残留由调用方上报）', async () => {
+    const base = sharedDeps()
+    const deps = {
+      ...base,
+      purgeAppOwnedDevices: async () => ({
+        deleted: [{ id: 'd1', name: 'A 机' }],
+        failures: [
+          { name: 'B 机', message: '删除未完成' },
+          { name: 'C 机', message: '盘满' }
+        ]
+      })
+    }
+    const result = await clearRetainedWithCascade({ root: MANAGED }, deps)
+    expect(result.failures.map((entry) => entry.name)).toEqual(['B 机', 'C 机'])
+    // 主操作已成立：SDK 已清
+    expect(fs.exists(MANAGED)).toBe(false)
+  })
+
+  it('purge 缺席：只清 SDK 不动设备（passthrough）', async () => {
+    const result = await clearRetainedWithCascade({ root: MANAGED }, sharedDeps())
+    expect(result.failures).toEqual([])
+    expect(fs.exists(MANAGED)).toBe(false)
+  })
+
+  it('非共享态：clearRetainedRoot 守卫照常拒绝（级联不启动）', async () => {
+    seedSourceInto(fs, MANAGED)
+    const purge = vi.fn(async () => ({ deleted: [], failures: [] }))
+    await expect(
+      clearRetainedWithCascade({ root: MANAGED }, { ...buildDeps(fs), purgeAppOwnedDevices: purge })
+    ).rejects.toThrow('shared')
+    expect(purge).not.toHaveBeenCalled()
   })
 })
 

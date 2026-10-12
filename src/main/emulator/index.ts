@@ -43,10 +43,12 @@ import { isMigrationActive } from './sdkMigration'
 import {
   adoptSourceSwitch,
   cancelSourceMigration,
-  clearRetainedRoot,
+  clearRetainedWithCascade,
+  createSwitchDeps,
   onSdkSourceChanged,
   startSourceMigration,
-  switchSource
+  switchSource,
+  type PurgeAppOwnedResult
 } from './sdkSourceSwitch'
 import type { SdkSourceMode } from '@shared/types'
 
@@ -72,8 +74,8 @@ const pushToAllWindows = (channel: string, payload: unknown): void => {
 const pushProgress = (progress: SdkProgress): void =>
   pushToAllWindows(IPC_CHANNELS.sdkProgress, progress)
 
-/** 许可确认——PRD 4.5：必须应用内确认，不静默接受 */
-const confirmLicenses = async (): Promise<void> => {
+/** 许可确认——PRD 4.5：必须应用内确认，不静默接受；返回是否同意（拒绝=用户取消） */
+const confirmLicenses = async (): Promise<boolean> => {
   const window = BrowserWindow.getAllWindows()[0]
   const options = {
     title: msg('licenseTitle'),
@@ -86,7 +88,9 @@ const confirmLicenses = async (): Promise<void> => {
   const result = window
     ? await dialog.showMessageBox(window, options)
     : await dialog.showMessageBox(options)
-  if (result.response !== 0) throw new Error(msg('licenseRejected'))
+  // 布尔返回而非抛错（review P2-2）：拒绝 = 用户主动取消，调用方静默处理——
+  // 不再依赖错误文本匹配的跨函数契约
+  return result.response === 0
 }
 
 // 画像缓存（5min）：avdmanager list device 是 Java 子进程（秒级），不必每次向导都跑。
@@ -216,10 +220,7 @@ export interface SdkIpcDeps {
   savedDeviceSkinRef?: (id: string) => Promise<string | null>
   referencingDeviceNames?: (packageName: string) => string[]
   /** 清除保留根后的设备级联删除（devices 域注入；缺席则只清 SDK 不动设备） */
-  purgeAppOwnedDevices?: () => Promise<{
-    deleted: Array<{ id: string; name: string }>
-    failures: Array<{ name: string; message: string }>
-  }>
+  purgeAppOwnedDevices?: () => Promise<PurgeAppOwnedResult>
   /** 项目自有设备计数（清除确认框级联警告用） */
   appOwnedDeviceCount?: () => Promise<number>
 }
@@ -275,19 +276,18 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     ) {
       throw new Error(msg('invalidPayload'))
     }
-    const snapshot = await clearRetainedRoot({ root: (raw as Record<string, unknown>).root as string })
-    // 设备级联（用户 2026-10-12 批复）：保留 SDK 已删，项目自有设备的镜像永久
-    // 消失——设备一并清掉。SDK 删除是用户确认过的主操作，先完成；设备清理逐台
-    // best-effort，失败汇总上报（残留行可切回自有根后手删）
-    if (deps.purgeAppOwnedDevices !== undefined) {
-      const purged = await deps.purgeAppOwnedDevices()
-      if (purged.failures.length > 0) {
-        throw new Error(
-          msg('sdkClearPurgeFailed', {
-            failures: purged.failures.map((entry) => `${entry.name}：${entry.message}`).join('；')
-          })
-        )
-      }
+    // 级联编排下沉 clearRetainedWithCascade（review P2-3：顺序与失败聚合有域测），
+    // 这里只留守卫与本地化上报
+    const { snapshot, failures } = await clearRetainedWithCascade(
+      { root: (raw as Record<string, unknown>).root as string },
+      { ...createSwitchDeps(), purgeAppOwnedDevices: deps.purgeAppOwnedDevices }
+    )
+    if (failures.length > 0) {
+      throw new Error(
+        msg('sdkClearPurgeFailed', {
+          failures: failures.map((entry) => `${entry.name}：${entry.message}`).join('；')
+        })
+      )
     }
     return snapshot
   })
@@ -315,14 +315,8 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     const root = resolveRoot(raw)
     const snapshot = await detectSdk(root)
     if (!snapshot.licensed) {
-      try {
-        await confirmLicenses()
-      } catch (error) {
-        // 许可拒绝 = 用户主动取消（非失败）：静默返回当前态，不进错误通道
-        // （消息匹配限本进程同 locale，msg 输出即抛出文本）
-        if (error instanceof Error && error.message === msg('licenseRejected')) return snapshot
-        throw error
-      }
+      // 许可拒绝 = 用户主动取消（非失败）：静默返回当前态，不进错误通道
+      if (!(await confirmLicenses())) return snapshot
     }
     return bootstrapSdk(root, {}, pushProgress)
   })

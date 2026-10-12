@@ -297,13 +297,17 @@ const DeviceRow = ({
           className="icon-button"
           aria-label={format(copy.editAria, { name: device.name })}
           title={
-            crossBucket
+            crossBucket && device.status !== 'running'
               ? copy.crossBucketBlockedTitle
               : device.status === 'creating' || device.status === 'deleting'
                 ? copy.editBusyTitle
                 : copy.editTitle
           }
-          disabled={crossBucket || device.status === 'creating' || device.status === 'deleting'}
+          disabled={
+            (crossBucket && device.status !== 'running') ||
+            device.status === 'creating' ||
+            device.status === 'deleting'
+          }
           onClick={onEdit}
         >
           <Settings2 size={14} />
