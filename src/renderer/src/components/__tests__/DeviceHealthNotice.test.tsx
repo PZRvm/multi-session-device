@@ -113,19 +113,10 @@ describe('DeviceHealthNotice', () => {
     expect(screen.queryByRole('status')).toBeNull()
   })
 
-  it('P3-C 修复：折叠区内异常设备给计数行，不再闷声吞信息', () => {
-    render(
-      <DeviceHealthNotice
-        summary={{ ...okSummary, signature: 'sig' }}
-        storeHealth={okStore}
-        unavailableCount={0}
-        hiddenAffectedCount={1}
-        affectedNames={[]}
-        rechecking={false}
-        onRecheck={vi.fn()}
-        onViewDetail={vi.fn()}
-      />
-    )
-    expect(screen.getByText(format(copy.hiddenOriginUnavailable, { count: 1 }))).toBeTruthy()
+  it('另一来源桶的异常不进横幅（用户 2026-10-12 复核：隐藏侧完全静默）', () => {
+    // 全量侧有异常（签名非空），但可见集零行——横幅整条不出，
+    // 明细只走「查看详情」与折叠区展开后的行内提示
+    renderNotice({ ...okSummary, signature: 'sig', unavailableCount: 1 }, okStore, [], 0)
+    expect(screen.queryByRole('status')).toBeNull()
   })
 })

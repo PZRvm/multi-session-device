@@ -9,11 +9,9 @@ type DeviceHealthNoticeProps = {
   summary: ReconciliationSummary
   storeHealth: StoreHealth
   /** 文件异常计数（视图口径，plan 2026-10-12-device-list-origin-view-filter 轴 2）：
-   * 只数当前可见集——隐藏设备的异常由折叠区交代，不再进汇总条 */
+   * 只数当前可见集——另一来源桶的设备完全不参与顶部异常判定（用户 2026-10-12
+   * 复核：隐藏侧异常不进横幅，明细走「查看详情」与折叠区展开后的行内提示） */
   unavailableCount: number
-  /** 折叠区内文件异常的设备数（视图口径）：横幅不再报看不见设备的明细，
-   * 但有一条计数行交代存在，不闷声吞信息 */
-  hiddenAffectedCount?: number
   /** 文件异常设备名（按列表顺序，截断展示） */
   affectedNames: string[]
   /** 重查进行中（按钮转忙碌） */
@@ -29,7 +27,6 @@ const DeviceHealthNotice = ({
   summary,
   storeHealth,
   unavailableCount,
-  hiddenAffectedCount = 0,
   affectedNames,
   rechecking,
   onRecheck,
@@ -49,9 +46,6 @@ const DeviceHealthNotice = ({
     const more =
       affectedNames.length > 3 ? format(copy.moreSuffix, { count: affectedNames.length }) : ''
     lines.push(format(copy.unavailableDevices, { count: unavailableCount, names, more }))
-  }
-  if (hiddenAffectedCount > 0) {
-    lines.push(format(copy.hiddenOriginUnavailable, { count: hiddenAffectedCount }))
   }
   if (summary.orphanCount > 0) {
     lines.push(format(copy.orphanAvds, { count: summary.orphanCount }))
