@@ -446,6 +446,64 @@ describe('DeviceRow（review 修复轮）', () => {
     expect(onRename).not.toHaveBeenCalled()
   })
 
+  it('跨来源桶（用户复核 5）：编辑/删除禁用带说明，重命名路径拦截反馈；停止不受限', () => {
+    const onCrossBucketBlocked = vi.fn()
+    // 停止态跨桶：编辑/删除禁用 + tooltip 指路；F2 重命名走拦截回调不进输入框
+    render(
+      <DeviceRow
+        device={baseDevice}
+        selected={false}
+        storeTrusted
+        metaWritable
+        crossBucket
+        onSelect={vi.fn()}
+        onStart={vi.fn()}
+        onStop={vi.fn()}
+        onCancelStart={vi.fn()}
+        onCopySerial={vi.fn()}
+        onDelete={vi.fn()}
+        onRename={vi.fn()}
+        onEdit={vi.fn()}
+        onRenameBlocked={vi.fn()}
+        onCrossBucketBlocked={onCrossBucketBlocked}
+      />
+    )
+    const edit = screen.getByRole('button', { name: format(copy.editAria, { name: 'Pixel 8 API 34' }) }) as HTMLButtonElement
+    const del = screen.getByRole('button', { name: format(copy.deleteAria, { name: 'Pixel 8 API 34' }) }) as HTMLButtonElement
+    expect(edit.disabled).toBe(true)
+    expect(del.disabled).toBe(true)
+    expect(edit.title).toBe(copy.crossBucketBlockedTitle)
+    expect(del.title).toBe(copy.crossBucketBlockedTitle)
+    fireEvent.keyDown(screen.getByText('Pixel 8 API 34').parentElement!, { key: 'F2' })
+    expect(onCrossBucketBlocked).toHaveBeenCalledTimes(1)
+    expect(screen.queryByLabelText(copy.renameAria)).toBeNull()
+    cleanup()
+    // 运行中跨桶（过渡态豁免显示）：停止钮可用——另一侧设备必须可停
+    render(
+      <DeviceRow
+        device={{ ...baseDevice, status: 'running', serial: 'emulator-5554' }}
+        selected={false}
+        storeTrusted
+        metaWritable
+        crossBucket
+        onSelect={vi.fn()}
+        onStart={vi.fn()}
+        onStop={vi.fn()}
+        onCancelStart={vi.fn()}
+        onCopySerial={vi.fn()}
+        onDelete={vi.fn()}
+        onRename={vi.fn()}
+        onEdit={vi.fn()}
+        onCrossBucketBlocked={vi.fn()}
+      />
+    )
+    expect(
+      (
+        screen.getByRole('button', { name: format(copy.stopAria, { name: 'Pixel 8 API 34' }) }) as HTMLButtonElement
+      ).disabled
+    ).toBe(false)
+  })
+
   it('出身徽标：shared-studio 出身显示（aria/tooltip 三语全称）；app-owned 与缺席不显示', () => {
     setup({ device: { ...baseDevice, imageSourceOrigin: 'shared-studio' } })
     expect(screen.getByLabelText(copy.deviceOriginStudio)).toBeTruthy()

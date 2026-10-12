@@ -562,6 +562,45 @@ describe('devices 域（创建/删除事务）', () => {
     }
   })
 
+  it('跨来源桶设备只读（用户复核 5）：共享态下对 app-owned 出身设备改名/删除被服务端拒绝', async () => {
+    const otherId = '018f1c2d-cccc-4000-8000-000000000009'
+    mocks.readDeviceMetas.mockResolvedValue([
+      {
+        id: otherId,
+        name: '自有设备',
+        profileId: 'pixel_8',
+        profileLabel: 'Pixel 8',
+        imagePackageName: 'system-images;android-36;google_apis_playstore;arm64-v8a',
+        apiDisplay: '36',
+        formFactor: 'phone',
+        screenSummary: null,
+        advancedSettings: null,
+        snapshotReadyAt: null,
+        createdAt: 0
+      } as never
+    ])
+    const { handlerFor } = await freshDomain()
+    const sdkSource = await import('../../emulator/sdkSource')
+    sdkSource.setSdkSourceState({
+      version: 1,
+      source: 'shared-studio',
+      customPath: null,
+      sharedPath: '/studio/sdk'
+    })
+    try {
+      await expect(
+        handlerFor(IPC_CHANNELS.devicesRename)(mainWindowEvent(), { id: otherId, name: '新名' })
+      ).rejects.toThrow('另一 SDK 来源')
+      await expect(
+        handlerFor(IPC_CHANNELS.devicesDelete)(mainWindowEvent(), { id: otherId })
+      ).rejects.toThrow('另一 SDK 来源')
+      expect(mocks.deleteAvd).not.toHaveBeenCalled()
+      expect(mocks.writeDeviceMetas).not.toHaveBeenCalled()
+    } finally {
+      sdkSource.resetSdkSourceStateForTest()
+    }
+  })
+
   it('快照携带活动来源桶（plan 2026-10-12-device-list-origin-view-filter）：managed/custom → app-owned，shared → shared-studio', async () => {
     const { handlerFor } = await freshDomain()
     const sdkSource = await import('../../emulator/sdkSource')

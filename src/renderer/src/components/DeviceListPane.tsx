@@ -5,7 +5,7 @@ import { MAIN_COPY, format } from '@shared/i18n'
 import type { Device, StoreHealthState } from '@shared/types'
 import { useCopy } from '../hooks/useCopy'
 import DeviceRow from './DeviceRow'
-import { splitByOriginView, type SourceBucket } from './originView'
+import { splitByOriginView, originOf, type SourceBucket } from './originView'
 
 type DeviceListPaneProps = {
   devices: Device[]
@@ -31,6 +31,8 @@ type DeviceListPaneProps = {
   /** 打开配置编辑窗（运行中也可查看） */
   onEdit: (id: string) => void
   onRenameBlocked?: () => void
+  /** 跨来源桶设备尝试修改（重命名路径）时的反馈入口（用户复核 5） */
+  onCrossBucketBlocked?: () => void
 }
 
 const rowHandlers = (
@@ -40,6 +42,7 @@ const rowHandlers = (
     | 'selectedId'
     | 'storeTrusted'
     | 'metaWritable'
+    | 'sourceBucket'
     | 'onSelect'
     | 'onStart'
     | 'onStop'
@@ -49,6 +52,7 @@ const rowHandlers = (
     | 'onRename'
     | 'onEdit'
     | 'onRenameBlocked'
+    | 'onCrossBucketBlocked'
   >
 ): React.JSX.Element => (
   <DeviceRow
@@ -57,6 +61,7 @@ const rowHandlers = (
     selected={device.id === shared.selectedId}
     storeTrusted={shared.storeTrusted}
     metaWritable={shared.metaWritable}
+    crossBucket={originOf(device) !== shared.sourceBucket}
     onSelect={() => shared.onSelect(device.id)}
     onStart={() => shared.onStart(device.id)}
     onStop={() => shared.onStop(device.id)}
@@ -66,6 +71,7 @@ const rowHandlers = (
     onRename={(name) => shared.onRename(device.id, name)}
     onEdit={() => shared.onEdit(device.id)}
     onRenameBlocked={shared.onRenameBlocked}
+    onCrossBucketBlocked={shared.onCrossBucketBlocked}
   />
 )
 
@@ -90,7 +96,8 @@ const DeviceListPane = ({
   onDelete,
   onRename,
   onEdit,
-  onRenameBlocked
+  onRenameBlocked,
+  onCrossBucketBlocked
 }: DeviceListPaneProps): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
   const [foldedOpen, setFoldedOpen] = useState(false)
@@ -129,6 +136,7 @@ const DeviceListPane = ({
                 selectedId,
                 storeTrusted,
                 metaWritable,
+                sourceBucket,
                 onSelect,
                 onStart,
                 onStop,
@@ -137,7 +145,8 @@ const DeviceListPane = ({
                 onDelete,
                 onRename,
                 onEdit,
-                onRenameBlocked
+                onRenameBlocked,
+                onCrossBucketBlocked
               })
             )}
           </div>
@@ -163,6 +172,7 @@ const DeviceListPane = ({
                       selectedId,
                       storeTrusted,
                       metaWritable,
+                      sourceBucket,
                       onSelect,
                       onStart,
                       onStop,
@@ -171,7 +181,8 @@ const DeviceListPane = ({
                       onDelete,
                       onRename,
                       onEdit,
-                      onRenameBlocked
+                      onRenameBlocked,
+                      onCrossBucketBlocked
                     })
                   )}
                 </div>

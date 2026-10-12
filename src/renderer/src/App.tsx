@@ -302,6 +302,12 @@ const App = (): React.JSX.Element => {
     void showAlert(copy.renameBlockedTitle, copy.renameBlockedMessage)
   }
 
+  // 跨来源桶设备尝试修改（重命名路径）的反馈（用户复核 5）：编辑/删除是禁用钮
+  // 带 tooltip，重命名走键盘/双击无钮可禁——用 dialog 说明
+  const handleCrossBucketBlocked = (): void => {
+    void showAlert(copy.crossBucketModifyTitle, copy.crossBucketModifyMessage)
+  }
+
   const handleRetryLoad = (): void => {
     void load()
   }
@@ -426,6 +432,7 @@ const App = (): React.JSX.Element => {
           onRename={handleRename}
           onEdit={handleEdit}
           onRenameBlocked={handleRenameBlocked}
+          onCrossBucketBlocked={handleCrossBucketBlocked}
         />
         <footer className="foot">
           <Button

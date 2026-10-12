@@ -25,6 +25,9 @@ type DeviceRowProps = {
   storeTrusted: boolean
   /** 库可写（storeHealth 为 ok）：read-only 时禁改删与重命名 */
   metaWritable: boolean
+  /** 跨来源桶（出身≠当前来源，含运行豁免显示的他桶设备）：另一侧设备不可修改
+   * （plan 用户复核 5）——编辑/删除禁用、重命名拦截，停止/取消不受限 */
+  crossBucket?: boolean
   onSelect: () => void
   onStart: () => void
   onStop: () => void
@@ -36,6 +39,8 @@ type DeviceRowProps = {
   onEdit: () => void
   /** read-only 下尝试重命名（双击/F2）时的反馈入口（review P3——静默 no-op 无说明） */
   onRenameBlocked?: () => void
+  /** 跨来源桶下尝试修改（重命名路径）时的反馈入口 */
+  onCrossBucketBlocked?: () => void
 }
 
 /** 设备行：ListRow 视觉（选中整行反白）+ 状态点 + 行内启停/取消/复制/删除 + 双击/F2/选中态 Enter 行内重命名。
@@ -46,6 +51,7 @@ const DeviceRow = ({
   selected,
   storeTrusted,
   metaWritable,
+  crossBucket = false,
   onSelect,
   onStart,
   onStop,
@@ -54,7 +60,8 @@ const DeviceRow = ({
   onDelete,
   onRename,
   onEdit,
-  onRenameBlocked
+  onRenameBlocked,
+  onCrossBucketBlocked
 }: DeviceRowProps): React.JSX.Element => {
   const [renaming, setRenaming] = useState(false)
   const [draft, setDraft] = useState(device.name)
@@ -88,10 +95,16 @@ const DeviceRow = ({
     device.status === 'stopped' &&
     (!storeTrusted || availability === null || availability.state !== 'valid')
   const deleteDisabled =
-    !metaWritable || (device.status !== 'stopped' && device.status !== 'running')
+    !metaWritable ||
+    crossBucket ||
+    (device.status !== 'stopped' && device.status !== 'running')
 
   const startRename = (): void => {
     if (device.status === 'creating' || device.status === 'deleting') return
+    if (crossBucket) {
+      onCrossBucketBlocked?.()
+      return
+    }
     if (!metaWritable) {
       onRenameBlocked?.()
       return
@@ -284,11 +297,13 @@ const DeviceRow = ({
           className="icon-button"
           aria-label={format(copy.editAria, { name: device.name })}
           title={
-            device.status === 'creating' || device.status === 'deleting'
-              ? copy.editBusyTitle
-              : copy.editTitle
+            crossBucket
+              ? copy.crossBucketBlockedTitle
+              : device.status === 'creating' || device.status === 'deleting'
+                ? copy.editBusyTitle
+                : copy.editTitle
           }
-          disabled={device.status === 'creating' || device.status === 'deleting'}
+          disabled={crossBucket || device.status === 'creating' || device.status === 'deleting'}
           onClick={onEdit}
         >
           <Settings2 size={14} />
@@ -297,7 +312,13 @@ const DeviceRow = ({
           type="button"
           className="icon-button"
           aria-label={format(copy.deleteAria, { name: device.name })}
-          title={metaWritable ? copy.deleteTitle : copy.deleteFrozenTitle}
+          title={
+            crossBucket
+              ? copy.crossBucketBlockedTitle
+              : metaWritable
+                ? copy.deleteTitle
+                : copy.deleteFrozenTitle
+          }
           disabled={deleteDisabled}
           onClick={onDelete}
         >

@@ -71,6 +71,7 @@ const zhCN = {
   actionCreate: '创建设备',
   actionDelete: '删除设备',
   actionRename: '重命名设备',
+  deviceCrossOriginBlocked: '该设备属于另一 SDK 来源——切换到对应来源后才能修改（改名/删除/编辑保存）',
   storeErrorBlocked: '设备数据读取失败（{issues}），不能{action}；请先修复 devices.json 后重新检查',
   storeReadonlyBlocked: '元数据写入已冻结（{issues}），不能{action}',
   appClosingNoStart: '应用退出清理中，暂停启动',
@@ -522,6 +523,7 @@ const zhTW: ErrorsCopy = {
   actionCreate: '建立裝置',
   actionDelete: '刪除裝置',
   actionRename: '重新命名裝置',
+  deviceCrossOriginBlocked: '該裝置屬於另一 SDK 來源——切換到對應來源後才能修改（改名/刪除/編輯儲存）',
   storeErrorBlocked: '裝置資料讀取失敗（{issues}），不能{action}；請先修復 devices.json 後重新檢查',
   storeReadonlyBlocked: '中繼資料寫入已凍結（{issues}），不能{action}',
   appClosingNoStart: '應用程式退出清理中，暫停啟動',
@@ -960,6 +962,8 @@ const enUS: ErrorsCopy = {
   actionCreate: 'create a device',
   actionDelete: 'delete a device',
   actionRename: 'rename a device',
+  deviceCrossOriginBlocked:
+    'This device belongs to the other SDK source — switch to that source to modify it (rename/delete/edit-save)',
   storeErrorBlocked:
     'Failed to read device data ({issues}); cannot {action}. Fix devices.json and recheck first',
   storeReadonlyBlocked: 'Device metadata writes are frozen ({issues}); cannot {action}',

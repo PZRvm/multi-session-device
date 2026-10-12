@@ -837,6 +837,18 @@ const assertMetaWritable = (action: string): void => {
   }
 }
 
+/**
+ * 跨来源设备只读（plan 2026-10-12-device-list-origin-view-filter 用户复核 5）：
+ * 另一桶出身的设备在当前来源下禁止改名/删除/编辑保存——UI 禁用为主，此处双保险
+ * （禁用态可被伪造入参绕过）。启动/停止不受限：运行中设备必须可停（豁免条款），
+ * 启动可行性与来源的关系由既有健康核验表达，不入此守卫。
+ */
+const assertDeviceInCurrentBucket = (device: Device): void => {
+  const origin = device.imageSourceOrigin ?? 'app-owned'
+  const current = isSharedReadOnly() ? 'shared-studio' : 'app-owned'
+  if (origin !== current) throw new Error(msg('deviceCrossOriginBlocked'))
+}
+
 /** 后台运行故障 → 主窗（无主窗时保留在行内 lastError，重开后展示） */
 const emitRuntimeError = (message: RuntimeErrorMessage): void => {
   getMainWindow()?.webContents.send(IPC_CHANNELS.devicesRuntimeError, message)
@@ -1347,6 +1359,7 @@ const deleteFlow = async (id: string): Promise<DeviceSnapshot> => {
   const device = requireDevice(id)
   if (device.status === 'creating') throw new Error(msg('deleteWhileCreating'))
   if (editFlights.has(id)) throw new Error(msg('blockDeleteWhileSaving'))
+  assertDeviceInCurrentBucket(device)
   // 副作用前守卫（对账设计 4）：库不可写时拒绝——删了 AVD 却删不掉元数据会留幽灵记录
   assertMetaWritable(msg('actionDelete'))
   if (device.status === 'starting') await cancelStartDevice(id)
@@ -1613,6 +1626,7 @@ const renameDevice = async (id: string, name: string): Promise<DeviceSnapshot> =
     throw new Error(msg('renameWhileBusy'))
   }
   if (editFlights.has(id)) throw new Error(msg('blockRenameWhileSaving'))
+  assertDeviceInCurrentBucket(device)
   assertMetaWritable(msg('actionRename'))
   await commitMetas((metas) => metas.map((meta) => (meta.id === id ? { ...meta, name } : meta)))
   broadcastChanged()
@@ -2322,6 +2336,7 @@ const updateDeviceConfig = (input: UpdateDeviceInput): Promise<DeviceSnapshot> =
   const promise = (async (): Promise<DeviceSnapshot> => {
     if (!acceptingCommands) throw new Error(msg('appClosingNoSave'))
     await ensureLoaded()
+    assertDeviceInCurrentBucket(requireDevice(input.id))
     try {
       return await updateConfigFlow(input)
     } finally {
