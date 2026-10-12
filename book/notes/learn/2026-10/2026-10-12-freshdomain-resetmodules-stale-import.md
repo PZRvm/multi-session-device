@@ -25,3 +25,10 @@ plan 轴 4 原设计「登记点包装 broadcast 单点拦截」假设 broadcast
 ## 3. 出身类静态标注的「两桶」划分要与迁移语义对表
 
 `imageSourceOrigin` 取值 app-owned/shared-studio 两桶而非 managed/custom/shared 三态——因为托管↔自选迁移不跨越自有/共享边界（迁移=镜像跟着根走，设备可启动性不变），两桶标注永不过期；三态标注反而会在迁移后产生「出身写 managed、根已 custom」的假过期。设计来源类字段时先对表迁移矩阵再定取值粒度。
+
+## 4. zustand store 是模块级单例——测试间状态必泄漏，断言默认值先显式复位
+
+`useDeviceStore` 在模块层 `create()` 一次，vitest 同文件内所有用例共享同一实例：前一个用例把 `sourceBucket` 置成 `shared-studio`，下一个用例断言「默认 app-owned」就拿旧值（顺序依赖，单跑绿全跑红）。跨文件不泄漏（每文件新模块注册表），同文件必泄漏。
+
+- 正解：断言默认值前 `useDeviceStore.setState({ sourceBucket: 'app-owned', revision: -1 })` 显式复位；或者一个用例内做完全部翻转断言。
+- 同族坑：store 的 `apply` 用 `??` 回落当前值时，测试要演练「缺席回落」必须显式传 `undefined`（extras 展开 undefined 才会覆盖默认）——测试 helper 给了默认值就永远测不到回落分支。

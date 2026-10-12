@@ -141,3 +141,35 @@ sourceBucket: 'app-owned' | 'shared-studio'
 4. 创建即落当前视图：共享态向导（已装镜像）建一台 → 立即出现在共享视图顶部。
 5. 汇总条口径：共享态下隐藏的托管坏设备不进「N 台文件异常」计数（轴 2 批复后）；展开后计数随之可见化。
 6. 三语正确；全量测试、typecheck / lint / build 通过。
+
+## 实施记录 — 2026-10-12（worktree feature/device-list-source-aware 续作，批 1–6 完成，真机验收待做）
+
+### Phase 3：实现
+
+- `types.ts`：`DeviceSnapshot.sourceBucket`（必填，与 devices 同帧）；`snapshotNow()` 按 `isSharedReadOnly()` 计算——切来源后的重查轮快照自然翻转到新桶，boot 侧恢复先于首帧，无中间态。
+- `deviceStore`：`sourceBucket` 切片，`apply` 内提取（`??` 回落当前值）。
+- `originView.ts`（新）：`originOf`/`isTransientStatus`/`splitByOriginView` 谓词单源——DeviceListPane 与 App 汇总条口径共用。
+- `DeviceListPane`：主分区（本桶 + 过渡态豁免）+ 底部折叠区（计数行展开/收起）；**展开后独立分区呈现不混排**（偏差 1）；行渲染抽 `rowHandlers` 复用。
+- `App`：`affectedNames` 按可见集派生；`DeviceHealthNotice` 计数 prop 化（`unavailableCount`，不再直读 summary）；`BoardHead` 计数同切可见集（偏差 1）。
+- i18n：`otherOriginOwned`/`otherOriginStudio` 两键三语（折叠行按当前桶选词；可见文本即无障碍名，`foldedSectionAria` 键在实现中删除）。
+
+**偏差记录 1**：用户批复「两边尽量隔离就好」超出轴 1 原字面（"展开后混排"）——展开的折叠区改为独立分区（分隔线 + 浮起背景），`BoardHead` 设备计数一并切可见集口径（plan 未列，属隔离意图的延伸，review P3-A 记录）。
+
+**偏差记录 2**：实施顺序调整——用户指示「不要合并，先在之前 worktree 修改」，dev 侧已做的合并回退（`reset --keep`，用户本地 PRODUCT.md/electron-builder.yml 改动保留），出身批与过滤视图批同留本分支，验收后统一合并。前置依赖（出身字段在分支上）因此自然满足。
+
+### Phase 4：验证
+
+- 新增测试 7 项：DeviceListPane 过滤/豁免/折叠展开 ×1、共享桶文案切换 ×1、缺席出身归属 ×1；deviceStore 切片覆写与缺席回落 ×2；主进程快照三态 ×1；DeviceHealthNotice 视图口径 ×1。快照 mock 缺键连锁按 learn 锚点法逐文件补齐（App.reconciliation/DeviceCanvas.actions/deviceStore）。
+- 全量 **1123 项通过、6 项原有跳过**；typecheck 0 错；lint 0 告警；build 通过。
+- 真机验收**未做**（上方清单 ①–⑥，与出身批 ①–⑦ 一并走查）。
+
+### Phase 5：review（只记录不修）
+
+- P3-A：BoardHead 计数切可见集属 plan 外延伸（偏差 1），若需要「库内总量」口径需另加展示位。
+- P3-B：选中设备若落在折叠区（如选中所见设备后切来源），画布仍显示它但列表行不可见——一期接受；正常操作路径不会选中隐藏设备，展开可达。
+- P3-C：汇总条的 visible 门（signature/orphanCount）与对账通知弹窗仍是全量真值——孤立目录与签名异常是「库的事」不受视图过滤，仅 unavailable 计数为视图口径；语义成立，记录备查。
+
+### Phase 6：收尾
+
+- PRD 设备列表节 AC 扩容；stage05 SDK 步骤附注；[learn](../notes/learn/2026-10/2026-10-12-freshdomain-resetmodules-stale-import.md) 补 zustand 单例泄漏条目。
+- 本 plan 保持 in_progress：验收清单 ①–⑥ 全过后翻 completed。
