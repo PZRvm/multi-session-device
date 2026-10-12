@@ -371,7 +371,7 @@ describe('全量对账 runReconciliation', () => {
         id: UUID_ORPHAN,
         kind: 'orphan',
         detail: '完整组（无元数据记录）',
-        path: join(roots.avdHome, `${UUID_ORPHAN}.ini`)
+        path: join(roots.avdHome, `${UUID_ORPHAN}.avd`)
       }
     ])
     expect(outcome.unrecognizedCount).toBe(2) // ini-only-uuid（非 UUID）+ studio-made

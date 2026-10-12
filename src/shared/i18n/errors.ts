@@ -166,6 +166,7 @@ const zhCN = {
     '共享 Android Studio SDK 只读：不安装/不升级/不卸载 SDK 包，缺包请回 Android Studio 安装或切换来源',
   sdkMigrationBusy: 'SDK 迁移进行中，此操作暂不可用——请到设置的 SDK 来源页继续或回滚',
   dialogDetailTruncated: '……（报告过长，已省略后 {omitted} 行）',
+  shellPathRejected: '路径不在应用数据目录内，已拒绝',
   wizardCallerNotFound: '无法定位调用方窗口',
   chooseSdkRootTitle: '选择 SDK 根目录',
   editorMainOnly: '仅主窗可打开编辑窗',
@@ -603,6 +604,7 @@ const zhTW: ErrorsCopy = {
     '共享 Android Studio SDK 唯讀：不安裝/不升級/不解除安裝 SDK 套件，缺套件請回 Android Studio 安裝或切換來源',
   sdkMigrationBusy: 'SDK 遷移進行中，此操作暫不可用——請到設定的 SDK 來源頁繼續或回復',
   dialogDetailTruncated: '……（報告過長，已省略後 {omitted} 行）',
+  shellPathRejected: '路徑不在應用程式資料目錄內，已拒絕',
   wizardCallerNotFound: '無法定位呼叫方視窗',
   chooseSdkRootTitle: '選擇 SDK 根目錄',
   editorMainOnly: '僅主窗可開啟編輯視窗',
@@ -1049,6 +1051,7 @@ const enUS: ErrorsCopy = {
   sdkMigrationBusy:
     'An SDK migration is in progress and this operation is unavailable. Continue or roll it back on the SDK source page in Settings',
   dialogDetailTruncated: '…(report truncated, {omitted} more lines omitted)',
+  shellPathRejected: 'The path is outside the app data directory and was rejected',
   chooseSdkRootTitle: 'Choose the SDK root folder',
   wizardCallerNotFound: 'cannot locate the calling window',
   editorMainOnly: 'only the main window may open the editor',

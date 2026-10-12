@@ -654,7 +654,8 @@ const scanOrphans = async (
       id: stem,
       kind: linked ? 'metadata-linked' : 'orphan',
       detail: linked ? msg('rcMetaAnomalySuffix', { detail }) : msg('rcNoMetaSuffix', { detail }),
-      path: join(request.dirs.avdHome, hasIni ? `${stem}.ini` : `${stem}.avd`)
+      // 完整组选 .avd 目录（处置语义：Finder 定位到目录，ini 同名可循）；缺 avd 用 ini
+      path: join(request.dirs.avdHome, `${stem}.${hasAvd ? 'avd' : 'ini'}`)
     })
   }
   orphans.sort((a, b) => a.id.localeCompare(b.id))

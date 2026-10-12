@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
 import type { ReconcileReport } from '@shared/types'
+import { toApiResult } from '../api'
 import { useCopy } from '../hooks/useCopy'
 import Button from '../components/Button'
 
@@ -79,6 +80,7 @@ const hasAnyIssue = (report: ReconcileReport): boolean =>
 
 const ReportBody = ({ report }: { report: ReconcileReport }): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
+  const [showError, setShowError] = useState<string | null>(null)
   return (
     <ReportLayout>
       {report.checkedAt !== null ? (
@@ -124,6 +126,7 @@ const ReportBody = ({ report }: { report: ReconcileReport }): React.JSX.Element 
       {report.orphanEntries.length > 0 ? (
         <section>
           <h3>{copy.reportGroupOrphans}</h3>
+          {showError !== null ? <p className="report-line report-error">{showError}</p> : null}
           {report.orphanEntries.map((orphan) => (
             <div className="orphan-row" key={orphan.id}>
               <p className="report-line">
@@ -134,7 +137,11 @@ const ReportBody = ({ report }: { report: ReconcileReport }): React.JSX.Element 
                   type="button"
                   className="finder-btn"
                   onClick={() => {
-                    void window.api.dialog.showItemInFolder(orphan.path)
+                    void toApiResult(window.api.dialog.showItemInFolder(orphan.path)).then(
+                      (result) => {
+                        if (!result.ok) setShowError(result.error)
+                      }
+                    )
                   }}
                 >
                   {copy.showInFinder}

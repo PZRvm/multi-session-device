@@ -7,12 +7,16 @@ const mocks = vi.hoisted(() => ({
     response: 0,
     checkboxChecked: false
   })),
-  fromWebContents: vi.fn(() => null)
+  fromWebContents: vi.fn(() => null),
+  showItemInFolder: vi.fn(async () => undefined),
+  appGetPath: vi.fn(() => '/userdata')
 }))
 vi.mock('electron', () => ({
   ipcMain: { handle: mocks.handle },
   dialog: { showMessageBox: mocks.showMessageBox },
-  BrowserWindow: { fromWebContents: mocks.fromWebContents }
+  BrowserWindow: { fromWebContents: mocks.fromWebContents },
+  shell: { showItemInFolder: mocks.showItemInFolder },
+  app: { getPath: mocks.appGetPath }
 }))
 vi.mock('../../app-icon', () => ({ appIcon: undefined }))
 vi.mock('../../locale', () => ({
@@ -39,6 +43,8 @@ const shownOptions = (): { detail?: string } =>
 describe('dialog:show detail 行数预算（超长弹窗截断，2026-10-12 用户报障）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // clearAllMocks 清掉 getPath 的实现——shell 白名单依赖它，逐用例重设
+    mocks.appGetPath.mockImplementation(() => '/userdata')
     registerDialogIpc()
   })
 
@@ -67,3 +73,46 @@ describe('dialog:show detail 行数预算（超长弹窗截断，2026-10-12 用�
     expect(lines[40]).toBe('TRUNC(80)')
   })
 })
+
+describe('shell:show-item-in-folder 白名单（review P1）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.appGetPath.mockImplementation(() => '/userdata')
+    registerDialogIpc()
+  })
+
+  const show = (payload: unknown): Promise<unknown> =>
+    mocks.handle.mock.calls
+      .filter(([name]) => name === 'shell:show-item-in-folder')
+      .at(-1)![1](fakeEvent, payload)
+
+  it('avdHome 内放行；avdHome 外拒绝', async () => {
+    await show({ path: '/userdata/avd-home/x.ini' })
+    expect(mocks.showItemInFolder).toHaveBeenCalledWith('/userdata/avd-home/x.ini')
+
+    mocks.showItemInFolder.mockClear()
+    await expectShellReject(() => show({ path: '/etc/passwd' }))
+    expect(mocks.showItemInFolder).not.toHaveBeenCalled()
+  })
+
+  it('`..` 穿越被归一化后拒绝（review P1 主场景）', async () => {
+    await expectShellReject(() => show({ path: '/userdata/avd-home/a/../../secrets.txt' }))
+    expect(mocks.showItemInFolder).not.toHaveBeenCalled()
+  })
+
+  it('NUL 字节拒绝', async () => {
+    await expectShellReject(() => show({ path: '/userdata/avd-home/a\0b' }))
+  })
+})
+
+/** rejects.toThrow 修饰符在本文件的 electron mock 组合下不稳定——显式 try/catch 断言 */
+async function expectShellReject(run: () => Promise<unknown>): Promise<void> {
+  let threw = false
+  try {
+    await run()
+  } catch (error) {
+    threw = true
+    expect(error instanceof Error ? error.message : String(error)).toMatch(/shellPathRejected/)
+  }
+  expect(threw).toBe(true)
+}

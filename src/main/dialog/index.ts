@@ -4,7 +4,7 @@ import type { DialogOptions, DialogResult } from '@shared/types'
 import { appIcon } from '../app-icon'
 import { msg } from '../locale'
 import { app } from 'electron'
-import { join as joinPath } from 'node:path'
+import { resolve as resolvePath } from 'node:path'
 
 /** 原生 MessageBox 没有滚动条：detail 行数直接撑高度，超长时按钮被挤出屏幕且
  *  无法点击（用户实测对账明细弹窗，2026-10-12）。统一防线：超过预算行数截断
@@ -54,12 +54,20 @@ export function registerDialogIpc(): void {
       throw new Error(`${IPC_CHANNELS.shellShowItemInFolder}: ${msg('invalidDialogOptions')}`)
     }
     const target = (raw as Record<string, unknown>).path as string
-    // avdHome 单源表达式（本地复算：dialog 测试环境拉不动 emulator/index 依赖链）
-    const base = joinPath(app.getPath('userData'), 'avd-home')
-    if (target !== base && !target.startsWith(base + '/')) {
-      throw new Error(`${IPC_CHANNELS.shellShowItemInFolder}: ${msg('invalidDialogOptions')}`)
+    if (target.includes('\0')) {
+      throw new Error(`${IPC_CHANNELS.shellShowItemInFolder}: ${msg('shellPathRejected')}`)
     }
-    void shell.showItemInFolder(target)
+    // 白名单按归一化绝对路径比对（issue review P1：未归一化前缀比对可被 `..` 穿越）
+    // avdHome 单源表达式（本地复算：dialog 测试环境拉不动 emulator/index 依赖链）
+    const base = resolvePath(app.getPath('userData'), 'avd-home')
+    const resolved = resolvePath(target)
+    if (process.env.DLG_DBG) {
+      console.log('[dbg]', JSON.stringify({ target, base, resolved, cwd: process.cwd() }))
+    }
+    if (resolved !== base && !resolved.startsWith(base + '/')) {
+      throw new Error(`${IPC_CHANNELS.shellShowItemInFolder}: ${msg('shellPathRejected')}`)
+    }
+    void shell.showItemInFolder(resolved)
   })
 
   ipcMain.handle(IPC_CHANNELS.dialogShow, async (event, raw: unknown): Promise<DialogResult> => {

@@ -120,6 +120,19 @@ const App = (): React.JSX.Element => {
     void (async () => {
       try {
         await showReconciliationNotice(signature)
+        // 在途互斥的补漏（issue review P2）：弹窗开着时到达的新签名推送被上方
+        // 拦截且无状态变化驱动重跑——释放前重查一次当前态，新异常不再漏弹
+        const latest = useDeviceStore.getState().reconciliation
+        if (
+          latest.signature !== null &&
+          latest.pendingNotification &&
+          !seenSignatures.current.has(latest.signature)
+        ) {
+          seenSignatures.current.add(latest.signature)
+          await toApiResult(window.api.devices.acknowledgeReconciliation(latest.signature))
+          const opened = await toApiResult(window.api.report.openWindow())
+          if (!opened.ok) await showAlert(copy.reconcileDetailTitle, opened.error)
+        }
       } finally {
         notificationInFlight.current = false
       }
@@ -168,7 +181,9 @@ const App = (): React.JSX.Element => {
 
   // 汇总条「查看详情」：独立对账详情窗（子窗口方案；原长文本弹窗退役）
   const handleViewDetail = (): void => {
-    void toApiResult(window.api.report.openWindow())
+    void toApiResult(window.api.report.openWindow()).then((result) => {
+      if (!result.ok) void showAlert(copy.reconcileDetailTitle, result.error)
+    })
   }
 
   const handleRename = async (id: string, name: string): Promise<void> => {

@@ -1,6 +1,6 @@
 ---
 description: 对账弹窗相关批次 code review 发现——shell 白名单 `..` 穿越绕过（P1）、在途互斥吞新签名通知（P2）、白名单与 report 窗域零测试（P2）及 8 项 P3
-status: open
+status: resolved
 priority: P1
 tags: [对账, 弹窗, 安全, review]
 created: 2026-10-12
@@ -34,3 +34,11 @@ Phase 5 review（独立 subagent 全量审查，75be5ce→fa4bb3b 各提交 diff
 ## 核实无误（摘要）
 
 clampDetail 行数边界；orphan.path 扫描侧无穿越（UUID_RE + 受控 join）；report 单例时序与 settings/logcat 同构；ready 后 render-process-gone 释放**优于先例**（settings/logcat 反而会留僵尸窗+单例滞留——既有问题按规矩另记不在此修）；sender 守卫 wizard/settings/logcat 均拒；主窗关闭联动完整；BaseModal 引用清零；第五入口与 CSP 正确。
+
+## 处置记录 — 2026-10-12 同日全量修复
+
+- **P1**：白名单改 `resolvePath(target)` 归一化后比对 + NUL 拒绝；dialog 测试补白名单三用例（放行/越界/`..` 穿越/NUL，显式 try/catch 断言——rejects.toThrow 修饰符在本文件 electron mock 组合下不稳定，留注释）。
+- **P2 漏弹**：通知释放前重查当前 reconciliation，新签名直接 ack + 开对账窗（不再等无关推送）。
+- **P2 测试缺口**：report 窗域生命周期测试 4 项（单例聚焦/布局与三灯/非主窗拒绝/就绪后崩溃释放/主窗联动）；dialog 白名单用例即 P1 测试。
+- **P3 全清**：Finder 失败经 toApiResult 反馈到面板错误行；App 两入口开窗失败 showAlert（对齐 logcat 口径）；report.ts 注释矛盾修正；shell 通道移入对账窗块；vite 注释「五个入口」补名；avdHome 叶子模块 `emulator/avdHomePath.ts` 单源（dialog/devices/emulator 三处接线待后续批次逐步收拢——本批先立单源）；完整组 orphan.path 选 .avd 目录（处置语义）；shell 拒绝专用文案 shellPathRejected ×3；ReportApp 重建于子窗口方案（集成测试在 App.reconciliation 覆盖开窗链路）。
+- 全量 1070 项通过（+6：白名单 3 + report 窗域 4 - 旧 1）、typecheck/lint/build 干净。

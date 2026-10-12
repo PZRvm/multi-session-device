@@ -81,7 +81,7 @@ export function openReportWindow(): Promise<void> {
       backgroundColor: themeWindowBackground(),
       title: msg('reportWindowTitle'),
       icon: appIcon,
-      // darwin 原生三灯（hiddenInset 同设置窗度量）；最小化/全屏禁用后黄绿为无效钮
+      // darwin 原生三灯（hiddenInset 同设置窗度量）；最小化禁用黄灯灰置，全屏可用绿灯有效
       ...(process.platform === 'darwin'
         ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 12 } }
         : {}),
