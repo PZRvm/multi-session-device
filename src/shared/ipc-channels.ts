@@ -122,6 +122,8 @@ export const IPC_CHANNELS = {
   // ---- 对账详情窗（plan 2026-10-12-reconcile-report-panel 子窗口方案）----
   /** 主窗请求打开对账详情窗（单例；已开则聚焦） */
   reportWindowOpen: 'report-window:open',
+  /** 在 Finder 中显示文件（孤立组处置入口；路径白名单校验在 main） */
+  shellShowItemInFolder: 'shell:show-item-in-folder',
   /** 窗口退订单设备（关窗由 main 侧 destroyed 钩子统一清理） */
   logcatUnsubscribe: 'logcat:unsubscribe',
   /** main → 各窗：批量日志行（250ms 或 200 行触发 flush；dropped 为流控丢弃计数） */

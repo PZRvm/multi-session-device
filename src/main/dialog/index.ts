@@ -1,8 +1,10 @@
-import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { DialogOptions, DialogResult } from '@shared/types'
 import { appIcon } from '../app-icon'
 import { msg } from '../locale'
+import { app } from 'electron'
+import { join as joinPath } from 'node:path'
 
 /** 原生 MessageBox 没有滚动条：detail 行数直接撑高度，超长时按钮被挤出屏幕且
  *  无法点击（用户实测对账明细弹窗，2026-10-12）。统一防线：超过预算行数截断
@@ -41,6 +43,25 @@ const isDialogOptions = (value: unknown): value is DialogOptions => {
 }
 
 export function registerDialogIpc(): void {
+  // 孤立组处置入口：在 Finder 中显示（用户自行删改——保留「不自动清理」语义）。
+  // 路径白名单：只放行应用 avdHome 下的文件，拒绝任意路径探测。
+  ipcMain.handle(IPC_CHANNELS.shellShowItemInFolder, (_event, raw: unknown): void => {
+    if (
+      typeof raw !== 'object' ||
+      raw === null ||
+      typeof (raw as Record<string, unknown>).path !== 'string'
+    ) {
+      throw new Error(`${IPC_CHANNELS.shellShowItemInFolder}: ${msg('invalidDialogOptions')}`)
+    }
+    const target = (raw as Record<string, unknown>).path as string
+    // avdHome 单源表达式（本地复算：dialog 测试环境拉不动 emulator/index 依赖链）
+    const base = joinPath(app.getPath('userData'), 'avd-home')
+    if (target !== base && !target.startsWith(base + '/')) {
+      throw new Error(`${IPC_CHANNELS.shellShowItemInFolder}: ${msg('invalidDialogOptions')}`)
+    }
+    void shell.showItemInFolder(target)
+  })
+
   ipcMain.handle(IPC_CHANNELS.dialogShow, async (event, raw: unknown): Promise<DialogResult> => {
     // renderer 传来的 payload 不可信，先过运行时守卫再进业务
     if (!isDialogOptions(raw)) {

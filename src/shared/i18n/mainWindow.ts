@@ -105,6 +105,7 @@ const zhCN = {
   orphanGroup: '孤立文件组 {id}：{detail}（保留原文件，不自动清理）',
   unrecognizedFiles: '另有 {count} 个非 UUID 命名的 .ini/.avd 形态文件未处理',
   scanIssue: '扫描问题：{message}',
+  showInFinder: '在 Finder 中显示',
   reportLoading: '正在加载对账报告…',
   reportLoadFailed: '报告加载失败：{message}',
   reportRetry: '重试',
@@ -264,6 +265,7 @@ const zhTW: MainWindowCopy = {
   orphanGroup: '孤立檔案組 {id}：{detail}（保留原檔案，不自動清理）',
   unrecognizedFiles: '另有 {count} 個非 UUID 命名的 .ini/.avd 形態檔案未處理',
   scanIssue: '掃描問題：{message}',
+  showInFinder: '在 Finder 中顯示',
   reportLoading: '正在載入對帳報告…',
   reportLoadFailed: '報告載入失敗：{message}',
   reportRetry: '重試',
@@ -429,6 +431,7 @@ const enUS: MainWindowCopy = {
   unrecognizedFiles:
     '{count} more .ini/.avd-shaped files with non-UUID names were left unprocessed',
   scanIssue: 'Scan issue: {message}',
+  showInFinder: 'Show in Finder',
   reportLoading: 'Loading reconciliation report…',
   reportLoadFailed: 'Failed to load report: {message}',
   reportRetry: 'Retry',

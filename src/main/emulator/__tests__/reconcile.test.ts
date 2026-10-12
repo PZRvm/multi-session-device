@@ -367,7 +367,12 @@ describe('全量对账 runReconciliation', () => {
     )
     expect(outcome.availabilityById.get(UUID_A)?.state).toBe('valid')
     expect(outcome.orphans).toEqual([
-      { id: UUID_ORPHAN, kind: 'orphan', detail: '完整组（无元数据记录）' }
+      {
+        id: UUID_ORPHAN,
+        kind: 'orphan',
+        detail: '完整组（无元数据记录）',
+        path: join(roots.avdHome, `${UUID_ORPHAN}.ini`)
+      }
     ])
     expect(outcome.unrecognizedCount).toBe(2) // ini-only-uuid（非 UUID）+ studio-made
     expect(outcome.scanError).toBeNull()
@@ -391,9 +396,15 @@ describe('全量对账 runReconciliation', () => {
       {
         id: UUID_ORPHAN,
         kind: 'metadata-linked',
-        detail: '仅 .avd 目录（缺少 .ini）（元数据异常关联）'
+        detail: '仅 .avd 目录（缺少 .ini）（元数据异常关联）',
+        path: join(roots.avdHome, `${UUID_ORPHAN}.avd`)
       },
-      { id: UUID_B, kind: 'orphan', detail: '仅 .avd 目录（缺少 .ini）（无元数据记录）' }
+      {
+        id: UUID_B,
+        kind: 'orphan',
+        detail: '仅 .avd 目录（缺少 .ini）（无元数据记录）',
+        path: join(roots.avdHome, `${UUID_B}.avd`)
+      }
     ])
   })
 

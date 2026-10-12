@@ -125,9 +125,20 @@ const ReportBody = ({ report }: { report: ReconcileReport }): React.JSX.Element 
         <section>
           <h3>{copy.reportGroupOrphans}</h3>
           {report.orphanEntries.map((orphan) => (
-            <p className="report-line" key={orphan.id}>
-              {format(copy.orphanGroup, { id: orphan.id, detail: orphan.detail })}
-            </p>
+            <div className="orphan-row" key={orphan.id}>
+              <p className="report-line">
+                {format(copy.orphanGroup, { id: orphan.id, detail: orphan.detail })}
+              </p>
+              <button
+                type="button"
+                className="finder-btn"
+                onClick={() => {
+                  void window.api.dialog.showItemInFolder(orphan.path)
+                }}
+              >
+                {copy.showInFinder}
+              </button>
+            </div>
           ))}
         </section>
       ) : null}
@@ -150,6 +161,32 @@ const ReportBody = ({ report }: { report: ReconcileReport }): React.JSX.Element 
 }
 
 const ReportLayout = styled.div`
+  /* 内容与窗口边缘的呼吸空间（用户反馈：文字顶格） */
+  padding: 16px 20px 20px;
+
+  .orphan-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .finder-btn {
+    flex: none;
+    min-height: 26px;
+    padding: 2px 10px;
+    border: 1px solid var(--board-control-line);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--board-ink);
+    font-size: 12px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--board-hover-veil);
+    }
+  }
+
   section {
     margin: 0 0 14px;
   }

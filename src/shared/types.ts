@@ -190,12 +190,15 @@ export interface StoreHealth {
   issues: StoreHealthIssue[]
 }
 
-/** avdHome 顶层的孤立/异常关联文件组：只列出与说明，不提供自动清理 */
+/** avdHome 顶层的孤立/异常关联文件组：只列出与说明，不提供自动清理——
+ *  path 供「在 Finder 中显示」（用户自行处置） */
 export interface ReconcileOrphanEntry {
   /** 文件基名（UUID 形态；非 UUID 名只计入数量不进此表） */
   id: string
   kind: 'orphan' | 'metadata-linked'
   detail: string
+  /** 组内主文件绝对路径（.ini 优先，缺则 .avd 目录）；仅本机展示用 */
+  path: string
 }
 
 /** 一轮对账的完整报告：详情经 devices:reconciliation-report 拉取，随快照只带摘要 */

@@ -653,7 +653,8 @@ const scanOrphans = async (
     orphans.push({
       id: stem,
       kind: linked ? 'metadata-linked' : 'orphan',
-      detail: linked ? msg('rcMetaAnomalySuffix', { detail }) : msg('rcNoMetaSuffix', { detail })
+      detail: linked ? msg('rcMetaAnomalySuffix', { detail }) : msg('rcNoMetaSuffix', { detail }),
+      path: join(request.dirs.avdHome, hasIni ? `${stem}.ini` : `${stem}.avd`)
     })
   }
   orphans.sort((a, b) => a.id.localeCompare(b.id))
