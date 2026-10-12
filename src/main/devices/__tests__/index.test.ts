@@ -185,7 +185,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('electron', () => ({
   ipcMain: { handle: mocks.handle },
-  BrowserWindow: { getAllWindows: mocks.getAllWindows },
+  BrowserWindow: { getAllWindows: mocks.getAllWindows, fromWebContents: vi.fn(() => null) },
   app: { getPath: vi.fn(() => '/userdata') },
   clipboard: { writeText: mocks.clipboardWriteText }
 }))
@@ -296,6 +296,12 @@ vi.mock('../../emulator/configTransaction', async (importOriginal) => ({
 }))
 vi.mock('../../emulator/cameras', () => ({ listWebcams: mocks.listWebcams }))
 vi.mock('../../window', () => ({ getMainWindow: mocks.getMainWindow }))
+vi.mock('../../window/report', () => ({
+  getReportWindow: () => null,
+  openReportWindow: async () => {},
+  closeReportWindow: () => {},
+  registerReportIpc: () => {}
+}))
 vi.mock('../../window/wizard', () => ({
   wizardOwns: mocks.wizardOwns,
   wizardContextOf: (sender: { id?: number } | null | undefined) =>

@@ -16,6 +16,12 @@ interface ReportSession {
 
 let reportSession: ReportSession | null = null
 
+/** 当前对账详情窗（无 / 已销毁 = null）——devices 域 sender 白名单用 */
+export function getReportWindow(): BrowserWindow | null {
+  const window = reportSession?.window
+  return window !== null && window !== undefined && !window.isDestroyed() ? window : null
+}
+
 export function closeReportWindow(): void {
   const window = reportSession?.window
   if (window && !window.isDestroyed()) window.close()

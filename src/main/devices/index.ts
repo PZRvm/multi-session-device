@@ -88,6 +88,7 @@ import {
 import { PortAllocator, tcpProbe } from '../emulator/ports'
 import { createRunner, StartCancelledError } from '../emulator/runner'
 import { getMainWindow } from '../window'
+import { getReportWindow } from '../window/report'
 import { wizardContextOf } from '../window/wizard'
 import { importedSkinsRoot } from '../emulator/skins'
 import { listWebcams } from '../emulator/cameras'
@@ -2494,7 +2495,11 @@ export function registerDevicesIpc(): void {
   ipcMain.handle(
     IPC_CHANNELS.devicesReconciliationReport,
     async (event): Promise<ReconcileReport | null> => {
-      requireSender(IPC_CHANNELS.devicesReconciliationReport, event, 'main')
+      // 对账详情窗（子窗口方案）也允许拉完整报告——sender 由 report 窗口域单例管理
+      const isReport = getReportWindow()?.webContents.id === event.sender.id
+      if (!isReport) {
+        requireSender(IPC_CHANNELS.devicesReconciliationReport, event, 'main')
+      }
       // 只回最近报告：不 ensureLoaded、不触发隐式扫描（plan 设计 5）
       return lastReport
     }
