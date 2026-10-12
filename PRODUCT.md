@@ -36,7 +36,7 @@ web
 
 ## Brand Commitments
 
-沿用 `DESIGN.md` 与 `src/shared/themeSystems.ts` 的现有设计系统。产品正式名称待定，仓库名为 `multi-session-device`。
+沿用 `DESIGN.md` 与 `src/shared/themeSystems.ts` 的现有设计系统。产品中文名定为「多开模拟器」，与姊妹项目「多会话测试浏览器」同族命名；仓库名保持 `multi-session-device`，安装包文件名沿用 ASCII。
 
 ## Evidence on Hand
 

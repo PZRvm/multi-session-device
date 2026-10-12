@@ -1,5 +1,5 @@
 appId: com.electron.app
-productName: multi-session-device
+productName: 多开模拟器
 directories:
   buildResources: build
 files:
@@ -24,6 +24,7 @@ nsis:
   createDesktopShortcut: always
 mac:
   icon: build/icon.icns
+  artifactName: ${name}-${version}-${arch}-mac.${ext}
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: 用于让 Android 模拟器使用本机摄像头进行测试。
