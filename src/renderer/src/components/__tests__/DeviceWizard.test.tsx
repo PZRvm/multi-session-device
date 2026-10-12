@@ -603,6 +603,17 @@ describe('DeviceWizard 清单加载反馈（代次守卫回归）', () => {
     expect(screen.queryByRole('button', { name: copy.sdkBootstrapAction })).toBeNull()
   })
 
+  it('引导探测负路径（review P3-5）：报错但组件齐全——只出重试不出引导钮', async () => {
+    const profiles = vi.fn(async (): Promise<DeviceProfile[]> => {
+      throw new Error('画像清单服务暂不可用')
+    })
+    installSdkStub({ profiles }) // status 默认组件齐全
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    expect(await screen.findByText('画像清单服务暂不可用')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: copy.sdkBootstrapAction })).toBeNull()
+    expect(screen.getByRole('button', { name: copy.retry })).toBeTruthy()
+  })
+
   it('许可拒绝 = 用户取消（用户反馈）：无报错，按钮原地恢复可再次发起', async () => {
     // 现实语义：取消后 SDK 仍未就绪，重拉继续报同一错误——按钮保持在场可再发起
     const profiles = vi.fn(async (): Promise<DeviceProfile[]> => {

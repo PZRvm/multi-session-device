@@ -138,7 +138,7 @@ const zhCN = {
     '设备正在运行：将先停止并等待退出，再删除 AVD。\n此操作不可撤销：AVD 目录与设备内所有数据将永久删除。',
   deleteDetail:
     '此操作不可撤销：\n· AVD 目录将被永久删除\n· 设备内所有数据（登录态、应用、文件）一并消失',
-  crossBucketBlockedTitle: '另一来源设备——切换来源后可修改',
+  crossBucketBlockedTitle: '另一来源设备——切换来源后可用',
   crossBucketModifyTitle: '另一来源设备不可修改',
   crossBucketModifyMessage: '该设备创建于另一 SDK 来源；切换到对应来源后即可编辑、重命名或删除',
   renameBlockedTitle: '暂不能重命名',
@@ -310,7 +310,7 @@ const zhTW: MainWindowCopy = {
     '裝置正在執行：將先停止並等待退出，再刪除 AVD。\n此操作不可復原：AVD 目錄與裝置內所有資料將永久刪除。',
   deleteDetail:
     '此操作不可復原：\n· AVD 目錄將被永久刪除\n· 裝置內所有資料（登入狀態、應用程式、檔案）一併消失',
-  crossBucketBlockedTitle: '另一來源裝置——切換來源後可修改',
+  crossBucketBlockedTitle: '另一來源裝置——切換來源後可用',
   crossBucketModifyTitle: '另一來源裝置不可修改',
   crossBucketModifyMessage: '該裝置建立於另一 SDK 來源；切換到對應來源後即可編輯、重新命名或刪除',
   renameBlockedTitle: '暫不能重新命名',
@@ -489,7 +489,7 @@ const enUS: MainWindowCopy = {
     'The device is running: it will be stopped and awaited before deleting the AVD.\nThis cannot be undone: the AVD directory and all data inside the device will be permanently deleted.',
   deleteDetail:
     'This cannot be undone:\n· The AVD directory will be permanently deleted\n· All data inside the device (logins, apps, files) will be gone',
-  crossBucketBlockedTitle: 'Device from the other source — switch sources to modify',
+  crossBucketBlockedTitle: 'Device from the other source — switch sources to use it',
   crossBucketModifyTitle: 'Read-only: other SDK source',
   crossBucketModifyMessage:
     'This device was created with another SDK source; switch to that source to edit, rename, or delete it',

@@ -78,6 +78,7 @@ import {
 import { awaitWithAbort } from '../emulator/abort'
 import { isMigrationActive } from '../emulator/sdkMigration'
 import { isSharedReadOnly } from '../emulator/sdkSource'
+import { bucketOfShared, originOfMeta } from '@shared/deviceOrigin'
 import {
   ensureSharedServer,
   candidateAdbPaths,
@@ -573,6 +574,7 @@ const reconciliationSummaryNow = (): ReconciliationSummary => ({
       device.availability.state !== 'checking'
   ).length,
   orphanCount: lastReport?.orphanEntries.length ?? 0,
+  scanError: lastReport?.scanError ?? null,
   storeState: storeHealth.state,
   pendingNotification: lastReport?.pendingNotification ?? false
 })
@@ -779,7 +781,7 @@ const snapshotNow = (): DeviceSnapshot => ({
   storeHealth,
   reconciliation: reconciliationSummaryNow(),
   // 活动来源桶（出身过滤视图）：切来源后的重查轮快照自然翻转到新桶
-  sourceBucket: isSharedReadOnly() ? 'shared-studio' : 'app-owned'
+  sourceBucket: bucketOfShared(isSharedReadOnly())
 })
 
 const broadcastChanged = (): void => {
@@ -844,9 +846,9 @@ const assertMetaWritable = (action: string): void => {
  * 启动可行性与来源的关系由既有健康核验表达，不入此守卫。
  */
 const assertDeviceInCurrentBucket = (device: Device): void => {
-  const origin = device.imageSourceOrigin ?? 'app-owned'
-  const current = isSharedReadOnly() ? 'shared-studio' : 'app-owned'
-  if (origin !== current) throw new Error(msg('deviceCrossOriginBlocked'))
+  if (originOfMeta(device) !== bucketOfShared(isSharedReadOnly())) {
+    throw new Error(msg('deviceCrossOriginBlocked'))
+  }
 }
 
 /** 后台运行故障 → 主窗（无主窗时保留在行内 lastError，重开后展示） */
@@ -1439,7 +1441,7 @@ export const purgeAppOwnedDevices = async (): Promise<{
 }> => {
   await ensureLoaded()
   const targets = devices
-    .filter((device) => (device.imageSourceOrigin ?? 'app-owned') === 'app-owned')
+    .filter((device) => originOfMeta(device) === 'app-owned')
     .map((device) => ({ id: device.id, name: device.name }))
   const deleted: Array<{ id: string; name: string }> = []
   const failures: Array<{ name: string; message: string }> = []
@@ -1457,8 +1459,7 @@ export const purgeAppOwnedDevices = async (): Promise<{
 /** 设置窗清除确认框的计数来源：项目自有出身设备总数（当前视图的另一桶全体） */
 export const appOwnedDeviceCount = async (): Promise<number> => {
   await ensureLoaded()
-  return devices.filter((device) => (device.imageSourceOrigin ?? 'app-owned') === 'app-owned')
-    .length
+  return devices.filter((device) => originOfMeta(device) === 'app-owned').length
 }
 
 const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult> => {

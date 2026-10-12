@@ -90,10 +90,12 @@ const DeviceRow = ({
       ? availabilityReason(availability, availabilityLabels)
       : null
 
-  // stopped 且 checking/非 valid 禁启动；库不可信（error）同样禁——元数据无法信任
+  // stopped 且 checking/非 valid 禁启动；库不可信（error）同样禁——元数据无法信任；
+  // 跨桶 stopped 设备禁启动（review P3-3 决策：另一侧只读到底——从这边启动会让
+  // 设备跳进当前视图、停止后又折回，视图跳动且语义越界；运行豁免设备不受影响）
   const startDisabled =
     device.status === 'stopped' &&
-    (!storeTrusted || availability === null || availability.state !== 'valid')
+    (crossBucket || !storeTrusted || availability === null || availability.state !== 'valid')
   const deleteDisabled =
     !metaWritable ||
     crossBucket ||
@@ -222,7 +224,13 @@ const DeviceRow = ({
             type="button"
             className="icon-button"
             aria-label={format(copy.startAria, { name: device.name })}
-            title={startDisabled ? copy.startDisabledTitle : copy.start}
+            title={
+              crossBucket && device.status === 'stopped'
+                ? copy.crossBucketBlockedTitle
+                : startDisabled
+                  ? copy.startDisabledTitle
+                  : copy.start
+            }
             disabled={startDisabled}
             onClick={onStart}
           >

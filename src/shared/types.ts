@@ -229,7 +229,14 @@ export interface ReconcileReport {
 /** 快照内嵌的对账摘要：renderer 据此驱动汇总条与提示，不携带报告详情 */
 export interface ReconciliationSummary {
   signature: string | null
+  /**
+   * 全量口径的文件异常设备数（review P3-2 注）：主窗汇总条已改视图口径（经
+   * DeviceHealthNotice.unavailableCount prop 传入），此字段供主进程侧与详情
+   * 报告链路使用——渲染层勿再直读它做主窗展示。
+   */
   unavailableCount: number
+  /** 本轮扫描自身失败（null = 无）；非空时结果不可信，通知不适用视图静默（P3-4） */
+  scanError?: string | null
   orphanCount: number
   storeState: StoreHealthState
   pendingNotification: boolean

@@ -43,6 +43,7 @@ const reconcileAnomalyHiddenFromView = (): boolean => {
   )
   return (
     !visibleAffected &&
+    (state.reconciliation.scanError ?? null) === null &&
     state.reconciliation.orphanCount === 0 &&
     state.storeHealth.state === 'ok'
   )

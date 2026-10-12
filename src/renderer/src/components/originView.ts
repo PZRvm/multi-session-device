@@ -1,10 +1,11 @@
 import type { Device, DeviceStatus } from '@shared/types'
+import { originOfMeta, type SourceBucket } from '@shared/deviceOrigin'
 
-/** 活动来源桶（与 DeviceSnapshot.sourceBucket 同型） */
-export type SourceBucket = 'app-owned' | 'shared-studio'
+// 出身/桶口径单源在 @shared/deviceOrigin（review P3-1）；此处只保留视图概念
+export type { SourceBucket }
 
-/** 出身读取：缺席（存量）回落 app-owned（plan 2026-10-12-device-list-source-aware 轴 2） */
-export const originOf = (device: Device): SourceBucket => device.imageSourceOrigin ?? 'app-owned'
+/** 出身读取（单源别名）：缺席（存量）回落 app-owned */
+export const originOf = originOfMeta
 
 /** 过渡态：starting/running/stopping 豁免出身过滤（跨桶运行设备必须可见可停） */
 export const isTransientStatus = (status: DeviceStatus): boolean =>

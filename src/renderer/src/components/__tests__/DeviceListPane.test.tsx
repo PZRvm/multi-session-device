@@ -124,11 +124,28 @@ describe('DeviceListPane 空库文案（review P2-3/P3）', () => {
       screen.getByRole('button', { name: format(copy.otherOriginStudio, { count: 1 }) })
     )
     expect(screen.getByText('共享机')).toBeTruthy()
-    // 收起
+    // 集成层（review P3-5）：折叠区行跨桶只读——编辑/删除禁用带说明；F2 走拦截回调
+    const sharedEdit = screen.getByRole('button', {
+      name: format(copy.editAria, { name: '共享机' })
+    }) as HTMLButtonElement
+    const sharedDelete = screen.getByRole('button', {
+      name: format(copy.deleteAria, { name: '共享机' })
+    }) as HTMLButtonElement
+    expect(sharedEdit.disabled).toBe(true)
+    expect(sharedDelete.disabled).toBe(true)
+    expect(sharedEdit.title).toBe(copy.crossBucketBlockedTitle)
+    const onCrossBucketBlocked = vi.fn()
+    cleanup()
+    renderPane({
+      devices: [owned, shared],
+      sourceBucket: 'app-owned',
+      onCrossBucketBlocked
+    })
     fireEvent.click(
       screen.getByRole('button', { name: format(copy.otherOriginStudio, { count: 1 }) })
     )
-    expect(screen.queryByText('共享机')).toBeNull()
+    fireEvent.keyDown(screen.getByText('共享机').parentElement!, { key: 'F2' })
+    expect(onCrossBucketBlocked).toHaveBeenCalledTimes(1)
   })
 
   it('出身过滤视图：共享桶视图下折叠行文案切换为「项目自有」', () => {
