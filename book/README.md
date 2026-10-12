@@ -149,10 +149,10 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-10-settings-window-crash-reopen.md](notes/issue/2026-10/2026-10-10-settings-window-crash-reopen.md) — P2：设置窗就绪后 renderer 崩溃未释放单例，主窗齿轮再次打开只聚焦故障窗；静态前端 review 发现，待独立修复
 - [2026-10-10-three-features-merge-code-review.md](notes/issue/2026-10/2026-10-10-three-features-merge-code-review.md) — 一期收尾三功能（APK 拖拽安装/截屏/日志面板）合并 dev 复核 review——4 项 P2、7 项 P3；同日修复批全量处置
 - [2026-10-11-sdk-source-shared-wizard-guide-and-journal-corruption.md](notes/issue/2026-10/2026-10-11-sdk-source-shared-wizard-guide-and-journal-corruption.md) — 共享 Studio SDK 模式四个遗留——向导缺包引导 UI 未做、journal 损坏无接管、ANDROID_USER_HOME/EMULATOR_HOME 落共享根内、source-adopt/source-migrate 缺 Studio 路径服务端复验（伪造载荷可把 Studio 根当可写自选根）
-- [2026-10-12-reconcile-report-full-view.md](notes/issue/2026-10/2026-10-12-reconcile-report-full-view.md) — 对账明细弹窗经 40 行截断防线后，超长报告的后 N 行在弹窗内不可见——需要应用内完整查看入口（滚动面板或导出）
-- [2026-10-12-reconcile-window-review-findings.md](notes/issue/2026-10/2026-10-12-reconcile-window-review-findings.md) — 对账弹窗相关批次 code review 发现——shell 白名单 `..` 穿越绕过（P1）、在途互斥吞新签名通知（P2）、白名单与 report 窗域零测试（P2）及 8 项 P3
 - [2026-10-12-devicewizard-setstate-in-effect-lint.md](notes/issue/2026-10/2026-10-12-devicewizard-setstate-in-effect-lint.md) — DeviceWizard.tsx:458 存量 lint error——react-hooks 规则报 effect 内同步 setState 可触发级联渲染；dev 基线即有，非断网开关批引入
 - [2026-10-12-network-switch-code-review.md](notes/issue/2026-10/2026-10-12-network-switch-code-review.md) — 断网开关批 code review（八项清单）——总体 pass；3 项 P3 已修复（解析降级/networkGet 刷新初值/mock helper）、2 项批复语义不修，处置记录在内
+- [2026-10-12-reconcile-report-full-view.md](notes/issue/2026-10/2026-10-12-reconcile-report-full-view.md) — 对账明细弹窗经 40 行截断防线后，超长报告的后 N 行在弹窗内不可见——需要应用内完整查看入口（滚动面板或导出）
+- [2026-10-12-reconcile-window-review-findings.md](notes/issue/2026-10/2026-10-12-reconcile-window-review-findings.md) — 对账弹窗相关批次 code review 发现——shell 白名单 `..` 穿越绕过（P1）、在途互斥吞新签名通知（P2）、白名单与 report 窗域零测试（P2）及 8 项 P3
 
 ### notes/learn/
 
@@ -223,6 +223,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-10-styled-single-wrapper-refactor.md](notes/learn/2026-10/2026-10-10-styled-single-wrapper-refactor.md) — styled 单 Wrapper 全局重排的执行经验——影响表和施工批次必须对账、并行 agent 的集中验证纪律、后代类选择器特异性升档的前提
 - [2026-10-11-sdk-source-async-predicate-and-sync-guard.md](notes/learn/2026-10/2026-10-11-sdk-source-async-predicate-and-sync-guard.md) — SDK 来源切换实现批的三条踩坑——异步谓词被同步布尔守卫吞掉恒过、IPC 入口守卫做真实 fs 读扰动时序敏感用例、就绪门检查绑定了应用自有布局
 - [2026-10-12-app-mount-subscription-test-mock-shape.md](notes/learn/2026-10/2026-10-12-app-mount-subscription-test-mock-shape.md) — 断网开关批经验——App 挂载期新增 window.api 订阅必须同步补齐既有测试的 mock 形状（22 项连环挂）；vi.fn mock 带参函数要显式参数类型
+- [2026-10-12-merge-readme-regen-and-lint-baseline.md](notes/learn/2026-10/2026-10-12-merge-readme-regen-and-lint-baseline.md) — 双分支合并 review 经验——生成物 README 冲突必须重跑生成器收敛（手拼必漂移）；lint/测试「通过」注记要复跑验证，基线问题在两父提交上分别复跑定位归属
 
 ### notes/task/
 
@@ -321,4 +322,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 228 documents -->
+<!-- 232 documents -->
