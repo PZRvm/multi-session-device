@@ -1,6 +1,6 @@
 ---
 description: 来源感知设备列表：设备出身标注（项目自有/Android Studio SDK，创建时落盘）+ 切 SDK 来源后主动重查全量可用性 + 镜像缺失时的来源指路文案
-status: in_progress
+status: completed
 created: 2026-10-12
 ---
 
@@ -195,7 +195,7 @@ const wrappedBroadcast = (channel, payload) => {
 ### Phase 6：收尾
 
 - stage05 SDK 来源设置步骤附本批注记；[learn：freshDomain 模块重置后的静态 import 陷阱](../notes/learn/2026-10/2026-10-12-freshdomain-resetmodules-stale-import.md)。
-- 本 plan 保持 in_progress：验收清单 ①–⑦ 全过后翻 completed。
+- **2026-10-12 用户真机验收通过**（「验收完毕，没问题了，过了」）：清单 ①–⑦ 经多轮走查覆盖——切共享即时禁用+徽标+指路、共享建机、切回恢复、清除级联、重启分类保持、汇总条与通知静默、跨桶只读与引导两段化；验收期发现四批缺陷均已修复（store 投影冻结为最重）。本 plan 翻 completed。
 
 ### 验收期修复批 2 — 2026-10-12（用户真机三连报障的统一根因，已修并复核通过）
 

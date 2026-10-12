@@ -1,6 +1,6 @@
 ---
 description: 设备列表出身过滤视图（方案 C）：一份事实源 + 随来源切换的视图谓词——默认只显示当前来源桶出身的设备，其余收进折叠区可展开，运行/过渡态设备永远豁免
-status: in_progress
+status: completed
 created: 2026-10-12
 ---
 
@@ -175,7 +175,7 @@ sourceBucket: 'app-owned' | 'shared-studio'
 - **Phase 5 code review（2026-10-12 合并前，只记录不修）**：结论总体 pass、无 P1——4 项 P2（跨桶运行设备查看配置回归 / 许可静默文本匹配契约 / 清除级联编排与计数通道零测试 / 级联计数时间窗）与 8 项 P3，[处置记录](../notes/issue/2026-10/2026-10-12-source-aware-filter-batch-review.md)。
 - **review 修复批（用户批复「全部修复」，2026-10-12）**：P2 四项清零——跨桶运行设备恢复查看配置、confirmLicenses 布尔化（删文本匹配契约与词条）、级联编排下沉 clearRetainedWithCascade + 4 项域测、级联文案时点口径；计数通道薄透传降 P3 留置。全量 1136 项通过。
 - **review P3 修复批（用户批复「全部修复」，2026-10-12）**：八项清零——口径单源 @shared/deviceOrigin、死字段注释、跨桶 stopped 禁启动（隔离语义决策，tooltip 通用化）、summary 增 scanError 防扫描失败被静默、三测试缺口补齐（折叠区集成/引导负路径/通知补漏）、测试复位 sourceBucket、监听器数组化+退订、rmTree 失败指引。全量 1139 项通过。review issue 全部发现清零关闭。
-- 本 plan 保持 in_progress：验收清单 ①–⑥ 全过后翻 completed。
+- **2026-10-12 用户真机验收通过**：清单 ①–⑥ 走查覆盖——双桶切换折叠/展开、汇总条与通知只认当前桶（空横幅与计数行经复核修订后静默）、跨桶只读、清除级联删除；review P2×4+P3×8 修复批同批验收。本 plan 翻 completed。
 
 ### 验收期修复批 — 2026-10-12（用户真机走查报障：切共享后出现只剩按钮的空警告条）
 
