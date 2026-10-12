@@ -584,9 +584,7 @@ describe('DeviceWizard 清单加载反馈（代次守卫回归）', () => {
     fireEvent.click(bootstrapButton)
     // 两段式（用户反馈）：点击后 pending 禁用但无忙碌动画；进度事件才转「引导中」
     await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(1))
-    expect(
-      screen.queryByText(copy.sdkBootstrapBusy)
-    ).toBeNull()
+    expect(screen.queryByText(copy.sdkBootstrapBusy)).toBeNull()
     handle.emitSdkProgress(10)
     expect(await screen.findByText(copy.sdkBootstrapBusy)).toBeTruthy()
     // 引导成功 → 按钮消失、画像自动重拉成功

@@ -97,9 +97,7 @@ const DeviceRow = ({
     device.status === 'stopped' &&
     (crossBucket || !storeTrusted || availability === null || availability.state !== 'valid')
   const deleteDisabled =
-    !metaWritable ||
-    crossBucket ||
-    (device.status !== 'stopped' && device.status !== 'running')
+    !metaWritable || crossBucket || (device.status !== 'stopped' && device.status !== 'running')
 
   const startRename = (): void => {
     if (device.status === 'creating' || device.status === 'deleting') return

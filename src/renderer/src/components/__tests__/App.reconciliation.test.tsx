@@ -166,9 +166,7 @@ describe('App 对账汇总提示（plan 设计 5）', () => {
     ).mockResolvedValue(hiddenSnapshot)
     render(<App />)
     await waitFor(() => expect(useDeviceStore.getState().loaded).toBe(true))
-    await waitFor(() =>
-      expect(acknowledgeReconciliation).toHaveBeenCalledWith('sig-anomaly-1')
-    )
+    await waitFor(() => expect(acknowledgeReconciliation).toHaveBeenCalledWith('sig-anomaly-1'))
     expect(dialog).not.toHaveBeenCalled()
     expect(reportWindowOpen).not.toHaveBeenCalled()
   })
@@ -199,9 +197,7 @@ describe('App 对账汇总提示（plan 设计 5）', () => {
       pushSnapshot?.(hiddenSnapshot)
     })
     releaseDialog({ response: 1, checkboxChecked: false })
-    await waitFor(() =>
-      expect(acknowledgeReconciliation).toHaveBeenCalledWith('sig-hidden-2')
-    )
+    await waitFor(() => expect(acknowledgeReconciliation).toHaveBeenCalledWith('sig-hidden-2'))
     // 弹窗一次、报告窗零开（首签 response=1 不开；补漏签名隐藏侧静默）
     expect(dialog).toHaveBeenCalledTimes(1)
     expect(reportWindowOpen).not.toHaveBeenCalled()

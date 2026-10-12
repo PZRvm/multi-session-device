@@ -191,8 +191,7 @@ const DeviceWizard = ({
     if (bootstrapPending || bootstrapping) return
     setBootstrapPending(true)
     setBootstrapError(null)
-    const offProgress =
-      window.api?.sdk?.onSdkProgress?.(() => setBootstrapping(true)) ?? (() => {})
+    const offProgress = window.api?.sdk?.onSdkProgress?.(() => setBootstrapping(true)) ?? (() => {})
     try {
       await window.api?.sdk?.bootstrap()
       // 不清 sdkBootstrapable：许可拒绝静默返回后错误块仍在，按钮须可再次发起；
@@ -684,9 +683,7 @@ const DeviceWizard = ({
                 {bootstrapping ? copy.sdkBootstrapBusy : copy.sdkBootstrapAction}
               </span>
             </Button>
-            {bootstrapError !== null ? (
-              <span className="error-text">{bootstrapError}</span>
-            ) : null}
+            {bootstrapError !== null ? <span className="error-text">{bootstrapError}</span> : null}
           </>
         ) : null
       )

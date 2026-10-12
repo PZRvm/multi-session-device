@@ -292,7 +292,7 @@ describe('clearRetainedWithCascade（清除级联编排，review P2-3）', () =>
     resetMigrationFlagForTest()
   })
 
-  const sharedDeps = () => {
+  const sharedDeps = (): SwitchDeps => {
     seedSourceInto(fs, MANAGED)
     setSdkSourceState({
       version: 1,
