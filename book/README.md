@@ -300,6 +300,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-10-settings-reference-layout.md](plans/2026-10-10-settings-reference-layout.md) — 设置静态界面按用户参考图保留行式外观与主题色，隐藏主窗顶部外观 tab
 - [2026-10-10-styled-single-wrapper-refactor.md](plans/2026-10-10-styled-single-wrapper-refactor.md) — 渲染层 styled-components 全量重排——每文件只留一个 Wrapper，内部元素改 className 后代选择器，视觉零变化
 - [2026-10-11-sdk-source-switching.md](plans/2026-10-11-sdk-source-switching.md) — SDK 来源切换设计：三态状态机与 sdk.json 持久化、路径迁移引擎（同卷 rename/跨卷 copy+verify+journal 崩溃恢复）、共享模式保留根与清除入口、AVD 镜像引用改写与设置窗交互
+- [2026-10-12-device-list-origin-view-filter.md](plans/2026-10-12-device-list-origin-view-filter.md) — 设备列表出身过滤视图（方案 C）：一份事实源 + 随来源切换的视图谓词——默认只显示当前来源桶出身的设备，其余收进折叠区可展开，运行/过渡态设备永远豁免
 - [2026-10-12-device-list-source-aware.md](plans/2026-10-12-device-list-source-aware.md) — 来源感知设备列表：设备出身标注（项目自有/Android Studio SDK，创建时落盘）+ 切 SDK 来源后主动重查全量可用性 + 镜像缺失时的来源指路文案
 - [2026-10-12-network-switch-group.md](plans/2026-10-12-network-switch-group.md) — 断网开关组：工具条并排三开关——飞行模式总开关（真断网）+ Wi-Fi/移动数据分 radio（场景测试）；1s 轮询读回、变化才推、设备为唯一事实源
 - [2026-10-12-reconcile-report-panel.md](plans/2026-10-12-reconcile-report-panel.md) — 对账报告完整查看面板设计——主窗首个自绘弹层（BaseModal 原语 + 分组滚动明细），汇总条「查看详情」与摘要式原生通知双入口打开，原生长文本弹窗退役；关闭 issue 2026-10-12-reconcile-report-full-view
@@ -323,4 +324,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 233 documents -->
+<!-- 234 documents -->
