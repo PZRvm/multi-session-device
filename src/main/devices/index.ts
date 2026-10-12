@@ -1,4 +1,4 @@
-import { BrowserWindow, app, clipboard, ipcMain } from 'electron'
+import { app, clipboard, ipcMain } from 'electron'
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -19,9 +19,7 @@ import type {
   DeviceSnapshot,
   ReconcileReport,
   ReconcileResult,
-  ReconciliationSummary,
   RuntimeErrorMessage,
-  StoreHealth,
   UpdateDeviceInput
 } from '@shared/types'
 import { normalizeEditedSettings, sanitizeUpdateSettings } from '@shared/settings-contract'
@@ -109,55 +107,48 @@ import {
 } from './environment'
 
 export { adbBinaryPath, androidToolEnv } from './environment'
+export { attachDeviceStreamBridge } from './state'
+import {
+  acceptingCommandsNow,
+  avdEpochNow,
+  broadcastChanged,
+  bumpAvdEpoch,
+  bumpMetaRevision,
+  checkingAvailability,
+  devicesNow,
+  editFlights,
+  frozenMessages,
+  lastReportNow,
+  metaRevisionNow,
+  reconciliationSummaryNow,
+  rebuildDevices,
+  requireDevice,
+  revisionNow,
+  setAcceptingCommands,
+  setDevices,
+  setLastReport,
+  setStoreHealth,
+  setSuspectIds,
+  snapshotNow,
+  storeHealthNow,
+  streamBridge,
+  suspectIdsNow,
+  toMeta,
+  transientIdsNow
+} from './state'
 
 // ---- 主进程是设备列表与运行状态的唯一事实源（architecture 边界不变量）----
-// status/lastError/serial/runId 只活在这里的内存里，重启一律「停止」，不入盘。
+// status/lastError/serial/runId 只活在 state.ts 的内存里，重启一律「停止」，不入盘。
 // availability/storeHealth 同为内存派生（对账产物），随快照发布、不进 toMeta。
 
-let devices: Device[] = []
-let revision = 0
 let loadPromise: Promise<void> | null = null
 let writeQueue: Promise<void> = Promise.resolve()
-let acceptingCommands = true
 const deleteFlights = new Map<string, Promise<DeviceSnapshot>>()
 
-// ---- 对账状态（plan 2026-10-05-avd-reconciliation 设计 3）----
-
-/** 当前库健康：error 时无可信列表；read-only 冻结一切元数据写入 */
-let storeHealth: StoreHealth = { state: 'ok', issues: [] }
 /** 最后接纳/成功提交的元数据（外部变化判定基准）；null = 尚无可信列表 */
 let acceptedMetas: DeviceMeta[] | null = null
-/** 坏/重复条目中可识别的 id（「元数据异常关联文件」） */
-let suspectIds: string[] = []
-/** 元数据提交代次（commitMetas 成功后 +1）——扫描过期判定 */
-let metaRevision = 0
-/** AVD 文件变更代次（create/delete 事务开始与结束 +1）——扫描过期判定 */
-let avdEpoch = 0
-let lastReport: ReconcileReport | null = null
 let acknowledgedSignature: string | null = null
 let reconcilePromise: Promise<ReconcileResult> | null = null
-
-// ---- 配置编辑域状态（plan 2026-10-08-device-config-edit）----
-
-/** 同设备保存互斥（覆盖全部 await）：持有期间启动/删除/独立重命名/重复保存拒绝交错 */
-const editFlights = new Map<string, Promise<DeviceSnapshot>>()
-/** 事务恢复无法裁决、冻结配置写入的目标（id → 中文原因；行内 lastError 反馈） */
-const frozenMessages = new Map<string, string>()
-
-const bumpAvdEpoch = (): void => {
-  avdEpoch += 1
-}
-
-/** 投屏会话桥（ipc 层装配）：running 建流，stopped/beforeKill 释放流资源 */
-const streamBridge: {
-  running?: (id: string, runId: string, serial: string) => void
-  stopped?: (id: string) => void
-  beforeKill?: (id: string, runId: string) => Promise<void>
-} = {}
-
-export function attachDeviceStreamBridge(bridge: typeof streamBridge): void {
-  Object.assign(streamBridge, bridge)
-}
 
 /**
  * SDK 来源变更后的全量可用性重查（plan 2026-10-12-device-list-source-aware）：
@@ -191,57 +182,14 @@ export const runningDeviceRef = async (
 /** 截屏域迟到回填复核用：同步读 running（不 ensureLoaded——调用点设备必已加载；
  * 与异步复核的差别是零微任务间隙，停止钩子无法插进复核与缓存回填之间） */
 export const isRunningDevice = (id: string): boolean => {
-  const device = devices.find((entry) => entry.id === id)
+  const device = devicesNow().find((entry) => entry.id === id)
   return device?.status === 'running' && !!device.serial
 }
 
 export const listDeviceNamesReferencing = (packageName: string): string[] =>
-  devices.filter((device) => device.imagePackageName === packageName).map((device) => device.name)
-
-const checkingAvailability = (): DeviceAvailability => ({
-  state: 'checking',
-  issues: [],
-  checkedAt: null
-})
-
-/** 创建/删除/回滚/保存中的 id：扫描时暂缓判孤立（保存中 config 半提交不是稳定目标） */
-const transientIdsNow = (): Set<string> =>
-  new Set([
-    ...devices
-      .filter((device) => device.status === 'creating' || device.status === 'deleting')
-      .map((device) => device.id),
-    ...editFlights.keys()
-  ])
-
-/**
- * 以 metas 重建 devices：同 id 保留完整运行字段（status/lastError/serial/runId/
- * startedAt/availability），新 id 落 stopped + checking——首载/首建/提交三处共用
- * 单源（review P3：三段近重复收敛）。
- */
-const rebuildDevices = (metas: DeviceMeta[]): Device[] => {
-  const runtimeById = new Map(devices.map((device) => [device.id, device]))
-  return metas.map((meta) => {
-    const runtime = runtimeById.get(meta.id)
-    return runtime !== undefined
-      ? {
-          ...meta,
-          frameKind: runtime.frameKind ?? frameKindOf(meta.profileId),
-          status: runtime.status,
-          lastError: runtime.lastError,
-          cameraNotice: runtime.cameraNotice,
-          serial: runtime.serial,
-          runId: runtime.runId,
-          startedAt: runtime.startedAt,
-          availability: runtime.availability
-        }
-      : {
-          ...meta,
-          frameKind: frameKindOf(meta.profileId),
-          status: 'stopped' as const,
-          availability: checkingAvailability()
-        }
-  })
-}
+  devicesNow()
+    .filter((device) => device.imagePackageName === packageName)
+    .map((device) => device.name)
 
 /**
  * 首次加载（issue 2026-10-03 双读的收口）：并发调用共享同一 Promise，失败可重试。
@@ -269,11 +217,11 @@ const loadAndScan = async (): Promise<void> => {
     }
   }
   await ensureFrameIndex()
-  storeHealth = read.health
-  suspectIds = read.suspectIds
+  setStoreHealth(read.health)
+  setSuspectIds(read.suspectIds)
   acceptedMetas = read.health.state === 'error' ? null : read.metas
-  devices = rebuildDevices(read.metas)
-  applyFrozenTargets(devices)
+  setDevices(rebuildDevices(read.metas))
+  applyFrozenTargets(devicesNow())
   applyScan(await scanCurrent())
 }
 
@@ -306,10 +254,10 @@ const applyFrozenTargets = (list: Device[]): void => {
 const scanCurrent = async (): Promise<ReconcileOutcome> => {
   try {
     return await runReconciliation({
-      metas: devices
+      metas: devicesNow()
         .filter((device) => device.status !== 'creating' && device.status !== 'deleting')
         .map(toMeta),
-      badMetaIds: new Set(suspectIds),
+      badMetaIds: new Set(suspectIdsNow()),
       transientIds: transientIdsNow(),
       dirs: reconcileDirs()
     })
@@ -327,10 +275,10 @@ const scanCurrent = async (): Promise<ReconcileOutcome> => {
 /** 变化检测键：availability/storeHealth/报告摘要与 scanError/avd-missing 清理——checkedAt 不参与 */
 const changeKey = (): string =>
   JSON.stringify({
-    store: storeHealth,
+    store: storeHealthNow(),
     summary: reconciliationSummaryNow(),
-    scanError: lastReport?.scanError ?? null,
-    devices: devices.map((device) => [
+    scanError: lastReportNow()?.scanError ?? null,
+    devices: devicesNow().map((device) => [
       device.id,
       device.availability?.state ?? null,
       device.availability?.issues.map((issue) => [issue.code, issue.severity]) ?? null,
@@ -341,7 +289,7 @@ const changeKey = (): string =>
 /** 合并一轮扫描：只写 availability 与报告，运行字段原样保留；无语义变化不广播 */
 const applyScan = (outcome: ReconcileOutcome): void => {
   const before = changeKey()
-  for (const device of devices) {
+  for (const device of devicesNow()) {
     const availability = outcome.availabilityById.get(device.id)
     if (availability === undefined) continue
     device.availability = availability
@@ -350,16 +298,17 @@ const applyScan = (outcome: ReconcileOutcome): void => {
       device.lastError = undefined
     }
   }
-  lastReport = buildReport(outcome)
+  setLastReport(buildReport(outcome))
   if (changeKey() !== before) broadcastChanged()
   // 异常清零后复位确认记录（review P3）：同内容异常复发时重新提示
-  if (lastReport.signature === null) acknowledgedSignature = null
+  if (lastReportNow()?.signature === null) acknowledgedSignature = null
   syncReportRevision()
 }
 
 /** report.revision 对齐发布快照的代次（review P3——原恒差 1） */
 const syncReportRevision = (): void => {
-  if (lastReport !== null) lastReport = { ...lastReport, revision }
+  const report = lastReportNow()
+  if (report !== null) setLastReport({ ...report, revision: revisionNow() })
 }
 
 /**
@@ -368,22 +317,23 @@ const syncReportRevision = (): void => {
  * 沿上一轮（这两条路径不重扫文件，上一轮结论仍有效）。
  */
 const refreshReportFromDevices = (): void => {
-  if (lastReport === null) return
+  const report = lastReportNow()
+  if (report === null) return
   const deviceIssues = collectDeviceIssues()
   const signature = computeSignature(
     {
-      orphans: lastReport.orphanEntries,
-      unrecognizedCount: lastReport.unrecognizedCount,
-      scanError: lastReport.scanError
+      orphans: report.orphanEntries,
+      unrecognizedCount: report.unrecognizedCount,
+      scanError: report.scanError
     },
     deviceIssues
   )
-  lastReport = {
-    ...lastReport,
+  setLastReport({
+    ...report,
     deviceIssues,
     signature,
     pendingNotification: signature !== null && signature !== acknowledgedSignature
-  }
+  })
   if (signature === null) acknowledgedSignature = null
 }
 
@@ -391,10 +341,10 @@ const buildReport = (outcome: ReconcileOutcome): ReconcileReport => {
   const deviceIssues = collectDeviceIssues()
   const signature = computeSignature(outcome, deviceIssues)
   return {
-    revision,
+    revision: revisionNow(),
     signature,
     checkedAt: outcome.checkedAt,
-    storeHealth,
+    storeHealth: storeHealthNow(),
     deviceIssues,
     orphanEntries: outcome.orphans,
     unrecognizedCount: outcome.unrecognizedCount,
@@ -408,7 +358,7 @@ const buildReport = (outcome: ReconcileOutcome): ReconcileReport => {
 /** 报告口径的受影响设备：排除 checking（事务中/暂缓判断——review P2-2，不计数不进
  * 签名）；非 valid 或带 warning 的稳定设备进入 */
 const collectDeviceIssues = (): ReconcileReport['deviceIssues'] =>
-  devices
+  devicesNow()
     .filter(
       (device) =>
         device.availability !== undefined &&
@@ -425,16 +375,17 @@ const computeSignature = (
   outcome: Pick<ReconcileOutcome, 'orphans' | 'unrecognizedCount' | 'scanError'>,
   deviceIssues: ReconcileReport['deviceIssues']
 ): string | null => {
+  const health = storeHealthNow()
   const hasAnomaly =
-    storeHealth.state !== 'ok' ||
-    storeHealth.issues.length > 0 ||
+    health.state !== 'ok' ||
+    health.issues.length > 0 ||
     deviceIssues.some((entry) => entry.availability.state !== 'valid') ||
     outcome.orphans.length > 0 ||
     outcome.unrecognizedCount > 0
   if (!hasAnomaly) return null
   return JSON.stringify({
-    storeState: storeHealth.state,
-    store: storeHealth.issues.map((issue) => [issue.code, issue.entryIndex ?? -1]),
+    storeState: health.state,
+    store: health.issues.map((issue) => [issue.code, issue.entryIndex ?? -1]),
     devices: deviceIssues
       .filter((entry) => entry.availability.state !== 'valid')
       .map((entry) => [
@@ -448,20 +399,6 @@ const computeSignature = (
     unrecognized: outcome.unrecognizedCount
   })
 }
-
-const reconciliationSummaryNow = (): ReconciliationSummary => ({
-  signature: lastReport?.signature ?? null,
-  unavailableCount: devices.filter(
-    (device) =>
-      device.availability !== undefined &&
-      device.availability.state !== 'valid' &&
-      device.availability.state !== 'checking'
-  ).length,
-  orphanCount: lastReport?.orphanEntries.length ?? 0,
-  scanError: lastReport?.scanError ?? null,
-  storeState: storeHealth.state,
-  pendingNotification: lastReport?.pendingNotification ?? false
-})
 
 /** 人工重查/事务收尾共用单飞；完成后清空——下一次调用重新执行 */
 const reconcileDevices = (): Promise<ReconcileResult> => {
@@ -480,28 +417,29 @@ const performReconcile = async (): Promise<ReconcileResult> => {
   // 长文件扫描在队列外；代次变化则整轮重查（上限 3 次防反复失效）
   let outcome: ReconcileOutcome | null = null
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const startMeta = metaRevision
-    const startEpoch = avdEpoch
+    const startMeta = metaRevisionNow()
+    const startEpoch = avdEpochNow()
     outcome = await scanCurrent()
-    if (startMeta === metaRevision && startEpoch === avdEpoch) break
+    if (startMeta === metaRevisionNow() && startEpoch === avdEpochNow()) break
     outcome = null
   }
   if (outcome === null) {
     // 三轮代次全部失配（review P3）：保留上一轮结果与 checkedAt，只叠加未完成说明
     // ——不伪装刚检查过、不抹掉既有 orphans/deviceIssues；scanError 不参与签名，不重弹
-    if (lastReport !== null) {
+    const churned = lastReportNow()
+    if (churned !== null) {
       const before = changeKey()
-      lastReport = {
-        ...lastReport,
+      setLastReport({
+        ...churned,
         scanError: msg('reconcileChurn')
-      }
+      })
       if (changeKey() !== before) broadcastChanged()
       syncReportRevision()
     }
-    return { snapshot: snapshotNow(), report: lastReport! }
+    return { snapshot: snapshotNow(), report: lastReportNow()! }
   }
   applyScan(outcome)
-  return { snapshot: snapshotNow(), report: lastReport! }
+  return { snapshot: snapshotNow(), report: lastReportNow()! }
 }
 
 const deepEqual = (a: unknown, b: unknown): boolean => {
@@ -530,17 +468,17 @@ const metasEqual = (a: DeviceMeta[], b: DeviceMeta[]): boolean =>
 const rereadStore = async (): Promise<void> => {
   const read = await readDeviceStore()
   if (read.health.state === 'error') {
-    storeHealth = read.health
-    suspectIds = read.suspectIds
+    setStoreHealth(read.health)
+    setSuspectIds(read.suspectIds)
     return
   }
   if (acceptedMetas === null) {
     // 初载 error 后首次成功重读：首次建立可信列表（同 id 保留运行字段；初载 error
     // 时 devices 必为空，运行字段保留是防御性口径）
-    storeHealth = read.health
-    suspectIds = read.suspectIds
+    setStoreHealth(read.health)
+    setSuspectIds(read.suspectIds)
     acceptedMetas = read.metas
-    devices = rebuildDevices(read.metas)
+    setDevices(rebuildDevices(read.metas))
     return
   }
   if (!metasEqual(read.metas, acceptedMetas)) {
@@ -548,7 +486,7 @@ const rereadStore = async (): Promise<void> => {
     if (read.health.state === 'ok') {
       armStoreProtection(msg('storeExternalModifiedFrozen'))
     }
-    storeHealth = {
+    setStoreHealth({
       state: 'read-only',
       issues: [
         ...read.health.issues,
@@ -557,32 +495,14 @@ const rereadStore = async (): Promise<void> => {
           message: msg('storeExternalModifiedAtLoad')
         }
       ]
-    }
-    suspectIds = read.suspectIds
+    })
+    setSuspectIds(read.suspectIds)
     return
   }
   // 与最后接纳一致：readDeviceStore 的 ok 已解除写保护（生产唯一解除入口）
-  storeHealth = read.health
-  suspectIds = read.suspectIds
+  setStoreHealth(read.health)
+  setSuspectIds(read.suspectIds)
 }
-
-const toMeta = (device: Device): DeviceMeta => ({
-  id: device.id,
-  name: device.name,
-  profileId: device.profileId,
-  profileLabel: device.profileLabel,
-  imagePackageName: device.imagePackageName,
-  apiDisplay: device.apiDisplay,
-  formFactor: device.formFactor,
-  screenSummary: device.screenSummary,
-  advancedSettings: device.advancedSettings,
-  snapshotReadyAt: device.snapshotReadyAt ?? null,
-  ...(device.cutoutResetPending === true ? { cutoutResetPending: true } : {}),
-  ...(device.imageSourceOrigin !== undefined
-    ? { imageSourceOrigin: device.imageSourceOrigin }
-    : {}),
-  createdAt: device.createdAt
-})
 
 /** 全局串行队列：元数据提交与受控重读共用（对账设计 3——保护状态提交不与写盘交错） */
 const enqueueStoreTask = <T>(task: () => Promise<T>): Promise<T> => {
@@ -602,7 +522,7 @@ const rebuildWithPendingRows = (draft: DeviceMeta[]): Device[] => {
   const committedIds = new Set(draft.map((meta) => meta.id))
   return [
     ...rebuildDevices(draft),
-    ...devices.filter((device) => device.status === 'creating' && !committedIds.has(device.id))
+    ...devicesNow().filter((device) => device.status === 'creating' && !committedIds.has(device.id))
   ]
 }
 
@@ -623,7 +543,7 @@ const commitMetas = (mutate: (metas: DeviceMeta[]) => DeviceMeta[]): Promise<voi
       !metasEqual(guard.metas, acceptedMetas)
     ) {
       armStoreProtection(msg('storeExternalModifiedAtWrite'))
-      storeHealth = {
+      setStoreHealth({
         state: 'read-only',
         issues: [
           ...guard.health.issues,
@@ -632,7 +552,7 @@ const commitMetas = (mutate: (metas: DeviceMeta[]) => DeviceMeta[]): Promise<voi
             message: msg('storeWriteAbortedV1')
           }
         ]
-      }
+      })
       throw new Error(msg('storeExternalModifiedAborted'))
     }
     if (acceptedMetas === null) {
@@ -645,7 +565,7 @@ const commitMetas = (mutate: (metas: DeviceMeta[]) => DeviceMeta[]): Promise<voi
       const prev = acceptedMetas.find((entry) => entry.id === meta.id)
       if (prev === undefined || deepEqual(prev, meta)) continue
       if (!pendingJournalCleanup.has(meta.id)) continue
-      const label = devices.find((entry) => entry.id === meta.id)?.name ?? meta.id
+      const label = devicesNow().find((entry) => entry.id === meta.id)?.name ?? meta.id
       try {
         await removeJournal(journalDir, meta.id)
         pendingJournalCleanup.delete(meta.id)
@@ -654,44 +574,21 @@ const commitMetas = (mutate: (metas: DeviceMeta[]) => DeviceMeta[]): Promise<voi
       }
     }
     await writeDeviceMetas(draft)
-    devices = rebuildWithPendingRows(draft)
+    setDevices(rebuildWithPendingRows(draft))
     acceptedMetas = draft
-    metaRevision += 1
+    bumpMetaRevision()
   })
-
-const snapshotNow = (): DeviceSnapshot => ({
-  revision,
-  devices: devices.map((device) => ({ ...device })),
-  storeHealth,
-  reconciliation: reconciliationSummaryNow(),
-  // 活动来源桶（出身过滤视图）：切来源后的重查轮快照自然翻转到新桶
-  sourceBucket: bucketOfShared(isSharedReadOnly())
-})
-
-const broadcastChanged = (): void => {
-  revision += 1
-  const snapshot = snapshotNow()
-  for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send(IPC_CHANNELS.devicesChanged, snapshot)
-  }
-}
 
 /** 窗口上下文窄视图（日志窗下拉等）：只暴露 id/名称/运行态/serial/runId——
  *  相比全量快照不扩散健康详情、镜像与附加设置；各消费域仍须自行守卫 sender */
 export const listDeviceRuntimeViews = (): DeviceRuntimeView[] =>
-  devices.map((device) => ({
+  devicesNow().map((device) => ({
     id: device.id,
     name: device.name,
     status: device.status,
     serial: device.serial,
     runId: device.runId
   }))
-
-const requireDevice = (id: string): Device => {
-  const device = devices.find((entry) => entry.id === id)
-  if (!device) throw new Error(msg('deviceNotFound', { id }))
-  return device
-}
 
 /** 安装域注入用（plan 2026-10-10-drag-apk-install）：断言设备 running 并返回 serial；
  *  未 running 抛本地化错误——与 copySerial 同一守卫口径 */
@@ -705,18 +602,19 @@ export const runningDeviceSerial = (id: string): string => {
 
 /** 元数据写命令的副作用前守卫（对账设计 3）：error/read-only 都拒绝并说明原因 */
 const assertMetaWritable = (action: string): void => {
-  if (storeHealth.state === 'error') {
+  const health = storeHealthNow()
+  if (health.state === 'error') {
     throw new Error(
       msg('storeErrorBlocked', {
-        issues: storeHealth.issues[0]?.message ?? msg('unknownError'),
+        issues: health.issues[0]?.message ?? msg('unknownError'),
         action
       })
     )
   }
-  if (storeHealth.state === 'read-only') {
+  if (health.state === 'read-only') {
     throw new Error(
       msg('storeReadonlyBlocked', {
-        issues: storeHealth.issues.map((issue) => issue.message).join('；'),
+        issues: health.issues.map((issue) => issue.message).join('；'),
         action
       })
     )
@@ -743,7 +641,7 @@ const emitRuntimeError = (message: RuntimeErrorMessage): void => {
 // ---- runner 事件 → 设备状态回写 ----
 
 const handleRunning = (id: string, runId: string, serial: string): void => {
-  const device = devices.find((entry) => entry.id === id)
+  const device = devicesNow().find((entry) => entry.id === id)
   if (!device || device.runId !== runId || device.status !== 'starting') return
   device.status = 'running'
   device.serial = serial
@@ -756,7 +654,7 @@ const handleUnexpectedExit = (
   runId: string,
   info: { code: number; stderrTail: string; stdoutTail: string }
 ): void => {
-  const device = devices.find((entry) => entry.id === id)
+  const device = devicesNow().find((entry) => entry.id === id)
   if (!device || device.runId !== runId) return // 旧代次退出不覆盖新实例
   // 致命参数错误只打在 stdout（37.2.12 实测），stderr/stdout 尾部都带上
   const parts = [
@@ -962,7 +860,7 @@ const runner = createRunner({
   },
   beforeStart: async (id, runId, signal) => {
     displayArgsByDevice.delete(id)
-    const device = devices.find((entry) => entry.id === id)
+    const device = devicesNow().find((entry) => entry.id === id)
     if (device === undefined) throw new Error(msg('deviceNotFound', { id }))
     // 真正启动前即时核验（对账设计 4）：不信任上次扫描结果；结果只落在相同代次上
     const availability = await awaitWithAbort(
@@ -976,7 +874,7 @@ const runner = createRunner({
     )
     // 写回前重取列表对象（review P3）：跨 await 的 commitMetas 会重建 devices 数组，
     // 闭包里的旧引用会变成孤儿——写上去等于丢失更新
-    const current = devices.find((entry) => entry.id === id)
+    const current = devicesNow().find((entry) => entry.id === id)
     if (current?.runId === runId && current.status === 'starting') {
       current.availability = availability
     }
@@ -1007,7 +905,7 @@ const runner = createRunner({
     if (usesWebcam) {
       const myStart = device.startedAt ?? 0
       const boundOthers: ArbitrationSide[] = []
-      for (const entry of devices) {
+      for (const entry of devicesNow()) {
         if (
           entry.id === id ||
           (entry.status !== 'starting' && entry.status !== 'running') ||
@@ -1037,7 +935,7 @@ const runner = createRunner({
           front: arbitration.front,
           rear: arbitration.rear
         })
-        const row = devices.find((entry) => entry.id === id)
+        const row = devicesNow().find((entry) => entry.id === id)
         if (row?.runId === runId && row.status === 'starting') {
           row.cameraNotice = arbitration.notices.join('；')
           broadcastChanged()
@@ -1059,7 +957,7 @@ const runner = createRunner({
   // Quick 的首启/失效路径：从未有效快照 → -no-snapshot-load（不加载旧快照，
   // 正常停止仍保存新快照；plan 设计 8 的冷启动恢复）
   extraArgsFor: (id) => {
-    const device = devices.find((entry) => entry.id === id)
+    const device = devicesNow().find((entry) => entry.id === id)
     const display = displayArgsByDevice.get(id)
     const displayArgs = display?.runId === device?.runId ? (display?.args ?? []) : []
     // 摄像头回退（仲裁命中时）：本次启动以 emulated 覆盖，config.ini 不动
@@ -1093,7 +991,7 @@ const runner = createRunner({
 // ---- 生命周期流程 ----
 
 const startDevice = async (id: string): Promise<DeviceSnapshot> => {
-  if (!acceptingCommands) throw new Error(msg('appClosingNoStart'))
+  if (!acceptingCommandsNow()) throw new Error(msg('appClosingNoStart'))
   await ensureLoaded()
   const device = requireDevice(id)
   if (editFlights.has(id)) throw new Error(msg('blockStartWhileSaving'))
@@ -1112,7 +1010,7 @@ const startDevice = async (id: string): Promise<DeviceSnapshot> => {
   broadcastChanged()
   try {
     const { runId, serial } = await runner.start(id, attemptId)
-    const target = devices.find((entry) => entry.id === id)
+    const target = devicesNow().find((entry) => entry.id === id)
     if (target?.runId === attemptId && target.status === 'starting') {
       target.runId = runId
       target.serial = serial
@@ -1120,7 +1018,7 @@ const startDevice = async (id: string): Promise<DeviceSnapshot> => {
     }
   } catch (error) {
     if (error instanceof StartCancelledError) return snapshotNow()
-    const target = devices.find((entry) => entry.id === id)
+    const target = devicesNow().find((entry) => entry.id === id)
     if (target?.runId === attemptId && target.status === 'starting') {
       target.status = 'stopped'
       target.serial = undefined
@@ -1273,7 +1171,7 @@ const deleteFlow = async (
     void reconcileDevices().catch(() => undefined)
     return snapshotNow()
   } catch (error) {
-    const target = devices.find((entry) => entry.id === id)
+    const target = devicesNow().find((entry) => entry.id === id)
     if (target) {
       target.status = 'stopped'
       target.lastError = {
@@ -1324,7 +1222,7 @@ export const purgeAppOwnedDevices = async (): Promise<{
   failures: Array<{ name: string; message: string }>
 }> => {
   await ensureLoaded()
-  const targets = devices
+  const targets = devicesNow()
     .filter((device) => originOfMeta(device) === 'app-owned')
     .map((device) => ({ id: device.id, name: device.name }))
   const deleted: Array<{ id: string; name: string }> = []
@@ -1343,7 +1241,7 @@ export const purgeAppOwnedDevices = async (): Promise<{
 /** 设置窗清除确认框的计数来源：项目自有出身设备总数（当前视图的另一桶全体） */
 export const appOwnedDeviceCount = async (): Promise<number> => {
   await ensureLoaded()
-  return devices.filter((device) => originOfMeta(device) === 'app-owned').length
+  return devicesNow().filter((device) => originOfMeta(device) === 'app-owned').length
 }
 
 const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult> => {
@@ -1472,7 +1370,7 @@ const createDeviceTransaction = async (
     status: 'creating'
   }
   bumpAvdEpoch()
-  devices = [...devices, device]
+  setDevices([...devicesNow(), device])
   broadcastChanged()
   try {
     // 事务：AVD 真建成功 → config patch（白名单键、保留未知键）→ 元数据落盘成功
@@ -1519,7 +1417,7 @@ const createDeviceTransaction = async (
     syncReportRevision()
     return { createdId: device.id, snapshot: snapshotNow() }
   } catch (error) {
-    devices = devices.filter((entry) => entry.id !== device.id)
+    setDevices(devicesNow().filter((entry) => entry.id !== device.id))
     broadcastChanged()
     // 回滚失败不再吞掉：返回主错误与残留路径，供诊断与手动清理（plan 设计 5）
     let rollbackError: string | null = null
@@ -1574,14 +1472,15 @@ export const assertEditorTarget = async (id: string): Promise<void> => {
 const editSaveBlockedReason = (device: Device, includeRuntime = true): string | null => {
   const frozen = frozenMessages.get(device.id)
   if (frozen !== undefined) return frozen
-  if (storeHealth.state === 'error') {
+  const health = storeHealthNow()
+  if (health.state === 'error') {
     return msg('blockSaveStoreError', {
-      issues: storeHealth.issues[0]?.message ?? msg('unknownError')
+      issues: health.issues[0]?.message ?? msg('unknownError')
     })
   }
-  if (storeHealth.state === 'read-only') {
+  if (health.state === 'read-only') {
     return msg('blockSaveStoreFrozen', {
-      issues: storeHealth.issues.map((issue) => issue.message).join('；')
+      issues: health.issues.map((issue) => issue.message).join('；')
     })
   }
   if (device.status === 'creating' || device.status === 'deleting') {
@@ -1867,7 +1766,7 @@ const sharedCameraOwnersOf = async (
     ['rearCamera', settings.rearCamera]
   ] as const
   if (!slots.some(([, camera]) => camera.mode === 'webcam')) return {}
-  const others = devices.filter(
+  const others = devicesNow().filter(
     (entry) => entry.id !== id && entry.status !== 'creating' && entry.status !== 'deleting'
   )
   const bindings: Array<{ camera: DeviceAdvancedSettings['frontCamera']; owner: string }> = []
@@ -2053,7 +1952,7 @@ const commitMetasWithConfig = (
       !metasEqual(guard.metas, acceptedMetas)
     ) {
       armStoreProtection(msg('storeExternalModifiedAtWrite'))
-      storeHealth = {
+      setStoreHealth({
         state: 'read-only',
         issues: [
           ...guard.health.issues,
@@ -2062,7 +1961,7 @@ const commitMetasWithConfig = (
             message: msg('storeWriteAbortedV1')
           }
         ]
-      }
+      })
       throw new Error(msg('storeExternalModifiedAborted'))
     }
     // 写 config 前复验原字节：外部工具改过 config 即中止，不覆盖
@@ -2099,9 +1998,9 @@ const commitMetasWithConfig = (
       // 复查 P2-1：草稿基线是已提交元数据，其他事务的创建临时行不进写盘内容
       const draft = acceptedMetas.map((entry) => (entry.id === id ? newMeta : entry))
       await writeDeviceMetas(draft)
-      devices = rebuildWithPendingRows(draft)
+      setDevices(rebuildWithPendingRows(draft))
       acceptedMetas = draft
-      metaRevision += 1
+      bumpMetaRevision()
     } catch (error) {
       metaFailure = error
     }
@@ -2114,7 +2013,7 @@ const commitMetasWithConfig = (
         const journalPath = join(dir, `${id}.json`)
         const message = `上次保存未完成且回滚失败（${messageOf(rollbackError)}），本设备的配置写入已冻结；事务记录保留在 ${journalPath}`
         frozenMessages.set(id, message)
-        const target = devices.find((entry) => entry.id === id)
+        const target = devicesNow().find((entry) => entry.id === id)
         if (target) target.lastError = { code: 'config-transaction', message }
         throw new Error(message)
       }
@@ -2260,7 +2159,7 @@ const updateDeviceConfig = (input: UpdateDeviceInput): Promise<DeviceSnapshot> =
   const flight = editFlights.get(input.id)
   if (flight) return flight
   const promise = (async (): Promise<DeviceSnapshot> => {
-    if (!acceptingCommands) throw new Error(msg('appClosingNoSave'))
+    if (!acceptingCommandsNow()) throw new Error(msg('appClosingNoSave'))
     await ensureLoaded()
     assertDeviceInCurrentBucket(requireDevice(input.id))
     try {
@@ -2300,23 +2199,24 @@ const requireSender = (
 
 /** 确认已展示某签名的异常汇总（对账设计 5）：只消费当前签名的待提示态 */
 const acknowledgeReconciliation = (signature: string): void => {
-  if (lastReport === null || lastReport.signature === null) return
-  if (lastReport.signature !== signature) return // 迟到确认不消费新异常
+  const report = lastReportNow()
+  if (report === null || report.signature === null) return
+  if (report.signature !== signature) return // 迟到确认不消费新异常
   acknowledgedSignature = signature
-  if (lastReport.pendingNotification) {
-    lastReport = { ...lastReport, pendingNotification: false }
+  if (report.pendingNotification) {
+    setLastReport({ ...report, pendingNotification: false })
     broadcastChanged()
   }
 }
 
 /** 退出清理：停掉本工具全部实例（有界）；返回未停干净的设备 id */
 export async function prepareAppShutdown(): Promise<{ leftovers: string[] }> {
-  acceptingCommands = false
+  setAcceptingCommands(false)
   const leftovers = await runner.disposeAll()
   // 等待在途配置事务到达可恢复边界（journal 已清理或保留待恢复）——排队空任务
   // 即等队列尾，不在退出途中截断跨文件事务
   await enqueueStoreTask(async () => undefined).catch(() => undefined)
-  for (const device of devices) {
+  for (const device of devicesNow()) {
     if (!leftovers.includes(device.id)) {
       if (
         device.status === 'starting' ||
@@ -2338,7 +2238,7 @@ export async function prepareAppShutdown(): Promise<{ leftovers: string[] }> {
 
 /** 用户选择留在应用后恢复命令接纳（runner 侧同步恢复） */
 export function resumeAfterShutdown(): void {
-  acceptingCommands = true
+  setAcceptingCommands(true)
   runner.resumeAccepting()
 }
 
@@ -2466,7 +2366,7 @@ export function registerDevicesIpc(): void {
         requireSender(IPC_CHANNELS.devicesReconciliationReport, event, 'main')
       }
       // 只回最近报告：不 ensureLoaded、不触发隐式扫描（plan 设计 5）
-      return lastReport
+      return lastReportNow()
     }
   )
 
