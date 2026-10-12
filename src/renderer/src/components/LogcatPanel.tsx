@@ -203,6 +203,8 @@ const Wrapper = styled.div`
       white-space: pre-wrap;
       word-break: break-all;
       color: var(--board-ink);
+      /* 日志是可复制的数据文本——全局禁选下局部回开 */
+      user-select: text;
     }
 
     .gap {

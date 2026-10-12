@@ -108,6 +108,8 @@ const StatusCard = styled.div`
 
   .status-failed {
     color: var(--danger);
+    /* 失败原文是可复制的排查数据（adb 输出）——全局禁选下局部回开 */
+    user-select: text;
   }
 
   .busy-note {

@@ -44,4 +44,13 @@ body {
   font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  /* 桌面应用默认整体禁选（按钮文案/画布拖动不再出现选区）；要可复制的
+     数据文本（日志行/报告行/失败原文）在组件内局部回开 user-select: text */
+  user-select: none;
+}
+
+/* 表单控件不受整体禁选影响：输入内容必须可选可编辑 */
+input,
+textarea {
+  user-select: text;
 }

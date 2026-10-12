@@ -187,6 +187,11 @@ const ReportLayout = styled.div`
     align-self: stretch;
   }
 
+  /* 报告行是可复制的排查数据（含路径/详情原文）——全局禁选下局部回开 */
+  .report-line {
+    user-select: text;
+  }
+
   .orphan-actions {
     display: flex;
     justify-content: flex-end;
