@@ -27,7 +27,8 @@ export default defineConfig({
           index: resolve('src/renderer/index.html'),
           wizard: resolve('src/renderer/wizard.html'),
           settings: resolve('src/renderer/settings.html'),
-          logcat: resolve('src/renderer/logcat.html')
+          logcat: resolve('src/renderer/logcat.html'),
+          report: resolve('src/renderer/report.html')
         }
       }
     }

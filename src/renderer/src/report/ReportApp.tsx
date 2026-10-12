@@ -3,16 +3,14 @@ import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
 import type { ReconcileReport } from '@shared/types'
 import { useCopy } from '../hooks/useCopy'
-import BaseModal from './BaseModal'
-import Button from './Button'
+import Button from '../components/Button'
 
 type ReportPhase =
   | { phase: 'loading' }
   | { phase: 'ready'; report: ReconcileReport | null }
   | { phase: 'error'; message: string }
 
-export interface ReconcileReportModalProps {
-  onClose: () => void
+export interface ReportAppProps {
   /** 测试注入的报告通道（缺省走 preload 桥） */
   fetchReport?: () => Promise<ReconcileReport | null>
 }
@@ -22,10 +20,7 @@ export interface ReconcileReportModalProps {
  * 完整报告、分组滚动渲染——超长明细不再受原生弹窗 40 行截断限制（截断防线
  * 仍服务其他弹窗）。只读（设计轴 2）：重新检查在汇总条，重开面板即新报告。
  */
-const ReconcileReportModal = ({
-  onClose,
-  fetchReport
-}: ReconcileReportModalProps): React.JSX.Element => {
+const ReportApp = ({ fetchReport }: ReportAppProps): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
   const [state, setState] = useState<ReportPhase>({ phase: 'loading' })
   const generationRef = useRef(0)
@@ -53,7 +48,7 @@ const ReconcileReportModal = ({
   }, [load])
 
   return (
-    <BaseModal title={copy.reconcileDetailTitle} onClose={onClose}>
+    <ReportLayout>
       {state.phase === 'loading' ? (
         <p className="report-line">{copy.reportLoading}</p>
       ) : state.phase === 'error' ? (
@@ -70,7 +65,7 @@ const ReconcileReportModal = ({
       ) : (
         <ReportBody report={state.report} />
       )}
-    </BaseModal>
+    </ReportLayout>
   )
 }
 
@@ -182,4 +177,4 @@ const ReportLayout = styled.div`
   }
 `
 
-export default ReconcileReportModal
+export default ReportApp

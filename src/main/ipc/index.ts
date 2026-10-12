@@ -20,6 +20,7 @@ import { registerScreenshotIpc, clearScreenshotCache } from '../screenshot'
 import { registerWizardIpc } from '../window/wizard'
 import { registerSettingsIpc } from '../window/settings'
 import { registerLogcatIpc, isLogcatWindowSender } from '../window/logcat'
+import { registerReportIpc } from '../window/report'
 import { registerThemeIpc } from '../theme'
 import { registerLocaleIpc } from '../locale'
 import { getMainWindow } from '../window'
@@ -54,6 +55,7 @@ export function registerIpcHandlers(): void {
   })
   registerSettingsIpc()
   registerLogcatIpc()
+  registerReportIpc()
   registerThemeIpc()
   registerLocaleIpc()
 

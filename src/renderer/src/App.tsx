@@ -9,7 +9,6 @@ import { useLocaleStore } from './stores/localeStore'
 import BoardHead from './components/BoardHead'
 import Button from './components/Button'
 import CanvasPlaceholder from './components/CanvasPlaceholder'
-import ReconcileReportModal from './components/ReconcileReportModal'
 import DeviceCanvas from './components/DeviceCanvas'
 import DeviceHealthNotice from './components/DeviceHealthNotice'
 import DeviceListPane from './components/DeviceListPane'
@@ -46,8 +45,6 @@ const App = (): React.JSX.Element => {
 
   const [listWidth, setListWidth] = useState(280)
   const [rechecking, setRechecking] = useState(false)
-  // 对账完整报告面板开合（plan 2026-10-12）
-  const [reportOpen, setReportOpen] = useState(false)
   // 日志 dock 默认收起（不持久化开合状态——每次启动都从收起起步）；画布剩余
   // 不足 560 时点击入口直接开独立窗
   const [logDockOpen, setLogDockOpen] = useState(false)
@@ -106,7 +103,7 @@ const App = (): React.JSX.Element => {
       if (!shown.ok) return // 展示失败不登记 seen，待下次推送重试
       seenSignatures.current.add(signature)
       await toApiResult(window.api.devices.acknowledgeReconciliation(signature))
-      if (shown.data.response === 0) setReportOpen(true)
+      if (shown.data.response === 0) void toApiResult(window.api.report.openWindow())
     },
     [copy]
   )
@@ -169,9 +166,9 @@ const App = (): React.JSX.Element => {
     if (!result.ok) await showAlert(copy.recheckFailed, result.error)
   }
 
-  // 汇总条「查看详情」：应用内完整面板（plan 2026-10-12；原长文本弹窗退役）
+  // 汇总条「查看详情」：独立对账详情窗（子窗口方案；原长文本弹窗退役）
   const handleViewDetail = (): void => {
-    setReportOpen(true)
+    void toApiResult(window.api.report.openWindow())
   }
 
   const handleRename = async (id: string, name: string): Promise<void> => {
@@ -331,7 +328,6 @@ const App = (): React.JSX.Element => {
 
   return (
     <Wrapper lang={locale}>
-      {reportOpen ? <ReconcileReportModal onClose={() => setReportOpen(false)} /> : null}
       <div className="list-pane" style={{ width: listWidth }}>
         <BoardHead
           count={devices.length}

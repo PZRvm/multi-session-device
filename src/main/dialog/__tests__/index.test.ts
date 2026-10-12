@@ -3,9 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   handle: vi.fn(),
-  showMessageBox: vi.fn(
-    async (_windowOrOptions: unknown, _options?: unknown) => ({ response: 0, checkboxChecked: false })
-  ),
+  showMessageBox: vi.fn(async (_windowOrOptions: unknown, _options?: unknown) => ({
+    response: 0,
+    checkboxChecked: false
+  })),
   fromWebContents: vi.fn(() => null)
 }))
 vi.mock('electron', () => ({
@@ -26,8 +27,10 @@ vi.mock('../../locale', () => ({
 import { registerDialogIpc } from '../index'
 
 const fakeEvent = { sender: { id: 7 } }
-const handlerOf = (channel: string): ((payload: unknown) => Promise<unknown>) =>
-  (payload: unknown) => mocks.handle.mock.calls.find(([name]) => name === channel)![1](fakeEvent, payload)
+const handlerOf =
+  (channel: string): ((payload: unknown) => Promise<unknown>) =>
+  (payload: unknown) =>
+    mocks.handle.mock.calls.find(([name]) => name === channel)![1](fakeEvent, payload)
 
 const shownOptions = (): { detail?: string } =>
   (mocks.showMessageBox.mock.calls[0][0] ??

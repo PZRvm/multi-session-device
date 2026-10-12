@@ -119,6 +119,9 @@ export const IPC_CHANNELS = {
   // 与投屏域的刻意差异：任意窗口可订阅（非仅主窗）、流控允许丢最旧保最新（非不可丢）。
   /** 窗口订阅设备日志（回放缓冲尾 500 行 + 实时）；任意窗口可调 */
   logcatSubscribe: 'logcat:subscribe',
+  // ---- 对账详情窗（plan 2026-10-12-reconcile-report-panel 子窗口方案）----
+  /** 主窗请求打开对账详情窗（单例；已开则聚焦） */
+  reportWindowOpen: 'report-window:open',
   /** 窗口退订单设备（关窗由 main 侧 destroyed 钩子统一清理） */
   logcatUnsubscribe: 'logcat:unsubscribe',
   /** main → 各窗：批量日志行（250ms 或 200 行触发 flush；dropped 为流控丢弃计数） */

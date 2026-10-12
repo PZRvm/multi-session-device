@@ -9,6 +9,7 @@ import { settingsApi } from './settings'
 import { screenshotApi } from './screenshot'
 import { installApi } from './install'
 import { logcatApi } from './logcat'
+import { reportApi } from './report'
 
 export const api = {
   platform: process.platform,
@@ -22,7 +23,8 @@ export const api = {
   screen: screenApi,
   screenshot: screenshotApi,
   install: installApi,
-  logcat: logcatApi
+  logcat: logcatApi,
+  report: reportApi
 }
 
 export type Api = typeof api

@@ -65,6 +65,7 @@ const report: ReconcileReport = {
 const dialog = vi.fn(async () => ({ response: 0, checkboxChecked: false }))
 const reconciliationReport = vi.fn(async () => report)
 const acknowledgeReconciliation = vi.fn(async () => {})
+const reportWindowOpen = vi.fn(async () => {})
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -85,6 +86,7 @@ beforeEach(() => {
   })
   ;(window as unknown as { api: unknown }).api = {
     dialog: { show: dialog },
+    report: { openWindow: reportWindowOpen },
     wizard: { open: vi.fn(async () => true) },
     logcat: {
       isWindowOpen: vi.fn(async () => false),
@@ -120,9 +122,8 @@ describe('App 对账汇总提示（plan 设计 5）', () => {
     expect(shown[0].detail).toBeUndefined()
     expect(shown[0].buttons).toEqual([copy.reconcileSummaryView, copy.reconcileSummaryAck])
     await waitFor(() => expect(acknowledgeReconciliation).toHaveBeenCalledWith('sig-anomaly-1'))
-    // response=0（查看详情，dialog mock 默认）→ 完整报告面板打开并渲染明细
-    expect(await screen.findByRole('dialog', { name: copy.reconcileDetailTitle })).toBeTruthy()
-    expect(screen.getAllByText(/缺少 d1\.ini/).length).toBeGreaterThan(0)
+    // response=0（查看详情，dialog mock 默认）→ 打开独立对账详情窗（子窗口方案）
+    expect(reportWindowOpen).toHaveBeenCalledTimes(1)
   })
 
   it('无待提示（pendingNotification=false）：不弹、不确认', async () => {
