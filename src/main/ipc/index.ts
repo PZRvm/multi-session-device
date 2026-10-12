@@ -10,10 +10,11 @@ import {
   runningDeviceRef,
   runningDeviceSerial,
   savedDeviceSkinRef,
-  registerDevicesIpc
+  registerDevicesIpc,
+  triggerSourceChangeReconcile
 } from '../devices'
 import { createLogcatManager } from '../logcat'
-import { registerSdkIpc } from '../emulator'
+import { registerSdkIpc, onSdkSourceChanged } from '../emulator'
 import { registerApkInstallIpc } from '../apkInstall'
 import { createScrcpyManager } from '../scrcpy'
 import { registerScreenshotIpc, clearScreenshotCache } from '../screenshot'
@@ -36,6 +37,9 @@ export async function shutdownStreams(): Promise<void> {
 export function registerIpcHandlers(): void {
   registerDialogIpc()
   registerDevicesIpc()
+  // 来源变更 → devices 全量可用性重查（plan 2026-10-12-device-list-source-aware）：
+  // 生效根变了镜像核验结果跟着变，切换后列表即时标注不可用设备，不再等点启动才暴露
+  onSdkSourceChanged(triggerSourceChangeReconcile)
   // 引用查询经注入进入 sdk 域（镜像删除守卫）——emulator 域不反向依赖 devices
   registerSdkIpc({ referencingDeviceNames: listDeviceNamesReferencing, savedDeviceSkinRef })
   // 编辑窗目标核验经注入进入向导域（开窗前 devices 域裁决，避免 wizard 反向依赖）

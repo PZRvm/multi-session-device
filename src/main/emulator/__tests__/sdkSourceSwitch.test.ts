@@ -18,6 +18,8 @@ import {
   adoptSourceSwitch,
   cancelSourceMigration,
   clearRetainedRoot,
+  createSwitchDeps,
+  onSdkSourceChanged,
   startSourceMigration,
   switchSource,
   type SwitchDeps
@@ -432,5 +434,20 @@ describe('cancelSourceMigration on corrupt journal（问题二处置）', () => 
     expect(fs.exists(`${MANAGED}/emulator/emulator`)).toBe(true)
     expect(fs.exists(CUSTOM)).toBe(false)
     expect(fs.read(`${AVD_HOME}/d1.avd/config.ini`)).toContain(`image.sys.src.dir=${MANAGED}/`)
+  })
+})
+
+describe('来源变更监听（plan 2026-10-12-device-list-source-aware）', () => {
+  it('createSwitchDeps.broadcast 仅 sdk:source-changed 触发监听器——五发射点统一分流', () => {
+    const listener = vi.fn()
+    onSdkSourceChanged(listener)
+    const deps = createSwitchDeps()
+    deps.broadcast('sdk:progress', { percent: 1 })
+    deps.broadcast('sdk:migrate-progress', { phase: 'scanning' })
+    expect(listener).not.toHaveBeenCalled()
+    deps.broadcast('sdk:source-changed', {})
+    expect(listener).toHaveBeenCalledTimes(1)
+    // 复位防泄漏到其他用例
+    onSdkSourceChanged(() => {})
   })
 })

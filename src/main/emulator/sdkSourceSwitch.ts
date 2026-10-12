@@ -54,11 +54,27 @@ const pushToAllWindows = (channel: string, payload: unknown): void => {
   }
 }
 
+/**
+ * 来源变更监听（plan 2026-10-12-device-list-source-aware）：生效根可能变化的
+ * 路径（切换/采纳/清除保留根/恢复）都经 deps.broadcast 发 sdk:source-changed，
+ * 在此统一分流——注册表由 ipc/index.ts 登记点填充（devices 域触发全量可用性
+ * 重查）。公开入口的 deps 均为每次调用现建（无单例），拦截放 broadcast 包装处
+ * 是唯一全覆盖的单点。
+ */
+let sourceChangedListener: (() => void) | null = null
+
+export const onSdkSourceChanged = (listener: () => void): void => {
+  sourceChangedListener = listener
+}
+
 export const createSwitchDeps = (): SwitchDeps => ({
   migration: createMigrationDeps(() => app.getPath('userData')),
   runningCount: () => runningDeviceCount(),
   avdHome: () => join(app.getPath('userData'), 'avd-home'),
-  broadcast: pushToAllWindows,
+  broadcast: (channel, payload) => {
+    pushToAllWindows(channel, payload)
+    if (channel === IPC_CHANNELS.sdkSourceChanged) sourceChangedListener?.()
+  },
   detection: getStudioDetection,
   runDetection: () => runStudioDetection()
 })

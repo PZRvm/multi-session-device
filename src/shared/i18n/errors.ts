@@ -369,6 +369,8 @@ const zhCN = {
   rcIdNotUuid: '设备 id 不是 UUID 形态（{id}），拒绝核验',
   rcCheckTimeout: '文件检查超时（{seconds} 秒），本轮结果不可用',
   rcImageIdentityDiffers: '实际镜像（{actual}）与保存的镜像身份（{saved}）不同，请核对',
+  rcOriginHintShared: '；该设备创建于 Android Studio SDK，切换到共享来源即可启动',
+  rcOriginHintOwned: '；该设备的镜像在应用自有 SDK 中，切回托管或自选来源即可使用',
   rcMetaAnomalySuffix: '{detail}（元数据异常关联）',
   rcNoMetaSuffix: '{detail}（无元数据记录）',
   rcOrphanScanFailed: '孤立组扫描失败：{message}',
@@ -801,6 +803,8 @@ const zhTW: ErrorsCopy = {
   rcIdNotUuid: '裝置 id 不是 UUID 形態（{id}），拒絕核驗',
   rcCheckTimeout: '檔案檢查逾時（{seconds} 秒），本輪結果不可用',
   rcImageIdentityDiffers: '實際映像（{actual}）與儲存的映像身份（{saved}）不同，請核對',
+  rcOriginHintShared: '；該裝置建立於 Android Studio SDK，切換到共用來源即可啟動',
+  rcOriginHintOwned: '；該裝置的映像在應用程式自有 SDK 中，切回託管或自選來源即可使用',
   rcMetaAnomalySuffix: '{detail}（中繼資料異常關聯）',
   rcNoMetaSuffix: '{detail}（無中繼資料記錄）',
   rcOrphanScanFailed: '孤立組掃描失敗：{message}',
@@ -1275,6 +1279,10 @@ const enUS: ErrorsCopy = {
   rcCheckTimeout: 'File check timed out ({seconds} s); this round is unusable',
   rcImageIdentityDiffers:
     'The actual image ({actual}) differs from the saved image identity ({saved}); please verify',
+  rcOriginHintShared:
+    '; This device was created with the Android Studio SDK — switch to the shared source to start it',
+  rcOriginHintOwned:
+    "; This device's image lives in the app-owned SDK — switch back to the managed or custom source to use it",
   rcMetaAnomalySuffix: '{detail} (metadata-anomalous association)',
   rcNoMetaSuffix: '{detail} (no metadata record)',
   rcOrphanScanFailed: 'Orphan group scan failed: {message}',

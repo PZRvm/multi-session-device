@@ -77,6 +77,7 @@ import {
 } from '../emulator/reconcile'
 import { awaitWithAbort } from '../emulator/abort'
 import { isMigrationActive } from '../emulator/sdkMigration'
+import { isSharedReadOnly } from '../emulator/sdkSource'
 import {
   ensureSharedServer,
   candidateAdbPaths,
@@ -271,6 +272,15 @@ const frameKindOf = (profileId: string): DeviceFrameKind | undefined =>
 
 export function attachDeviceStreamBridge(bridge: typeof streamBridge): void {
   Object.assign(streamBridge, bridge)
+}
+
+/**
+ * SDK 来源变更后的全量可用性重查（plan 2026-10-12-device-list-source-aware）：
+ * 生效根变了，镜像核验结果跟着变——fire-and-forget 沿删除/创建回滚后的对账先例，
+ * 单飞守卫合并连续切换。ipc/index.ts 登记点经 onSdkSourceChanged 接线。
+ */
+export const triggerSourceChangeReconcile = (): void => {
+  void reconcileDevices().catch(() => undefined)
 }
 
 /**
@@ -682,6 +692,9 @@ const toMeta = (device: Device): DeviceMeta => ({
   advancedSettings: device.advancedSettings,
   snapshotReadyAt: device.snapshotReadyAt ?? null,
   ...(device.cutoutResetPending === true ? { cutoutResetPending: true } : {}),
+  ...(device.imageSourceOrigin !== undefined
+    ? { imageSourceOrigin: device.imageSourceOrigin }
+    : {}),
   createdAt: device.createdAt
 })
 
@@ -1509,6 +1522,9 @@ const createDeviceTransaction = async (
         : null,
     advancedSettings,
     snapshotReadyAt: null,
+    // 出身标注（plan 2026-10-12-device-list-source-aware）：创建时的来源桶；
+    // 共享态建出的设备引用 Studio 根内的镜像，切回自有根后指路文案靠它区分
+    imageSourceOrigin: isSharedReadOnly() ? 'shared-studio' : 'app-owned',
     createdAt: Date.now(),
     frameKind: frameKindOf(raw.profileId),
     availability: checkingAvailability(),

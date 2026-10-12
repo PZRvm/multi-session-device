@@ -3,7 +3,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest'
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { DeviceMeta } from '@shared/types'
+import type { DeviceAvailability, DeviceMeta } from '@shared/types'
 import {
   MAX_CONFIG_BYTES,
   checkDeviceHealth,
@@ -11,6 +11,7 @@ import {
   runReconciliation,
   type ReconcileDirs
 } from '../reconcile'
+import { resetSdkSourceStateForTest, setSdkSourceState } from '../sdkSource'
 
 const tmpDirs: string[] = []
 const makeTmp = async (): Promise<string> => {
@@ -695,5 +696,68 @@ describe('review 修复轮回归（判定正确性）', () => {
         aborting
       )
     ).rejects.toThrow('mid-scan')
+  })
+})
+
+describe('出身指路（plan 2026-10-12-device-list-source-aware）', () => {
+  const imageMessage = (availability: DeviceAvailability): string =>
+    availability.issues.find((issue) => issue.component === 'image')!.message
+
+  it('当前自有：shared-studio 出身缺失 → 指切共享；缺席（存量=app-owned）→ 原文', async () => {
+    const roots = await makeRoots()
+    await writeAvd(roots, UUID_A)
+    const hinted = await checkDeviceHealth(
+      metaOf(UUID_A, { imageSourceOrigin: 'shared-studio' }),
+      roots.dirs,
+      { now }
+    )
+    expect(hinted.state).toBe('missing')
+    expect(imageMessage(hinted)).toContain('切换到共享来源即可启动')
+    const plain = await checkDeviceHealth(metaOf(UUID_A), roots.dirs, { now })
+    expect(imageMessage(plain)).not.toContain('Android Studio SDK')
+  })
+
+  it('当前共享：app-owned 出身缺失 → 指切回自有；shared-studio 出身缺失 → 原文', async () => {
+    const roots = await makeRoots()
+    await writeAvd(roots, UUID_A)
+    setSdkSourceState({
+      version: 1,
+      source: 'shared-studio',
+      customPath: null,
+      sharedPath: '/studio/sdk'
+    })
+    try {
+      const hinted = await checkDeviceHealth(metaOf(UUID_A), roots.dirs, { now })
+      expect(hinted.state).toBe('missing')
+      expect(imageMessage(hinted)).toContain('切回托管或自选来源即可使用')
+      const plain = await checkDeviceHealth(
+        metaOf(UUID_A, { imageSourceOrigin: 'shared-studio' }),
+        roots.dirs,
+        { now }
+      )
+      expect(imageMessage(plain)).not.toContain('应用自有 SDK')
+    } finally {
+      resetSdkSourceStateForTest()
+    }
+  })
+
+  it('非 missing 类故障不追加指路（身份损坏与来源无关）', async () => {
+    const roots = await makeRoots()
+    await writeAvd(roots, UUID_A)
+    // package.xml 身份与元数据不同 → identity-mismatch（broken）
+    await installImage(roots, IMAGE_DIR_SEGMENTS, 'system-images;android-35;google_apis;arm64-v8a')
+    setSdkSourceState({
+      version: 1,
+      source: 'shared-studio',
+      customPath: null,
+      sharedPath: '/studio/sdk'
+    })
+    try {
+      const availability = await checkDeviceHealth(metaOf(UUID_A), roots.dirs, { now })
+      expect(availability.state).toBe('broken')
+      expect(imageMessage(availability)).not.toContain('应用自有 SDK')
+    } finally {
+      resetSdkSourceStateForTest()
+    }
   })
 })

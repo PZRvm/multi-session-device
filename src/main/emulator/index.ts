@@ -44,6 +44,7 @@ import {
   adoptSourceSwitch,
   cancelSourceMigration,
   clearRetainedRoot,
+  onSdkSourceChanged,
   startSourceMigration,
   switchSource
 } from './sdkSourceSwitch'
@@ -51,6 +52,9 @@ import type { SdkSourceMode } from '@shared/types'
 
 /** 应用自有 AVD 根（ANDROID_AVD_HOME 语义） */
 export const defaultAvdHome = (): string => join(app.getPath('userData'), 'avd-home')
+
+// 来源变更监听（sdkSourceSwitch 定义）：ipc/index.ts 登记点接线 devices 重查
+export { onSdkSourceChanged }
 
 const resolveRoot = (raw: unknown): string => {
   // 缺省走 sdkSource 统一解析（managed/custom/shared-studio 活动根）

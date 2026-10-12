@@ -445,4 +445,15 @@ describe('DeviceRow（review 修复轮）', () => {
     expect(onRenameBlocked).toHaveBeenCalledTimes(2)
     expect(onRename).not.toHaveBeenCalled()
   })
+
+  it('出身徽标：shared-studio 出身显示（aria/tooltip 三语全称）；app-owned 与缺席不显示', () => {
+    setup({ device: { ...baseDevice, imageSourceOrigin: 'shared-studio' } })
+    expect(screen.getByLabelText(copy.deviceOriginStudio)).toBeTruthy()
+    cleanup()
+    setup({ device: { ...baseDevice, imageSourceOrigin: 'app-owned' } })
+    expect(screen.queryByLabelText(copy.deviceOriginStudio)).toBeNull()
+    cleanup()
+    setup()
+    expect(screen.queryByLabelText(copy.deviceOriginStudio)).toBeNull()
+  })
 })

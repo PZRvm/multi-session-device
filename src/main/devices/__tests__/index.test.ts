@@ -524,6 +524,44 @@ describe('devices 域（创建/删除事务）', () => {
     expect(mocks.writeDeviceMetas).not.toHaveBeenCalled()
   })
 
+  it('出身标注：托管态建出 app-owned（plan 2026-10-12-device-list-source-aware）', async () => {
+    const { handlerFor } = await freshDomain()
+    await handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), validCreateInput)
+    const persisted = mocks.writeDeviceMetas.mock.calls.at(-1)![0] as DeviceMeta[]
+    expect(persisted[0].imageSourceOrigin).toBe('app-owned')
+  })
+
+  it('出身标注：共享态建出 shared-studio；toMeta 透传重落盘不丢', async () => {
+    const { handlerFor } = await freshDomain()
+    // freshDomain resetModules 后须取同一个新实例设态——静态 import 的 sdkSource 已是旧模块
+    const sdkSource = await import('../../emulator/sdkSource')
+    sdkSource.setSdkSourceState({
+      version: 1,
+      source: 'shared-studio',
+      customPath: null,
+      sharedPath: '/studio/sdk'
+    })
+    try {
+      const result = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+        mainWindowEvent(),
+        validCreateInput
+      )) as { createdId: string }
+      const persisted = mocks.writeDeviceMetas.mock.calls.at(-1)![0] as DeviceMeta[]
+      expect(persisted[0].imageSourceOrigin).toBe('shared-studio')
+      // 改名触发 toMeta 重写：出身随之透传（不可变字段不因编辑丢失）
+      await handlerFor(IPC_CHANNELS.devicesRename)(mainWindowEvent(), {
+        id: result.createdId,
+        name: '共享机'
+      })
+      const renamed = mocks.fileMetas.current!
+      expect(renamed.find((meta) => meta.id === result.createdId)?.imageSourceOrigin).toBe(
+        'shared-studio'
+      )
+    } finally {
+      sdkSource.resetSdkSourceStateForTest()
+    }
+  })
+
   it('create：能力经唯一入口 buildEnrichedCapabilities 构建并喂给归一化（P1 接线锚）', async () => {
     const { handlerFor } = await freshDomain()
     await handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), validCreateInput)

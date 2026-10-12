@@ -118,6 +118,12 @@ export interface DeviceMeta {
   snapshotReadyAt: number | null
   /** 用户明确请求恢复默认挖孔；下次冷启动执行，成功后移除此标记 */
   cutoutResetPending?: boolean
+  /**
+   * 设备出身（持久）：创建时的 SDK 来源桶。缺席（共享模式出现前的存量）读取时
+   * 视作 app-owned——不迁移、不改 store 版本（formFactor v1 兼容同款）。
+   * 只作展示与指路文案，零参与启动判定（能否启动唯一事实源是实时镜像核验）。
+   */
+  imageSourceOrigin?: 'app-owned' | 'shared-studio'
   createdAt: number
 }
 

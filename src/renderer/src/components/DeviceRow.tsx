@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Copy, Loader2, Play, Settings2, Square, Trash2, X } from 'lucide-react'
+import { Building2, Copy, Loader2, Play, Settings2, Square, Trash2, X } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
 import type { Device, DeviceAvailability, DeviceStatus } from '@shared/types'
@@ -166,7 +166,20 @@ const DeviceRow = ({
         />
       ) : (
         <span className="text-block">
-          <span className="title">{device.name}</span>
+          <span className="title">
+            {device.name}
+            {/* 出身徽标（plan 2026-10-12-device-list-source-aware）：仅共享来源出身
+                显示——项目自有是默认世界，减噪；tooltip 全称给足语义 */}
+            {device.imageSourceOrigin === 'shared-studio' ? (
+              <span
+                className="origin-badge"
+                title={copy.deviceOriginStudio}
+                aria-label={copy.deviceOriginStudio}
+              >
+                <Building2 size={11} aria-hidden="true" />
+              </span>
+            ) : null}
+          </span>
           <span className="subtitle">{subtitle}</span>
           {healthLine !== null ? (
             <span className="health-line" title={healthLine}>
@@ -391,6 +404,21 @@ const Wrapper = styled.div`
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* 出身徽标（共享来源设备）：名称行尾小图标，tooltip 承载全称 */
+  .origin-badge {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    margin-left: 5px;
+    vertical-align: -1px;
+    color: var(--board-ink-dim);
+  }
+
+  &[aria-current] .origin-badge {
+    color: inherit;
+    opacity: 0.78;
   }
 
   .subtitle {
