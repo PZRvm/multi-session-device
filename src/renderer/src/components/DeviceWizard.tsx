@@ -155,6 +155,61 @@ const DeviceWizard = ({
     fetchProfiles,
     data?.profiles
   )
+  // SDK 引导入口（用户 2026-10-12 需求：清除保留 SDK 后切回托管，根已空要能重建）：
+  // 画像清单报「SDK 尚未就绪」时探测组件状态，JRE/cmdline-tools 缺失 → 错误块出现
+  // 「完成 SDK 引导」按钮，成功后自动重拉清单。bootstrap 通道（sdk:bootstrap）一直
+  // 在，此前无 UI 消费——原 plan「空根起步 + 向导 bootstrap」至此闭环
+  const [sdkBootstrapable, setSdkBootstrapable] = useState(false)
+  const [bootstrapping, setBootstrapping] = useState(false)
+  const [bootstrapPending, setBootstrapPending] = useState(false)
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null)
+  useEffect(() => {
+    if (profiles.error === null || sdkBootstrapable || bootstrapping || bootstrapPending) return
+    let alive = true
+    void (async () => {
+      try {
+        const snapshot = await window.api?.sdk?.status()
+        if (
+          alive &&
+          snapshot !== undefined &&
+          (!snapshot.cmdlineTools.present || !snapshot.jre.present)
+        ) {
+          setSdkBootstrapable(true)
+        }
+      } catch {
+        // 探测失败保持纯重试——引导按钮宁缺毋滥
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [profiles.error, sdkBootstrapable, bootstrapping, bootstrapPending])
+  // 两段式忙碌（用户 2026-10-12 反馈）：点击先只是 pending（钮禁用、许可弹窗在途），
+  // 首个 sdk:progress 事件（= 许可已确认、组件开始下载）才转「引导中」spinner——
+  // 许可拒绝在 main 侧静默返回当前态，这里不报错，按钮原地恢复
+  const runSdkBootstrap = useCallback(async (): Promise<void> => {
+    if (bootstrapPending || bootstrapping) return
+    setBootstrapPending(true)
+    setBootstrapError(null)
+    const offProgress =
+      window.api?.sdk?.onSdkProgress?.(() => setBootstrapping(true)) ?? (() => {})
+    try {
+      await window.api?.sdk?.bootstrap()
+      // 不清 sdkBootstrapable：许可拒绝静默返回后错误块仍在，按钮须可再次发起；
+      // 真成功时画像错误清零，错误块（含按钮）自然消失
+      void reloadProfiles()
+    } catch (error) {
+      setBootstrapError(
+        format(WIZARD_COPY[useLocaleStore.getState().locale].sdkBootstrapFailed, {
+          message: error instanceof Error ? error.message : String(error)
+        })
+      )
+    } finally {
+      offProgress()
+      setBootstrapPending(false)
+      setBootstrapping(false)
+    }
+  }, [bootstrapPending, bootstrapping, reloadProfiles])
   // 重开恢复暂存（review P3：模块级可变量下沉为实例 ref；仍不入 state——
   // 绕过请求代次守卫的口径不变）
   const lastActiveRef = useRef<{
@@ -555,7 +610,8 @@ const DeviceWizard = ({
     loadingText: string,
     refreshingText: string,
     emptyText: string,
-    content: React.JSX.Element
+    content: React.JSX.Element,
+    errorExtra: React.ReactNode = null
   ): React.JSX.Element => {
     const waiting = resource.phase === 'loading' || resource.phase === 'idle'
     if (waiting && resource.data.length === 0) {
@@ -572,6 +628,7 @@ const DeviceWizard = ({
           <div className="error-block" role="alert">
             <span className="error-text">{resource.error}</span>
             <Button onClick={retry}>{copy.retry}</Button>
+            {errorExtra}
           </div>
         ) : null}
         {waiting ? (
@@ -613,7 +670,25 @@ const DeviceWizard = ({
               : null
           }
           emptyNote={sharedNoImages ? copy.sharedModeNoImages : null}
-        />
+        />,
+        sdkBootstrapable ? (
+          <>
+            <Button
+              onClick={() => void runSdkBootstrap()}
+              disabled={bootstrapPending || bootstrapping}
+            >
+              <span className="bootstrap-label">
+                {bootstrapping ? (
+                  <Loader2 size={12} aria-hidden="true" className="spinner" />
+                ) : null}
+                {bootstrapping ? copy.sdkBootstrapBusy : copy.sdkBootstrapAction}
+              </span>
+            </Button>
+            {bootstrapError !== null ? (
+              <span className="error-text">{bootstrapError}</span>
+            ) : null}
+          </>
+        ) : null
       )
     }
     return renderCatalogShell(
@@ -984,6 +1059,13 @@ const Wrapper = styled.div`
     flex: none;
     padding: 12px 16px;
     border-top: 1px solid var(--board-hairline);
+  }
+
+  /* SDK 引导钮的图标+文本行（用户反馈对齐问题）：4px 间距，图标动画复用根作用域 .spinner */
+  .bootstrap-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
 `
 

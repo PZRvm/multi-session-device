@@ -71,6 +71,7 @@ const zhCN = {
   actionCreate: '创建设备',
   actionDelete: '删除设备',
   actionRename: '重命名设备',
+  deviceCrossOriginBlocked: '该设备属于另一 SDK 来源——切换到对应来源后才能修改（改名/删除/编辑保存）',
   storeErrorBlocked: '设备数据读取失败（{issues}），不能{action}；请先修复 devices.json 后重新检查',
   storeReadonlyBlocked: '元数据写入已冻结（{issues}），不能{action}',
   appClosingNoStart: '应用退出清理中，暂停启动',
@@ -203,9 +204,9 @@ const zhCN = {
     '这些组件受 Android SDK 许可协议约束：\n· android-sdk-license（两版）\n· android-sdk-preview-license\n\n同意后本应用将在自有目录内写入许可确认文件并下载组件（数百 MB，仅此一次）。你拒绝则不下载、不写任何文件。',
   licenseAccept: '同意并继续',
   licenseReject: '拒绝',
-  licenseRejected: '用户拒绝 Android SDK 许可，bootstrap 中止',
   sdkNotReady: 'SDK 尚未就绪（缺 cmdline-tools 或 JRE），先完成 SDK 引导',
   sdkInvalidRoot: '非法的 SDK 根',
+  sdkClearPurgeFailed: '保留 SDK 已清除，但部分项目自有设备删除失败（{failures}）；残留设备可切回对应来源后手动删除',
   sdkSharedNotReady:
     '共享 SDK 缺少可用组件（cmdline-tools 或 Android Studio 的 Java）：请在 Android Studio 的 SDK Manager 补装命令行工具，或到设置的 SDK 来源页重新检测/切换来源',
   skinQueryNotWired: '设备皮肤查询未接入',
@@ -369,6 +370,8 @@ const zhCN = {
   rcIdNotUuid: '设备 id 不是 UUID 形态（{id}），拒绝核验',
   rcCheckTimeout: '文件检查超时（{seconds} 秒），本轮结果不可用',
   rcImageIdentityDiffers: '实际镜像（{actual}）与保存的镜像身份（{saved}）不同，请核对',
+  rcOriginHintShared: '；该设备创建于 Android Studio SDK，切换到共享来源即可启动',
+  rcOriginHintOwned: '；该设备的镜像在应用自有 SDK 中，切回托管或自选来源即可使用',
   rcMetaAnomalySuffix: '{detail}（元数据异常关联）',
   rcNoMetaSuffix: '{detail}（无元数据记录）',
   rcOrphanScanFailed: '孤立组扫描失败：{message}',
@@ -520,6 +523,7 @@ const zhTW: ErrorsCopy = {
   actionCreate: '建立裝置',
   actionDelete: '刪除裝置',
   actionRename: '重新命名裝置',
+  deviceCrossOriginBlocked: '該裝置屬於另一 SDK 來源——切換到對應來源後才能修改（改名/刪除/編輯儲存）',
   storeErrorBlocked: '裝置資料讀取失敗（{issues}），不能{action}；請先修復 devices.json 後重新檢查',
   storeReadonlyBlocked: '中繼資料寫入已凍結（{issues}），不能{action}',
   appClosingNoStart: '應用程式退出清理中，暫停啟動',
@@ -645,9 +649,9 @@ const zhTW: ErrorsCopy = {
     '這些元件受 Android SDK 授權協議約束：\n· android-sdk-license（兩版）\n· android-sdk-preview-license\n\n同意後本應用程式將在自有目錄內寫入授權確認檔案並下載元件（數百 MB，僅此一次）。你拒絕則不下載、不寫任何檔案。',
   licenseAccept: '同意並繼續',
   licenseReject: '拒絕',
-  licenseRejected: '使用者拒絕 Android SDK 授權，bootstrap 中止',
   sdkNotReady: 'SDK 尚未就緒（缺 cmdline-tools 或 JRE），先完成 SDK 引導',
   sdkInvalidRoot: '非法的 SDK 根',
+  sdkClearPurgeFailed: '保留 SDK 已清除，但部分專案自有裝置刪除失敗（{failures}）；殘留裝置可切回對應來源後手動刪除',
   sdkSharedNotReady:
     '共享 SDK 缺少可用元件（cmdline-tools 或 Android Studio 的 Java）：請在 Android Studio 的 SDK Manager 補裝命令列工具，或到設定的 SDK 來源頁重新偵測/切換來源',
   skinQueryNotWired: '裝置皮膚查詢未接入',
@@ -801,6 +805,8 @@ const zhTW: ErrorsCopy = {
   rcIdNotUuid: '裝置 id 不是 UUID 形態（{id}），拒絕核驗',
   rcCheckTimeout: '檔案檢查逾時（{seconds} 秒），本輪結果不可用',
   rcImageIdentityDiffers: '實際映像（{actual}）與儲存的映像身份（{saved}）不同，請核對',
+  rcOriginHintShared: '；該裝置建立於 Android Studio SDK，切換到共用來源即可啟動',
+  rcOriginHintOwned: '；該裝置的映像在應用程式自有 SDK 中，切回託管或自選來源即可使用',
   rcMetaAnomalySuffix: '{detail}（中繼資料異常關聯）',
   rcNoMetaSuffix: '{detail}（無中繼資料記錄）',
   rcOrphanScanFailed: '孤立組掃描失敗：{message}',
@@ -956,6 +962,8 @@ const enUS: ErrorsCopy = {
   actionCreate: 'create a device',
   actionDelete: 'delete a device',
   actionRename: 'rename a device',
+  deviceCrossOriginBlocked:
+    'This device belongs to the other SDK source — switch to that source to modify it (rename/delete/edit-save)',
   storeErrorBlocked:
     'Failed to read device data ({issues}); cannot {action}. Fix devices.json and recheck first',
   storeReadonlyBlocked: 'Device metadata writes are frozen ({issues}); cannot {action}',
@@ -1100,9 +1108,10 @@ const enUS: ErrorsCopy = {
     'These components are covered by the Android SDK license agreements:\n· android-sdk-license (two versions)\n· android-sdk-preview-license\n\nIf you agree, this app will write a license confirmation file into its own directory and download the components (hundreds of MB, once). If you decline, nothing is downloaded or written.',
   licenseAccept: 'Agree and continue',
   licenseReject: 'Decline',
-  licenseRejected: 'User declined the Android SDK license; bootstrap aborted',
   sdkNotReady: 'SDK is not ready (missing cmdline-tools or JRE); finish SDK bootstrap first',
   sdkInvalidRoot: 'Illegal SDK root',
+  sdkClearPurgeFailed:
+    'Retained SDK cleared, but some app-owned devices failed to delete ({failures}); remaining devices can be removed manually after switching back',
   sdkSharedNotReady:
     'The shared SDK is missing usable components (cmdline-tools or the Android Studio Java runtime): install the command-line tools from the Android Studio SDK Manager, or re-detect/switch the source on the SDK source page in Settings',
   skinQueryNotWired: 'Device skin query is not wired',
@@ -1275,6 +1284,10 @@ const enUS: ErrorsCopy = {
   rcCheckTimeout: 'File check timed out ({seconds} s); this round is unusable',
   rcImageIdentityDiffers:
     'The actual image ({actual}) differs from the saved image identity ({saved}); please verify',
+  rcOriginHintShared:
+    '; This device was created with the Android Studio SDK — switch to the shared source to start it',
+  rcOriginHintOwned:
+    "; This device's image lives in the app-owned SDK — switch back to the managed or custom source to use it",
   rcMetaAnomalySuffix: '{detail} (metadata-anomalous association)',
   rcNoMetaSuffix: '{detail} (no metadata record)',
   rcOrphanScanFailed: 'Orphan group scan failed: {message}',

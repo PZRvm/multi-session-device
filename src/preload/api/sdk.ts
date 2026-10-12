@@ -44,9 +44,11 @@ export const sdkApi = {
   /** 取消 = 回滚（仅设置窗；崩溃恢复横幅同入口） */
   sourceMigrateCancel: (): Promise<'done'> =>
     ipcRenderer.invoke(IPC_CHANNELS.sdkSourceMigrateCancel),
-  /** 清除保留根（仅共享模式；原生确认在 UI 完成） */
+  /** 清除保留根（仅共享模式；原生确认在 UI 完成；连带删除全部项目自有设备） */
   sourceClearRetained: (root: string): Promise<SdkSourceSnapshot> =>
     ipcRenderer.invoke(IPC_CHANNELS.sdkSourceClearRetained, { root }),
+  /** 项目自有设备计数（清除确认框的级联警告） */
+  appOwnedDeviceCount: (): Promise<number> => ipcRenderer.invoke(IPC_CHANNELS.sdkAppOwnedCount),
   /** 原生目录选择器选自选 SDK 根（仅设置窗；null = 用户取消） */
   chooseCustomRoot: (): Promise<string | null> =>
     ipcRenderer.invoke(IPC_CHANNELS.sdkChooseCustomRoot),
@@ -68,6 +70,16 @@ export const sdkApi = {
     ipcRenderer.on(IPC_CHANNELS.sdkMigrateProgress, listener)
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.sdkMigrateProgress, listener)
+    }
+  },
+  /** bootstrap 进度订阅（许可确认通过、组件开始下载后才首个事件——忙碌态由此驱动） */
+  onSdkProgress: (callback: (progress: SdkProgress) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, progress: SdkProgress): void => {
+      callback(progress)
+    }
+    ipcRenderer.on(IPC_CHANNELS.sdkProgress, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.sdkProgress, listener)
     }
   },
   onProgress: (callback: (progress: SdkProgress) => void): (() => void) => {

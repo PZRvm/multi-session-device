@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Device, DeviceSnapshot, ReconcileReport } from '@shared/types'
 import App from '../../App'
@@ -47,7 +47,8 @@ const snapshot: DeviceSnapshot = {
     orphanCount: 0,
     storeState: 'ok',
     pendingNotification: true
-  }
+  },
+  sourceBucket: 'app-owned'
 }
 
 const report: ReconcileReport = {
@@ -64,18 +65,23 @@ const report: ReconcileReport = {
 }
 
 const dialog = vi.fn(async () => ({ response: 0, checkboxChecked: false }))
+/** devices:changed 推送捕获（beforeEach 重置；补漏分支测试用） */
+let pushSnapshot: ((snap: DeviceSnapshot) => void) | null = null
 const reconciliationReport = vi.fn(async () => report)
 const acknowledgeReconciliation = vi.fn(async () => {})
 const reportWindowOpen = vi.fn(async () => {})
 
 beforeEach(() => {
   vi.clearAllMocks()
+  pushSnapshot = null
   useDeviceStore.setState({
     devices: [],
     selectedId: null,
     revision: -1,
     loaded: false,
     loadError: null,
+    // review P3-6：zustand 单例跨用例泄漏，显式复位视图桶初值
+    sourceBucket: 'app-owned',
     storeHealth: { state: 'ok', issues: [] },
     reconciliation: {
       signature: null,
@@ -100,7 +106,10 @@ beforeEach(() => {
       reconcile: vi.fn(async () => ({ snapshot, report })),
       reconciliationReport,
       acknowledgeReconciliation,
-      onChanged: () => () => {},
+      onChanged: (cb: (snap: DeviceSnapshot) => void): (() => void) => {
+        pushSnapshot = cb
+        return () => {}
+      },
       onRuntimeError: () => () => {}
     },
     network: networkApiMock()
@@ -142,6 +151,75 @@ describe('App 对账汇总提示（plan 设计 5）', () => {
     await waitFor(() => expect(useDeviceStore.getState().loaded).toBe(true))
     expect(dialog).not.toHaveBeenCalled()
     expect(acknowledgeReconciliation).not.toHaveBeenCalled()
+  })
+
+  it('另一来源桶的异常不弹原生通知——静默登记 seen 并代为 ack（用户 2026-10-12 复核续）', async () => {
+    const hiddenSnapshot: DeviceSnapshot = {
+      ...snapshot,
+      devices: [{ ...device, imageSourceOrigin: 'shared-studio' }],
+      sourceBucket: 'app-owned'
+    }
+    ;(
+      (window as unknown as { api: { devices: { list: unknown } } }).api.devices.list as ReturnType<
+        typeof vi.fn
+      >
+    ).mockResolvedValue(hiddenSnapshot)
+    render(<App />)
+    await waitFor(() => expect(useDeviceStore.getState().loaded).toBe(true))
+    await waitFor(() =>
+      expect(acknowledgeReconciliation).toHaveBeenCalledWith('sig-anomaly-1')
+    )
+    expect(dialog).not.toHaveBeenCalled()
+    expect(reportWindowOpen).not.toHaveBeenCalled()
+  })
+
+  it('补漏分支守视图口径（review P3-5）：弹窗在途到达的隐藏侧新签名——静默 ack 不开报告窗', async () => {
+    // 弹窗悬挂（不立即回复），期间推一个"异常全在另一桶"的新签名
+    let releaseDialog!: (value: { response: number; checkboxChecked: boolean }) => void
+    dialog.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseDialog = resolve
+        })
+    )
+    render(<App />)
+    await waitFor(() => expect(dialog).toHaveBeenCalled())
+    const hiddenSnapshot: DeviceSnapshot = {
+      ...snapshot,
+      revision: 2,
+      devices: [{ ...device, imageSourceOrigin: 'shared-studio' }],
+      sourceBucket: 'app-owned',
+      reconciliation: {
+        ...snapshot.reconciliation,
+        signature: 'sig-hidden-2',
+        unavailableCount: 1
+      }
+    }
+    act(() => {
+      pushSnapshot?.(hiddenSnapshot)
+    })
+    releaseDialog({ response: 1, checkboxChecked: false })
+    await waitFor(() =>
+      expect(acknowledgeReconciliation).toHaveBeenCalledWith('sig-hidden-2')
+    )
+    // 弹窗一次、报告窗零开（首签 response=1 不开；补漏签名隐藏侧静默）
+    expect(dialog).toHaveBeenCalledTimes(1)
+    expect(reportWindowOpen).not.toHaveBeenCalled()
+  })
+
+  it('scanError 非空不适用视图静默（review P3-4）：无可见异常也照常弹通知', async () => {
+    const scanFailed: DeviceSnapshot = {
+      ...snapshot,
+      reconciliation: { ...snapshot.reconciliation, signature: 'sig-scan', scanError: '扫描中断' }
+    }
+    ;(
+      (window as unknown as { api: { devices: { list: unknown } } }).api.devices.list as ReturnType<
+        typeof vi.fn
+      >
+    ).mockResolvedValue(scanFailed)
+    render(<App />)
+    // 断言核心：扫描失败未被判为"隐藏侧"而静默——通知照常弹出
+    await waitFor(() => expect(dialog).toHaveBeenCalled())
   })
 
   it('列表常驻：异常设备在汇总条与健康原因行可见，重新检查可触发', async () => {

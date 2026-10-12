@@ -118,6 +118,12 @@ export interface DeviceMeta {
   snapshotReadyAt: number | null
   /** 用户明确请求恢复默认挖孔；下次冷启动执行，成功后移除此标记 */
   cutoutResetPending?: boolean
+  /**
+   * 设备出身（持久）：创建时的 SDK 来源桶。缺席（共享模式出现前的存量）读取时
+   * 视作 app-owned——不迁移、不改 store 版本（formFactor v1 兼容同款）。
+   * 只作展示与指路文案，零参与启动判定（能否启动唯一事实源是实时镜像核验）。
+   */
+  imageSourceOrigin?: 'app-owned' | 'shared-studio'
   createdAt: number
 }
 
@@ -223,7 +229,14 @@ export interface ReconcileReport {
 /** 快照内嵌的对账摘要：renderer 据此驱动汇总条与提示，不携带报告详情 */
 export interface ReconciliationSummary {
   signature: string | null
+  /**
+   * 全量口径的文件异常设备数（review P3-2 注）：主窗汇总条已改视图口径（经
+   * DeviceHealthNotice.unavailableCount prop 传入），此字段供主进程侧与详情
+   * 报告链路使用——渲染层勿再直读它做主窗展示。
+   */
   unavailableCount: number
+  /** 本轮扫描自身失败（null = 无）；非空时结果不可信，通知不适用视图静默（P3-4） */
+  scanError?: string | null
   orphanCount: number
   storeState: StoreHealthState
   pendingNotification: boolean
@@ -256,6 +269,11 @@ export interface DeviceSnapshot {
   devices: Device[]
   storeHealth: StoreHealth
   reconciliation: ReconciliationSummary
+  /**
+   * 组快照时的活动来源桶（出身过滤视图谓词依赖，plan 2026-10-12-device-list-origin-view-filter）。
+   * 与 devices 同帧到达，无中间态；boot 侧 restoreSdkSource 先于首帧快照。
+   */
+  sourceBucket: 'app-owned' | 'shared-studio'
 }
 
 /** 人工重查（devices:reconcile）结果：合并后的快照与本轮报告 */

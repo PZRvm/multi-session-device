@@ -33,6 +33,7 @@ const snapshot = (
     storeState: 'ok',
     pendingNotification: false
   },
+  sourceBucket: 'app-owned',
   ...extras
 })
 
@@ -286,5 +287,25 @@ describe('deviceStore 网络态切片（plan 2026-10-12-network-switch-group）'
       d1: { airplane: false, wifi: true, data: true },
       d2: { airplane: false, wifi: true, data: true }
     })
+  })
+})
+
+describe('活动来源桶（plan 2026-10-12-device-list-origin-view-filter）', () => {
+  it('快照携带 sourceBucket：applySnapshot 覆写，缺席回落当前值', () => {
+    useDeviceStore
+      .getState()
+      .applySnapshot(snapshot([device()], 5, { sourceBucket: 'shared-studio' }))
+    expect(useDeviceStore.getState().sourceBucket).toBe('shared-studio')
+  })
+
+  it('默认桶 app-owned；来源切换后新快照翻转', () => {
+    // zustand 模块级单例：前测的桶状态会泄漏，显式复位到初值再断言默认
+    useDeviceStore.setState({ sourceBucket: 'app-owned', revision: -1 })
+    expect(useDeviceStore.getState().sourceBucket).toBe('app-owned')
+    useDeviceStore.getState().applySnapshot(snapshot([], 6, { sourceBucket: 'shared-studio' }))
+    expect(useDeviceStore.getState().sourceBucket).toBe('shared-studio')
+    // 快照缺席 sourceBucket → 回落当前值（?? 语义）
+    useDeviceStore.getState().applySnapshot(snapshot([], 7, { sourceBucket: undefined }))
+    expect(useDeviceStore.getState().sourceBucket).toBe('shared-studio')
   })
 })

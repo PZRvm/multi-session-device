@@ -79,6 +79,7 @@ const zhCN = {
   retainedClear: '清除…',
   retainedBound: '绑定设备',
   clearConfirmTitle: '清除保留的 SDK',
+  clearConfirmDeviceCascade: '；将同时删除全部项目自有设备（当前 {count} 台；含 AVD 目录与数据，不可恢复）',
   clearConfirmDetail:
     '清除后不可恢复（可重新下载）；绑定设备的镜像在此目录时，这些设备将无法启动。',
   clearConfirmButton: '清除',
@@ -198,6 +199,7 @@ const zhTW: SettingsCopy = {
   retainedClear: '清除…',
   retainedBound: '綁定裝置',
   clearConfirmTitle: '清除保留的 SDK',
+  clearConfirmDeviceCascade: '；將同時刪除全部專案自有裝置（目前 {count} 台；含 AVD 目錄與資料，不可復原）',
   clearConfirmDetail:
     '清除後無法復原（可重新下載）；綁定裝置的鏡像在此目錄時，這些裝置將無法啟動。',
   clearConfirmButton: '清除',
@@ -317,6 +319,8 @@ const enUS: SettingsCopy = {
   retainedClear: 'Clear…',
   retainedBound: 'Bound devices',
   clearConfirmTitle: 'Clear retained SDK',
+  clearConfirmDeviceCascade:
+    '; All app-owned devices will also be deleted (currently {count}; AVD directories and data; unrecoverable)',
   clearConfirmDetail:
     'This cannot be undone (the SDK can be re-downloaded); devices whose images live there will fail to start.',
   clearConfirmButton: 'Clear',

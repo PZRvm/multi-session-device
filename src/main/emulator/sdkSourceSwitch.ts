@@ -54,11 +54,33 @@ const pushToAllWindows = (channel: string, payload: unknown): void => {
   }
 }
 
+/**
+ * 来源变更监听（plan 2026-10-12-device-list-source-aware）：生效根可能变化的
+ * 路径（切换/采纳/清除保留根/恢复）都经 deps.broadcast 发 sdk:source-changed，
+ * 在此统一分流——注册表由 ipc/index.ts 登记点填充（devices 域触发全量可用性
+ * 重查）。公开入口的 deps 均为每次调用现建（无单例），拦截放 broadcast 包装处
+ * 是唯一全覆盖的单点。多监听集合 + 退订返回（review P3-7）：测试可精确清理，
+ * 不再依赖覆盖式复位的隐式约定。
+ */
+const sourceChangedListeners = new Set<() => void>()
+
+export const onSdkSourceChanged = (listener: () => void): (() => void) => {
+  sourceChangedListeners.add(listener)
+  return () => {
+    sourceChangedListeners.delete(listener)
+  }
+}
+
 export const createSwitchDeps = (): SwitchDeps => ({
   migration: createMigrationDeps(() => app.getPath('userData')),
   runningCount: () => runningDeviceCount(),
   avdHome: () => join(app.getPath('userData'), 'avd-home'),
-  broadcast: pushToAllWindows,
+  broadcast: (channel, payload) => {
+    pushToAllWindows(channel, payload)
+    if (channel === IPC_CHANNELS.sdkSourceChanged) {
+      for (const listener of sourceChangedListeners) listener()
+    }
+  },
   detection: getStudioDetection,
   runDetection: () => runStudioDetection()
 })
@@ -399,7 +421,44 @@ export async function clearRetainedRoot(
     .filter((root): root is string => root !== null)
     .map((root) => resolve(root))
   if (!allowed.includes(resolve(input.root))) throw new Error('not a retained root')
-  await deps.migration.rmTree(resolve(input.root))
+  try {
+    await deps.migration.rmTree(resolve(input.root))
+  } catch (error) {
+    // review P3-8：rmTree 中途失败可能留下半删目录——指明可重试清除收尾，
+    // 且此时设备级联未启动（编排按成功才走）
+    throw new Error(
+      `retained root clear failed (may be partially deleted; retry clear to finish): ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+  }
   deps.broadcast(IPC_CHANNELS.sdkSourceChanged, {})
   return getSdkSourceSnapshot()
+}
+
+/** 清除级联的设备删除结果（devices 域注入；编排见 clearRetainedWithCascade） */
+export interface PurgeAppOwnedResult {
+  deleted: Array<{ id: string; name: string }>
+  failures: Array<{ name: string; message: string }>
+}
+
+export interface ClearCascadeDeps extends SwitchDeps {
+  /** 清除保留根后的设备级联（devices 域注入；缺席则只清 SDK 不动设备） */
+  purgeAppOwnedDevices?: () => Promise<PurgeAppOwnedResult>
+}
+
+/**
+ * 清除保留根 + 设备级联（用户 2026-10-12 批复，review P2-3 自 ipc handler 下沉
+ * 以便域测）：主操作（清 SDK）先行完成，级联逐台 best-effort——失败聚合返回由
+ * 调用方本地化上报（failures 非空时 SDK 已删、部分设备残留）。顺序是语义：
+ * 级联失败不回滚 SDK 删除（用户确认的主操作优先成立）。
+ */
+export async function clearRetainedWithCascade(
+  input: { root: string },
+  deps: ClearCascadeDeps = createSwitchDeps()
+): Promise<{ snapshot: SdkSourceSnapshot; failures: PurgeAppOwnedResult['failures'] }> {
+  const snapshot = await clearRetainedRoot(input, deps)
+  if (deps.purgeAppOwnedDevices === undefined) return { snapshot, failures: [] }
+  const purged = await deps.purgeAppOwnedDevices()
+  return { snapshot, failures: purged.failures }
 }

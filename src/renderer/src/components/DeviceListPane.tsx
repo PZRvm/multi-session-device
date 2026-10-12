@@ -1,8 +1,11 @@
+import { useState } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
 import type { Device, StoreHealthState } from '@shared/types'
 import { useCopy } from '../hooks/useCopy'
 import DeviceRow from './DeviceRow'
+import { splitByOriginView, originOf, type SourceBucket } from './originView'
 
 type DeviceListPaneProps = {
   devices: Device[]
@@ -13,6 +16,8 @@ type DeviceListPaneProps = {
   metaWritable: boolean
   /** store error：空列表显示「读取失败」而不是「还没有设备」 */
   storeState: StoreHealthState
+  /** 活动来源桶（出身过滤视图谓词依赖，plan 2026-10-12-device-list-origin-view-filter） */
+  sourceBucket: SourceBucket
   /** list invoke 级失败原因（review P2-3）：与「空库」分开展示并提供重试 */
   loadError: string | null
   onRetryLoad: () => void
@@ -26,15 +31,61 @@ type DeviceListPaneProps = {
   /** 打开配置编辑窗（运行中也可查看） */
   onEdit: (id: string) => void
   onRenameBlocked?: () => void
+  /** 跨来源桶设备尝试修改（重命名路径）时的反馈入口（用户复核 5） */
+  onCrossBucketBlocked?: () => void
 }
 
-/** 左栏列表区：板头（BoardHead）与底部新建钮由 App 编排，这里只管列表本体 */
+const rowHandlers = (
+  device: Device,
+  shared: Pick<
+    DeviceListPaneProps,
+    | 'selectedId'
+    | 'storeTrusted'
+    | 'metaWritable'
+    | 'sourceBucket'
+    | 'onSelect'
+    | 'onStart'
+    | 'onStop'
+    | 'onCancelStart'
+    | 'onCopySerial'
+    | 'onDelete'
+    | 'onRename'
+    | 'onEdit'
+    | 'onRenameBlocked'
+    | 'onCrossBucketBlocked'
+  >
+): React.JSX.Element => (
+  <DeviceRow
+    key={device.id}
+    device={device}
+    selected={device.id === shared.selectedId}
+    storeTrusted={shared.storeTrusted}
+    metaWritable={shared.metaWritable}
+    crossBucket={originOf(device) !== shared.sourceBucket}
+    onSelect={() => shared.onSelect(device.id)}
+    onStart={() => shared.onStart(device.id)}
+    onStop={() => shared.onStop(device.id)}
+    onCancelStart={() => shared.onCancelStart(device.id)}
+    onCopySerial={() => shared.onCopySerial(device.id)}
+    onDelete={() => shared.onDelete(device)}
+    onRename={(name) => shared.onRename(device.id, name)}
+    onEdit={() => shared.onEdit(device.id)}
+    onRenameBlocked={shared.onRenameBlocked}
+    onCrossBucketBlocked={shared.onCrossBucketBlocked}
+  />
+)
+
+/** 左栏列表区：板头（BoardHead）与底部新建钮由 App 编排，这里只管列表本体。
+ * 出身过滤视图（plan 2026-10-12-device-list-origin-view-filter）：默认只平铺
+ * 当前来源桶出身的设备（过渡态豁免），另一桶收进底部折叠区——展开后也以独立
+ * 分区呈现，不与主列表混排（用户批复「两边尽量隔离」）。 */
 const DeviceListPane = ({
   devices,
   selectedId,
   storeTrusted,
   metaWritable,
   storeState,
+  sourceBucket,
   loadError,
   onRetryLoad,
   onSelect,
@@ -45,9 +96,19 @@ const DeviceListPane = ({
   onDelete,
   onRename,
   onEdit,
-  onRenameBlocked
+  onRenameBlocked,
+  onCrossBucketBlocked
 }: DeviceListPaneProps): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
+  const [foldedOpen, setFoldedOpen] = useState(false)
+  const { active, folded } = splitByOriginView(devices, sourceBucket)
+  const foldedLine =
+    folded.length > 0
+      ? format(sourceBucket === 'shared-studio' ? copy.otherOriginOwned : copy.otherOriginStudio, {
+          count: folded.length
+        })
+      : null
+
   return (
     <Wrapper>
       {devices.length === 0 ? (
@@ -69,24 +130,65 @@ const DeviceListPane = ({
         )
       ) : (
         <div className="list">
-          {devices.map((device) => (
-            <DeviceRow
-              key={device.id}
-              device={device}
-              selected={device.id === selectedId}
-              storeTrusted={storeTrusted}
-              metaWritable={metaWritable}
-              onSelect={() => onSelect(device.id)}
-              onStart={() => onStart(device.id)}
-              onStop={() => onStop(device.id)}
-              onCancelStart={() => onCancelStart(device.id)}
-              onCopySerial={() => onCopySerial(device.id)}
-              onDelete={() => onDelete(device)}
-              onRename={(name) => onRename(device.id, name)}
-              onEdit={() => onEdit(device.id)}
-              onRenameBlocked={onRenameBlocked}
-            />
-          ))}
+          <div className="origin-main">
+            {active.map((device) =>
+              rowHandlers(device, {
+                selectedId,
+                storeTrusted,
+                metaWritable,
+                sourceBucket,
+                onSelect,
+                onStart,
+                onStop,
+                onCancelStart,
+                onCopySerial,
+                onDelete,
+                onRename,
+                onEdit,
+                onRenameBlocked,
+                onCrossBucketBlocked
+              })
+            )}
+          </div>
+          {foldedLine !== null ? (
+            <div className="origin-folded">
+              <button
+                type="button"
+                className="folded-toggle"
+                aria-expanded={foldedOpen}
+                onClick={() => setFoldedOpen((open) => !open)}
+              >
+                {foldedOpen ? (
+                  <ChevronDown size={12} aria-hidden="true" />
+                ) : (
+                  <ChevronRight size={12} aria-hidden="true" />
+                )}
+                {foldedLine}
+              </button>
+              {foldedOpen ? (
+                <div className="origin-folded-body">
+                  {folded.map((device) =>
+                    rowHandlers(device, {
+                      selectedId,
+                      storeTrusted,
+                      metaWritable,
+                      sourceBucket,
+                      onSelect,
+                      onStart,
+                      onStop,
+                      onCancelStart,
+                      onCopySerial,
+                      onDelete,
+                      onRename,
+                      onEdit,
+                      onRenameBlocked,
+                      onCrossBucketBlocked
+                    })
+                  )}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       )}
     </Wrapper>
@@ -105,11 +207,48 @@ const Wrapper = styled.div`
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+    min-height: 0;
+  }
 
-    /* 行间发丝线（Hairline Rule）：按相邻子元素分隔，不依赖行根标签 */
-    & > * + * {
-      border-top: 1px solid var(--board-hairline);
-    }
+  /* 出身过滤视图：主分区与折叠分区各自独立（展开不混排，用户批复「两边尽量隔离」） */
+  .origin-main,
+  .origin-folded-body {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .origin-folded {
+    border-top: 1px solid var(--board-hairline);
+    background: var(--board-bg-raised);
+  }
+
+  .folded-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    padding: 7px 12px;
+    border: none;
+    background: none;
+    color: var(--board-ink-dim);
+    font-size: 11px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .folded-toggle:hover {
+    color: var(--board-tile-ink);
+  }
+
+  .folded-toggle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  /* 相邻行间发丝线沿用主列表规则；分区之间由折叠区背景色与分区线区隔 */
+  .origin-main > * + *,
+  .origin-folded-body > * + * {
+    border-top: 1px solid var(--board-hairline);
   }
 
   .empty-hint {

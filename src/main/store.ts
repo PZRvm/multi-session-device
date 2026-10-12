@@ -133,6 +133,13 @@ function firstInvalidV2Field(meta: Record<string, unknown>): string | null {
     return 'cutoutResetPending'
   }
   if (
+    meta.imageSourceOrigin !== undefined &&
+    meta.imageSourceOrigin !== 'app-owned' &&
+    meta.imageSourceOrigin !== 'shared-studio'
+  ) {
+    return 'imageSourceOrigin'
+  }
+  if (
     meta.snapshotReadyAt !== null &&
     (typeof meta.snapshotReadyAt !== 'number' ||
       !Number.isFinite(meta.snapshotReadyAt) ||
@@ -195,6 +202,7 @@ const projectV2Meta = (meta: DeviceMeta): DeviceMeta => ({
   advancedSettings: meta.advancedSettings === null ? null : projectSettings(meta.advancedSettings),
   snapshotReadyAt: meta.snapshotReadyAt ?? null,
   ...(meta.cutoutResetPending === true ? { cutoutResetPending: true } : {}),
+  ...(meta.imageSourceOrigin !== undefined ? { imageSourceOrigin: meta.imageSourceOrigin } : {}),
   createdAt: meta.createdAt
 })
 

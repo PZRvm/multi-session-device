@@ -213,7 +213,8 @@ it('电源停止当前设备，停止后显示占位，只在左侧点击启动�
       orphanCount: 0,
       storeState: 'ok' as const,
       pendingNotification: false
-    }
+    },
+    sourceBucket: 'app-owned' as const
   }
   start.mockResolvedValueOnce({ revision: 3, devices: [device], ...healthExtras })
   render(<App />)

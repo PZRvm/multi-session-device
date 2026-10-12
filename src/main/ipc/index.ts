@@ -4,16 +4,19 @@ import {
   attachDeviceStreamBridge,
   adbBinaryPath,
   androidToolEnv,
+  appOwnedDeviceCount,
   isRunningDevice,
   listDeviceNamesReferencing,
   listDeviceRuntimeViews,
+  purgeAppOwnedDevices,
   runningDeviceRef,
   runningDeviceSerial,
   savedDeviceSkinRef,
-  registerDevicesIpc
+  registerDevicesIpc,
+  triggerSourceChangeReconcile
 } from '../devices'
 import { createLogcatManager } from '../logcat'
-import { registerSdkIpc } from '../emulator'
+import { registerSdkIpc, onSdkSourceChanged } from '../emulator'
 import { registerApkInstallIpc } from '../apkInstall'
 import { createScrcpyManager } from '../scrcpy'
 import { registerScreenshotIpc, clearScreenshotCache } from '../screenshot'
@@ -36,8 +39,18 @@ export async function shutdownStreams(): Promise<void> {
 export function registerIpcHandlers(): void {
   registerDialogIpc()
   registerDevicesIpc()
-  // 引用查询经注入进入 sdk 域（镜像删除守卫）——emulator 域不反向依赖 devices
-  registerSdkIpc({ referencingDeviceNames: listDeviceNamesReferencing, savedDeviceSkinRef })
+  // 来源变更 → devices 全量可用性重查（plan 2026-10-12-device-list-source-aware）：
+  // 生效根变了镜像核验结果跟着变，切换后列表即时标注不可用设备，不再等点启动才暴露
+  onSdkSourceChanged(triggerSourceChangeReconcile)
+  // 引用查询经注入进入 sdk 域（镜像删除守卫）——emulator 域不反向依赖 devices；
+  // 清除保留根的设备级联与确认框计数同走注入（用户 2026-10-12 批复：清 SDK 连带
+  // 删除全部项目自有设备）
+  registerSdkIpc({
+    referencingDeviceNames: listDeviceNamesReferencing,
+    savedDeviceSkinRef,
+    purgeAppOwnedDevices,
+    appOwnedDeviceCount
+  })
   // 编辑窗目标核验经注入进入向导域（开窗前 devices 域裁决，避免 wizard 反向依赖）
   registerWizardIpc({ assertEditorTarget })
   // 拖拽 APK 安装：running/serial 断言经注入（安装域不反向依赖 devices）；仅主窗可发起

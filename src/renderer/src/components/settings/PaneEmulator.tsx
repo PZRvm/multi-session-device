@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { SdkMigrationProgress, SdkSourceMode, SdkSourceSwitchEvaluation } from '@shared/types'
+import { format } from '@shared/i18n'
 import SettingsParts, { type SettingsPaneProps } from './SettingsParts'
 import { useSdkSource } from './useSdkSource'
 
@@ -70,6 +71,7 @@ type PendingCard = MigrateCard | ChoiceCard
 
 const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => {
   const sdk = useSdkSource()
+  const { appOwnedDeviceCount } = sdk
   const [card, setCard] = useState<PendingCard | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -192,17 +194,15 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
     await runAction(() => sdk.adopt(input.target, input.customPath))
   }
 
-  const clearRetained = async (
-    root: string,
-    bytes: number,
-    boundDevices: number
-  ): Promise<void> => {
+  const clearRetained = async (root: string, bytes: number): Promise<void> => {
+    // 级联计数（用户 2026-10-12 批复）：清除保留 SDK 连带删除全部项目自有设备
+    const appOwned = await appOwnedDeviceCount()
     const ok = await confirmDialog({
       title: copy.clearConfirmTitle,
       message: `${root}（${formatBytes(bytes)}）`,
       detail:
         copy.clearConfirmDetail +
-        (boundDevices > 0 ? `${boundDevices}${copy.boundDevicesSuffix}` : ''),
+        (appOwned > 0 ? format(copy.clearConfirmDeviceCascade, { count: appOwned }) : ''),
       confirm: copy.clearConfirmButton
     })
     if (!ok) return
@@ -498,7 +498,7 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
                 className="inline-action"
                 disabled={sdk.acting}
                 onClick={() => {
-                  void clearRetained(root.root, root.bytes, root.boundDevices)
+                  void clearRetained(root.root, root.bytes)
                 }}
               >
                 {copy.retainedClear}

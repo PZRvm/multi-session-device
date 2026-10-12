@@ -1,12 +1,12 @@
 ---
 description: 来源感知设备列表：设备出身标注（项目自有/Android Studio SDK，创建时落盘）+ 切 SDK 来源后主动重查全量可用性 + 镜像缺失时的来源指路文案
-status: draft
+status: completed
 created: 2026-10-12
 ---
 
 # 来源感知设备列表（出身标注 + 切来源重查 + 指路文案）— plan
 
-设计阶段（Step 0 / Phase 1 / Phase 2）草案，**设计轴待批复，实现未开始**。来源：用户报障「切到共享 Studio SDK 后左侧列表不变，点启动才失败」（2026-10-12 讨论）。讨论结论：设备列表不变是设计如此（avd-home 恒不迁移），缺口是切换后没有主动告知哪些设备不可用；本 plan 补三块——出身标注、切换重查、指路文案。
+设计阶段（Step 0 / Phase 1 / Phase 2）完成并经用户批复（2026-10-12 审阅草案后指示「执行该计划」，五轴按推荐项落地）。来源：用户报障「切到共享 Studio SDK 后左侧列表不变，点启动才失败」（2026-10-12 讨论）。讨论结论：设备列表不变是设计如此（avd-home 恒不迁移），缺口是切换后没有主动告知哪些设备不可用；本 plan 补三块——出身标注、切换重查、指路文案。
 
 依据：[stage05](../stage/05-功能完善.md) 步骤「SDK 来源设置」（[plan 2026-10-11-sdk-source-switching](2026-10-11-sdk-source-switching.md)，共享切换/保留根语义已实现）、共享态向导收窄批（创建侧已只列可用镜像，本 plan 补存量侧）。
 
@@ -37,13 +37,13 @@ created: 2026-10-12
 | 指路文案 | 镜像缺失 + 出身≠当前来源 → 行内 hint 与启动失败弹窗给出「切换到 X 可用」恢复路径 | 出身与当前来源一致时的镜像缺失维持既有通用文案 |
 | 既有行为保持 | DeviceRow 启动钮已按 availability 禁用（`state !== 'valid'`），本 plan 不改判定，只让数据与文案变准 | — |
 
-设计轴（**待批复**，▪ 为推荐项）：
+设计轴（**2026-10-12 全部批复**，按推荐项落地；轴 4 实施形态见偏差 1）：
 
-- [ ] **轴 1 徽标显示范围**：▪ 仅「Android Studio SDK」出身设备显示徽标（项目自有是默认世界，减噪）；备选：两类都显示。
-- [ ] **轴 2 存量回填**：▪ 缺席字段读取时静默视作「项目自有」（全部存量设备早于共享模式，事实安全；零迁移，同 formFactor v1 兼容先例）；备选：显示「未知」待首查归化。
-- [ ] **轴 3 文案落点**：▪ 主进程 reconcile 镜像消息统一增强（行内 hint 与启动弹窗同源，`applyImageCheck` 已接收 meta 可读出身）；备选：渲染层派生（需把当前来源态引入主窗，多一条数据链）。
-- [ ] **轴 4 重查接线**：▪ 登记点包装 `broadcast` 单点拦截（`sdkSourceChanged` 通道发出即触发，五个发射点全覆盖——切换/采纳/清除/恢复任一改变生效根的路径都不漏；sdkSourceSwitch 模块零改动）；备选：显式回调依赖注入。
-- [ ] **轴 5 徽标形态**：▪ 图标 + tooltip 全称（Studio 用 lucide Buildings 或类似、项目自有仅轴 1 批复「仅共享显示」时无需图标）；备选：图标 + 短文字常显。
+- [x] **轴 1 徽标显示范围**：仅「Android Studio SDK」出身设备显示徽标（项目自有是默认世界，减噪）；备选：两类都显示。
+- [x] **轴 2 存量回填**：缺席字段读取时静默视作「项目自有」（全部存量设备早于共享模式，事实安全；零迁移，同 formFactor v1 兼容先例）；备选：显示「未知」待首查归化。
+- [x] **轴 3 文案落点**：主进程 reconcile 镜像消息统一增强（行内 hint 与启动弹窗同源，`applyImageCheck` 已接收 meta 可读出身）；备选：渲染层派生（需把当前来源态引入主窗，多一条数据链）。
+- [x] **轴 4 重查接线**：登记点拦截、五发射点全覆盖；备选：显式回调依赖注入。
+- [x] **轴 5 徽标形态**：图标 + tooltip 全称（lucide Building2）；备选：图标 + 短文字常显。
 
 ## Impact range — Phase 1
 
@@ -163,3 +163,43 @@ const wrappedBroadcast = (channel, payload) => {
 5. 托管↔自选迁移一次 → 「项目自有」设备全程可启动、无 hint 闪现（标注不因迁移改变）。
 6. 快速连续切换来源两次 → 列表最终状态正确、无重查堆积报错。
 7. 三语词条正确；全量测试、typecheck / lint / build 通过。
+
+## 实施记录 — 2026-10-12（worktree feature/device-list-source-aware，批 1–6 完成，真机验收待做）
+
+### Phase 3：实现
+
+- `src/shared/types.ts`：`DeviceMeta.imageSourceOrigin?: 'app-owned' | 'shared-studio'`（持久、可选、零参与启动判定的注释锚）。
+- `src/main/devices/index.ts`：创建事务 device 字面量写出身（`isSharedReadOnly()` 分桶）；`toMeta` 条件透传；新出口 `triggerSourceChangeReconcile()`（fire-and-forget 复用 `reconcileDevices` 单飞，沿删除/创建回滚先例）。
+- `src/main/emulator/sdkSourceSwitch.ts`：模块内监听器注册表 `onSdkSourceChanged` + `createSwitchDeps` 的 broadcast 包装——见偏差 1。
+- `src/main/ipc/index.ts`：登记点 `onSdkSourceChanged(triggerSourceChangeReconcile)` 接线；`emulator/index.ts` 转出口。
+- `src/main/emulator/reconcile.ts`：`withOriginHint`（仅 missing 类故障追加，出身≠当前来源桶才追加）；errors 域词条 `rcOriginHintShared`/`rcOriginHintOwned` 三语。
+- `src/renderer/src/components/DeviceRow.tsx`：名称行尾 `Building2` 徽标（仅 shared-studio、tooltip 三语）；mainWindow 域词条 `deviceOriginStudio` 三语。
+- `book/docs/PRD.md`：设备列表节 AC 扩容（出身标注 + 重查 + 指路 + 事实源声明）。
+
+**偏差记录 1（轴 4）**：plan 假设 broadcast 依赖在登记点注入、包装一处即可——实际 `sdkSourceSwitch` 各公开入口均以默认参数**每次调用现建** `createSwitchDeps()`，无单例可包。改为模块内监听器注册表（`onSdkSourceChanged`，沿 `attachDeviceStreamBridge` 先例）+ `createSwitchDeps` broadcast 包装分流，登记点接线不变、五发射点全覆盖不变；模块改动为 additive hook（8 行），「显式依赖注入」备选仍成立。
+
+**偏差记录 2**：本批之前在共享态创建的设备（2026-10-11 共享模式上线至本批之间的窗口）按缺席回落 app-owned——若其镜像实际在 Studio 根，切回自有后指路方向会错。当前用户机器无此窗口数据，接受；归化方案（如按 sdk.json 历史窗口判断）不值当，见 review P3-B。
+
+### Phase 4：验证
+
+- 新增测试 7 项：devices 出身 ×2（托管 app-owned、共享 shared-studio + toMeta 透传重落盘不丢）；sdkSourceSwitch 拦截 ×1（仅 source-changed 触发监听器）；reconcile 出身指路 ×3（自有/共享当前态 × 出身四象限 + 非 missing 故障不追加）；DeviceRow 徽标 ×1（条件渲染与缺席不显示）。
+- 全量 **1116 项通过、6 项原有跳过**；typecheck 0 错；lint 0 告警；build 通过。
+- 真机/模拟器验收**未做**（上方清单 ①–⑦）。
+
+### Phase 5：review（只记录不修）
+
+- P3-A：快速连续切换时单飞合并可能漏扫后一次——switch A 落地触发重查（飞行中），switch B 落地只拿到在途 promise，B 的根不再补扫，availability 停留 A 口径直到下一次自然重查（启动/删除/重启）。低频、自愈，如需精确可加 trailing generation 重跑。
+- P3-B：见偏差记录 2——共享窗口期存量设备的指路方向可能错，接受。
+- P3-C：`onSdkSourceChanged` 为覆盖式单监听器，测试间需手动复位（本文件测试尾部已复位）；未来多监听需求出现时改数组。
+
+### Phase 6：收尾
+
+- stage05 SDK 来源设置步骤附本批注记；[learn：freshDomain 模块重置后的静态 import 陷阱](../notes/learn/2026-10/2026-10-12-freshdomain-resetmodules-stale-import.md)。
+- **2026-10-12 用户真机验收通过**（「验收完毕，没问题了，过了」）：清单 ①–⑦ 经多轮走查覆盖——切共享即时禁用+徽标+指路、共享建机、切回恢复、清除级联、重启分类保持、汇总条与通知静默、跨桶只读与引导两段化；验收期发现四批缺陷均已修复（store 投影冻结为最重）。本 plan 翻 completed。
+
+### 验收期修复批 2 — 2026-10-12（用户真机三连报障的统一根因，已修并复核通过）
+
+- **根因**：`imageSourceOrigin` 未登记进 store 白名单投影（`projectV2Meta`——「未知顶层/嵌套键不进内存、不随写回盘」）——写侧落盘、**读侧剥离**。三条症状一因：① 创建后切来源 → 重查 `rereadStore` 以投影版（缺字段）比对内存版（带字段）→ 误判「外部修改」→ 冻结写入 → 无法创建/删除；② 重启后投影=内存 → 解冻能用（假象，代价是字段丢失）；③ 每次读盘出身被剥 → 全数回落 app-owned，双通道分类消失。
+- **修法**（`e3cd0b4`）：照 `cutoutResetPending` 模式补投影 + `firstInvalidV2Field` 闭集校验；store.test 增跨读盘保留回归。全量 1126 项通过、typecheck/lint/build 干净。
+- **用户真机复核通过**（「这次运行效果对了」）：切共享建设备 → 切回托管删除/创建 → 重启分类保留，三症状全消。
+- 教训入 [learn：持久字段四处同步清单](../notes/learn/2026-10/2026-10-12-persistent-field-store-projection-checklist.md)。另：仓库无 `requestSingleInstanceLock`，多构建并行共享 userData 会互踩（独立隐患，另立 issue）。

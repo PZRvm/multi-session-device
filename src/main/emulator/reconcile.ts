@@ -9,6 +9,7 @@ import type {
   ReconcileOrphanEntry
 } from '@shared/types'
 import { checkLocalImage, type LocalImageCheck, type LocalImageFault } from './catalog'
+import { isSharedReadOnly } from './sdkSource'
 import { msg } from '../locale'
 
 /**
@@ -225,6 +226,25 @@ const imageFaultState: Record<
   'identity-mismatch': { state: 'broken', code: 'image-identity-mismatch' },
   'missing-source-properties': { state: 'missing', code: 'image-source-properties-missing' },
   'missing-system-img': { state: 'missing', code: 'image-system-img-missing' }
+}
+
+/**
+ * 出身指路（plan 2026-10-12-device-list-source-aware）：镜像在当前生效根缺失
+ * 且设备出身与当前来源桶不符时，消息附「切换到 X 可用」——行内 hint 与启动
+ * 失败弹窗同源共享。出身≠来源只是提示线索不是故障原因，故仅在 missing 类
+ * 故障追加（损坏/权限/symlink 与来源无关）；两根并存同名镜像时核验直接通过，
+ * 本提示根本不会产生，无误导。
+ */
+const withOriginHint = (
+  meta: DeviceMeta,
+  state: DeviceAvailabilityState,
+  message: string
+): string => {
+  if (state !== 'missing') return message
+  const origin = meta.imageSourceOrigin ?? 'app-owned'
+  const current = isSharedReadOnly() ? 'shared-studio' : 'app-owned'
+  if (origin === current) return message
+  return message + msg(origin === 'shared-studio' ? 'rcOriginHintShared' : 'rcOriginHintOwned')
 }
 
 /**
@@ -536,7 +556,7 @@ const applyImageCheck = async (
       mapped.state,
       'image',
       mapped.code,
-      check.faultMessage ?? msg('rcImageVerifyFailed')
+      withOriginHint(meta, mapped.state, check.faultMessage ?? msg('rcImageVerifyFailed'))
     )
     return
   }

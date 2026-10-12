@@ -21,15 +21,40 @@ import {
   LOG_PANE_MIN_WIDTH
 } from './components/logPaneWidth'
 import { useDeviceStore } from './stores/deviceStore'
+import { splitByOriginView } from './components/originView'
 
 /** 日志 dock 展开时画布至少保留的宽度（模拟器居中自适应的保底；不足则整栏退化） */
 const LOG_CANVAS_MIN_WIDTH = 560
+
+/**
+ * 对账异常是否只落在另一来源桶（视图口径，用户 2026-10-12 复核续）：当前可见集
+ * 无设备异常、且无库级异常/孤立组时，原生通知与报告窗都不打扰——另一桶设备的
+ * 镜像不在当前根属预期（切回来就能用），不是值得打断用户的事。明细仍走
+ * 「查看详情」与折叠区展开后的行内提示。
+ */
+const reconcileAnomalyHiddenFromView = (): boolean => {
+  const state = useDeviceStore.getState()
+  const { active } = splitByOriginView(state.devices, state.sourceBucket)
+  const visibleAffected = active.some(
+    (device) =>
+      device.availability !== undefined &&
+      device.availability.state !== 'valid' &&
+      device.availability.state !== 'checking'
+  )
+  return (
+    !visibleAffected &&
+    (state.reconciliation.scanError ?? null) === null &&
+    state.reconciliation.orphanCount === 0 &&
+    state.storeHealth.state === 'ok'
+  )
+}
 
 const App = (): React.JSX.Element => {
   const devices = useDeviceStore((state) => state.devices)
   const selectedId = useDeviceStore((state) => state.selectedId)
   const storeHealth = useDeviceStore((state) => state.storeHealth)
   const reconciliation = useDeviceStore((state) => state.reconciliation)
+  const sourceBucket = useDeviceStore((state) => state.sourceBucket)
   const loadError = useDeviceStore((state) => state.loadError)
   const load = useDeviceStore((state) => state.load)
   const reconcile = useDeviceStore((state) => state.reconcile)
@@ -131,6 +156,13 @@ const App = (): React.JSX.Element => {
     const { signature, pendingNotification } = reconciliation
     if (!pendingNotification) return
     if (seenSignatures.current.has(signature)) return
+    // 视图口径静默（用户复核续）：异常全在另一来源桶——登记 seen 并代为 ack
+    // （main 侧该签名不再待提示，重启也不复发），不弹原生通知
+    if (reconcileAnomalyHiddenFromView()) {
+      seenSignatures.current.add(signature)
+      void toApiResult(window.api.devices.acknowledgeReconciliation(signature))
+      return
+    }
     if (notificationInFlight.current) return
     notificationInFlight.current = true
     void (async () => {
@@ -146,8 +178,11 @@ const App = (): React.JSX.Element => {
         ) {
           seenSignatures.current.add(latest.signature)
           await toApiResult(window.api.devices.acknowledgeReconciliation(latest.signature))
-          const opened = await toApiResult(window.api.report.openWindow())
-          if (!opened.ok) await showAlert(copy.reconcileDetailTitle, opened.error)
+          // 补漏同样守视图口径：新异常只在另一桶时静默 ack，不开报告窗
+          if (!reconcileAnomalyHiddenFromView()) {
+            const opened = await toApiResult(window.api.report.openWindow())
+            if (!opened.ok) await showAlert(copy.reconcileDetailTitle, opened.error)
+          }
         }
       } finally {
         notificationInFlight.current = false
@@ -252,20 +287,26 @@ const App = (): React.JSX.Element => {
     )
 
   const selected = devices.find((device) => device.id === selectedId) ?? null
+  // 出身过滤视图（plan 2026-10-12-device-list-origin-view-filter）：汇总条与板头
+  // 计数按可见集口径（轴 2 + 用户「两边尽量隔离」批复）——不报看不见的设备
+  const { active: visibleDevices } = splitByOriginView(devices, sourceBucket)
   // checking（创建中/暂缓判断）不算「文件异常」——与 main 侧报告口径一致（review P2-2）
-  const affectedNames = devices
-    .filter(
-      (device) =>
-        device.availability !== undefined &&
-        device.availability.state !== 'valid' &&
-        device.availability.state !== 'checking'
-    )
-    .map((device) => device.name)
+  const isFileAffected = (device: Device): boolean =>
+    device.availability !== undefined &&
+    device.availability.state !== 'valid' &&
+    device.availability.state !== 'checking'
+  const affectedNames = visibleDevices.filter(isFileAffected).map((device) => device.name)
   const storeTrusted = storeHealth.state !== 'error'
   const metaWritable = storeHealth.state === 'ok'
 
   const handleRenameBlocked = (): void => {
     void showAlert(copy.renameBlockedTitle, copy.renameBlockedMessage)
+  }
+
+  // 跨来源桶设备尝试修改（重命名路径）的反馈（用户复核 5）：编辑/删除是禁用钮
+  // 带 tooltip，重命名走键盘/双击无钮可禁——用 dialog 说明
+  const handleCrossBucketBlocked = (): void => {
+    void showAlert(copy.crossBucketModifyTitle, copy.crossBucketModifyMessage)
   }
 
   const handleRetryLoad = (): void => {
@@ -361,13 +402,14 @@ const App = (): React.JSX.Element => {
     <Wrapper lang={locale}>
       <div className="list-pane" style={{ width: listWidth }}>
         <BoardHead
-          count={devices.length}
+          count={visibleDevices.length}
           compact={listWidth <= 320}
           onOpenSettings={() => void openSettings()}
         />
         <DeviceHealthNotice
           summary={reconciliation}
           storeHealth={storeHealth}
+          unavailableCount={affectedNames.length}
           affectedNames={affectedNames}
           rechecking={rechecking}
           onRecheck={handleRecheck}
@@ -379,6 +421,7 @@ const App = (): React.JSX.Element => {
           storeTrusted={storeTrusted}
           metaWritable={metaWritable}
           storeState={storeHealth.state}
+          sourceBucket={sourceBucket}
           loadError={loadError}
           onRetryLoad={handleRetryLoad}
           onSelect={setSelected}
@@ -390,6 +433,7 @@ const App = (): React.JSX.Element => {
           onRename={handleRename}
           onEdit={handleEdit}
           onRenameBlocked={handleRenameBlocked}
+          onCrossBucketBlocked={handleCrossBucketBlocked}
         />
         <footer className="foot">
           <Button

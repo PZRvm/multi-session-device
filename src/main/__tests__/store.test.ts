@@ -55,6 +55,17 @@ describe('store v1/v2 typed 读取', () => {
     await writeStore({ version: 2, devices: [v2Meta({ cutoutResetPending: 'yes' as never })] })
     expect((await readDeviceStore()).health.state).toBe('read-only')
   })
+  it('设备出身跨读盘保留（白名单投影登记），闭集外取值拒绝（真机冻结回归）', async () => {
+    // 回归（2026-10-12 用户报障三连）：imageSourceOrigin 未进 projectV2Meta 白名单时，
+    // 读侧剥离 → rereadStore 比对内存（带字段）与投影（缺字段）判「外部修改」→
+    // 冻结写入（切来源即触发）+ 重启后出身丢失全数回落 app-owned
+    await writeDeviceMetas([v2Meta({ imageSourceOrigin: 'shared-studio' })])
+    expect((await readDeviceStore()).metas[0].imageSourceOrigin).toBe('shared-studio')
+    await writeDeviceMetas([v2Meta()])
+    expect((await readDeviceStore()).metas[0].imageSourceOrigin).toBeUndefined()
+    await writeStore({ version: 2, devices: [v2Meta({ imageSourceOrigin: 'nonsense' as never })] })
+    expect((await readDeviceStore()).health.state).toBe('read-only')
+  })
   it('无文件（ENOENT）= 首次空库 ok，无写保护', async () => {
     const result = await readDeviceStore()
     expect(result.metas).toEqual([])

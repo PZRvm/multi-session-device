@@ -19,7 +19,8 @@ const okSummary: ReconciliationSummary = {
 const renderNotice = (
   summary: ReconciliationSummary,
   storeHealth: StoreHealth = okStore,
-  affectedNames: string[] = []
+  affectedNames: string[] = [],
+  unavailableCount: number = summary.unavailableCount
 ): { onRecheck: ReturnType<typeof vi.fn>; onViewDetail: ReturnType<typeof vi.fn> } => {
   const onRecheck = vi.fn()
   const onViewDetail = vi.fn()
@@ -27,6 +28,7 @@ const renderNotice = (
     <DeviceHealthNotice
       summary={summary}
       storeHealth={storeHealth}
+      unavailableCount={unavailableCount}
       affectedNames={affectedNames}
       rechecking={false}
       onRecheck={onRecheck}
@@ -82,6 +84,7 @@ describe('DeviceHealthNotice', () => {
       <DeviceHealthNotice
         summary={{ ...okSummary, signature: 'sig', unavailableCount: 1 }}
         storeHealth={okStore}
+        unavailableCount={1}
         affectedNames={['A 机']}
         rechecking={true}
         onRecheck={vi.fn()}
@@ -91,5 +94,29 @@ describe('DeviceHealthNotice', () => {
     expect(
       (screen.getByRole('button', { name: new RegExp(copy.recheck) }) as HTMLButtonElement).disabled
     ).toBe(true)
+  })
+
+  it('视图口径（plan 2026-10-12-device-list-origin-view-filter 轴 2）：计数用 prop 不读 summary', () => {
+    // summary 声称 3 台异常，但可见集只有 1 台——汇总条只说可见的那台
+    renderNotice({ ...okSummary, signature: 'sig', unavailableCount: 3 }, okStore, ['A 机'], 1)
+    expect(
+      screen.getByText(
+        new RegExp(
+          format(copy.unavailableDevices, { count: 1, names: 'A 机', more: '' }).split('（')[0]
+        )
+      )
+    ).toBeTruthy()
+  })
+
+  it('P3-C 回归：全量签名非空但视图口径零行 → 不渲染（空横幅不复现）', () => {
+    renderNotice({ ...okSummary, signature: 'sig-hidden-only' }, okStore, [], 0)
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('另一来源桶的异常不进横幅（用户 2026-10-12 复核：隐藏侧完全静默）', () => {
+    // 全量侧有异常（签名非空），但可见集零行——横幅整条不出，
+    // 明细只走「查看详情」与折叠区展开后的行内提示
+    renderNotice({ ...okSummary, signature: 'sig', unavailableCount: 1 }, okStore, [], 0)
+    expect(screen.queryByRole('status')).toBeNull()
   })
 })

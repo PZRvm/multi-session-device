@@ -51,6 +51,8 @@ interface DeviceState {
   loadError: string | null
   storeHealth: StoreHealth
   reconciliation: ReconciliationSummary
+  /** 活动来源桶（出身过滤视图谓词依赖，plan 2026-10-12-device-list-origin-view-filter） */
+  sourceBucket: 'app-owned' | 'shared-studio'
   /** 设备网络态（plan 2026-10-12）：deviceId → 最新读回；设备是唯一事实源 */
   network: Record<string, NetworkState>
   load: () => Promise<void>
@@ -81,6 +83,7 @@ export const useDeviceStore = create<DeviceState>()((set, get) => {
       selectedId: normalizeSelection(snapshot.devices, state.selectedId),
       storeHealth: snapshot.storeHealth ?? state.storeHealth,
       reconciliation: snapshot.reconciliation ?? state.reconciliation,
+      sourceBucket: snapshot.sourceBucket ?? state.sourceBucket,
       network: pruneNetwork(snapshot.devices, state.network)
     }))
   }
@@ -101,6 +104,7 @@ export const useDeviceStore = create<DeviceState>()((set, get) => {
     loadError: null,
     storeHealth: OK_STORE_HEALTH,
     reconciliation: EMPTY_SUMMARY,
+    sourceBucket: 'app-owned',
     network: {},
     load: async () => {
       const result = await toApiResult(window.api.devices.list())

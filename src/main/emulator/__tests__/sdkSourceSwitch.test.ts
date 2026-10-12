@@ -18,6 +18,9 @@ import {
   adoptSourceSwitch,
   cancelSourceMigration,
   clearRetainedRoot,
+  clearRetainedWithCascade,
+  createSwitchDeps,
+  onSdkSourceChanged,
   startSourceMigration,
   switchSource,
   type SwitchDeps
@@ -280,6 +283,84 @@ describe('clearRetainedRoot（仅共享模式）', () => {
   })
 })
 
+describe('clearRetainedWithCascade（清除级联编排，review P2-3）', () => {
+  let fs: FakeFs
+  beforeEach(() => {
+    fs = new FakeFs()
+    sentBroadcasts.length = 0
+    resetSdkSourceStateForTest()
+    resetMigrationFlagForTest()
+  })
+
+  const sharedDeps = () => {
+    seedSourceInto(fs, MANAGED)
+    setSdkSourceState({
+      version: 1,
+      source: 'shared-studio',
+      customPath: null,
+      sharedPath: STUDIO_SDK
+    })
+    return buildDeps(fs)
+  }
+
+  it('顺序：先清 SDK 后级联 purge；成功路径 failures 为空', async () => {
+    const order: string[] = []
+    const base = sharedDeps()
+    const deps = {
+      ...base,
+      migration: {
+        ...base.migration,
+        rmTree: async (path: string) => {
+          order.push(`rm:${path}`)
+          return base.migration.rmTree(path)
+        }
+      },
+      purgeAppOwnedDevices: async () => {
+        order.push('purge')
+        return { deleted: [{ id: 'd1', name: '自有机' }], failures: [] }
+      }
+    }
+    const result = await clearRetainedWithCascade({ root: MANAGED }, deps)
+    expect(result.snapshot.source).toBe('shared-studio')
+    expect(result.failures).toEqual([])
+    expect(order).toEqual([`rm:${MANAGED}`, 'purge'])
+    expect(fs.exists(MANAGED)).toBe(false)
+  })
+
+  it('级联失败聚合返回不抛（SDK 已删、残留由调用方上报）', async () => {
+    const base = sharedDeps()
+    const deps = {
+      ...base,
+      purgeAppOwnedDevices: async () => ({
+        deleted: [{ id: 'd1', name: 'A 机' }],
+        failures: [
+          { name: 'B 机', message: '删除未完成' },
+          { name: 'C 机', message: '盘满' }
+        ]
+      })
+    }
+    const result = await clearRetainedWithCascade({ root: MANAGED }, deps)
+    expect(result.failures.map((entry) => entry.name)).toEqual(['B 机', 'C 机'])
+    // 主操作已成立：SDK 已清
+    expect(fs.exists(MANAGED)).toBe(false)
+  })
+
+  it('purge 缺席：只清 SDK 不动设备（passthrough）', async () => {
+    const result = await clearRetainedWithCascade({ root: MANAGED }, sharedDeps())
+    expect(result.failures).toEqual([])
+    expect(fs.exists(MANAGED)).toBe(false)
+  })
+
+  it('非共享态：clearRetainedRoot 守卫照常拒绝（级联不启动）', async () => {
+    seedSourceInto(fs, MANAGED)
+    const purge = vi.fn(async () => ({ deleted: [], failures: [] }))
+    await expect(
+      clearRetainedWithCascade({ root: MANAGED }, { ...buildDeps(fs), purgeAppOwnedDevices: purge })
+    ).rejects.toThrow('shared')
+    expect(purge).not.toHaveBeenCalled()
+  })
+})
+
 describe('startSourceMigration / cancelSourceMigration（编排收尾）', () => {
   let fs: FakeFs
   beforeEach(() => {
@@ -432,5 +513,22 @@ describe('cancelSourceMigration on corrupt journal（问题二处置）', () => 
     expect(fs.exists(`${MANAGED}/emulator/emulator`)).toBe(true)
     expect(fs.exists(CUSTOM)).toBe(false)
     expect(fs.read(`${AVD_HOME}/d1.avd/config.ini`)).toContain(`image.sys.src.dir=${MANAGED}/`)
+  })
+})
+
+describe('来源变更监听（plan 2026-10-12-device-list-source-aware）', () => {
+  it('createSwitchDeps.broadcast 仅 sdk:source-changed 触发监听器——多监听与退订（P3-7）', () => {
+    const listener = vi.fn()
+    const off = onSdkSourceChanged(listener)
+    const deps = createSwitchDeps()
+    deps.broadcast('sdk:progress', { percent: 1 })
+    deps.broadcast('sdk:migrate-progress', { phase: 'scanning' })
+    expect(listener).not.toHaveBeenCalled()
+    deps.broadcast('sdk:source-changed', {})
+    expect(listener).toHaveBeenCalledTimes(1)
+    // 退订后再广播不再触达（review P3-7：显式退订取代覆盖式复位）
+    off()
+    deps.broadcast('sdk:source-changed', {})
+    expect(listener).toHaveBeenCalledTimes(1)
   })
 })

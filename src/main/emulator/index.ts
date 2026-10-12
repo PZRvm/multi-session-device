@@ -43,14 +43,20 @@ import { isMigrationActive } from './sdkMigration'
 import {
   adoptSourceSwitch,
   cancelSourceMigration,
-  clearRetainedRoot,
+  clearRetainedWithCascade,
+  createSwitchDeps,
+  onSdkSourceChanged,
   startSourceMigration,
-  switchSource
+  switchSource,
+  type PurgeAppOwnedResult
 } from './sdkSourceSwitch'
 import type { SdkSourceMode } from '@shared/types'
 
 /** 应用自有 AVD 根（ANDROID_AVD_HOME 语义） */
 export const defaultAvdHome = (): string => join(app.getPath('userData'), 'avd-home')
+
+// 来源变更监听（sdkSourceSwitch 定义）：ipc/index.ts 登记点接线 devices 重查
+export { onSdkSourceChanged }
 
 const resolveRoot = (raw: unknown): string => {
   // 缺省走 sdkSource 统一解析（managed/custom/shared-studio 活动根）
@@ -68,8 +74,8 @@ const pushToAllWindows = (channel: string, payload: unknown): void => {
 const pushProgress = (progress: SdkProgress): void =>
   pushToAllWindows(IPC_CHANNELS.sdkProgress, progress)
 
-/** 许可确认——PRD 4.5：必须应用内确认，不静默接受 */
-const confirmLicenses = async (): Promise<void> => {
+/** 许可确认——PRD 4.5：必须应用内确认，不静默接受；返回是否同意（拒绝=用户取消） */
+const confirmLicenses = async (): Promise<boolean> => {
   const window = BrowserWindow.getAllWindows()[0]
   const options = {
     title: msg('licenseTitle'),
@@ -82,7 +88,9 @@ const confirmLicenses = async (): Promise<void> => {
   const result = window
     ? await dialog.showMessageBox(window, options)
     : await dialog.showMessageBox(options)
-  if (result.response !== 0) throw new Error(msg('licenseRejected'))
+  // 布尔返回而非抛错（review P2-2）：拒绝 = 用户主动取消，调用方静默处理——
+  // 不再依赖错误文本匹配的跨函数契约
+  return result.response === 0
 }
 
 // 画像缓存（5min）：avdmanager list device 是 Java 子进程（秒级），不必每次向导都跑。
@@ -211,6 +219,10 @@ const requireSdkReady = async (root: string): Promise<void> => {
 export interface SdkIpcDeps {
   savedDeviceSkinRef?: (id: string) => Promise<string | null>
   referencingDeviceNames?: (packageName: string) => string[]
+  /** 清除保留根后的设备级联删除（devices 域注入；缺席则只清 SDK 不动设备） */
+  purgeAppOwnedDevices?: () => Promise<PurgeAppOwnedResult>
+  /** 项目自有设备计数（清除确认框级联警告用） */
+  appOwnedDeviceCount?: () => Promise<number>
 }
 
 export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
@@ -255,7 +267,7 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     return cancelSourceMigration()
   })
 
-  ipcMain.handle(IPC_CHANNELS.sdkSourceClearRetained, (event, raw: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.sdkSourceClearRetained, async (event, raw: unknown) => {
     requireSettingsSender(IPC_CHANNELS.sdkSourceClearRetained, event)
     if (
       typeof raw !== 'object' ||
@@ -264,7 +276,26 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     ) {
       throw new Error(msg('invalidPayload'))
     }
-    return clearRetainedRoot({ root: (raw as Record<string, unknown>).root as string })
+    // 级联编排下沉 clearRetainedWithCascade（review P2-3：顺序与失败聚合有域测），
+    // 这里只留守卫与本地化上报
+    const { snapshot, failures } = await clearRetainedWithCascade(
+      { root: (raw as Record<string, unknown>).root as string },
+      { ...createSwitchDeps(), purgeAppOwnedDevices: deps.purgeAppOwnedDevices }
+    )
+    if (failures.length > 0) {
+      throw new Error(
+        msg('sdkClearPurgeFailed', {
+          failures: failures.map((entry) => `${entry.name}：${entry.message}`).join('；')
+        })
+      )
+    }
+    return snapshot
+  })
+
+  // 清除确认框的级联计数（仅设置窗）：项目自有设备全体将被连带删除
+  ipcMain.handle(IPC_CHANNELS.sdkAppOwnedCount, async (event): Promise<number> => {
+    requireSettingsSender(IPC_CHANNELS.sdkAppOwnedCount, event)
+    return deps.appOwnedDeviceCount !== undefined ? deps.appOwnedDeviceCount() : 0
   })
 
   // 原生目录选择器（自选 SDK 根）：null = 用户取消，不走错误通道
@@ -283,7 +314,10 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     assertSdkWritable(IPC_CHANNELS.sdkBootstrap)
     const root = resolveRoot(raw)
     const snapshot = await detectSdk(root)
-    if (!snapshot.licensed) await confirmLicenses()
+    if (!snapshot.licensed) {
+      // 许可拒绝 = 用户主动取消（非失败）：静默返回当前态，不进错误通道
+      if (!(await confirmLicenses())) return snapshot
+    }
     return bootstrapSdk(root, {}, pushProgress)
   })
 

@@ -77,6 +77,8 @@ import {
 } from '../emulator/reconcile'
 import { awaitWithAbort } from '../emulator/abort'
 import { isMigrationActive } from '../emulator/sdkMigration'
+import { isSharedReadOnly } from '../emulator/sdkSource'
+import { bucketOfShared, originOfMeta } from '@shared/deviceOrigin'
 import {
   ensureSharedServer,
   candidateAdbPaths,
@@ -271,6 +273,15 @@ const frameKindOf = (profileId: string): DeviceFrameKind | undefined =>
 
 export function attachDeviceStreamBridge(bridge: typeof streamBridge): void {
   Object.assign(streamBridge, bridge)
+}
+
+/**
+ * SDK 来源变更后的全量可用性重查（plan 2026-10-12-device-list-source-aware）：
+ * 生效根变了，镜像核验结果跟着变——fire-and-forget 沿删除/创建回滚后的对账先例，
+ * 单飞守卫合并连续切换。ipc/index.ts 登记点经 onSdkSourceChanged 接线。
+ */
+export const triggerSourceChangeReconcile = (): void => {
+  void reconcileDevices().catch(() => undefined)
 }
 
 /**
@@ -563,6 +574,7 @@ const reconciliationSummaryNow = (): ReconciliationSummary => ({
       device.availability.state !== 'checking'
   ).length,
   orphanCount: lastReport?.orphanEntries.length ?? 0,
+  scanError: lastReport?.scanError ?? null,
   storeState: storeHealth.state,
   pendingNotification: lastReport?.pendingNotification ?? false
 })
@@ -682,6 +694,9 @@ const toMeta = (device: Device): DeviceMeta => ({
   advancedSettings: device.advancedSettings,
   snapshotReadyAt: device.snapshotReadyAt ?? null,
   ...(device.cutoutResetPending === true ? { cutoutResetPending: true } : {}),
+  ...(device.imageSourceOrigin !== undefined
+    ? { imageSourceOrigin: device.imageSourceOrigin }
+    : {}),
   createdAt: device.createdAt
 })
 
@@ -764,7 +779,9 @@ const snapshotNow = (): DeviceSnapshot => ({
   revision,
   devices: devices.map((device) => ({ ...device })),
   storeHealth,
-  reconciliation: reconciliationSummaryNow()
+  reconciliation: reconciliationSummaryNow(),
+  // 活动来源桶（出身过滤视图）：切来源后的重查轮快照自然翻转到新桶
+  sourceBucket: bucketOfShared(isSharedReadOnly())
 })
 
 const broadcastChanged = (): void => {
@@ -819,6 +836,18 @@ const assertMetaWritable = (action: string): void => {
         action
       })
     )
+  }
+}
+
+/**
+ * 跨来源设备只读（plan 2026-10-12-device-list-origin-view-filter 用户复核 5）：
+ * 另一桶出身的设备在当前来源下禁止改名/删除/编辑保存——UI 禁用为主，此处双保险
+ * （禁用态可被伪造入参绕过）。启动/停止不受限：运行中设备必须可停（豁免条款），
+ * 启动可行性与来源的关系由既有健康核验表达，不入此守卫。
+ */
+const assertDeviceInCurrentBucket = (device: Device): void => {
+  if (originOfMeta(device) !== bucketOfShared(isSharedReadOnly())) {
+    throw new Error(msg('deviceCrossOriginBlocked'))
   }
 }
 
@@ -1327,11 +1356,15 @@ const cancelStartDevice = async (id: string): Promise<DeviceSnapshot> => {
   return snapshotNow()
 }
 
-const deleteFlow = async (id: string): Promise<DeviceSnapshot> => {
+const deleteFlow = async (
+  id: string,
+  opts: { bypassOriginBucket?: boolean } = {}
+): Promise<DeviceSnapshot> => {
   await ensureLoaded()
   const device = requireDevice(id)
   if (device.status === 'creating') throw new Error(msg('deleteWhileCreating'))
   if (editFlights.has(id)) throw new Error(msg('blockDeleteWhileSaving'))
+  if (!opts.bypassOriginBucket) assertDeviceInCurrentBucket(device)
   // 副作用前守卫（对账设计 4）：库不可写时拒绝——删了 AVD 却删不掉元数据会留幽灵记录
   assertMetaWritable(msg('actionDelete'))
   if (device.status === 'starting') await cancelStartDevice(id)
@@ -1383,13 +1416,50 @@ const deleteFlow = async (id: string): Promise<DeviceSnapshot> => {
   }
 }
 
-const deleteDevice = (id: string): Promise<DeviceSnapshot> => {
+const deleteDevice = (
+  id: string,
+  opts: { bypassOriginBucket?: boolean } = {}
+): Promise<DeviceSnapshot> => {
   // 停止/删除中的重复请求合并到同一次执行
   const flight = deleteFlights.get(id)
   if (flight) return flight
-  const promise = deleteFlow(id).finally(() => deleteFlights.delete(id))
+  const promise = deleteFlow(id, opts).finally(() => deleteFlights.delete(id))
   deleteFlights.set(id, promise)
   return promise
+}
+
+/**
+ * 清除保留根的设备级联（用户 2026-10-12 批复）：共享态下清除保留 SDK 时，
+ * 项目自有出身的设备镜像随之永久消失——设备一并删除（AVD 目录 + 元数据），
+ * 不留永久不可启动的死行。逐台走删除流（含运行中先停），失败逐台收集不中断
+ * 其余（SDK 已删，残留行可切回自有根后手删）。跨桶只读守卫在此放行——
+ * 清除本身就是对另一桶的系统性清理。
+ */
+export const purgeAppOwnedDevices = async (): Promise<{
+  deleted: Array<{ id: string; name: string }>
+  failures: Array<{ name: string; message: string }>
+}> => {
+  await ensureLoaded()
+  const targets = devices
+    .filter((device) => originOfMeta(device) === 'app-owned')
+    .map((device) => ({ id: device.id, name: device.name }))
+  const deleted: Array<{ id: string; name: string }> = []
+  const failures: Array<{ name: string; message: string }> = []
+  for (const target of targets) {
+    try {
+      await deleteDevice(target.id, { bypassOriginBucket: true })
+      deleted.push(target)
+    } catch (error) {
+      failures.push({ name: target.name, message: messageOf(error) })
+    }
+  }
+  return { deleted, failures }
+}
+
+/** 设置窗清除确认框的计数来源：项目自有出身设备总数（当前视图的另一桶全体） */
+export const appOwnedDeviceCount = async (): Promise<number> => {
+  await ensureLoaded()
+  return devices.filter((device) => originOfMeta(device) === 'app-owned').length
 }
 
 const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult> => {
@@ -1509,6 +1579,9 @@ const createDeviceTransaction = async (
         : null,
     advancedSettings,
     snapshotReadyAt: null,
+    // 出身标注（plan 2026-10-12-device-list-source-aware）：创建时的来源桶；
+    // 共享态建出的设备引用 Studio 根内的镜像，切回自有根后指路文案靠它区分
+    imageSourceOrigin: isSharedReadOnly() ? 'shared-studio' : 'app-owned',
     createdAt: Date.now(),
     frameKind: frameKindOf(raw.profileId),
     availability: checkingAvailability(),
@@ -1595,6 +1668,7 @@ const renameDevice = async (id: string, name: string): Promise<DeviceSnapshot> =
     throw new Error(msg('renameWhileBusy'))
   }
   if (editFlights.has(id)) throw new Error(msg('blockRenameWhileSaving'))
+  assertDeviceInCurrentBucket(device)
   assertMetaWritable(msg('actionRename'))
   await commitMetas((metas) => metas.map((meta) => (meta.id === id ? { ...meta, name } : meta)))
   broadcastChanged()
@@ -2304,6 +2378,7 @@ const updateDeviceConfig = (input: UpdateDeviceInput): Promise<DeviceSnapshot> =
   const promise = (async (): Promise<DeviceSnapshot> => {
     if (!acceptingCommands) throw new Error(msg('appClosingNoSave'))
     await ensureLoaded()
+    assertDeviceInCurrentBucket(requireDevice(input.id))
     try {
       return await updateConfigFlow(input)
     } finally {

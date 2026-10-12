@@ -4,6 +4,7 @@ import { WIZARD_COPY, format } from '@shared/i18n'
 import type {
   DeviceProfile,
   ImageCatalogResult,
+  SdkSnapshot,
   SdkUninstallState,
   ImageEntry,
   SdkImageProgress,
@@ -480,16 +481,21 @@ const installSdkStub = (parts: {
   images?: Mock<() => Promise<ImageCatalogResult>>
   downloadImage?: Mock<(packageName: string) => Promise<void>>
   cancelDownloadImage?: Mock<(packageName: string) => Promise<void>>
+  status?: Mock<() => Promise<SdkSnapshot>>
+  bootstrap?: Mock<() => Promise<SdkSnapshot>>
 }): {
   emitProgress: (progress: SdkImageProgress) => void
   emitUninstallState: (state: SdkUninstallState) => void
+  emitSdkProgress: (percent: number) => void
 } => {
   const handle: {
     emitProgress: (progress: SdkImageProgress) => void
     emitUninstallState: (state: SdkUninstallState) => void
+    emitSdkProgress: (percent: number) => void
   } = {
     emitProgress: () => {},
-    emitUninstallState: () => {}
+    emitUninstallState: () => {},
+    emitSdkProgress: () => {}
   }
   ;(window as { api?: unknown }).api = {
     sdk: {
@@ -498,12 +504,28 @@ const installSdkStub = (parts: {
       downloadImage: parts.downloadImage ?? vi.fn(async () => {}),
       cancelDownloadImage: parts.cancelDownloadImage ?? vi.fn(async () => {}),
       wizardCapabilities: vi.fn(async () => CAPABILITIES),
+      // 引导入口默认「组件齐全」——既有用例不触发引导按钮
+      status:
+        parts.status ??
+        vi.fn(async () => ({
+          root: '/sdk',
+          jre: { present: true },
+          cmdlineTools: { present: true },
+          platformTools: { present: true },
+          emulator: { present: true },
+          licensed: true
+        })),
+      bootstrap: parts.bootstrap ?? vi.fn(async () => undefined as never),
       onImageProgress: (cb: (progress: SdkImageProgress) => void): (() => void) => {
         handle.emitProgress = cb
         return () => {}
       },
       onUninstallState: (cb: (state: SdkUninstallState) => void): (() => void) => {
         handle.emitUninstallState = cb
+        return () => {}
+      },
+      onSdkProgress: (cb: (progress: { percent?: number }) => void): (() => void) => {
+        handle.emitSdkProgress = (percent: number): void => cb({ percent })
         return () => {}
       }
     }
@@ -533,6 +555,103 @@ describe('DeviceWizard 清单加载反馈（代次守卫回归）', () => {
     await screen.findByText('API 36')
     fireEvent.click(screen.getByText('API 36'))
     expect((screen.getByLabelText(copy.nameLabel) as HTMLInputElement).value).toBe('Pixel 8 API 36')
+  })
+
+  it('SDK 未就绪（清除保留根后的空根场景）：错误块出现「完成 SDK 引导」，忙碌由进度驱动，成功后自动重拉画像', async () => {
+    let calls = 0
+    const profiles = vi.fn(async (): Promise<DeviceProfile[]> => {
+      calls += 1
+      if (calls === 1) throw new Error('SDK 尚未就绪（缺 cmdline-tools 或 JRE），先完成 SDK 引导')
+      return PROFILES
+    })
+    const dBootstrap = deferred<SdkSnapshot>()
+    const bootstrap = vi.fn(() => dBootstrap.promise)
+    const handle = installSdkStub({
+      profiles,
+      status: vi.fn(async (): Promise<SdkSnapshot> => ({
+        root: '/sdk',
+        jre: { present: false },
+        cmdlineTools: { present: false },
+        platformTools: { present: false },
+        emulator: { present: false },
+        licensed: false
+      })),
+      bootstrap
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    expect(await screen.findByText(/SDK 尚未就绪/)).toBeTruthy()
+    const bootstrapButton = await screen.findByRole('button', { name: copy.sdkBootstrapAction })
+    fireEvent.click(bootstrapButton)
+    // 两段式（用户反馈）：点击后 pending 禁用但无忙碌动画；进度事件才转「引导中」
+    await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(1))
+    expect(
+      screen.queryByText(copy.sdkBootstrapBusy)
+    ).toBeNull()
+    handle.emitSdkProgress(10)
+    expect(await screen.findByText(copy.sdkBootstrapBusy)).toBeTruthy()
+    // 引导成功 → 按钮消失、画像自动重拉成功
+    dBootstrap.resolve({
+      root: '/sdk',
+      jre: { present: true },
+      cmdlineTools: { present: true },
+      platformTools: { present: true },
+      emulator: { present: true },
+      licensed: true
+    })
+    expect(await screen.findByText('Pixel 8')).toBeTruthy()
+    expect(profiles).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('button', { name: copy.sdkBootstrapAction })).toBeNull()
+  })
+
+  it('引导探测负路径（review P3-5）：报错但组件齐全——只出重试不出引导钮', async () => {
+    const profiles = vi.fn(async (): Promise<DeviceProfile[]> => {
+      throw new Error('画像清单服务暂不可用')
+    })
+    installSdkStub({ profiles }) // status 默认组件齐全
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    expect(await screen.findByText('画像清单服务暂不可用')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: copy.sdkBootstrapAction })).toBeNull()
+    expect(screen.getByRole('button', { name: copy.retry })).toBeTruthy()
+  })
+
+  it('许可拒绝 = 用户取消（用户反馈）：无报错，按钮原地恢复可再次发起', async () => {
+    // 现实语义：取消后 SDK 仍未就绪，重拉继续报同一错误——按钮保持在场可再发起
+    const profiles = vi.fn(async (): Promise<DeviceProfile[]> => {
+      throw new Error('SDK 尚未就绪（缺 cmdline-tools 或 JRE），先完成 SDK 引导')
+    })
+    const bootstrap = vi.fn(async (): Promise<SdkSnapshot> => ({
+      root: '/sdk',
+      jre: { present: false },
+      cmdlineTools: { present: false },
+      platformTools: { present: false },
+      emulator: { present: false },
+      licensed: false
+    }))
+    installSdkStub({
+      profiles,
+      status: vi.fn(async (): Promise<SdkSnapshot> => ({
+        root: '/sdk',
+        jre: { present: false },
+        cmdlineTools: { present: false },
+        platformTools: { present: false },
+        emulator: { present: false },
+        licensed: false
+      })),
+      bootstrap
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    expect(await screen.findByText(/SDK 尚未就绪/)).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: copy.sdkBootstrapAction }))
+    // main 静默返回当前态 → 渲染层无错误、按钮恢复（画像重拉仍报未就绪，错误块保持原文）
+    await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('button', { name: copy.sdkBootstrapAction }) as HTMLButtonElement)
+          .disabled
+      ).toBe(false)
+    )
+    expect(screen.queryByText(/SDK 引导失败/)).toBeNull()
+    expect(screen.getByText(/SDK 尚未就绪/)).toBeTruthy()
   })
 
   it('仅镜像失败：第二页显示错误与镜像重试，画像数据保留可回退', async () => {

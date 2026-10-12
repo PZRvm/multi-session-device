@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Copy, Loader2, Play, Settings2, Square, Trash2, X } from 'lucide-react'
+import { Building2, Copy, Loader2, Play, Settings2, Square, Trash2, X } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
 import type { Device, DeviceAvailability, DeviceStatus } from '@shared/types'
@@ -25,6 +25,9 @@ type DeviceRowProps = {
   storeTrusted: boolean
   /** 库可写（storeHealth 为 ok）：read-only 时禁改删与重命名 */
   metaWritable: boolean
+  /** 跨来源桶（出身≠当前来源，含运行豁免显示的他桶设备）：另一侧设备不可修改
+   * （plan 用户复核 5）——编辑/删除禁用、重命名拦截，停止/取消不受限 */
+  crossBucket?: boolean
   onSelect: () => void
   onStart: () => void
   onStop: () => void
@@ -36,6 +39,8 @@ type DeviceRowProps = {
   onEdit: () => void
   /** read-only 下尝试重命名（双击/F2）时的反馈入口（review P3——静默 no-op 无说明） */
   onRenameBlocked?: () => void
+  /** 跨来源桶下尝试修改（重命名路径）时的反馈入口 */
+  onCrossBucketBlocked?: () => void
 }
 
 /** 设备行：ListRow 视觉（选中整行反白）+ 状态点 + 行内启停/取消/复制/删除 + 双击/F2/选中态 Enter 行内重命名。
@@ -46,6 +51,7 @@ const DeviceRow = ({
   selected,
   storeTrusted,
   metaWritable,
+  crossBucket = false,
   onSelect,
   onStart,
   onStop,
@@ -54,7 +60,8 @@ const DeviceRow = ({
   onDelete,
   onRename,
   onEdit,
-  onRenameBlocked
+  onRenameBlocked,
+  onCrossBucketBlocked
 }: DeviceRowProps): React.JSX.Element => {
   const [renaming, setRenaming] = useState(false)
   const [draft, setDraft] = useState(device.name)
@@ -83,15 +90,23 @@ const DeviceRow = ({
       ? availabilityReason(availability, availabilityLabels)
       : null
 
-  // stopped 且 checking/非 valid 禁启动；库不可信（error）同样禁——元数据无法信任
+  // stopped 且 checking/非 valid 禁启动；库不可信（error）同样禁——元数据无法信任；
+  // 跨桶 stopped 设备禁启动（review P3-3 决策：另一侧只读到底——从这边启动会让
+  // 设备跳进当前视图、停止后又折回，视图跳动且语义越界；运行豁免设备不受影响）
   const startDisabled =
     device.status === 'stopped' &&
-    (!storeTrusted || availability === null || availability.state !== 'valid')
+    (crossBucket || !storeTrusted || availability === null || availability.state !== 'valid')
   const deleteDisabled =
-    !metaWritable || (device.status !== 'stopped' && device.status !== 'running')
+    !metaWritable ||
+    crossBucket ||
+    (device.status !== 'stopped' && device.status !== 'running')
 
   const startRename = (): void => {
     if (device.status === 'creating' || device.status === 'deleting') return
+    if (crossBucket) {
+      onCrossBucketBlocked?.()
+      return
+    }
     if (!metaWritable) {
       onRenameBlocked?.()
       return
@@ -166,7 +181,20 @@ const DeviceRow = ({
         />
       ) : (
         <span className="text-block">
-          <span className="title">{device.name}</span>
+          <span className="title">
+            {device.name}
+            {/* 出身徽标（plan 2026-10-12-device-list-source-aware）：仅共享来源出身
+                显示——项目自有是默认世界，减噪；tooltip 全称给足语义 */}
+            {device.imageSourceOrigin === 'shared-studio' ? (
+              <span
+                className="origin-badge"
+                title={copy.deviceOriginStudio}
+                aria-label={copy.deviceOriginStudio}
+              >
+                <Building2 size={11} aria-hidden="true" />
+              </span>
+            ) : null}
+          </span>
           <span className="subtitle">{subtitle}</span>
           {healthLine !== null ? (
             <span className="health-line" title={healthLine}>
@@ -196,7 +224,13 @@ const DeviceRow = ({
             type="button"
             className="icon-button"
             aria-label={format(copy.startAria, { name: device.name })}
-            title={startDisabled ? copy.startDisabledTitle : copy.start}
+            title={
+              crossBucket && device.status === 'stopped'
+                ? copy.crossBucketBlockedTitle
+                : startDisabled
+                  ? copy.startDisabledTitle
+                  : copy.start
+            }
             disabled={startDisabled}
             onClick={onStart}
           >
@@ -271,11 +305,17 @@ const DeviceRow = ({
           className="icon-button"
           aria-label={format(copy.editAria, { name: device.name })}
           title={
-            device.status === 'creating' || device.status === 'deleting'
-              ? copy.editBusyTitle
-              : copy.editTitle
+            crossBucket && device.status !== 'running'
+              ? copy.crossBucketBlockedTitle
+              : device.status === 'creating' || device.status === 'deleting'
+                ? copy.editBusyTitle
+                : copy.editTitle
           }
-          disabled={device.status === 'creating' || device.status === 'deleting'}
+          disabled={
+            (crossBucket && device.status !== 'running') ||
+            device.status === 'creating' ||
+            device.status === 'deleting'
+          }
           onClick={onEdit}
         >
           <Settings2 size={14} />
@@ -284,7 +324,13 @@ const DeviceRow = ({
           type="button"
           className="icon-button"
           aria-label={format(copy.deleteAria, { name: device.name })}
-          title={metaWritable ? copy.deleteTitle : copy.deleteFrozenTitle}
+          title={
+            crossBucket
+              ? copy.crossBucketBlockedTitle
+              : metaWritable
+                ? copy.deleteTitle
+                : copy.deleteFrozenTitle
+          }
           disabled={deleteDisabled}
           onClick={onDelete}
         >
@@ -391,6 +437,21 @@ const Wrapper = styled.div`
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* 出身徽标（共享来源设备）：名称行尾小图标，tooltip 承载全称 */
+  .origin-badge {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    margin-left: 5px;
+    vertical-align: -1px;
+    color: var(--board-ink-dim);
+  }
+
+  &[aria-current] .origin-badge {
+    color: inherit;
+    opacity: 0.78;
   }
 
   .subtitle {

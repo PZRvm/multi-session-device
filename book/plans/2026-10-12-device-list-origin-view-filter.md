@@ -1,6 +1,6 @@
 ---
 description: 设备列表出身过滤视图（方案 C）：一份事实源 + 随来源切换的视图谓词——默认只显示当前来源桶出身的设备，其余收进折叠区可展开，运行/过渡态设备永远豁免
-status: in_progress
+status: completed
 created: 2026-10-12
 ---
 
@@ -141,3 +141,46 @@ sourceBucket: 'app-owned' | 'shared-studio'
 4. 创建即落当前视图：共享态向导（已装镜像）建一台 → 立即出现在共享视图顶部。
 5. 汇总条口径：共享态下隐藏的托管坏设备不进「N 台文件异常」计数（轴 2 批复后）；展开后计数随之可见化。
 6. 三语正确；全量测试、typecheck / lint / build 通过。
+
+## 实施记录 — 2026-10-12（worktree feature/device-list-source-aware 续作，批 1–6 完成，真机验收待做）
+
+### Phase 3：实现
+
+- `types.ts`：`DeviceSnapshot.sourceBucket`（必填，与 devices 同帧）；`snapshotNow()` 按 `isSharedReadOnly()` 计算——切来源后的重查轮快照自然翻转到新桶，boot 侧恢复先于首帧，无中间态。
+- `deviceStore`：`sourceBucket` 切片，`apply` 内提取（`??` 回落当前值）。
+- `originView.ts`（新）：`originOf`/`isTransientStatus`/`splitByOriginView` 谓词单源——DeviceListPane 与 App 汇总条口径共用。
+- `DeviceListPane`：主分区（本桶 + 过渡态豁免）+ 底部折叠区（计数行展开/收起）；**展开后独立分区呈现不混排**（偏差 1）；行渲染抽 `rowHandlers` 复用。
+- `App`：`affectedNames` 按可见集派生；`DeviceHealthNotice` 计数 prop 化（`unavailableCount`，不再直读 summary）；`BoardHead` 计数同切可见集（偏差 1）。
+- i18n：`otherOriginOwned`/`otherOriginStudio` 两键三语（折叠行按当前桶选词；可见文本即无障碍名，`foldedSectionAria` 键在实现中删除）。
+
+**偏差记录 1**：用户批复「两边尽量隔离就好」超出轴 1 原字面（"展开后混排"）——展开的折叠区改为独立分区（分隔线 + 浮起背景），`BoardHead` 设备计数一并切可见集口径（plan 未列，属隔离意图的延伸，review P3-A 记录）。
+
+**偏差记录 2**：实施顺序调整——用户指示「不要合并，先在之前 worktree 修改」，dev 侧已做的合并回退（`reset --keep`，用户本地 PRODUCT.md/electron-builder.yml 改动保留），出身批与过滤视图批同留本分支，验收后统一合并。前置依赖（出身字段在分支上）因此自然满足。
+
+### Phase 4：验证
+
+- 新增测试 7 项：DeviceListPane 过滤/豁免/折叠展开 ×1、共享桶文案切换 ×1、缺席出身归属 ×1；deviceStore 切片覆写与缺席回落 ×2；主进程快照三态 ×1；DeviceHealthNotice 视图口径 ×1。快照 mock 缺键连锁按 learn 锚点法逐文件补齐（App.reconciliation/DeviceCanvas.actions/deviceStore）。
+- 全量 **1123 项通过、6 项原有跳过**；typecheck 0 错；lint 0 告警；build 通过。
+- 真机验收**未做**（上方清单 ①–⑥，与出身批 ①–⑦ 一并走查）。
+
+### Phase 5：review（只记录不修）
+
+- P3-A：BoardHead 计数切可见集属 plan 外延伸（偏差 1），若需要「库内总量」口径需另加展示位。
+- P3-B：选中设备若落在折叠区（如选中所见设备后切来源），画布仍显示它但列表行不可见——一期接受；正常操作路径不会选中隐藏设备，展开可达。
+- P3-C：汇总条的 visible 门（signature/orphanCount）与对账通知弹窗仍是全量真值——孤立目录与签名异常是「库的事」不受视图过滤，仅 unavailable 计数为视图口径；语义成立，记录备查。
+
+### Phase 6：收尾
+
+- PRD 设备列表节 AC 扩容；stage05 SDK 步骤附注；[learn](../notes/learn/2026-10/2026-10-12-freshdomain-resetmodules-stale-import.md) 补 zustand 单例泄漏条目。
+- **Phase 5 code review（2026-10-12 合并前，只记录不修）**：结论总体 pass、无 P1——4 项 P2（跨桶运行设备查看配置回归 / 许可静默文本匹配契约 / 清除级联编排与计数通道零测试 / 级联计数时间窗）与 8 项 P3，[处置记录](../notes/issue/2026-10/2026-10-12-source-aware-filter-batch-review.md)。
+- **review 修复批（用户批复「全部修复」，2026-10-12）**：P2 四项清零——跨桶运行设备恢复查看配置、confirmLicenses 布尔化（删文本匹配契约与词条）、级联编排下沉 clearRetainedWithCascade + 4 项域测、级联文案时点口径；计数通道薄透传降 P3 留置。全量 1136 项通过。
+- **review P3 修复批（用户批复「全部修复」，2026-10-12）**：八项清零——口径单源 @shared/deviceOrigin、死字段注释、跨桶 stopped 禁启动（隔离语义决策，tooltip 通用化）、summary 增 scanError 防扫描失败被静默、三测试缺口补齐（折叠区集成/引导负路径/通知补漏）、测试复位 sourceBucket、监听器数组化+退订、rmTree 失败指引。全量 1139 项通过。review issue 全部发现清零关闭。
+- **2026-10-12 用户真机验收通过**：清单 ①–⑥ 走查覆盖——双桶切换折叠/展开、汇总条与通知只认当前桶（空横幅与计数行经复核修订后静默）、跨桶只读、清除级联删除；review P2×4+P3×8 修复批同批验收。本 plan 翻 completed。
+
+### 验收期修复批 — 2026-10-12（用户真机走查报障：切共享后出现只剩按钮的空警告条）
+
+- **P3-C 空横幅**（原记录「语义成立备查」被实测推翻）：全量签名非空亮门 + 视图口径零行正文 → 只剩「重新检查/查看详情」两个按钮的空条。修复：可见门改跟内容走（`lines.length === 0` 即不渲染），折叠区内异常设备补计数行（`hiddenOriginUnavailable` 三语，App 由 folded 集派生 `hiddenAffectedCount` 传入）——不闷声吞信息也不说看不见的话。新增 2 项回归（空横幅不复现、计数行渲染），全量 **1125 项通过**、typecheck/lint/build 干净。
+- 用户机器佐证：报障时「查看详情」报告窗正确显示被折叠设备的异常明细（全量真值在详情窗语义正确，维持）。
+- **用户复核修订（同日）**：上条修复给折叠区异常留的计数行（「另有 N 台其他来源设备文件异常」）被用户判定为多余提示——**顶部异常判定只认当前来源桶**，另一侧完全静默。移除 hiddenAffectedCount 行与三语词条，明细仅走「查看详情」与折叠区展开后的行内提示；测试改为「另一侧异常 → 横幅整条不出」。全量 1126 项通过。
+- **用户复核修订 5（同日，跨桶只读）**：另一来源桶的设备不允许被修改——UI 层 DeviceRow 增 `crossBucket`：编辑/删除钮禁用（tooltip「另一来源设备——切换来源后可修改」），重命名路径（双击/F2/Enter）走 `onCrossBucketBlocked` 弹说明框；**停止/取消启动不受限**（运行豁免条款的延伸——另一侧跑着的设备必须可停）。主进程双保险：`assertDeviceInCurrentBucket` 在 rename/delete/config-save（updateDeviceConfig）三入口拒绝跨桶写（禁用态可被伪造入参绕过，沿仓库双闸惯例）。新增 2 项测试（DeviceRow 跨桶禁用与运行豁免、域层服务端拒绝），全量 1129 项通过。
+- **用户复核修订 2（同日，启动弹窗）**：汇总条静默后原生通知弹窗仍在启动期弹出——同一视图口径延伸到通知链：`reconcileAnomalyHiddenFromView`（模块级，读 store 现值）判定「可见集无设备异常 ∧ 无孤立组 ∧ 库健康」时，登记 seen 并**代为 ack**（main 侧签名不再待提示，重启不复发），不弹 dialog 不开报告窗；补漏分支同样守口径。库级异常/孤立组不属「另一桶」豁免，照常提示。新增 1 项测试（另一桶异常 → 无 dialog、ack 被调、报告窗不开），全量 1127 项通过。
