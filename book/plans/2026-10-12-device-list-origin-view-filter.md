@@ -172,6 +172,7 @@ sourceBucket: 'app-owned' | 'shared-studio'
 ### Phase 6：收尾
 
 - PRD 设备列表节 AC 扩容；stage05 SDK 步骤附注；[learn](../notes/learn/2026-10/2026-10-12-freshdomain-resetmodules-stale-import.md) 补 zustand 单例泄漏条目。
+- **Phase 5 code review（2026-10-12 合并前，只记录不修）**：结论总体 pass、无 P1——4 项 P2（跨桶运行设备查看配置回归 / 许可静默文本匹配契约 / 清除级联编排与计数通道零测试 / 级联计数时间窗）与 8 项 P3，[处置记录](../notes/issue/2026-10/2026-10-12-source-aware-filter-batch-review.md)。
 - 本 plan 保持 in_progress：验收清单 ①–⑥ 全过后翻 completed。
 
 ### 验收期修复批 — 2026-10-12（用户真机走查报障：切共享后出现只剩按钮的空警告条）
