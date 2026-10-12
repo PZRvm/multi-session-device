@@ -188,14 +188,15 @@ const ReportLayout = styled.div`
   }
 
   section {
-    margin: 0 0 14px;
+    /* 分组之间与首组之上的呼吸（用户反馈三轮） */
+    margin: 18px 0 0;
   }
 
   h3 {
     margin: 0 0 6px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--board-ink-dim);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--board-ink);
   }
 
   .report-line {
