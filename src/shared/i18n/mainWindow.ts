@@ -26,6 +26,7 @@ const zhCN = {
   readOnlyState: '设备元数据写入已冻结（可继续启动已有设备；修复 devices.json 后重新检查）',
   errorState: '设备元数据读取失败（devices.json 异常，原文件已保留）',
   unavailableDevices: '{count} 台设备文件异常（{names}{more}），启动已禁用',
+  hiddenOriginUnavailable: '另有 {count} 台其他来源设备文件异常（列表底部展开可见）',
   moreSuffix: ' 等 {count} 台',
   orphanAvds: '{count} 组 AVD 文件没有对应设备记录（仅列出，不自动清理；详见详情）',
   recheck: '重新检查',
@@ -199,6 +200,7 @@ const zhTW: MainWindowCopy = {
   readOnlyState: '裝置中繼資料寫入已凍結（可繼續啟動已有裝置；修復 devices.json 後重新檢查）',
   errorState: '裝置中繼資料讀取失敗（devices.json 異常，原檔案已保留）',
   unavailableDevices: '{count} 台裝置檔案異常（{names}{more}），啟動已停用',
+  hiddenOriginUnavailable: '另有 {count} 台其他來源裝置檔案異常（列表底部展開可見）',
   moreSuffix: ' 等 {count} 台',
   orphanAvds: '{count} 組 AVD 檔案沒有對應裝置記錄（僅列出，不自動清理；詳見詳情）',
   recheck: '重新檢查',
@@ -368,6 +370,8 @@ const enUS: MainWindowCopy = {
     'Device metadata writes are frozen (existing devices can still start; recheck after fixing devices.json)',
   errorState: 'Failed to read device metadata (devices.json is invalid; the original file is kept)',
   unavailableDevices: '{count} devices have file issues ({names}{more}); starting is disabled',
+  hiddenOriginUnavailable:
+    '{count} devices from the other source have file issues (expand the list to view)',
   moreSuffix: ' and {count} more',
   orphanAvds:
     '{count} AVD file groups have no matching device record (listed only, not auto-cleaned; see details)',

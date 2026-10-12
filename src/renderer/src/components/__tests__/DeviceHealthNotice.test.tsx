@@ -107,4 +107,25 @@ describe('DeviceHealthNotice', () => {
       )
     ).toBeTruthy()
   })
+
+  it('P3-C 回归：全量签名非空但视图口径零行 → 不渲染（空横幅不复现）', () => {
+    renderNotice({ ...okSummary, signature: 'sig-hidden-only' }, okStore, [], 0)
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('P3-C 修复：折叠区内异常设备给计数行，不再闷声吞信息', () => {
+    render(
+      <DeviceHealthNotice
+        summary={{ ...okSummary, signature: 'sig' }}
+        storeHealth={okStore}
+        unavailableCount={0}
+        hiddenAffectedCount={1}
+        affectedNames={[]}
+        rechecking={false}
+        onRecheck={vi.fn()}
+        onViewDetail={vi.fn()}
+      />
+    )
+    expect(screen.getByText(format(copy.hiddenOriginUnavailable, { count: 1 }))).toBeTruthy()
+  })
 })

@@ -11,6 +11,9 @@ type DeviceHealthNoticeProps = {
   /** 文件异常计数（视图口径，plan 2026-10-12-device-list-origin-view-filter 轴 2）：
    * 只数当前可见集——隐藏设备的异常由折叠区交代，不再进汇总条 */
   unavailableCount: number
+  /** 折叠区内文件异常的设备数（视图口径）：横幅不再报看不见设备的明细，
+   * 但有一条计数行交代存在，不闷声吞信息 */
+  hiddenAffectedCount?: number
   /** 文件异常设备名（按列表顺序，截断展示） */
   affectedNames: string[]
   /** 重查进行中（按钮转忙碌） */
@@ -20,20 +23,19 @@ type DeviceHealthNoticeProps = {
 }
 
 /** 列表上方的对账汇总条（plan 设计 5）：异常持续可见，重查恢复，详情走原生弹窗；
- * 不提供孤立目录自动清理——只列出与保留策略说明。 */
+ * 不提供孤立目录自动清理——只列出与保留策略说明。可见性与内容同口径（review
+ * P3-C 修复）：没有话说就不出横幅——全量签名非空但视图口径零行时不再渲染空条。 */
 const DeviceHealthNotice = ({
   summary,
   storeHealth,
   unavailableCount,
+  hiddenAffectedCount = 0,
   affectedNames,
   rechecking,
   onRecheck,
   onViewDetail
 }: DeviceHealthNoticeProps): React.JSX.Element | null => {
   const copy = useCopy(MAIN_COPY)
-  const visible =
-    summary.signature !== null || storeHealth.state !== 'ok' || summary.orphanCount > 0
-  if (!visible) return null
 
   const stateText: Record<StoreHealth['state'], string> = {
     ok: '',
@@ -48,9 +50,15 @@ const DeviceHealthNotice = ({
       affectedNames.length > 3 ? format(copy.moreSuffix, { count: affectedNames.length }) : ''
     lines.push(format(copy.unavailableDevices, { count: unavailableCount, names, more }))
   }
+  if (hiddenAffectedCount > 0) {
+    lines.push(format(copy.hiddenOriginUnavailable, { count: hiddenAffectedCount }))
+  }
   if (summary.orphanCount > 0) {
     lines.push(format(copy.orphanAvds, { count: summary.orphanCount }))
   }
+  // 可见门跟内容走（P3-C）：签名是全量真值、行是视图口径，两者错位时
+  // 曾经渲染出只剩按钮的空横幅——改为有话才出条
+  if (lines.length === 0) return null
 
   return (
     <Wrapper role="status">

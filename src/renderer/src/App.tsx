@@ -256,16 +256,18 @@ const App = (): React.JSX.Element => {
   const selected = devices.find((device) => device.id === selectedId) ?? null
   // 出身过滤视图（plan 2026-10-12-device-list-origin-view-filter）：汇总条与板头
   // 计数按可见集口径（轴 2 + 用户「两边尽量隔离」批复）——不报看不见的设备
-  const { active: visibleDevices } = splitByOriginView(devices, sourceBucket)
+  const { active: visibleDevices, folded: foldedDevices } = splitByOriginView(
+    devices,
+    sourceBucket
+  )
   // checking（创建中/暂缓判断）不算「文件异常」——与 main 侧报告口径一致（review P2-2）
-  const affectedNames = visibleDevices
-    .filter(
-      (device) =>
-        device.availability !== undefined &&
-        device.availability.state !== 'valid' &&
-        device.availability.state !== 'checking'
-    )
-    .map((device) => device.name)
+  const isFileAffected = (device: Device): boolean =>
+    device.availability !== undefined &&
+    device.availability.state !== 'valid' &&
+    device.availability.state !== 'checking'
+  const affectedNames = visibleDevices.filter(isFileAffected).map((device) => device.name)
+  // 折叠区内的异常设备只给计数行（review P3-C 修复：空横幅 → 有话才出条 + 隐藏侧交代）
+  const hiddenAffectedCount = foldedDevices.filter(isFileAffected).length
   const storeTrusted = storeHealth.state !== 'error'
   const metaWritable = storeHealth.state === 'ok'
 
@@ -374,6 +376,7 @@ const App = (): React.JSX.Element => {
           summary={reconciliation}
           storeHealth={storeHealth}
           unavailableCount={affectedNames.length}
+          hiddenAffectedCount={hiddenAffectedCount}
           affectedNames={affectedNames}
           rechecking={rechecking}
           onRecheck={handleRecheck}
