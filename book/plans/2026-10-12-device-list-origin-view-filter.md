@@ -173,3 +173,8 @@ sourceBucket: 'app-owned' | 'shared-studio'
 
 - PRD 设备列表节 AC 扩容；stage05 SDK 步骤附注；[learn](../notes/learn/2026-10/2026-10-12-freshdomain-resetmodules-stale-import.md) 补 zustand 单例泄漏条目。
 - 本 plan 保持 in_progress：验收清单 ①–⑥ 全过后翻 completed。
+
+### 验收期修复批 — 2026-10-12（用户真机走查报障：切共享后出现只剩按钮的空警告条）
+
+- **P3-C 空横幅**（原记录「语义成立备查」被实测推翻）：全量签名非空亮门 + 视图口径零行正文 → 只剩「重新检查/查看详情」两个按钮的空条。修复：可见门改跟内容走（`lines.length === 0` 即不渲染），折叠区内异常设备补计数行（`hiddenOriginUnavailable` 三语，App 由 folded 集派生 `hiddenAffectedCount` 传入）——不闷声吞信息也不说看不见的话。新增 2 项回归（空横幅不复现、计数行渲染），全量 **1125 项通过**、typecheck/lint/build 干净。
+- 用户机器佐证：报障时「查看详情」报告窗正确显示被折叠设备的异常明细（全量真值在详情窗语义正确，维持）。
