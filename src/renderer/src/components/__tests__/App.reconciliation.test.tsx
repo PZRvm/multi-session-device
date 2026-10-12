@@ -47,7 +47,8 @@ const snapshot: DeviceSnapshot = {
     orphanCount: 0,
     storeState: 'ok',
     pendingNotification: true
-  }
+  },
+  sourceBucket: 'app-owned'
 }
 
 const report: ReconcileReport = {

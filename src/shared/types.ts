@@ -262,6 +262,11 @@ export interface DeviceSnapshot {
   devices: Device[]
   storeHealth: StoreHealth
   reconciliation: ReconciliationSummary
+  /**
+   * 组快照时的活动来源桶（出身过滤视图谓词依赖，plan 2026-10-12-device-list-origin-view-filter）。
+   * 与 devices 同帧到达，无中间态；boot 侧 restoreSdkSource 先于首帧快照。
+   */
+  sourceBucket: 'app-owned' | 'shared-studio'
 }
 
 /** 人工重查（devices:reconcile）结果：合并后的快照与本轮报告 */

@@ -31,6 +31,7 @@ const renderPane = (overrides: Partial<Parameters<typeof DeviceListPane>[0]>): v
       storeTrusted
       metaWritable
       storeState="ok"
+      sourceBucket="app-owned"
       loadError={null}
       onRetryLoad={vi.fn()}
       onSelect={vi.fn()}
@@ -81,6 +82,7 @@ describe('DeviceListPane 空库文案（review P2-3/P3）', () => {
         storeTrusted
         metaWritable
         storeState="ok"
+        sourceBucket="app-owned"
         loadError={null}
         onRetryLoad={vi.fn()}
         onSelect={vi.fn()}
@@ -93,6 +95,53 @@ describe('DeviceListPane 空库文案（review P2-3/P3）', () => {
         onEdit={vi.fn()}
       />
     )
+    expect(screen.getByText('Pixel test')).toBeTruthy()
+  })
+
+  it('出身过滤视图（plan 2026-10-12-device-list-origin-view-filter）：跨桶设备进折叠区，过渡态豁免，展开后独立分区', () => {
+    const owned = { ...baseDevice, id: 'd-owned', name: '自有机' }
+    const shared = {
+      ...baseDevice,
+      id: 'd-shared',
+      name: '共享机',
+      imageSourceOrigin: 'shared-studio' as const
+    }
+    const sharedRunning = {
+      ...shared,
+      id: 'd-shared-running',
+      name: '共享运行机',
+      status: 'running' as const,
+      serial: 'emulator-5554'
+    }
+    // 当前桶 app-owned：自有平铺、共享运行机豁免可见、共享停止机进折叠区
+    renderPane({ devices: [owned, sharedRunning, shared], sourceBucket: 'app-owned' })
+    expect(screen.getByText('自有机')).toBeTruthy()
+    expect(screen.getByText('共享运行机')).toBeTruthy()
+    expect(screen.queryByText('共享机')).toBeNull()
+    expect(screen.getByText(format(copy.otherOriginStudio, { count: 1 }))).toBeTruthy()
+    // 展开：独立分区呈现，标注照旧
+    fireEvent.click(
+      screen.getByRole('button', { name: format(copy.otherOriginStudio, { count: 1 }) })
+    )
+    expect(screen.getByText('共享机')).toBeTruthy()
+    // 收起
+    fireEvent.click(
+      screen.getByRole('button', { name: format(copy.otherOriginStudio, { count: 1 }) })
+    )
+    expect(screen.queryByText('共享机')).toBeNull()
+  })
+
+  it('出身过滤视图：共享桶视图下折叠行文案切换为「项目自有」', () => {
+    const owned = { ...baseDevice, id: 'd-owned', name: '自有机' }
+    renderPane({ devices: [owned], sourceBucket: 'shared-studio' })
+    expect(screen.queryByText('自有机')).toBeNull()
+    expect(screen.getByText(format(copy.otherOriginOwned, { count: 1 }))).toBeTruthy()
+  })
+
+  it('缺席出身（存量）回落 app-owned 归属', () => {
+    renderPane({ devices: [baseDevice], sourceBucket: 'shared-studio' })
+    expect(screen.queryByText('Pixel test')).toBeNull()
+    renderPane({ devices: [baseDevice], sourceBucket: 'app-owned' })
     expect(screen.getByText('Pixel test')).toBeTruthy()
   })
 })

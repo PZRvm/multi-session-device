@@ -21,6 +21,7 @@ import {
   LOG_PANE_MIN_WIDTH
 } from './components/logPaneWidth'
 import { useDeviceStore } from './stores/deviceStore'
+import { splitByOriginView } from './components/originView'
 
 /** 日志 dock 展开时画布至少保留的宽度（模拟器居中自适应的保底；不足则整栏退化） */
 const LOG_CANVAS_MIN_WIDTH = 560
@@ -30,6 +31,7 @@ const App = (): React.JSX.Element => {
   const selectedId = useDeviceStore((state) => state.selectedId)
   const storeHealth = useDeviceStore((state) => state.storeHealth)
   const reconciliation = useDeviceStore((state) => state.reconciliation)
+  const sourceBucket = useDeviceStore((state) => state.sourceBucket)
   const loadError = useDeviceStore((state) => state.loadError)
   const load = useDeviceStore((state) => state.load)
   const reconcile = useDeviceStore((state) => state.reconcile)
@@ -252,8 +254,11 @@ const App = (): React.JSX.Element => {
     )
 
   const selected = devices.find((device) => device.id === selectedId) ?? null
+  // 出身过滤视图（plan 2026-10-12-device-list-origin-view-filter）：汇总条与板头
+  // 计数按可见集口径（轴 2 + 用户「两边尽量隔离」批复）——不报看不见的设备
+  const { active: visibleDevices } = splitByOriginView(devices, sourceBucket)
   // checking（创建中/暂缓判断）不算「文件异常」——与 main 侧报告口径一致（review P2-2）
-  const affectedNames = devices
+  const affectedNames = visibleDevices
     .filter(
       (device) =>
         device.availability !== undefined &&
@@ -361,13 +366,14 @@ const App = (): React.JSX.Element => {
     <Wrapper lang={locale}>
       <div className="list-pane" style={{ width: listWidth }}>
         <BoardHead
-          count={devices.length}
+          count={visibleDevices.length}
           compact={listWidth <= 320}
           onOpenSettings={() => void openSettings()}
         />
         <DeviceHealthNotice
           summary={reconciliation}
           storeHealth={storeHealth}
+          unavailableCount={affectedNames.length}
           affectedNames={affectedNames}
           rechecking={rechecking}
           onRecheck={handleRecheck}
@@ -379,6 +385,7 @@ const App = (): React.JSX.Element => {
           storeTrusted={storeTrusted}
           metaWritable={metaWritable}
           storeState={storeHealth.state}
+          sourceBucket={sourceBucket}
           loadError={loadError}
           onRetryLoad={handleRetryLoad}
           onSelect={setSelected}

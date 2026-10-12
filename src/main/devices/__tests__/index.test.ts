@@ -562,6 +562,31 @@ describe('devices 域（创建/删除事务）', () => {
     }
   })
 
+  it('快照携带活动来源桶（plan 2026-10-12-device-list-origin-view-filter）：managed/custom → app-owned，shared → shared-studio', async () => {
+    const { handlerFor } = await freshDomain()
+    const sdkSource = await import('../../emulator/sdkSource')
+    const listSnapshot = async (): Promise<{ sourceBucket: string }> =>
+      (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+        sourceBucket: string
+      }
+    expect((await listSnapshot()).sourceBucket).toBe('app-owned')
+    sdkSource.setSdkSourceState({
+      version: 1,
+      source: 'custom',
+      customPath: '/vol/sdk',
+      sharedPath: null
+    })
+    expect((await listSnapshot()).sourceBucket).toBe('app-owned')
+    sdkSource.setSdkSourceState({
+      version: 1,
+      source: 'shared-studio',
+      customPath: null,
+      sharedPath: '/studio/sdk'
+    })
+    expect((await listSnapshot()).sourceBucket).toBe('shared-studio')
+    sdkSource.resetSdkSourceStateForTest()
+  })
+
   it('create：能力经唯一入口 buildEnrichedCapabilities 构建并喂给归一化（P1 接线锚）', async () => {
     const { handlerFor } = await freshDomain()
     await handlerFor(IPC_CHANNELS.devicesCreate)(mainWindowEvent(), validCreateInput)

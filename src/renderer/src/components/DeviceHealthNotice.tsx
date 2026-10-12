@@ -8,6 +8,9 @@ import Button from './Button'
 type DeviceHealthNoticeProps = {
   summary: ReconciliationSummary
   storeHealth: StoreHealth
+  /** 文件异常计数（视图口径，plan 2026-10-12-device-list-origin-view-filter 轴 2）：
+   * 只数当前可见集——隐藏设备的异常由折叠区交代，不再进汇总条 */
+  unavailableCount: number
   /** 文件异常设备名（按列表顺序，截断展示） */
   affectedNames: string[]
   /** 重查进行中（按钮转忙碌） */
@@ -21,6 +24,7 @@ type DeviceHealthNoticeProps = {
 const DeviceHealthNotice = ({
   summary,
   storeHealth,
+  unavailableCount,
   affectedNames,
   rechecking,
   onRecheck,
@@ -38,11 +42,11 @@ const DeviceHealthNotice = ({
   }
   const lines: string[] = []
   if (storeHealth.state !== 'ok') lines.push(stateText[storeHealth.state])
-  if (summary.unavailableCount > 0) {
+  if (unavailableCount > 0) {
     const names = affectedNames.slice(0, 3).join('、')
     const more =
       affectedNames.length > 3 ? format(copy.moreSuffix, { count: affectedNames.length }) : ''
-    lines.push(format(copy.unavailableDevices, { count: summary.unavailableCount, names, more }))
+    lines.push(format(copy.unavailableDevices, { count: unavailableCount, names, more }))
   }
   if (summary.orphanCount > 0) {
     lines.push(format(copy.orphanAvds, { count: summary.orphanCount }))

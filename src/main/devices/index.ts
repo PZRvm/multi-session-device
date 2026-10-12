@@ -777,7 +777,9 @@ const snapshotNow = (): DeviceSnapshot => ({
   revision,
   devices: devices.map((device) => ({ ...device })),
   storeHealth,
-  reconciliation: reconciliationSummaryNow()
+  reconciliation: reconciliationSummaryNow(),
+  // 活动来源桶（出身过滤视图）：切来源后的重查轮快照自然翻转到新桶
+  sourceBucket: isSharedReadOnly() ? 'shared-studio' : 'app-owned'
 })
 
 const broadcastChanged = (): void => {
