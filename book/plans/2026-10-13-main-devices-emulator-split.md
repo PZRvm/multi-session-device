@@ -1,6 +1,6 @@
 ---
 description: 纯机械拆分 src/main/devices/index.ts（2603 行 → 薄 index + 10 个域模块）与 src/main/emulator/index.ts（711 行 → 薄 index + 5 个文件）；对齐 emulator 目录「薄 index + 域模块」样板，公共契约（17 个导出符号）不变，行为零变化
-status: in_progress
+status: completed
 created: 2026-10-13
 ---
 

@@ -51,6 +51,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 ### docs/architecture/
 
 - [2026-10-08-android-runtime.md](docs/architecture/2026-10-08-android-runtime.md) — 阶段 4 收尾时的 Android 运行快照：模块、SDK/AVD 隔离、启停与投屏输入契约、操作和排查入口及未验边界
+- [2026-10-13-main-module-split.md](docs/architecture/2026-10-13-main-module-split.md) — main 进程模块拆分快照——devices 域从 2603 行单文件拆为薄 index + 10 个域模块、emulator/index.ts 拆为装配层 + 4 个 sdkIpc 分组；分层 DAG 与状态访问器规则
 - [README.md](docs/architecture/README.md) — 架构快照——带日期的文档，描述模块和数据流在当时的真实状态
 - [项目骨架.md](docs/architecture/项目骨架.md) — 多会话模拟器的项目骨架——技术栈、三进程结构、目录职责与规划模块落点（stage 01 改造后快照）
 
@@ -155,6 +156,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-12-reconcile-report-full-view.md](notes/issue/2026-10/2026-10-12-reconcile-report-full-view.md) — 对账明细弹窗经 40 行截断防线后，超长报告的后 N 行在弹窗内不可见——需要应用内完整查看入口（滚动面板或导出）
 - [2026-10-12-reconcile-window-review-findings.md](notes/issue/2026-10/2026-10-12-reconcile-window-review-findings.md) — 对账弹窗相关批次 code review 发现——shell 白名单 `..` 穿越绕过（P1）、在途互斥吞新签名通知（P2）、白名单与 report 窗域零测试（P2）及 8 项 P3
 - [2026-10-12-source-aware-filter-batch-review.md](notes/issue/2026-10/2026-10-12-source-aware-filter-batch-review.md) — 出身标注 + 过滤视图两批（含六轮验收期修复）合并前 code review——无 P1；4 项 P2（跨桶运行设备查看回归、许可静默文本匹配、级联编排零测试、计数时间窗）与 8 项 P3
+- [2026-10-13-存量lint不干净.md](notes/issue/2026-10/2026-10-13-存量lint不干净.md) — 存量 lint 不干净——sdkSourceSwitch.test.ts 一处缺函数返回类型（error 级），另有 DeviceWizard.tsx 等十余条 prettier 警告；2026-10-13 拆分验收时发现，与拆分无关
 
 ### notes/learn/
 
@@ -228,6 +230,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-12-freshdomain-resetmodules-stale-import.md](notes/learn/2026-10/2026-10-12-freshdomain-resetmodules-stale-import.md) — 来源感知列表批经验——vi.resetModules 后静态 import 成旧模块（测试设态必须动态重取同实例）；每调用现建 deps 的模块没有单例拦截点，监听器注册表是全覆盖分流的正解
 - [2026-10-12-merge-readme-regen-and-lint-baseline.md](notes/learn/2026-10/2026-10-12-merge-readme-regen-and-lint-baseline.md) — 双分支合并 review 经验——生成物 README 冲突必须重跑生成器收敛（手拼必漂移）；lint/测试「通过」注记要复跑验证，基线问题在两父提交上分别复跑定位归属
 - [2026-10-12-persistent-field-store-projection-checklist.md](notes/learn/2026-10/2026-10-12-persistent-field-store-projection-checklist.md) — 持久字段新增的完整落点清单——types/toMeta 之外还有 store 白名单投影与校验；漏投影的表象是读丢字段+切来源即冻结写入（误判外部修改）
+- [2026-10-13-主进程大文件拆分的边界方法.md](notes/learn/2026-10/2026-10-13-主进程大文件拆分的边界方法.md) — 主进程大文件拆分的边界方法——ESM let 不可外部赋值决定的状态归属规则（单写方私有 vs state.ts 访问器）、vi.resetModules 单例语义保持、按消费方零改动倒推出口契约
 
 ### notes/task/
 
@@ -309,6 +312,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-12-network-switch-group.md](plans/2026-10-12-network-switch-group.md) — 断网开关组：工具条并排三开关——飞行模式总开关（真断网）+ Wi-Fi/移动数据分 radio（场景测试）；1s 轮询读回、变化才推、设备为唯一事实源
 - [2026-10-12-reconcile-report-panel.md](plans/2026-10-12-reconcile-report-panel.md) — 对账报告完整查看面板设计——主窗首个自绘弹层（BaseModal 原语 + 分组滚动明细），汇总条「查看详情」与摘要式原生通知双入口打开，原生长文本弹窗退役；关闭 issue 2026-10-12-reconcile-report-full-view
 - [2026-10-12-shared-mode-wizard-installed-only.md](plans/2026-10-12-shared-mode-wizard-installed-only.md) — 共享 Studio SDK 模式的向导收窄设计——画像页只显示与已装镜像匹配的设备、镜像区只列已装 API（无服务筛选/完整列表/Preview/不支持开关与下载卸载按钮）、清单本地化与指路 Studio 空态；托管/自选完全不变
+- [2026-10-13-main-devices-emulator-split.md](plans/2026-10-13-main-devices-emulator-split.md) — 纯机械拆分 src/main/devices/index.ts（2603 行 → 薄 index + 10 个域模块）与 src/main/emulator/index.ts（711 行 → 薄 index + 5 个文件）；对齐 emulator 目录「薄 index + 域模块」样板，公共契约（17 个导出符号）不变，行为零变化
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### stage/
@@ -328,4 +332,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 238 documents -->
+<!-- 242 documents -->
