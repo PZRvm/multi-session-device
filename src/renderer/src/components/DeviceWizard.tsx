@@ -665,10 +665,12 @@ const DeviceWizard = ({
         sdkBootstrapable ? (
           <>
             <Button onClick={() => void runSdkBootstrap()} disabled={bootstrapping}>
-              {bootstrapping ? (
-                <Loader2 size={12} aria-hidden="true" className="spinner" />
-              ) : null}
-              {bootstrapping ? copy.sdkBootstrapBusy : copy.sdkBootstrapAction}
+              <span className="bootstrap-label">
+                {bootstrapping ? (
+                  <Loader2 size={12} aria-hidden="true" className="spinner" />
+                ) : null}
+                {bootstrapping ? copy.sdkBootstrapBusy : copy.sdkBootstrapAction}
+              </span>
             </Button>
             {bootstrapError !== null ? (
               <span className="error-text">{bootstrapError}</span>
@@ -1045,6 +1047,13 @@ const Wrapper = styled.div`
     flex: none;
     padding: 12px 16px;
     border-top: 1px solid var(--board-hairline);
+  }
+
+  /* SDK 引导钮的图标+文本行（用户反馈对齐问题）：4px 间距，图标动画复用根作用域 .spinner */
+  .bootstrap-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
 `
 
