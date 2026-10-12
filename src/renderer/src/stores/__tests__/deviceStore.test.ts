@@ -69,7 +69,8 @@ describe('deviceStore（快照 + revision 守卫）', () => {
         orphanCount: 0,
         storeState: 'ok',
         pendingNotification: false
-      }
+      },
+      network: {}
     })
   })
 
@@ -225,5 +226,65 @@ describe('deviceStore（快照 + revision 守卫）', () => {
     apiCalls.remove.mockResolvedValue(snapshot([device({ id: 'd2' })], 2))
     await useDeviceStore.getState().remove('d1')
     expect(useDeviceStore.getState().selectedId).toBe('d2')
+  })
+})
+
+describe('deviceStore 网络态切片（plan 2026-10-12-network-switch-group）', () => {
+  beforeEach(() => {
+    useDeviceStore.setState({
+      devices: [],
+      selectedId: null,
+      revision: -1,
+      network: {}
+    })
+  })
+
+  it('applyNetworkState：直写设备键，不影响其余键', () => {
+    useDeviceStore.setState({
+      network: { d1: { airplane: false, wifi: true, data: true } }
+    })
+    useDeviceStore.getState().applyNetworkState('d2', { airplane: true, wifi: false, data: false })
+    expect(useDeviceStore.getState().network).toEqual({
+      d1: { airplane: false, wifi: true, data: true },
+      d2: { airplane: true, wifi: false, data: false }
+    })
+  })
+
+  it('applySnapshot：快照里消失的设备剪除网络态键', () => {
+    useDeviceStore.setState({
+      devices: [device(), device({ id: 'd2' })],
+      network: {
+        d1: { airplane: false, wifi: true, data: true },
+        d2: { airplane: false, wifi: true, data: true }
+      }
+    })
+    useDeviceStore.getState().applySnapshot(snapshot([device({ id: 'd2' })], 2))
+    expect(useDeviceStore.getState().network).toEqual({
+      d2: { airplane: false, wifi: true, data: true }
+    })
+  })
+
+  it('applySnapshot：无过期键时网络态保持原引用（免无谓重渲染）', () => {
+    const network = { d1: { airplane: false, wifi: true, data: true } }
+    useDeviceStore.setState({ devices: [device()], network })
+    useDeviceStore.getState().applySnapshot(snapshot([device()], 1))
+    expect(useDeviceStore.getState().network).toBe(network)
+  })
+
+  it('applyNetworkStates：批量合并（刷新初值恢复）并按当前设备表剪枝（P3-1）', () => {
+    useDeviceStore.setState({
+      devices: [device(), device({ id: 'd2' })],
+      network: { d1: { airplane: true, wifi: false, data: false } }
+    })
+    useDeviceStore.getState().applyNetworkStates({
+      d1: { airplane: false, wifi: true, data: true },
+      d2: { airplane: false, wifi: true, data: true },
+      d3: { airplane: true, wifi: true, data: true }
+    })
+    // d1 被批量值覆盖、d2 新增、d3 不在设备表被剪除
+    expect(useDeviceStore.getState().network).toEqual({
+      d1: { airplane: false, wifi: true, data: true },
+      d2: { airplane: false, wifi: true, data: true }
+    })
   })
 })

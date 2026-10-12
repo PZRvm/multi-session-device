@@ -436,6 +436,10 @@ const zhCN = {
   screenshotSaveBusy: '保存进行中，请稍候',
   screenshotOversized: '截图数据超出大小上限',
   screenshotStale: '截图已过期（设备状态已变化），请重新截屏',
+  // ---- 网络开关域（plan 2026-10-12-network-switch-group；detail 保留 adb 原文）----
+  networkDeviceNotRunning: '设备不在运行中，无法切换网络开关',
+  networkBusy: '网络开关操作进行中，请稍候',
+  networkCommandFailed: '网络开关命令失败：{detail}',
   // ---- APK 安装域（plan 2026-10-10-drag-apk-install；detail 保留 adb 原文）----
   apkDeviceNotRunning: '设备未运行，无法安装 APK',
   apkInstallBusy: '该设备正在安装另一个 APK，请稍候',
@@ -864,6 +868,10 @@ const zhTW: ErrorsCopy = {
   screenshotSaveBusy: '儲存進行中，請稍候',
   screenshotOversized: '截圖資料超出大小上限',
   screenshotStale: '截圖已過期（裝置狀態已變化），請重新截圖',
+  // ---- 網路開關域（plan 2026-10-12-network-switch-group；detail 保留 adb 原文）----
+  networkDeviceNotRunning: '裝置不在執行中，無法切換網路開關',
+  networkBusy: '網路開關操作進行中，請稍候',
+  networkCommandFailed: '網路開關命令失敗：{detail}',
   // ---- APK 安裝域（plan 2026-10-10-drag-apk-install；detail 保留 adb 原文）----
   apkDeviceNotRunning: '裝置未執行，無法安裝 APK',
   apkInstallBusy: '該裝置正在安裝另一個 APK，請稍候',
@@ -1341,6 +1349,10 @@ const enUS: ErrorsCopy = {
   screenshotSaveBusy: 'A save is already in progress',
   screenshotOversized: 'Screenshot data exceeds the size limit',
   screenshotStale: 'The screenshot expired (device state changed); take a new one',
+  // ---- Network switch domain (plan 2026-10-12-network-switch-group; detail keeps adb output) ----
+  networkDeviceNotRunning: 'The device is not running; network switches are unavailable',
+  networkBusy: 'A network toggle is already in progress',
+  networkCommandFailed: 'Network toggle command failed: {detail}',
   // ---- APK install domain (plan 2026-10-10-drag-apk-install; detail keeps adb output verbatim) ----
   apkDeviceNotRunning: 'Device is not running; cannot install the APK',
   apkInstallBusy: 'Another APK is installing on this device; try again shortly',

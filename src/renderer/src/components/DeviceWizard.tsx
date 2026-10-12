@@ -463,6 +463,10 @@ const DeviceWizard = ({
     const eligible = images.data.filter(
       (entry) => entry.installed && verdicts.get(entry.packageName)?.status === 'supported'
     )
+    // 依赖驱动的单次写入：置入后 image !== null 条件翻转，下一 render 依赖不再变化，
+    // 不构成级联渲染（镜像上方能力装载重置同款）。必须写状态而非渲染期派生——
+    // 纯派生会在共享态条件消失（来源切走/清单变化）时丢掉已自动选中的镜像
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 写入即停：条件随 image 翻转，无级联
     if (eligible.length === 1) setImage(eligible[0])
   }, [sharedMode, selectedProfile, image, images.data, verdicts])
 

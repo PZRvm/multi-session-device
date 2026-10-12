@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../../App'
 import { useDeviceStore } from '../../stores/deviceStore'
 import { MAIN_COPY } from '@shared/i18n'
+import { networkApiMock } from './networkApiMock'
 const copy = MAIN_COPY['zh-CN']
 
 vi.mock('../DeviceCanvas', () => ({ default: () => null }))
@@ -57,7 +58,8 @@ beforeEach(() => {
       })),
       onChanged: () => () => {},
       onRuntimeError: () => () => {}
-    }
+    },
+    network: networkApiMock()
   }
   dialog.mockResolvedValue({ response: 0 })
 })

@@ -4,6 +4,7 @@ import App from '../../App'
 import { useDeviceStore } from '../../stores/deviceStore'
 import { MAIN_COPY } from '@shared/i18n'
 import type { Device, DeviceSnapshot, LogcatBatchMessage } from '@shared/types'
+import { networkApiMock } from './networkApiMock'
 
 const copy = MAIN_COPY['zh-CN']
 
@@ -82,6 +83,7 @@ describe('主窗日志 dock', () => {
         onChanged: () => () => {},
         onRuntimeError: () => () => {}
       },
+      network: networkApiMock(),
       logcat: {
         openWindow: openLogcatWindow,
         isWindowOpen: isWindowOpen,

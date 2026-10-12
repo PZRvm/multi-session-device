@@ -17,6 +17,7 @@ import { registerSdkIpc } from '../emulator'
 import { registerApkInstallIpc } from '../apkInstall'
 import { createScrcpyManager } from '../scrcpy'
 import { registerScreenshotIpc, clearScreenshotCache } from '../screenshot'
+import { registerNetworkIpc } from '../network'
 import { registerWizardIpc } from '../window/wizard'
 import { registerSettingsIpc } from '../window/settings'
 import { registerLogcatIpc, isLogcatWindowSender } from '../window/logcat'
@@ -53,6 +54,13 @@ export function registerIpcHandlers(): void {
     isRunningDevice,
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
   })
+  // 网络开关域（plan 2026-10-12）：注入同截屏域；句柄供桥启停轮询（running 起、停止收）
+  const network = registerNetworkIpc({
+    adbPath: adbBinaryPath,
+    runningDevice: runningDeviceRef,
+    isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id,
+    pushTarget: () => getMainWindow()?.webContents ?? null
+  })
   registerSettingsIpc()
   registerLogcatIpc()
   registerReportIpc()
@@ -80,19 +88,23 @@ export function registerIpcHandlers(): void {
     Promise.all([scrcpy.destroyAll(), logcat.destroyAll()]).then(() => undefined)
 
   // runner 事件 → 流会话生命周期：running 建会话，停止/崩溃/清理销毁（beforeKill 先释放
-  // 投屏与日志资源）。截屏缓存同桥收尾：设备停止/清理时最近一张作废（save 拒绝 stale）
+  // 投屏与日志资源）。截屏缓存同桥收尾：设备停止/清理时最近一张作废（save 拒绝 stale）；
+  // 网络轮询同桥启停：running 首拍读初值，停止/清理退订 timer 与读回基准
   attachDeviceStreamBridge({
     running: (id, runId, serial) => {
       void scrcpy.ensureSession({ id, runId, serial }).catch(() => undefined)
       logcat.ensureSession({ id, runId, serial })
+      network.startWatch(id, serial)
     },
     stopped: (id) => {
       clearScreenshotCache(id)
+      network.clearWatch(id)
       void scrcpy.destroySession(id)
       void logcat.destroySession(id)
     },
     beforeKill: (id) => {
       clearScreenshotCache(id)
+      network.clearWatch(id)
       return Promise.all([scrcpy.destroySession(id), logcat.destroySession(id)]).then(
         () => undefined
       )

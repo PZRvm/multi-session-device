@@ -77,7 +77,7 @@ description: 一期 Android 需求唯一依据——应用内新建隔离模拟�
 - 截屏：一键存当前画面（`adb exec-out screencap`）。
 - 录屏：开始/停止，产出视频文件（scrcpy `--record` 或 `screenrecord`）。
 - 拖拽安装：拖 APK 进画面即 `adb install`，显示安装结果。
-- 断网开关：一键切飞行模式开/关（`adb shell cmd connectivity airplane-mode`），供断网边界测试。
+- 断网开关：一键切飞行模式开/关（`adb shell cmd connectivity airplane-mode`），供断网边界测试。2026-10-12 批复扩容：工具条并排三开关——飞行模式总开关（真断网）+ Wi-Fi/移动数据分 radio 开关（`svc wifi` / `svc data`，网络场景测试；模拟器单关任一 radio 不断网——另一路接管，飞行模式或双关才真断网）；开关状态以设备读回为唯一事实源（1s 轮询，设备内手动切换 ≤1s 跟随）。
 - 日志面板：当前设备 logcat 流 + 关键字过滤 + 暂停/继续（一期最简，不做导出、不做按 app 过滤）。
 
 **E. SDK 独立引导（零 Android Studio 依赖）**

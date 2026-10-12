@@ -151,6 +151,8 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-11-sdk-source-shared-wizard-guide-and-journal-corruption.md](notes/issue/2026-10/2026-10-11-sdk-source-shared-wizard-guide-and-journal-corruption.md) — 共享 Studio SDK 模式四个遗留——向导缺包引导 UI 未做、journal 损坏无接管、ANDROID_USER_HOME/EMULATOR_HOME 落共享根内、source-adopt/source-migrate 缺 Studio 路径服务端复验（伪造载荷可把 Studio 根当可写自选根）
 - [2026-10-12-reconcile-report-full-view.md](notes/issue/2026-10/2026-10-12-reconcile-report-full-view.md) — 对账明细弹窗经 40 行截断防线后，超长报告的后 N 行在弹窗内不可见——需要应用内完整查看入口（滚动面板或导出）
 - [2026-10-12-reconcile-window-review-findings.md](notes/issue/2026-10/2026-10-12-reconcile-window-review-findings.md) — 对账弹窗相关批次 code review 发现——shell 白名单 `..` 穿越绕过（P1）、在途互斥吞新签名通知（P2）、白名单与 report 窗域零测试（P2）及 8 项 P3
+- [2026-10-12-devicewizard-setstate-in-effect-lint.md](notes/issue/2026-10/2026-10-12-devicewizard-setstate-in-effect-lint.md) — DeviceWizard.tsx:458 存量 lint error——react-hooks 规则报 effect 内同步 setState 可触发级联渲染；dev 基线即有，非断网开关批引入
+- [2026-10-12-network-switch-code-review.md](notes/issue/2026-10/2026-10-12-network-switch-code-review.md) — 断网开关批 code review（八项清单）——总体 pass；3 项 P3 已修复（解析降级/networkGet 刷新初值/mock helper）、2 项批复语义不修，处置记录在内
 
 ### notes/learn/
 
@@ -220,6 +222,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-10-screenshot-adb-binary-and-hooks-rules.md](notes/learn/2026-10/2026-10-10-screenshot-adb-binary-and-hooks-rules.md) — 截屏批三个实现经验——exec-out 二进制必须 Buffer 版 runner（runAdb utf8 化毁字节）、互斥检查与占位间不得夹 await、react-hooks 新规则用渲染期派生替代 effect setState
 - [2026-10-10-styled-single-wrapper-refactor.md](notes/learn/2026-10/2026-10-10-styled-single-wrapper-refactor.md) — styled 单 Wrapper 全局重排的执行经验——影响表和施工批次必须对账、并行 agent 的集中验证纪律、后代类选择器特异性升档的前提
 - [2026-10-11-sdk-source-async-predicate-and-sync-guard.md](notes/learn/2026-10/2026-10-11-sdk-source-async-predicate-and-sync-guard.md) — SDK 来源切换实现批的三条踩坑——异步谓词被同步布尔守卫吞掉恒过、IPC 入口守卫做真实 fs 读扰动时序敏感用例、就绪门检查绑定了应用自有布局
+- [2026-10-12-app-mount-subscription-test-mock-shape.md](notes/learn/2026-10/2026-10-12-app-mount-subscription-test-mock-shape.md) — 断网开关批经验——App 挂载期新增 window.api 订阅必须同步补齐既有测试的 mock 形状（22 项连环挂）；vi.fn mock 带参函数要显式参数类型
 
 ### notes/task/
 

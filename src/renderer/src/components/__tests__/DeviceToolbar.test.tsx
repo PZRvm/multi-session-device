@@ -1,12 +1,15 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MAIN_COPY } from '@shared/i18n'
+import type { NetworkState } from '@shared/types'
 import DeviceToolbar from '../DeviceToolbar'
 import type { ScreenshotState } from '../../hooks/useScreenshot'
 
 const copy = MAIN_COPY['zh-CN']
 const idle: ScreenshotState = { phase: 'idle' }
 const thumbnail = 'data:image/png;base64,QUJD'
+/** 网络态样例：飞行关 + wifi/数据开（设备常态） */
+const netOnline: NetworkState = { airplane: false, wifi: true, data: true }
 
 afterEach(cleanup)
 
@@ -22,7 +25,10 @@ const baseProps: ToolbarProps = {
   screenshotState: idle,
   onScreenshot: () => undefined,
   onScreenshotSave: () => undefined,
-  onScreenshotDismiss: () => undefined
+  onScreenshotDismiss: () => undefined,
+  networkState: netOnline,
+  networkBusy: null,
+  onNetworkToggle: () => undefined
 }
 
 describe('DeviceToolbar 截屏钮与气泡', () => {
@@ -76,5 +82,47 @@ describe('DeviceToolbar 截屏钮与气泡', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: copy.screenshotClose }))
     expect(onScreenshotDismiss).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('DeviceToolbar 网络开关组（plan 2026-10-12-network-switch-group）', () => {
+  it('三开关在场：分组可访问名 + aria-pressed 承载设备真实态；点击分发目标', () => {
+    const onNetworkToggle = vi.fn()
+    render(<DeviceToolbar {...baseProps} onNetworkToggle={onNetworkToggle} />)
+    expect(screen.getByRole('group', { name: copy.networkGroupAria })).toBeTruthy()
+    const airplane = screen.getByRole('button', { name: copy.networkAirplaneToggle })
+    const wifi = screen.getByRole('button', { name: copy.networkWifiToggle })
+    const data = screen.getByRole('button', { name: copy.networkDataToggle })
+    expect(airplane.getAttribute('aria-pressed')).toBe('false')
+    expect(wifi.getAttribute('aria-pressed')).toBe('true')
+    expect(data.getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(airplane)
+    fireEvent.click(wifi)
+    fireEvent.click(data)
+    expect(onNetworkToggle.mock.calls).toEqual([['airplane'], ['wifi'], ['data']])
+  })
+
+  it('网络态未知（设备未运行/初值未达）：三开关禁用且不带 aria-pressed', () => {
+    render(<DeviceToolbar {...baseProps} networkState={null} />)
+    for (const name of [
+      copy.networkAirplaneToggle,
+      copy.networkWifiToggle,
+      copy.networkDataToggle
+    ]) {
+      const button = screen.getByRole('button', { name }) as HTMLButtonElement
+      expect(button.disabled).toBe(true)
+      expect(button.getAttribute('aria-pressed')).toBeNull()
+    }
+  })
+
+  it('busy（任一目标在途）：三开关全禁用；不受投屏 disabled 牵连', () => {
+    render(<DeviceToolbar {...baseProps} disabled networkBusy="wifi" />)
+    for (const name of [
+      copy.networkAirplaneToggle,
+      copy.networkWifiToggle,
+      copy.networkDataToggle
+    ]) {
+      expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
+    }
   })
 })
