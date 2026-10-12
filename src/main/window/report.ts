@@ -87,7 +87,8 @@ export function openReportWindow(): Promise<void> {
         : {}),
       resizable: true,
       minimizable: false,
-      fullscreenable: false,
+      // 全屏可用——绿灯保持有效态；最小化禁用黄灯灰置（mac 原生无法单灯隐藏）
+      fullscreenable: true,
       autoHideMenuBar: true,
       webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true }
     })

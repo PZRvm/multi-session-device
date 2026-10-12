@@ -161,8 +161,8 @@ const ReportBody = ({ report }: { report: ReconcileReport }): React.JSX.Element 
 }
 
 const ReportLayout = styled.div`
-  /* 内容与窗口边缘的呼吸空间（用户反馈：文字顶格） */
-  padding: 16px 20px 20px;
+  /* 间距（用户反馈二轮）：上下加足、左右收窄 */
+  padding: 20px 12px 28px;
 
   .orphan-row {
     display: flex;
