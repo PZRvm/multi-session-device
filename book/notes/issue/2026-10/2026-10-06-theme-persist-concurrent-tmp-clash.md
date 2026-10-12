@@ -1,7 +1,9 @@
 ---
 description: theme.json 落盘的 tmp 文件名固定，两次快速切换的 persist 交错会互相覆盖 tmp——假失败日志且写入顺序无保证
+status: resolved
 ---
 
+> 2026-10-12 核销（fix/issue-audit 批）：theme store 已用 writeQueue 落盘串行队列（store.ts 注释直接引用本 issue）。
 # theme 持久化并发写共享 tmp 路径
 
 - **Observed**: 2026-10-06 主题持久化 plan Phase 5 review 发现：`persistThemeState`（src/main/theme/store.ts）用固定路径 `theme.json.tmp` 做 tmp+rename 原子写。两次快速主题切换（如毫秒级连点）的落盘交错时——writeFile(A) → writeFile(B) → rename(A) → rename(B)——B 的写入会覆盖 A 尚未 rename 的 tmp：rename(A) 实际落盘 B 的内容，rename(B) 对已消失的 tmp 报 ENOENT → renderer 记一条假的「落盘亮暗模式失败」，而磁盘上已是最新值。最终值通常碰巧正确，但写入顺序无保证、错误信号失真。

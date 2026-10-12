@@ -1,7 +1,9 @@
 ---
 description: commit-msg hook 直接取消息首行，不跳过空行与 # 注释行——模板残留或前导空行会以莫名的结构错误拦下提交
+status: resolved
 ---
 
+> 2026-10-12 核销（fix/issue-audit 批）：.githooks/commit-msg 现取「第一个非空、非 # 注释行」作主题，模板残留不再误拦。
 # commit-msg hook 未滤空行与注释行
 
 - **Observed**: 2026-10-02 Phase 5 review 发现：`.githooks/commit-msg` 用 `head -n 1 "$1"` 取主题，不跳过空行和 `#` 开头的注释行。已实测两种退出码 1：消息文件首行是 `# Please enter the commit message…`（编辑器模板残留，`--cleanup=verbatim` 下会保留到 commit-msg 阶段）、消息文件以空行开头——两种都报"整体结构不对"或"需要一个主题行"，报错不指向真实原因。

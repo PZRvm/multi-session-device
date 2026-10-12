@@ -22,7 +22,11 @@ import {
   switchSource,
   type SwitchDeps
 } from '../sdkSourceSwitch'
-import { loadMigrationJournal, migrationJournalPath } from '../sdkMigration'
+import {
+  loadMigrationJournal,
+  migrationJournalPath,
+  resetMigrationFlagForTest
+} from '../sdkMigration'
 import { FakeFs, makeDeps } from './sdkMigration.test'
 import type { StudioSdkDetection } from '@shared/types'
 
@@ -364,5 +368,69 @@ describe('startSourceMigration / cancelSourceMigration（编排收尾）', () =>
     expect(await loadMigrationJournal(deps.migration)).toBeNull()
     expect(getSdkSourceState().source).toBe('managed')
     expect(fs.exists(`${MANAGED}/platform-tools/adb`)).toBe(true)
+  })
+})
+describe('伪造载荷兜底（issue 2026-10-11 问题四处置）', () => {
+  let fs: FakeFs
+  beforeEach(() => {
+    fs = new FakeFs()
+    resetSdkSourceStateForTest()
+  })
+
+  it('source-migrate 指向 Studio SDK：服务端拒绝，不建 journal 不动来源', async () => {
+    seedManaged(fs)
+    seedSourceInto(fs, STUDIO_SDK)
+    const deps = buildDeps(fs)
+    await expect(
+      startSourceMigration({ target: 'custom', customPath: STUDIO_SDK, replace: true }, deps)
+    ).rejects.toThrow('Android Studio SDK')
+    expect(await loadMigrationJournal(deps.migration)).toBeNull()
+    expect(getSdkSourceState().source).toBe('managed')
+    expect(fs.exists(`${MANAGED}/platform-tools/adb`)).toBe(true)
+  })
+
+  it('source-adopt 指向 Studio SDK：服务端拒绝，不翻 source、不删落选根', async () => {
+    seedManaged(fs)
+    seedSourceInto(fs, STUDIO_SDK)
+    const deps = buildDeps(fs)
+    await expect(
+      adoptSourceSwitch({ target: 'custom', customPath: STUDIO_SDK }, deps)
+    ).rejects.toThrow('Android Studio SDK')
+    expect(getSdkSourceState().source).toBe('managed')
+    // 落选根（托管）原封未动——adopt 的 rmTree 未执行
+    expect(fs.exists(`${MANAGED}/licenses/android-sdk-license`)).toBe(true)
+    expect(fs.exists(`${MANAGED}/jre/Contents/Home/bin/java`)).toBe(true)
+  })
+})
+
+describe('cancelSourceMigration on corrupt journal（问题二处置）', () => {
+  let fs: FakeFs
+  beforeEach(() => {
+    fs = new FakeFs()
+    resetSdkSourceStateForTest()
+    resetMigrationFlagForTest()
+  })
+
+  it('journal 损坏 + 半迁移布局 → 探测式回滚：源恢复、journal 清、source 不翻', async () => {
+    seedManaged(fs)
+    seedAvdBoundTo(fs, MANAGED)
+    fs.devs.set(CUSTOM, 1)
+    fs.mkdirP(CUSTOM)
+    fs.rename(`${MANAGED}/platform-tools`, `${CUSTOM}/platform-tools`)
+    fs.rename(`${MANAGED}/emulator`, `${CUSTOM}/emulator`)
+    // 真实半损形态：整体 JSON 坏，但 toRoot 字段片段仍可读（managed→custom
+    // 半迁移时 sdk.json 还没有 customPath——方向全靠这条线索）
+    fs.write(
+      migrationJournalPath(makeDeps(fs)),
+      `{"version":1,"fromRoot":"${MANAGED}","toRoot":"${CUSTOM}","entries":[ BROKEN`
+    )
+    const deps = buildDeps(fs)
+    await cancelSourceMigration(deps)
+    expect(await loadMigrationJournal(deps.migration)).toBeNull()
+    expect(getSdkSourceState().source).toBe('managed')
+    expect(fs.exists(`${MANAGED}/platform-tools/adb`)).toBe(true)
+    expect(fs.exists(`${MANAGED}/emulator/emulator`)).toBe(true)
+    expect(fs.exists(CUSTOM)).toBe(false)
+    expect(fs.read(`${AVD_HOME}/d1.avd/config.ini`)).toContain(`image.sys.src.dir=${MANAGED}/`)
   })
 })

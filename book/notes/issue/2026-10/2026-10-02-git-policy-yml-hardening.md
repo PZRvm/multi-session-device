@@ -1,6 +1,9 @@
 ---
 description: git-policy.yml 两处待加固：GitHub 表达式直接内插进 shell 有注入面，首推 main 会被方向守卫误伤
+status: resolved
 ---
+
+> 2026-10-12 核销（fix/issue-audit 批）：两点均已处置——commit-subjects 的 `${{ }}` 全部收敛到 env 块以数据身份进 shell（文件内注释明示防注入意图）；首推 main 的方向守卫误伤已由 before 零值豁免覆盖（branch-direction 与 subjects 双处）。原登记后工作流已迭代，未回头销账。
 
 # git-policy.yml 的注入面与首推 main 误伤
 

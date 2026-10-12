@@ -582,6 +582,8 @@ export interface SdkSourceSnapshot {
   detection: StudioSdkDetection | null
   /** 未收尾迁移的 journal 视图（崩溃恢复横幅用）；null = 无在途/中断迁移 */
   migration: SdkMigrationView | null
+  /** journal 文件损坏（在但不可解析）：半迁移状态须拦切换，横幅只提供回滚 */
+  journalCorrupt: boolean
   /** 共享模式下的保留应用根清单（非共享态按不变量为空数组） */
   retainedRoots: SdkRetainedRoot[]
 }

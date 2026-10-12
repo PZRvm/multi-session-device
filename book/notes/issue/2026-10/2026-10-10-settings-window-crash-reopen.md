@@ -1,10 +1,12 @@
 ---
 description: P2：设置窗就绪后 renderer 崩溃未释放单例，主窗齿轮再次打开只聚焦故障窗；静态前端 review 发现，待独立修复
-status: open
+status: resolved
 priority: P2
 tags: [electron, settings, window, lifecycle, crash, review]
 created: 2026-10-10
 ---
+
+> 2026-10-12 resolved（fix/issue-audit 批）：render-process-gone 处理区分阶段——就绪前走加载失败收口（原行为），就绪后（settled 已置位、fail 早退的死路）改为释放单例并销毁残窗，下次齿轮点击重建新窗。回归：就绪后崩溃 → destroy 一次、再开建新窗且不聚焦死窗。
 
 # 设置窗就绪后崩溃无法重建
 

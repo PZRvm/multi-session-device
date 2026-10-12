@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { netFetch } from './netFetch'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { mkdir, readdir, rename, rm, stat, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -66,7 +67,8 @@ export interface ChunkSink {
 /** 默认依赖集合（导出供 default extractZip 等真实子进程行为做单测） */
 export const defaultDeps: Required<DownloaderDeps> = {
   openUrl: async (url, signal) => {
-    const response = await fetch(url, { signal })
+    // netFetch：镜像 zip 下载走系统代理（issue 2026-10-09）；流式 body 兼容
+    const response = await netFetch(url, { signal })
     if (!response.ok || response.body === null) {
       throw new Error(msg('dlHttpStatus', { status: response.status }))
     }

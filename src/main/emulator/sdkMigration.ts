@@ -120,22 +120,42 @@ export const requiredFreeBytes = (totalBytes: number): number =>
 export const migrationJournalPath = (deps: MigrationDeps): string =>
   join(deps.journalDir(), 'sdk-migration.json')
 
-export async function loadMigrationJournal(
+/** journal 盘面三态（issue 2026-10-11 问题二处置）：「无文件」与「文件在但损坏」
+ *  曾共用 null——损坏时守卫不拦、横幅不现、续跑回滚全失效，半迁移状态裸奔。 */
+export type MigrationJournalState =
+  | { status: 'absent' }
+  | { status: 'present'; journal: SdkMigrationJournalFile }
+  | { status: 'corrupt'; raw: string }
+
+export async function readMigrationJournalState(
   deps: MigrationDeps
-): Promise<SdkMigrationJournalFile | null> {
+): Promise<MigrationJournalState> {
   let raw: string
   try {
     raw = await deps.readFile(migrationJournalPath(deps))
-  } catch {
-    return null
+  } catch (cause) {
+    const code = (cause as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') return { status: 'absent' }
+    // EACCES 等「在但读不了」按损坏处理——守卫须拦；无正文可提线索
+    return { status: 'corrupt', raw: '' }
   }
   try {
     const parsed = JSON.parse(raw) as SdkMigrationJournalFile
-    if (parsed.version !== 1 || typeof parsed.fromRoot !== 'string') return null
-    return parsed
+    if (parsed.version !== 1 || typeof parsed.fromRoot !== 'string') {
+      return { status: 'corrupt', raw }
+    }
+    return { status: 'present', journal: parsed }
   } catch {
-    return null
+    return { status: 'corrupt', raw }
   }
+}
+
+/** 有效 journal 或 null（续跑/回滚/预检用——损坏文件对它们不可信） */
+export async function loadMigrationJournal(
+  deps: MigrationDeps
+): Promise<SdkMigrationJournalFile | null> {
+  const state = await readMigrationJournalState(deps)
+  return state.status === 'present' ? state.journal : null
 }
 
 async function saveMigrationJournal(
@@ -170,9 +190,10 @@ export function isMigrationActive(): boolean {
   return journalPresent
 }
 
-/** boot 时按盘面校准内存标志（崩溃残留 journal → true）；restoreSdkSource 调用 */
+/** boot 时按盘面校准内存标志（崩溃残留/损坏 journal → true，守卫拦启动与包操作）；
+ *  restoreSdkSource 调用 */
 export async function primeMigrationJournalFlag(deps: MigrationDeps): Promise<void> {
-  journalPresent = (await loadMigrationJournal(deps)) !== null
+  journalPresent = (await readMigrationJournalState(deps)).status !== 'absent'
 }
 
 /** 测试用：重置内存标志 */
@@ -693,6 +714,39 @@ async function copyTree(
     })
   }
   onBytes(bytes)
+}
+
+/** journal 损坏时的探测式回滚（issue 2026-10-11 问题二）：entries 不可信，按盘面
+ *  真值——movedRoot（迁移目标根）上 originalRoot（源根，sdk.json 未翻时的活动根）
+ *  缺失的顶层条目视为已移走，逐条移回；随后反向 relink、删 journal 与 .migrating、
+ *  目标根空则删。selectMovedRoot 由编排层判定（应用自有根中非活动且有内容者）。 */
+export async function rollbackCorruptMigration(
+  input: { movedRoot: string; originalRoot: string; avdHome: string },
+  options: MigrationRunOptions,
+  deps: MigrationDeps
+): Promise<'done'> {
+  const names = await deps.listDir(input.movedRoot).catch(() => [] as string[])
+  for (const name of names) {
+    if (name === STAGING) continue
+    if (await deps.pathExists(join(input.originalRoot, name))) continue
+    await moveEntry({ fromRoot: input.movedRoot, toRoot: input.originalRoot, name }, options, deps)
+  }
+  await deps.rmTree(join(input.movedRoot, STAGING)).catch(() => undefined)
+  await relinkAvdConfigs(
+    { avdHome: input.avdHome, fromRoot: input.movedRoot, toRoot: input.originalRoot },
+    deps
+  )
+  await clearMigrationJournal(deps)
+  const leftover = await deps.listDir(input.movedRoot).catch(() => [] as string[])
+  if (leftover.length === 0) await deps.rmTree(input.movedRoot).catch(() => undefined)
+  options.onProgress?.({
+    phase: 'cancelled',
+    percent: 0,
+    movedBytes: 0,
+    totalBytes: 0,
+    currentEntry: null
+  })
+  return 'done'
 }
 
 // ---- AVD 引用改写（设备不断链；§4）----

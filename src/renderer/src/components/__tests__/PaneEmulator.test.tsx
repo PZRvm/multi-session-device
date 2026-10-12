@@ -39,6 +39,7 @@ const snapshotOf = (over: Partial<SdkSourceSnapshot> = {}): SdkSourceSnapshot =>
   sharedPath: null,
   detection: detectionOf(),
   migration: null,
+  journalCorrupt: false,
   retainedRoots: [],
   ...over
 })
@@ -383,6 +384,18 @@ describe('PaneEmulator（SDK 来源交互化）', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('journal 损坏横幅：只提供回滚入口，点击调 sourceMigrateCancel', async () => {
+    api = installApi(snapshotOf({ journalCorrupt: true }))
+    await openPane(api)
+    const banner = await screen.findByRole('alert')
+    expect(banner.textContent).toContain('迁移记录损坏')
+    expect(screen.queryByRole('button', { name: '继续迁移…' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '回滚…' }))
+    await waitFor(() => {
+      expect(api.sourceMigrateCancel).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('非共享模式：不渲染保留根区', async () => {

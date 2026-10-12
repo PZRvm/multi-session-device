@@ -1,6 +1,9 @@
 ---
 description: emulator 37.2.12 的 console token 恒读写宿主 ~/.emulator_console_auth_token，ANDROID_EMULATOR_HOME 重定向不覆盖——全新机器上首次启动会向宿主 home 写入新 token
+status: resolved
 ---
+
+> 2026-10-12 处置（fix/issue-audit 批）：上游 emulator 行为，无可覆写的 env/参数——转为「上游约束·接受并监测」：PRD 4.2 隔离边界已补例外注记（AVD/SDK 数据独立，console token 是唯一已知例外）。若上游版本变更提供重定向再重开。
 
 # console token 逃出应用隔离目录
 

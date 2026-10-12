@@ -1,6 +1,9 @@
 ---
 description: window.api 对话框调用在守卫拒绝时会 reject，调用方不接住就是 unhandled rejection——调用约定要成文
+status: resolved
 ---
+
+> 2026-10-12 resolved（fix/issue-audit 批）：调用约定成文进 guidelines/coding-style.md（invoke 拒绝必须有归宿）；排查全部 `dialog.show` 调用点——App/Wizard 经 toApiResult、PaneEmulator 外层 runAction 已接，唯一裸点（DeviceWizard 卸载确认框段）补 try/catch 与执行段同口径展示。
 
 # window.api.dialog.show 的 rejection 需要调用方接住
 

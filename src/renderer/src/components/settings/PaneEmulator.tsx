@@ -78,7 +78,11 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
   const progress = sdk.progress
   const progressActive = progress !== null && ACTIVE_PHASES.includes(progress.phase)
   // 锁切换三态：动作在途 / 迁移进行中 / journal 未收尾（崩溃恢复横幅接管）
-  const locked = sdk.acting || progressActive || (snapshot?.migration != null && !progressActive)
+  // 锁切换三态：动作在途 / 迁移进行中 / journal 未收尾（含损坏——半迁移状态禁切换）
+  const locked =
+    sdk.acting ||
+    progressActive ||
+    ((snapshot?.migration != null || snapshot?.journalCorrupt === true) && !progressActive)
   const currentMode: SdkSourceMode = snapshot?.source ?? 'managed'
   // 共享选项可用性只由 studioFound 驱动（plan §5）；检测中先行禁用
   const sharedDisabled = sdk.detecting || detection === null || !detection.studioFound
@@ -419,6 +423,23 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
             >
               {copy.resumeAction}
             </button>
+            <button
+              type="button"
+              disabled={sdk.acting}
+              onClick={() => {
+                void runAction(() => sdk.cancelMigration())
+              }}
+            >
+              {copy.rollbackAction}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {snapshot?.journalCorrupt === true && !progressActive ? (
+        <div className="action-card warn" role="alert">
+          <p className="card-title">{copy.journalCorruptTitle}</p>
+          <div className="card-actions">
             <button
               type="button"
               disabled={sdk.acting}

@@ -130,6 +130,7 @@ describe('设置窗静态边界与语言切换', () => {
         defaultSdkPath: '/Users/t/Library/Android/sdk'
       },
       migration: null,
+      journalCorrupt: false,
       retainedRoots: []
     }
     const off = vi.fn()

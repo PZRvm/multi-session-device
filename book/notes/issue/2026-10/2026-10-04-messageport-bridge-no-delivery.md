@@ -2,6 +2,8 @@
 description: MessagePortMain 经 contextBridge 回传后 port 对象可达但不投递消息——视频包通道退回 webContents.send（每帧拷贝），产品化时可再评估
 ---
 
+> 2026-10-12 处置（fix/issue-audit 批）：保持留置（v1.1/产品化性能项）——现状 webContents.send 每帧拷贝下投屏帧率已过 PRD 性能预算验收（≥30fps）；MessagePort 直传作为后续优化再评估，不另立修复任务。
+
 # MessagePort 跨 contextBridge 不投递数据
 
 > 开放项已并入 [待修问题清单](../../task/2026-10-09-待修问题清单.md)追踪；本文仅作证据存档。

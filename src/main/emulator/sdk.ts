@@ -4,6 +4,8 @@ import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promise
 import { join } from 'node:path'
 import type { SdkComponentName, SdkProgress, SdkSnapshot } from '@shared/types'
 import { msg } from '../locale'
+import { androidUserHomeFor } from './androidUserHome'
+import { netFetch } from './netFetch'
 
 // ---- 钉版下载源（升级 = 显式改这里 + 重跑真机集成）----
 
@@ -40,7 +42,6 @@ export const sdkPaths = (
   adbBin: string
   emulatorBin: string
   licensesDir: string
-  userHome: string
 } => ({
   root,
   jreHome: join(root, 'jre', 'Contents', 'Home'),
@@ -50,8 +51,7 @@ export const sdkPaths = (
   avdmanagerBin: join(root, 'cmdline-tools', 'latest', 'bin', 'avdmanager'),
   adbBin: join(root, 'platform-tools', 'adb'),
   emulatorBin: join(root, 'emulator', 'emulator'),
-  licensesDir: join(root, 'licenses'),
-  userHome: join(root, 'android-user')
+  licensesDir: join(root, 'licenses')
 })
 
 /** 解析 source.properties 的 Pkg.Revision */
@@ -171,7 +171,8 @@ export interface BootstrapDeps {
 }
 
 const defaultFetcher = async (url: string): Promise<Buffer> => {
-  const response = await fetch(url)
+  // netFetch：系统代理下的引导下载（issue 2026-10-09）；接缝注入不变
+  const response = await netFetch(url)
   if (!response.ok) throw new Error(msg('downloadHttpFailed', { status: response.status, url }))
   return Buffer.from(await response.arrayBuffer())
 }
@@ -358,8 +359,9 @@ const sdkManagerEnv = (root: string): NodeJS.ProcessEnv => {
     JAVA_HOME: paths.jreHome,
     ANDROID_SDK_ROOT: root,
     ANDROID_HOME: root,
-    ANDROID_USER_HOME: paths.userHome,
-    ANDROID_PREFS_ROOT: paths.userHome
+    // android-user 恒定应用数据目录（issue 2026-10-11 问题三）——不随 SDK 根
+    ANDROID_USER_HOME: androidUserHomeFor(),
+    ANDROID_PREFS_ROOT: androidUserHomeFor()
   }
 }
 
@@ -376,7 +378,6 @@ export async function bootstrapSdk(
   const unpacker = deps.unpacker ?? defaultUnpacker
   const runner = deps.runner ?? defaultRunner
   const sources = deps.sources ?? PINNED_SOURCES
-  const paths = sdkPaths(root)
 
   const snapshot = await detectSdk(root)
   const steps = planBootstrap(snapshot)
@@ -386,7 +387,7 @@ export async function bootstrapSdk(
   }
 
   await mkdir(root, { recursive: true })
-  await mkdir(paths.userHome, { recursive: true })
+  await mkdir(androidUserHomeFor(), { recursive: true })
 
   if (steps.includes('licenses')) {
     onProgress({ stage: 'licenses', message: msg('sdkStepLicense') })

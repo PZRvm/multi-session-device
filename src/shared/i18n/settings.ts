@@ -70,6 +70,8 @@ const zhCN = {
   migrateFailed: '迁移失败',
   migrateCancelled: '已回滚',
   resumeTitle: '上次迁移未完成',
+  journalCorruptTitle:
+    '迁移记录损坏：无法继续迁移——可回滚到迁移前状态；如需手动处理，文件在应用数据目录 sdk-migration.json',
   resumeHintEntries: '已完成条目',
   resumeAction: '继续迁移…',
   rollbackAction: '回滚…',
@@ -187,6 +189,8 @@ const zhTW: SettingsCopy = {
   migrateFailed: '遷移失敗',
   migrateCancelled: '已回復',
   resumeTitle: '上次遷移未完成',
+  journalCorruptTitle:
+    '遷移記錄損壞：無法繼續遷移——可回復到遷移前狀態；如需手動處理，檔案在應用程式資料目錄 sdk-migration.json',
   resumeHintEntries: '已完成條目',
   resumeAction: '繼續遷移…',
   rollbackAction: '回復…',
@@ -304,6 +308,8 @@ const enUS: SettingsCopy = {
   migrateFailed: 'Migration failed',
   migrateCancelled: 'Rolled back',
   resumeTitle: 'An unfinished migration exists',
+  journalCorruptTitle:
+    'The migration journal is corrupt: migration cannot continue. You can roll back to the pre-migration state; to handle it manually, the file is sdk-migration.json in the app data directory.',
   resumeHintEntries: 'Completed entries',
   resumeAction: 'Continue migration…',
   rollbackAction: 'Roll back…',

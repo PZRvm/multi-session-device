@@ -1,4 +1,5 @@
 import { readdir, stat } from 'node:fs/promises'
+import { netFetch } from './netFetch'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { XMLParser } from 'fast-xml-parser'
@@ -590,7 +591,8 @@ export async function fetchImageCatalog(
   const fetcher =
     deps.fetcher ??
     (async (url: string): Promise<string> => {
-      const response = await fetch(url)
+      // netFetch：manifest 拉取走系统代理（issue 2026-10-09）
+      const response = await netFetch(url)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       return response.text()
     })

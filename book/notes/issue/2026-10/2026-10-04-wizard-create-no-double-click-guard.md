@@ -1,7 +1,9 @@
 ---
 description: 向导窗创建按钮无创建中禁用/防连击——双击可建出两台同名设备，stage 04 真实创建变慢后会被放大
+status: resolved
 ---
 
+> 2026-10-12 核销（fix/issue-audit 批）：DeviceWizard 已有 creatingRef/downloadingRef 同步防连击守卫（冒烟实测同 tick 双击拦截）。
 # 向导创建按钮无防连击
 
 - **Observed**: 2026-10-04 优化轮 Phase 5 review 发现：`DeviceWizard` 的「创建」按钮点击后不进入禁用态，`WizardApp.handleCreate` 是异步 IPC——连点两下会在窗口关闭前发出两次 `devices:create`，建出两台同名设备（id 不同）。stage 03 mock 下 IPC 瞬回影响小；stage 04 接真实 avdmanager 创建（秒级~十秒级）后会放大成重复建 AVD。

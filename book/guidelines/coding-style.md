@@ -45,6 +45,7 @@ export default DeviceList
 
 - 组件、类型、接口：大驼峰；变量、函数、普通文件：小驼峰；模块级常量：全大写下划线（`IPC_CHANNELS`）
 - IPC 通道名格式 `域:动作`（如 `dialog:show`），只准出现在 `src/shared/ipc-channels.ts`
+- renderer 调 `window.api` 的每个 invoke 都要有拒绝归宿：要么 `toApiResult` 包装，要么外层 try/catch 展示错误——主进程守卫（sender 校验、迁移/共享拦截等）以 reject 表达拒绝，裸 `await` 会变成 unhandled rejection（issue 2026-10-01 成文）。原生对话框（`dialog.show`）同理：确认框本身也可能被守卫拒绝。
 
 ## 样式与图标
 
