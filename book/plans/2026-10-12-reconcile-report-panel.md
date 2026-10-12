@@ -114,3 +114,11 @@ created: 2026-10-12
 - 三设计轴批复后落地：BaseModal 原语（遮罩/Esc/aria/focus 还原/body 滚动锁，3 测试）→ ReconcileReportModal 分组滚动面板（加载/失败重试/空态，120 条明细全渲染回归锚，4 测试）→ App 接线（汇总条「查看详情」与摘要式通知 [查看详情/知道了] 双入口开面板，删长文本弹窗路径）→ mainWindow 域 7 新键 + SummaryMessage 摘要化 ×3 语 + DESIGN.md 弹层一节。
 - 对账集成测试改写为摘要契约（无 detail、按钮组、选查看开面板并渲染明细）。
 - 验证：1070 项测试全绿（+7）、typecheck/lint/build 通过。
+
+## 追加（2026-10-12，用户约束：渲染层不要模态框）
+
+应用内 BaseModal 面板实施当晚用户明确「渲染层不要模态框」——方案改**独立子窗口**：
+- 新窗口域 `src/main/window/report.ts`（620×520 单例、已开聚焦、主窗关闭带走、就绪后崩溃释放单例——沿设置窗先例）+ 第五入口 `report.html` + `ReportApp`（原面板报告体去 BaseModal 壳）。
+- App 双入口（汇总条查看详情 / 摘要通知选查看）改 `window.api.report.openWindow()`；BaseModal 原语与其测试**删除**（自绘弹层家族结论：本产品渲染层不引入模态，后续需求走子窗口或内嵌区）。
+- 摘要式通知与在途互斥保留；dialog 40 行截断防线保留。
+- 验证：1057 项全绿、typecheck/lint/build 通过。DESIGN.md 弹层一节改写为「窗口策略」。
