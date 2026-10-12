@@ -562,6 +562,69 @@ describe('devices 域（创建/删除事务）', () => {
     }
   })
 
+  it('清除保留根级联（用户批复）：purgeAppOwnedDevices 只删项目自有设备，绕过跨桶只读守卫', async () => {
+    const ownedId = '018f1c2d-dddd-4000-8000-000000000011'
+    const sharedId = '018f1c2d-eeee-4000-8000-000000000012'
+    mocks.readDeviceMetas.mockResolvedValue([
+      {
+        id: ownedId,
+        name: '自有机',
+        profileId: 'pixel_8',
+        profileLabel: 'Pixel 8',
+        imagePackageName: 'system-images;android-36;google_apis_playstore;arm64-v8a',
+        apiDisplay: '36',
+        formFactor: 'phone',
+        screenSummary: null,
+        advancedSettings: null,
+        snapshotReadyAt: null,
+        createdAt: 0
+      },
+      {
+        id: sharedId,
+        name: '共享机',
+        profileId: 'pixel_8',
+        profileLabel: 'Pixel 8',
+        imagePackageName: 'system-images;android-36.1;google_apis_playstore;arm64-v8a',
+        apiDisplay: '36.1',
+        formFactor: 'phone',
+        screenSummary: null,
+        advancedSettings: null,
+        snapshotReadyAt: null,
+        imageSourceOrigin: 'shared-studio',
+        createdAt: 0
+      }
+    ] as never)
+    const { handlerFor } = await freshDomain()
+    const domain = (await import('..')) as typeof import('..')
+    const sdkSource = await import('../../emulator/sdkSource')
+    sdkSource.setSdkSourceState({
+      version: 1,
+      source: 'shared-studio',
+      customPath: null,
+      sharedPath: '/studio/sdk'
+    })
+    try {
+      // 级联前的确认框计数：只有 1 台项目自有
+      await expect(domain.appOwnedDeviceCount()).resolves.toBe(1)
+      // 跨桶只读下单台删除被拒（对照）——purge 是系统性清理，必须绕过
+      await expect(
+        handlerFor(IPC_CHANNELS.devicesDelete)(mainWindowEvent(), { id: ownedId })
+      ).rejects.toThrow('另一 SDK 来源')
+
+      const result = await domain.purgeAppOwnedDevices()
+      expect(result.deleted.map((entry) => entry.id)).toEqual([ownedId])
+      expect(result.failures).toEqual([])
+      // 共享机独存：内存与落盘都只剩它
+      const list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+        devices: Array<{ id: string }>
+      }
+      expect(list.devices.map((device) => device.id)).toEqual([sharedId])
+      expect(mocks.fileMetas.current!.map((meta) => meta.id)).toEqual([sharedId])
+    } finally {
+      sdkSource.resetSdkSourceStateForTest()
+    }
+  })
+
   it('跨来源桶设备只读（用户复核 5）：共享态下对 app-owned 出身设备改名/删除被服务端拒绝', async () => {
     const otherId = '018f1c2d-cccc-4000-8000-000000000009'
     mocks.readDeviceMetas.mockResolvedValue([

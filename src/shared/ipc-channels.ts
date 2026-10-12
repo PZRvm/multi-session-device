@@ -101,6 +101,8 @@ export const IPC_CHANNELS = {
   sdkSourceMigrateCancel: 'sdk:source-migrate-cancel',
   /** 清除保留根（仅共享模式；原生确认在 UI 完成） */
   sdkSourceClearRetained: 'sdk:source-clear-retained',
+  /** 清除确认框的项目自有设备计数（仅设置窗；级联删除警告） */
+  sdkAppOwnedCount: 'sdk:app-owned-device-count',
   /** 原生目录选择器选自选 SDK 根（仅设置窗；null = 用户取消） */
   sdkChooseCustomRoot: 'sdk:choose-custom-root',
   /** 来源变化广播（main → 各窗） */

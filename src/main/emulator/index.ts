@@ -215,6 +215,13 @@ const requireSdkReady = async (root: string): Promise<void> => {
 export interface SdkIpcDeps {
   savedDeviceSkinRef?: (id: string) => Promise<string | null>
   referencingDeviceNames?: (packageName: string) => string[]
+  /** 清除保留根后的设备级联删除（devices 域注入；缺席则只清 SDK 不动设备） */
+  purgeAppOwnedDevices?: () => Promise<{
+    deleted: Array<{ id: string; name: string }>
+    failures: Array<{ name: string; message: string }>
+  }>
+  /** 项目自有设备计数（清除确认框级联警告用） */
+  appOwnedDeviceCount?: () => Promise<number>
 }
 
 export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
@@ -259,7 +266,7 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     return cancelSourceMigration()
   })
 
-  ipcMain.handle(IPC_CHANNELS.sdkSourceClearRetained, (event, raw: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.sdkSourceClearRetained, async (event, raw: unknown) => {
     requireSettingsSender(IPC_CHANNELS.sdkSourceClearRetained, event)
     if (
       typeof raw !== 'object' ||
@@ -268,7 +275,27 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     ) {
       throw new Error(msg('invalidPayload'))
     }
-    return clearRetainedRoot({ root: (raw as Record<string, unknown>).root as string })
+    const snapshot = await clearRetainedRoot({ root: (raw as Record<string, unknown>).root as string })
+    // 设备级联（用户 2026-10-12 批复）：保留 SDK 已删，项目自有设备的镜像永久
+    // 消失——设备一并清掉。SDK 删除是用户确认过的主操作，先完成；设备清理逐台
+    // best-effort，失败汇总上报（残留行可切回自有根后手删）
+    if (deps.purgeAppOwnedDevices !== undefined) {
+      const purged = await deps.purgeAppOwnedDevices()
+      if (purged.failures.length > 0) {
+        throw new Error(
+          msg('sdkClearPurgeFailed', {
+            failures: purged.failures.map((entry) => `${entry.name}：${entry.message}`).join('；')
+          })
+        )
+      }
+    }
+    return snapshot
+  })
+
+  // 清除确认框的级联计数（仅设置窗）：项目自有设备全体将被连带删除
+  ipcMain.handle(IPC_CHANNELS.sdkAppOwnedCount, async (event): Promise<number> => {
+    requireSettingsSender(IPC_CHANNELS.sdkAppOwnedCount, event)
+    return deps.appOwnedDeviceCount !== undefined ? deps.appOwnedDeviceCount() : 0
   })
 
   // 原生目录选择器（自选 SDK 根）：null = 用户取消，不走错误通道

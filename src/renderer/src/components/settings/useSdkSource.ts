@@ -16,6 +16,8 @@ export interface SdkSourceUi {
   snapshot: SdkSourceSnapshot | null
   detecting: boolean
   acting: boolean
+  /** 项目自有设备计数（清除确认框级联警告，用户 2026-10-12 批复） */
+  appOwnedDeviceCount: () => Promise<number>
   /** 迁移进行中的实时进度（done/failed/cancelled 终态保留至下一次动作） */
   progress: SdkMigrationProgress | null
   refresh: () => Promise<void>
@@ -192,6 +194,17 @@ export const useSdkSource = (): SdkSourceUi => {
     [withActing]
   )
 
+  /** 项目自有设备计数（清除确认框的级联警告，用户 2026-10-12 批复） */
+  const appOwnedDeviceCount = useCallback(async (): Promise<number> => {
+    const sdk = api()
+    if (!sdk) return 0
+    try {
+      return await sdk.appOwnedDeviceCount()
+    } catch {
+      return 0 // 计数失败不拦清除入口——确认框按 0 台处理，主流程不受影响
+    }
+  }, [])
+
   const chooseCustomRoot = useCallback(async (): Promise<string | null> => {
     const sdk = api()
     if (!sdk) return null
@@ -212,6 +225,7 @@ export const useSdkSource = (): SdkSourceUi => {
     adopt,
     cancelMigration,
     clearRetained,
+    appOwnedDeviceCount,
     chooseCustomRoot
   }
 }

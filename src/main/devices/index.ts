@@ -1354,12 +1354,15 @@ const cancelStartDevice = async (id: string): Promise<DeviceSnapshot> => {
   return snapshotNow()
 }
 
-const deleteFlow = async (id: string): Promise<DeviceSnapshot> => {
+const deleteFlow = async (
+  id: string,
+  opts: { bypassOriginBucket?: boolean } = {}
+): Promise<DeviceSnapshot> => {
   await ensureLoaded()
   const device = requireDevice(id)
   if (device.status === 'creating') throw new Error(msg('deleteWhileCreating'))
   if (editFlights.has(id)) throw new Error(msg('blockDeleteWhileSaving'))
-  assertDeviceInCurrentBucket(device)
+  if (!opts.bypassOriginBucket) assertDeviceInCurrentBucket(device)
   // 副作用前守卫（对账设计 4）：库不可写时拒绝——删了 AVD 却删不掉元数据会留幽灵记录
   assertMetaWritable(msg('actionDelete'))
   if (device.status === 'starting') await cancelStartDevice(id)
@@ -1411,13 +1414,51 @@ const deleteFlow = async (id: string): Promise<DeviceSnapshot> => {
   }
 }
 
-const deleteDevice = (id: string): Promise<DeviceSnapshot> => {
+const deleteDevice = (
+  id: string,
+  opts: { bypassOriginBucket?: boolean } = {}
+): Promise<DeviceSnapshot> => {
   // 停止/删除中的重复请求合并到同一次执行
   const flight = deleteFlights.get(id)
   if (flight) return flight
-  const promise = deleteFlow(id).finally(() => deleteFlights.delete(id))
+  const promise = deleteFlow(id, opts).finally(() => deleteFlights.delete(id))
   deleteFlights.set(id, promise)
   return promise
+}
+
+/**
+ * 清除保留根的设备级联（用户 2026-10-12 批复）：共享态下清除保留 SDK 时，
+ * 项目自有出身的设备镜像随之永久消失——设备一并删除（AVD 目录 + 元数据），
+ * 不留永久不可启动的死行。逐台走删除流（含运行中先停），失败逐台收集不中断
+ * 其余（SDK 已删，残留行可切回自有根后手删）。跨桶只读守卫在此放行——
+ * 清除本身就是对另一桶的系统性清理。
+ */
+export const purgeAppOwnedDevices = async (): Promise<{
+  deleted: Array<{ id: string; name: string }>
+  failures: Array<{ name: string; message: string }>
+}> => {
+  await ensureLoaded()
+  const targets = devices
+    .filter((device) => (device.imageSourceOrigin ?? 'app-owned') === 'app-owned')
+    .map((device) => ({ id: device.id, name: device.name }))
+  const deleted: Array<{ id: string; name: string }> = []
+  const failures: Array<{ name: string; message: string }> = []
+  for (const target of targets) {
+    try {
+      await deleteDevice(target.id, { bypassOriginBucket: true })
+      deleted.push(target)
+    } catch (error) {
+      failures.push({ name: target.name, message: messageOf(error) })
+    }
+  }
+  return { deleted, failures }
+}
+
+/** 设置窗清除确认框的计数来源：项目自有出身设备总数（当前视图的另一桶全体） */
+export const appOwnedDeviceCount = async (): Promise<number> => {
+  await ensureLoaded()
+  return devices.filter((device) => (device.imageSourceOrigin ?? 'app-owned') === 'app-owned')
+    .length
 }
 
 const createDevice = async (raw: CreateDeviceInput): Promise<CreateDeviceResult> => {

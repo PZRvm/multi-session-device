@@ -207,6 +207,7 @@ const zhCN = {
   licenseRejected: '用户拒绝 Android SDK 许可，bootstrap 中止',
   sdkNotReady: 'SDK 尚未就绪（缺 cmdline-tools 或 JRE），先完成 SDK 引导',
   sdkInvalidRoot: '非法的 SDK 根',
+  sdkClearPurgeFailed: '保留 SDK 已清除，但部分项目自有设备删除失败（{failures}）；残留设备可切回对应来源后手动删除',
   sdkSharedNotReady:
     '共享 SDK 缺少可用组件（cmdline-tools 或 Android Studio 的 Java）：请在 Android Studio 的 SDK Manager 补装命令行工具，或到设置的 SDK 来源页重新检测/切换来源',
   skinQueryNotWired: '设备皮肤查询未接入',
@@ -652,6 +653,7 @@ const zhTW: ErrorsCopy = {
   licenseRejected: '使用者拒絕 Android SDK 授權，bootstrap 中止',
   sdkNotReady: 'SDK 尚未就緒（缺 cmdline-tools 或 JRE），先完成 SDK 引導',
   sdkInvalidRoot: '非法的 SDK 根',
+  sdkClearPurgeFailed: '保留 SDK 已清除，但部分專案自有裝置刪除失敗（{failures}）；殘留裝置可切回對應來源後手動刪除',
   sdkSharedNotReady:
     '共享 SDK 缺少可用元件（cmdline-tools 或 Android Studio 的 Java）：請在 Android Studio 的 SDK Manager 補裝命令列工具，或到設定的 SDK 來源頁重新偵測/切換來源',
   skinQueryNotWired: '裝置皮膚查詢未接入',
@@ -1111,6 +1113,8 @@ const enUS: ErrorsCopy = {
   licenseRejected: 'User declined the Android SDK license; bootstrap aborted',
   sdkNotReady: 'SDK is not ready (missing cmdline-tools or JRE); finish SDK bootstrap first',
   sdkInvalidRoot: 'Illegal SDK root',
+  sdkClearPurgeFailed:
+    'Retained SDK cleared, but some app-owned devices failed to delete ({failures}); remaining devices can be removed manually after switching back',
   sdkSharedNotReady:
     'The shared SDK is missing usable components (cmdline-tools or the Android Studio Java runtime): install the command-line tools from the Android Studio SDK Manager, or re-detect/switch the source on the SDK source page in Settings',
   skinQueryNotWired: 'Device skin query is not wired',
