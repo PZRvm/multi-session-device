@@ -1,6 +1,6 @@
 ---
 description: SDK 来源切换设计：三态状态机与 sdk.json 持久化、路径迁移引擎（同卷 rename/跨卷 copy+verify+journal 崩溃恢复）、共享模式保留根与清除入口、AVD 镜像引用改写与设置窗交互
-status: in_progress
+status: completed
 created: 2026-10-11
 ---
 
@@ -273,4 +273,5 @@ interface SdkMigrationProgress {
 - **2026-10-12 引导交互两段化（用户反馈续）**：① 许可拒绝 = 用户主动取消——main 侧 handler 匹配 `msg('licenseRejected')` 静默返回当前态（同进程同 locale，匹配可靠），不进错误通道；② 忙碌态改由首个 `sdk:progress` 事件驱动（preload 补 `onSdkProgress` 订阅，此前注释有述实缺）——点击后先 pending（钮禁用、许可弹窗在途、无动画），确认通过开始下载才转「引导中」；引导钮不清 bootstrapable（取消后错误块仍在，可再次发起；真成功画像错误清零按钮自然消失）。新增 2 项测试（进度驱动忙碌、拒绝静默恢复），全量 1132 项通过。
 - **2026-10-12 引导入口补全（用户报障：清除保留 SDK 后切回托管报「SDK 尚未就绪」且重试无效）**：`sdk:bootstrap` 通道与 preload 桥一直存在但**无任何 UI 消费**——原验收清单 ⑤ 的「空根起步 + 向导 bootstrap」半成品，被清除级联暴露。补法：向导画像页错误块在清单报错时探测 `sdk.status()`，JRE/cmdline-tools 缺失则出现「完成 SDK 引导」按钮（busy 态 + 失败文案，wizard 域三键三语）；成功自动重拉清单。共享态的 sdkSharedNotReady（指路 Studio SDK Manager）不走此按钮（探测发现组件在 JBR 语义下由共享根负责）。新增 1 项测试（未就绪→按钮→bootstrap 调用→画像重拉成功），全量 1131 项通过。
 - **2026-10-12 语义修订（用户批复，推翻原设计轴「清除永不触碰设备数据」）**：共享态下清除保留 SDK 时**级联删除全部项目自有设备**——镜像随保留根永久消失，设备留着只会是永不复原的死行。实现：devices 域 `purgeAppOwnedDevices`（逐台走删除流、运行先停、失败逐台收集；跨桶只读守卫在此路径放行——清除即对另一桶的系统性清理）+ `appOwnedDeviceCount`（确认框计数，`sdk:app-owned-device-count` 通道）；清根 handler 先删 SDK 后清设备（主操作优先完成，失败汇总上报）；确认框 detail 换级联警告（含设备数，settings 域新键 `clearConfirmDeviceCascade` 三语）。旧口径 `boundDevicesSuffix` 保留给迁移/二选一流程。新增 1 项域测试（只删项目自有、绕过守卫、共享机独存），全量 1130 项通过。
+- **2026-10-13 用户真机验收通过**：迁移链路 Test plan ①–⑥ 全过——带镜像迁移断链验证、迁移中杀进程恢复续跑、迁移中取消回滚、切共享/切回三分支（直接用/迁回/空根起步+向导引导）、目标非空二选一实操；干净机器画像枚举沿 issue 2026-10-09 口径复核通过。交互延伸批（出身标注/过滤视图/清除级联/引导入口）已另批验收。本 plan 翻 completed。
 - **2026-10-12 追加修复**：迁移完成后进度卡不消失（用户报障）——useSdkSource 终态停留 2.5s 自动收起 + done 标题；source-changed 刷新对滞留活动进度做防御性 done 收口（终态事件丢失兜底）；PaneEmulator.test 增 2 项回归（含 fake timers 与 async act 冲刷的时序写法）。

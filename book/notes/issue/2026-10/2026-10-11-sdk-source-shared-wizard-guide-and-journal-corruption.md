@@ -12,6 +12,7 @@ tags: [SDK 来源, 向导, 崩溃恢复]
 > 2026-10-12：由 [plan 2026-10-12-shared-mode-wizard-installed-only](../../../plans/2026-10-12-shared-mode-wizard-installed-only.md) 承接——共享态向导整体收窄（画像只列已装可用、API 只列已装、隐藏下载/卸载与筛选、缺包指路 Studio 空态）。实施完成前本条保持 open。
 > 2026-10-12 实现批完成（详见 plan 实施记录）：收窄与引导全部落地、1052 项全绿；真机验收后本条翻 resolved。
 > 2026-10-12 补充：收窄批已随 dev 合入并经用户真机使用（共享向导反馈批可证）；真机全量验收清单仍挂在 stage，验收后正式翻 resolved。
+> **2026-10-13 resolved（用户真机验收）**：收窄批全量走查通过（已装可用过滤/下载入口收窄/Studio 装删镜像即见即隐/共享下创建），[plan](../../../plans/2026-10-12-shared-mode-wizard-installed-only.md) 翻 completed。本 issue 四问全部销账关闭。
 
 main 侧守卫已闭环：`sdkDownloadImage`/`sdkUninstallImage`/`sdkBootstrap` 在共享态被 `assertSdkWritable` 拒绝（词条引导回 Studio 或切换来源）。但向导 renderer 未按共享态预处理：下载按钮仍可点，用户点了才收到报错；plan §6 的「向导只列已装镜像、下载项禁用并说明缺包去 Studio 装」只做了 main 侧拦截，未做 UI 预禁用与说明。
 
