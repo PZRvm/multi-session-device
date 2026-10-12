@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { join } from 'node:path'
-import type { CreateDeviceInput, DeviceFrameKind } from '@shared/types'
+import type { CreateDeviceInput, DeviceFrameKind, UpdateDeviceInput } from '@shared/types'
 import { splitPackageName } from '../emulator/catalog'
 import { importedSkinsRoot } from '../emulator/skins'
 import type { ReconcileDirs } from '../emulator/reconcile'
@@ -157,4 +157,19 @@ export const parseLegacyCamera = (
     return { mode: 'webcam', deviceId: text }
   }
   return null
+}
+
+/** 保存载荷守卫（renderer 不可信）：id/指纹必填，可选字段形状核验 */
+export const isUpdateDeviceInput = (value: unknown): value is UpdateDeviceInput => {
+  if (typeof value !== 'object' || value === null) return false
+  const input = value as Record<string, unknown>
+  if (typeof input.id !== 'string' || input.id.length === 0) return false
+  if (typeof input.fingerprint !== 'string' || input.fingerprint.length === 0) return false
+  if (input.name !== undefined && typeof input.name !== 'string') return false
+  if (input.resetDisplayCutout !== undefined && typeof input.resetDisplayCutout !== 'boolean')
+    return false
+  if (input.advancedSettings !== undefined && typeof input.advancedSettings !== 'object') {
+    return false
+  }
+  return true
 }
