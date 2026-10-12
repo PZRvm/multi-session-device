@@ -3,7 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   handle: vi.fn(),
-  showMessageBox: vi.fn(async (_windowOrOptions: unknown, _options?: unknown) => ({
+  showMessageBox: vi.fn<
+    (
+      windowOrOptions: unknown,
+      options?: unknown
+    ) => Promise<{
+      response: number
+      checkboxChecked: boolean
+    }>
+  >(async () => ({
     response: 0,
     checkboxChecked: false
   })),

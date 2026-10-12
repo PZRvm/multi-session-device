@@ -45,6 +45,9 @@ const ReportApp = ({ fetchReport }: ReportAppProps): React.JSX.Element => {
   }, [fetchReport])
 
   useEffect(() => {
+    // 打开即拉取的外部系统同步：load 首行同步置 loading 服务重试路径；初挂时
+    // 状态本就是 loading，一次写入即停，不构成级联渲染
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 初态即 loading，同步置位仅重试需要
     void load()
   }, [load])
 

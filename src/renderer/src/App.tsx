@@ -59,9 +59,13 @@ const App = (): React.JSX.Element => {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  const showAlert = async (title: string, message: string): Promise<void> => {
-    await toApiResult(window.api.dialog.show({ title, message, buttons: [copy.ok] }))
-  }
+  // useCallback：身份随 copy 稳定——下方两个订阅型 effect 可完整声明依赖，无需豁免
+  const showAlert = useCallback(
+    async (title: string, message: string): Promise<void> => {
+      await toApiResult(window.api.dialog.show({ title, message, buttons: [copy.ok] }))
+    },
+    [copy]
+  )
 
   useEffect(() => {
     void load()
@@ -89,8 +93,7 @@ const App = (): React.JSX.Element => {
         seenErrors.current.add(message.eventId)
         void showAlert(copy.runtimeErrorTitle, message.message)
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- showAlert 每渲染新建，语义上只依赖 copy
-    [copy]
+    [copy, showAlert]
   )
 
   // 对账异常汇总：pendingNotification 变化时弹一次原生 dialog，成功展示后确认；
@@ -150,7 +153,7 @@ const App = (): React.JSX.Element => {
         notificationInFlight.current = false
       }
     })()
-  }, [reconciliation, copy, showReconciliationNotice])
+  }, [reconciliation, copy, showReconciliationNotice, showAlert])
 
   // main 共用加载结果；同上下文连点也只保留一个提示，直到提示关闭才允许重试。
   // 返回是否成功（去重命中视为未成功——请求未由本次发起）
