@@ -35,4 +35,17 @@ review 当日用户批复「全部修复」，P2 四项同批清零：
 - **P2-3 已修（编排部分）**：级联编排自 ipc handler 下沉 `clearRetainedWithCascade`（sdkSourceSwitch），handler 只留守卫与本地化上报；新增 4 项域测（先清后删顺序 / 失败聚合不抛 / purge 缺席 passthrough / 非共享态守卫拒绝且级联不启动）。**残留**：`sdk:app-owned-device-count` 通道仍是薄透传（两行、settings 守卫），未单测——留置为 P3。
 - **P2-4 已修**：三语确认文案改「当前/目前/currently {count} 台」时点口径，明示数字为确认时刻快照。
 
-修复批全量 1136 项通过、typecheck/lint/build 干净。P3 八项维持留置。
+修复批全量 1136 项通过、typecheck/lint/build 干净。
+
+**P3 批（用户批复「全部修复」，同日清零八项）**：
+
+- **P3-1 已修**：出身/桶口径单源到 `@shared/deviceOrigin`（originOfMeta/bucketOfShared），main 四处（守卫/级联/计数/快照桶）与 renderer originView 全部换用。
+- **P3-2 已修**：`ReconciliationSummary.unavailableCount` 注释标明全量口径、主窗已视图化经 prop 传递。
+- **P3-3 已修（语义决策）**：跨桶 stopped 设备启动钮禁用（tooltip 通用化「切换来源后可用」）——与"另一侧只读"对齐，消除启动跳视图的语义越界；运行豁免不受影响。
+- **P3-4 已修**：summary 增 `scanError`（可选字段，builder 恒填）——扫描失败时通知不适用视图静默，照常弹；App 判定纳入 + 用例。
+- **P3-5 已修**：三个测试缺口补齐——折叠区行跨桶只读集成断言、引导探测负路径（组件齐全不出引导钮）、通知补漏分支守视图口径（隐藏签名静默 ack 不开窗）。
+- **P3-6 已修**：App.reconciliation beforeEach 显式复位 sourceBucket。
+- **P3-7 已修**：onSdkSourceChanged 改多监听 Set + 退订返回，测试改显式退订（不再覆盖式复位）。
+- **P3-8 已修**：clearRetainedRoot 的 rmTree 失败包裹指引（可能半删、可重试收尾、级联未启动）。
+
+P3 批全量 **1139 项通过**、typecheck/lint/build 干净。本 issue 全部发现清零，关闭。
