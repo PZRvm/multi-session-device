@@ -161,9 +161,10 @@ const DeviceWizard = ({
   // 在，此前无 UI 消费——原 plan「空根起步 + 向导 bootstrap」至此闭环
   const [sdkBootstrapable, setSdkBootstrapable] = useState(false)
   const [bootstrapping, setBootstrapping] = useState(false)
+  const [bootstrapPending, setBootstrapPending] = useState(false)
   const [bootstrapError, setBootstrapError] = useState<string | null>(null)
   useEffect(() => {
-    if (profiles.error === null || sdkBootstrapable || bootstrapping) return
+    if (profiles.error === null || sdkBootstrapable || bootstrapping || bootstrapPending) return
     let alive = true
     void (async () => {
       try {
@@ -182,14 +183,20 @@ const DeviceWizard = ({
     return () => {
       alive = false
     }
-  }, [profiles.error, sdkBootstrapable, bootstrapping])
+  }, [profiles.error, sdkBootstrapable, bootstrapping, bootstrapPending])
+  // 两段式忙碌（用户 2026-10-12 反馈）：点击先只是 pending（钮禁用、许可弹窗在途），
+  // 首个 sdk:progress 事件（= 许可已确认、组件开始下载）才转「引导中」spinner——
+  // 许可拒绝在 main 侧静默返回当前态，这里不报错，按钮原地恢复
   const runSdkBootstrap = useCallback(async (): Promise<void> => {
-    if (bootstrapping) return
-    setBootstrapping(true)
+    if (bootstrapPending || bootstrapping) return
+    setBootstrapPending(true)
     setBootstrapError(null)
+    const offProgress =
+      window.api?.sdk?.onSdkProgress?.(() => setBootstrapping(true)) ?? (() => {})
     try {
       await window.api?.sdk?.bootstrap()
-      setSdkBootstrapable(false)
+      // 不清 sdkBootstrapable：许可拒绝静默返回后错误块仍在，按钮须可再次发起；
+      // 真成功时画像错误清零，错误块（含按钮）自然消失
       void reloadProfiles()
     } catch (error) {
       setBootstrapError(
@@ -198,9 +205,11 @@ const DeviceWizard = ({
         })
       )
     } finally {
+      offProgress()
+      setBootstrapPending(false)
       setBootstrapping(false)
     }
-  }, [bootstrapping, reloadProfiles])
+  }, [bootstrapPending, bootstrapping, reloadProfiles])
   // 重开恢复暂存（review P3：模块级可变量下沉为实例 ref；仍不入 state——
   // 绕过请求代次守卫的口径不变）
   const lastActiveRef = useRef<{
@@ -664,7 +673,10 @@ const DeviceWizard = ({
         />,
         sdkBootstrapable ? (
           <>
-            <Button onClick={() => void runSdkBootstrap()} disabled={bootstrapping}>
+            <Button
+              onClick={() => void runSdkBootstrap()}
+              disabled={bootstrapPending || bootstrapping}
+            >
               <span className="bootstrap-label">
                 {bootstrapping ? (
                   <Loader2 size={12} aria-hidden="true" className="spinner" />

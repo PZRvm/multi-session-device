@@ -314,7 +314,16 @@ export function registerSdkIpc(deps: SdkIpcDeps = {}): void {
     assertSdkWritable(IPC_CHANNELS.sdkBootstrap)
     const root = resolveRoot(raw)
     const snapshot = await detectSdk(root)
-    if (!snapshot.licensed) await confirmLicenses()
+    if (!snapshot.licensed) {
+      try {
+        await confirmLicenses()
+      } catch (error) {
+        // 许可拒绝 = 用户主动取消（非失败）：静默返回当前态，不进错误通道
+        // （消息匹配限本进程同 locale，msg 输出即抛出文本）
+        if (error instanceof Error && error.message === msg('licenseRejected')) return snapshot
+        throw error
+      }
+    }
     return bootstrapSdk(root, {}, pushProgress)
   })
 

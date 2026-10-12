@@ -72,6 +72,16 @@ export const sdkApi = {
       ipcRenderer.removeListener(IPC_CHANNELS.sdkMigrateProgress, listener)
     }
   },
+  /** bootstrap 进度订阅（许可确认通过、组件开始下载后才首个事件——忙碌态由此驱动） */
+  onSdkProgress: (callback: (progress: SdkProgress) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, progress: SdkProgress): void => {
+      callback(progress)
+    }
+    ipcRenderer.on(IPC_CHANNELS.sdkProgress, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.sdkProgress, listener)
+    }
+  },
   onProgress: (callback: (progress: SdkProgress) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, progress: SdkProgress): void => {
       callback(progress)
