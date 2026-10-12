@@ -14,7 +14,6 @@ import type {
   DeviceConfigMismatch,
   DeviceEditSnapshot,
   DeviceEditStorageInfo,
-  DeviceFrameKind,
   DeviceMeta,
   DeviceRuntimeView,
   DeviceSnapshot,
@@ -63,36 +62,22 @@ import {
   settingsToRunnerArgs
 } from '../emulator/settings'
 import { avdmanagerPathFor, listDeviceProfiles } from '../emulator/profiles'
-import {
-  loadFrameKindIndex,
-  sdklibJarPathFor,
-  type FrameKindIndex
-} from '../emulator/profileMetadata'
+import { sdklibJarPathFor } from '../emulator/profileMetadata'
 import {
   CHECK_TIMEOUT_MS,
   checkDeviceHealth,
   runReconciliation,
-  type ReconcileDirs,
   type ReconcileOutcome
 } from '../emulator/reconcile'
 import { awaitWithAbort } from '../emulator/abort'
 import { isMigrationActive } from '../emulator/sdkMigration'
 import { isSharedReadOnly } from '../emulator/sdkSource'
 import { bucketOfShared, originOfMeta } from '@shared/deviceOrigin'
-import {
-  ensureSharedServer,
-  candidateAdbPaths,
-  listAdbSerials,
-  resolveAdbExecutable,
-  scrubAdbEnv,
-  type AdbExecutable
-} from '../emulator/adb'
-import { PortAllocator, tcpProbe } from '../emulator/ports'
+import { ensureSharedServer } from '../emulator/adb'
 import { createRunner, StartCancelledError } from '../emulator/runner'
 import { getMainWindow } from '../window'
 import { getReportWindow } from '../window/report'
 import { wizardContextOf } from '../window/wizard'
-import { importedSkinsRoot } from '../emulator/skins'
 import { listWebcams } from '../emulator/cameras'
 import {
   arbitrateCameras,
@@ -102,118 +87,28 @@ import {
 import { activePackageOp, beginPackageCreation, endPackageCreation } from '../emulator/packageOps'
 import { resetDisplayCutout } from '../emulator/displayCutout'
 import { configBaseline, configMismatchesOf } from '../emulator/configDrift'
-import { javaHomeFor, resolveSdkRoot } from '../emulator/sdkSource'
+import { javaHomeFor } from '../emulator/sdkSource'
 import { androidUserHomeFor } from '../emulator/androidUserHome'
+import {
+  ADVICE_RE,
+  adbBinaryPath,
+  avdDirs,
+  avdHome,
+  ensureFrameIndex,
+  frameKindOf,
+  isCreateDeviceInput,
+  isDeviceIdInput,
+  isRenameInput,
+  messageOf,
+  normalizeName,
+  ports,
+  reconcileDirs,
+  requireAdb,
+  sdkRoot,
+  skinDirectoryFor
+} from './environment'
 
-/** 底层错误自带建议从句的多语言标记（zh「请」/ zh-TW「請」/ en "please"） */
-const ADVICE_RE = /[請请]|please/i
-
-/** skinRef → 皮肤目录（sdk:* 解析 SDK skins；其余查应用库）。skinRef 已按能力
- * 枚举（skinIds 白名单）归一化校验，id 来源受信扫描（uuid/目录名），无逃逸面 */
-const skinDirectoryFor = (skinRef: string): string => {
-  if (skinRef.startsWith('sdk:')) {
-    return join(sdkRoot(), 'skins', skinRef.slice(4))
-  }
-  const id = skinRef.replace(/^(imported|downloaded):/, '')
-  return join(importedSkinsRoot(app.getPath('userData')), id)
-}
-
-// SDK 根经 sdkSource 统一解析（managed/custom/shared-studio；avd-home 恒在应用数据目录）
-const sdkRoot = (): string => resolveSdkRoot()
-const avdHome = (): string => join(app.getPath('userData'), 'avd-home')
-const avdDirs = (): { avdHome: string; sdkRoot: string; javaHome: string; userHome: string } => ({
-  avdHome: avdHome(),
-  sdkRoot: sdkRoot(),
-  // 共享 Studio SDK 时 avdmanager 跑在 Studio JBR 上（plan 2026-10-11）；
-  // android-user 恒定应用数据目录（issue 2026-10-11 问题三）
-  javaHome: javaHomeFor(sdkRoot()),
-  userHome: androidUserHomeFor()
-})
-/** 对账受控根：avd-home + SDK 根 + 应用皮肤库（skin.path 越界判定用） */
-const reconcileDirs = (): ReconcileDirs => ({
-  avdHome: avdHome(),
-  sdkRoot: sdkRoot(),
-  skinsRoot: importedSkinsRoot(app.getPath('userData'))
-})
-
-const MAX_NAME_LENGTH = 50
-
-const normalizeName = (value: unknown): string | null => {
-  if (typeof value !== 'string') return null
-  const name = value.trim()
-  if (name.length === 0 || name.length > MAX_NAME_LENGTH) return null
-  return name
-}
-
-/** renderer payload 不可信，进业务前先过守卫（coding-style IPC 纪律） */
-const isCreateDeviceInput = (value: unknown): value is CreateDeviceInput => {
-  if (typeof value !== 'object' || value === null) return false
-  const input = value as Record<string, unknown>
-  return (
-    typeof input.profileId === 'string' &&
-    input.profileId.length > 0 &&
-    typeof input.profileLabel === 'string' &&
-    input.profileLabel.length > 0 &&
-    typeof input.imagePackageName === 'string' &&
-    splitPackageName(input.imagePackageName) !== null &&
-    normalizeName(input.name) !== null &&
-    (input.advancedSettings === null ||
-      input.advancedSettings === undefined ||
-      typeof input.advancedSettings === 'object')
-  )
-}
-
-const isRenameInput = (value: unknown): value is { id: string; name: string } => {
-  if (typeof value !== 'object' || value === null) return false
-  const input = value as Record<string, unknown>
-  return typeof input.id === 'string' && input.id.length > 0 && normalizeName(input.name) !== null
-}
-
-const isDeviceIdInput = (value: unknown): value is { id: string } => {
-  if (typeof value !== 'object' || value === null) return false
-  const input = value as Record<string, unknown>
-  return typeof input.id === 'string' && input.id.length > 0
-}
-
-// ---- 共享 adb 可执行文件（解析一次；start 前经 ensureSharedServer 验兼容）----
-
-let adbExecutable: AdbExecutable | null = null
-const requireAdb = async (): Promise<AdbExecutable> => {
-  if (!adbExecutable) {
-    adbExecutable = await resolveAdbExecutable(candidateAdbPaths(sdkRoot()))
-  }
-  return adbExecutable
-}
-
-const messageOf = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
-
-/** scrcpy 会话与 runner 共用：已解析的 adb 二进制（未解析时回落应用自有路径） */
-export const adbBinaryPath = (): string =>
-  adbExecutable?.path ?? join(sdkRoot(), 'platform-tools', 'adb')
-
-/** 工具子进程统一环境：SDK 与用户目录全部指进应用自有目录（architecture 隔离不变量） */
-export const androidToolEnv = (): NodeJS.ProcessEnv =>
-  scrubAdbEnv({
-    ...process.env,
-    ANDROID_SDK_ROOT: sdkRoot(),
-    ANDROID_HOME: sdkRoot(),
-    ANDROID_AVD_HOME: avdHome(),
-    ANDROID_USER_HOME: androidUserHomeFor(),
-    ANDROID_EMULATOR_HOME: androidUserHomeFor()
-  })
-
-const ports = new PortAllocator({
-  probeTcp: tcpProbe,
-  // server 尚不可用时按无外部登记处理，spawn 前还有一道 serial 检查兜底
-  adbSerials: async () => {
-    try {
-      return await listAdbSerials((await requireAdb()).path)
-    } catch {
-      return new Set<string>()
-    }
-  }
-})
+export { adbBinaryPath, androidToolEnv } from './environment'
 
 // ---- 主进程是设备列表与运行状态的唯一事实源（architecture 边界不变量）----
 // status/lastError/serial/runId 只活在这里的内存里，重启一律「停止」，不入盘。
@@ -259,17 +154,6 @@ const streamBridge: {
   stopped?: (id: string) => void
   beforeKill?: (id: string, runId: string) => Promise<void>
 } = {}
-
-// ---- 画像外观索引（派生展示提示，不入盘）：SDK 缺失/解析失败收敛为空索引 ----
-let frameIndex: FrameKindIndex | null = null
-
-/** 每次调用重验 JAR stat（SDK 更新后自动失效重建）；loadFrameKindIndex 内部全兜底不抛 */
-const ensureFrameIndex = async (): Promise<void> => {
-  frameIndex = await loadFrameKindIndex(sdkRoot())
-}
-
-const frameKindOf = (profileId: string): DeviceFrameKind | undefined =>
-  frameIndex?.lookup(profileId)
 
 export function attachDeviceStreamBridge(bridge: typeof streamBridge): void {
   Object.assign(streamBridge, bridge)
@@ -1067,7 +951,7 @@ const runner = createRunner({
   avdHome,
   userHome: androidUserHomeFor,
   emulatorPath: () => join(sdkRoot(), 'emulator', 'emulator'),
-  adbPath: () => adbExecutable?.path ?? join(sdkRoot(), 'platform-tools', 'adb'),
+  adbPath: adbBinaryPath,
   ports,
   ensureAdbServer: async () => {
     const adb = await requireAdb()
