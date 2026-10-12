@@ -4,6 +4,7 @@ import { WIZARD_COPY, format } from '@shared/i18n'
 import type {
   DeviceProfile,
   ImageCatalogResult,
+  SdkSnapshot,
   SdkUninstallState,
   ImageEntry,
   SdkImageProgress,
@@ -480,6 +481,8 @@ const installSdkStub = (parts: {
   images?: Mock<() => Promise<ImageCatalogResult>>
   downloadImage?: Mock<(packageName: string) => Promise<void>>
   cancelDownloadImage?: Mock<(packageName: string) => Promise<void>>
+  status?: Mock<() => Promise<SdkSnapshot>>
+  bootstrap?: Mock<() => Promise<SdkSnapshot>>
 }): {
   emitProgress: (progress: SdkImageProgress) => void
   emitUninstallState: (state: SdkUninstallState) => void
@@ -498,6 +501,18 @@ const installSdkStub = (parts: {
       downloadImage: parts.downloadImage ?? vi.fn(async () => {}),
       cancelDownloadImage: parts.cancelDownloadImage ?? vi.fn(async () => {}),
       wizardCapabilities: vi.fn(async () => CAPABILITIES),
+      // 引导入口默认「组件齐全」——既有用例不触发引导按钮
+      status:
+        parts.status ??
+        vi.fn(async () => ({
+          root: '/sdk',
+          jre: { present: true },
+          cmdlineTools: { present: true },
+          platformTools: { present: true },
+          emulator: { present: true },
+          licensed: true
+        })),
+      bootstrap: parts.bootstrap ?? vi.fn(async () => undefined as never),
       onImageProgress: (cb: (progress: SdkImageProgress) => void): (() => void) => {
         handle.emitProgress = cb
         return () => {}
@@ -533,6 +548,44 @@ describe('DeviceWizard 清单加载反馈（代次守卫回归）', () => {
     await screen.findByText('API 36')
     fireEvent.click(screen.getByText('API 36'))
     expect((screen.getByLabelText(copy.nameLabel) as HTMLInputElement).value).toBe('Pixel 8 API 36')
+  })
+
+  it('SDK 未就绪（清除保留根后的空根场景）：错误块出现「完成 SDK 引导」，成功后自动重拉画像', async () => {
+    let calls = 0
+    const profiles = vi.fn(async (): Promise<DeviceProfile[]> => {
+      calls += 1
+      if (calls === 1) throw new Error('SDK 尚未就绪（缺 cmdline-tools 或 JRE），先完成 SDK 引导')
+      return PROFILES
+    })
+    const bootstrap = vi.fn(async (): Promise<SdkSnapshot> => ({
+      root: '/sdk',
+      jre: { present: true },
+      cmdlineTools: { present: true },
+      platformTools: { present: true },
+      emulator: { present: true },
+      licensed: true
+    }))
+    installSdkStub({
+      profiles,
+      status: vi.fn(async (): Promise<SdkSnapshot> => ({
+        root: '/sdk',
+        jre: { present: false },
+        cmdlineTools: { present: false },
+        platformTools: { present: false },
+        emulator: { present: false },
+        licensed: false
+      })),
+      bootstrap
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    expect(await screen.findByText(/SDK 尚未就绪/)).toBeTruthy()
+    const bootstrapButton = await screen.findByRole('button', { name: copy.sdkBootstrapAction })
+    fireEvent.click(bootstrapButton)
+    // 引导成功 → 按钮消失、画像自动重拉成功
+    expect(await screen.findByText('Pixel 8')).toBeTruthy()
+    expect(bootstrap).toHaveBeenCalledTimes(1)
+    expect(profiles).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('button', { name: copy.sdkBootstrapAction })).toBeNull()
   })
 
   it('仅镜像失败：第二页显示错误与镜像重试，画像数据保留可回退', async () => {

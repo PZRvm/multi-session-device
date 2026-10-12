@@ -155,6 +155,52 @@ const DeviceWizard = ({
     fetchProfiles,
     data?.profiles
   )
+  // SDK 引导入口（用户 2026-10-12 需求：清除保留 SDK 后切回托管，根已空要能重建）：
+  // 画像清单报「SDK 尚未就绪」时探测组件状态，JRE/cmdline-tools 缺失 → 错误块出现
+  // 「完成 SDK 引导」按钮，成功后自动重拉清单。bootstrap 通道（sdk:bootstrap）一直
+  // 在，此前无 UI 消费——原 plan「空根起步 + 向导 bootstrap」至此闭环
+  const [sdkBootstrapable, setSdkBootstrapable] = useState(false)
+  const [bootstrapping, setBootstrapping] = useState(false)
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null)
+  useEffect(() => {
+    if (profiles.error === null || sdkBootstrapable || bootstrapping) return
+    let alive = true
+    void (async () => {
+      try {
+        const snapshot = await window.api?.sdk?.status()
+        if (
+          alive &&
+          snapshot !== undefined &&
+          (!snapshot.cmdlineTools.present || !snapshot.jre.present)
+        ) {
+          setSdkBootstrapable(true)
+        }
+      } catch {
+        // 探测失败保持纯重试——引导按钮宁缺毋滥
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [profiles.error, sdkBootstrapable, bootstrapping])
+  const runSdkBootstrap = useCallback(async (): Promise<void> => {
+    if (bootstrapping) return
+    setBootstrapping(true)
+    setBootstrapError(null)
+    try {
+      await window.api?.sdk?.bootstrap()
+      setSdkBootstrapable(false)
+      void reloadProfiles()
+    } catch (error) {
+      setBootstrapError(
+        format(WIZARD_COPY[useLocaleStore.getState().locale].sdkBootstrapFailed, {
+          message: error instanceof Error ? error.message : String(error)
+        })
+      )
+    } finally {
+      setBootstrapping(false)
+    }
+  }, [bootstrapping, reloadProfiles])
   // 重开恢复暂存（review P3：模块级可变量下沉为实例 ref；仍不入 state——
   // 绕过请求代次守卫的口径不变）
   const lastActiveRef = useRef<{
@@ -555,7 +601,8 @@ const DeviceWizard = ({
     loadingText: string,
     refreshingText: string,
     emptyText: string,
-    content: React.JSX.Element
+    content: React.JSX.Element,
+    errorExtra: React.ReactNode = null
   ): React.JSX.Element => {
     const waiting = resource.phase === 'loading' || resource.phase === 'idle'
     if (waiting && resource.data.length === 0) {
@@ -572,6 +619,7 @@ const DeviceWizard = ({
           <div className="error-block" role="alert">
             <span className="error-text">{resource.error}</span>
             <Button onClick={retry}>{copy.retry}</Button>
+            {errorExtra}
           </div>
         ) : null}
         {waiting ? (
@@ -613,7 +661,20 @@ const DeviceWizard = ({
               : null
           }
           emptyNote={sharedNoImages ? copy.sharedModeNoImages : null}
-        />
+        />,
+        sdkBootstrapable ? (
+          <>
+            <Button onClick={() => void runSdkBootstrap()} disabled={bootstrapping}>
+              {bootstrapping ? (
+                <Loader2 size={12} aria-hidden="true" className="spinner" />
+              ) : null}
+              {bootstrapping ? copy.sdkBootstrapBusy : copy.sdkBootstrapAction}
+            </Button>
+            {bootstrapError !== null ? (
+              <span className="error-text">{bootstrapError}</span>
+            ) : null}
+          </>
+        ) : null
       )
     }
     return renderCatalogShell(
