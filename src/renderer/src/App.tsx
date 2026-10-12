@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Plus, ScrollText } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
@@ -87,19 +87,14 @@ const App = (): React.JSX.Element => {
   // seen 只在成功展示后登记（review P3——失败/中途取消不压制后续重试），异常清零时
   // 复位 seen：同内容异常复发时重新提示（与 main 侧 acknowledged 复位对称）
   const seenSignatures = useRef(new Set<string>())
-  useEffect(() => {
-    if (reconciliation.signature === null) {
-      seenSignatures.current.clear()
-      return
-    }
-    const { signature, pendingNotification } = reconciliation
-    if (!pendingNotification) return
-    if (seenSignatures.current.has(signature)) return
-    void (async () => {
-      // 摘要式原生通知（plan 2026-10-12 设计轴 1）：完整明细走应用内面板，
-      // 弹窗只报概况——按钮常在屏内，「查看详情」直接开面板
-      const current = useDeviceStore.getState().reconciliation
-      if (current.signature !== signature || !current.pendingNotification) return
+  // 在途通知互斥（弹三次回归的修法）：启动期 reconciliation 会推送多次，而 seen
+  // 登记发生在弹窗关闭后——窗口开着时到达的推送全都会通过 seen 守卫重入。
+  // 通知在屏期间拦下所有重入；关闭后由 seen/acknowledge 语义决定是否再弹。
+  const notificationInFlight = useRef(false)
+  /** 摘要式原生通知（plan 2026-10-12 设计轴 1）：完整明细走应用内面板，弹窗只报
+   *  概况——按钮常在屏内，「查看详情」直接开面板。确认/查看都登记 seen 并 ack。 */
+  const showReconciliationNotice = useCallback(
+    async (signature: string): Promise<void> => {
       const shown = await toApiResult(
         window.api.dialog.show({
           title: copy.reconcileSummaryTitle,
@@ -112,8 +107,27 @@ const App = (): React.JSX.Element => {
       seenSignatures.current.add(signature)
       await toApiResult(window.api.devices.acknowledgeReconciliation(signature))
       if (shown.data.response === 0) setReportOpen(true)
+    },
+    [copy]
+  )
+  useEffect(() => {
+    if (reconciliation.signature === null) {
+      seenSignatures.current.clear()
+      return
+    }
+    const { signature, pendingNotification } = reconciliation
+    if (!pendingNotification) return
+    if (seenSignatures.current.has(signature)) return
+    if (notificationInFlight.current) return
+    notificationInFlight.current = true
+    void (async () => {
+      try {
+        await showReconciliationNotice(signature)
+      } finally {
+        notificationInFlight.current = false
+      }
     })()
-  }, [reconciliation, copy])
+  }, [reconciliation, copy, showReconciliationNotice])
 
   // main 共用加载结果；同上下文连点也只保留一个提示，直到提示关闭才允许重试。
   // 返回是否成功（去重命中视为未成功——请求未由本次发起）
