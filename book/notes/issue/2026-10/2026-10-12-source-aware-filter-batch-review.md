@@ -28,4 +28,11 @@ tags: [code-review, sdk-source, device-list, origin, store, ipc]
 
 ## 处置
 
-按 workflow 只记录不修复。P2-1/P2-2 为小改动，P2-3 为补测试——建议用户批复后作为合并前修复批一次处理；P2-4 可择机；P3 全部留置。
+review 当日用户批复「全部修复」，P2 四项同批清零：
+
+- **P2-1 已修**：edit 禁用改 `crossBucket && status !== 'running'`——跨桶运行设备恢复「查看配置」（保存由 updateDeviceConfig 跨桶守卫拦），停止/删除禁用不变；测试补运行态编辑可用/删除禁用断言。
+- **P2-2 已修**：`confirmLicenses` 改返回 boolean（拒绝=取消），bootstrap handler `if (!(await confirmLicenses())) return snapshot`——文本匹配契约删除，`licenseRejected` 词条三语移除。
+- **P2-3 已修（编排部分）**：级联编排自 ipc handler 下沉 `clearRetainedWithCascade`（sdkSourceSwitch），handler 只留守卫与本地化上报；新增 4 项域测（先清后删顺序 / 失败聚合不抛 / purge 缺席 passthrough / 非共享态守卫拒绝且级联不启动）。**残留**：`sdk:app-owned-device-count` 通道仍是薄透传（两行、settings 守卫），未单测——留置为 P3。
+- **P2-4 已修**：三语确认文案改「当前/目前/currently {count} 台」时点口径，明示数字为确认时刻快照。
+
+修复批全量 1136 项通过、typecheck/lint/build 干净。P3 八项维持留置。
