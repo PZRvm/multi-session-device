@@ -145,6 +145,26 @@ describe('App 对账汇总提示（plan 设计 5）', () => {
     expect(acknowledgeReconciliation).not.toHaveBeenCalled()
   })
 
+  it('另一来源桶的异常不弹原生通知——静默登记 seen 并代为 ack（用户 2026-10-12 复核续）', async () => {
+    const hiddenSnapshot: DeviceSnapshot = {
+      ...snapshot,
+      devices: [{ ...device, imageSourceOrigin: 'shared-studio' }],
+      sourceBucket: 'app-owned'
+    }
+    ;(
+      (window as unknown as { api: { devices: { list: unknown } } }).api.devices.list as ReturnType<
+        typeof vi.fn
+      >
+    ).mockResolvedValue(hiddenSnapshot)
+    render(<App />)
+    await waitFor(() => expect(useDeviceStore.getState().loaded).toBe(true))
+    await waitFor(() =>
+      expect(acknowledgeReconciliation).toHaveBeenCalledWith('sig-anomaly-1')
+    )
+    expect(dialog).not.toHaveBeenCalled()
+    expect(reportWindowOpen).not.toHaveBeenCalled()
+  })
+
   it('列表常驻：异常设备在汇总条与健康原因行可见，重新检查可触发', async () => {
     render(<App />)
     expect(await screen.findByRole('status')).toBeTruthy()

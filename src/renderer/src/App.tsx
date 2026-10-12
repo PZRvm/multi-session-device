@@ -26,6 +26,28 @@ import { splitByOriginView } from './components/originView'
 /** 日志 dock 展开时画布至少保留的宽度（模拟器居中自适应的保底；不足则整栏退化） */
 const LOG_CANVAS_MIN_WIDTH = 560
 
+/**
+ * 对账异常是否只落在另一来源桶（视图口径，用户 2026-10-12 复核续）：当前可见集
+ * 无设备异常、且无库级异常/孤立组时，原生通知与报告窗都不打扰——另一桶设备的
+ * 镜像不在当前根属预期（切回来就能用），不是值得打断用户的事。明细仍走
+ * 「查看详情」与折叠区展开后的行内提示。
+ */
+const reconcileAnomalyHiddenFromView = (): boolean => {
+  const state = useDeviceStore.getState()
+  const { active } = splitByOriginView(state.devices, state.sourceBucket)
+  const visibleAffected = active.some(
+    (device) =>
+      device.availability !== undefined &&
+      device.availability.state !== 'valid' &&
+      device.availability.state !== 'checking'
+  )
+  return (
+    !visibleAffected &&
+    state.reconciliation.orphanCount === 0 &&
+    state.storeHealth.state === 'ok'
+  )
+}
+
 const App = (): React.JSX.Element => {
   const devices = useDeviceStore((state) => state.devices)
   const selectedId = useDeviceStore((state) => state.selectedId)
@@ -133,6 +155,13 @@ const App = (): React.JSX.Element => {
     const { signature, pendingNotification } = reconciliation
     if (!pendingNotification) return
     if (seenSignatures.current.has(signature)) return
+    // 视图口径静默（用户复核续）：异常全在另一来源桶——登记 seen 并代为 ack
+    // （main 侧该签名不再待提示，重启也不复发），不弹原生通知
+    if (reconcileAnomalyHiddenFromView()) {
+      seenSignatures.current.add(signature)
+      void toApiResult(window.api.devices.acknowledgeReconciliation(signature))
+      return
+    }
     if (notificationInFlight.current) return
     notificationInFlight.current = true
     void (async () => {
@@ -148,8 +177,11 @@ const App = (): React.JSX.Element => {
         ) {
           seenSignatures.current.add(latest.signature)
           await toApiResult(window.api.devices.acknowledgeReconciliation(latest.signature))
-          const opened = await toApiResult(window.api.report.openWindow())
-          if (!opened.ok) await showAlert(copy.reconcileDetailTitle, opened.error)
+          // 补漏同样守视图口径：新异常只在另一桶时静默 ack，不开报告窗
+          if (!reconcileAnomalyHiddenFromView()) {
+            const opened = await toApiResult(window.api.report.openWindow())
+            if (!opened.ok) await showAlert(copy.reconcileDetailTitle, opened.error)
+          }
         }
       } finally {
         notificationInFlight.current = false
