@@ -225,6 +225,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-12-app-mount-subscription-test-mock-shape.md](notes/learn/2026-10/2026-10-12-app-mount-subscription-test-mock-shape.md) — 断网开关批经验——App 挂载期新增 window.api 订阅必须同步补齐既有测试的 mock 形状（22 项连环挂）；vi.fn mock 带参函数要显式参数类型
 - [2026-10-12-freshdomain-resetmodules-stale-import.md](notes/learn/2026-10/2026-10-12-freshdomain-resetmodules-stale-import.md) — 来源感知列表批经验——vi.resetModules 后静态 import 成旧模块（测试设态必须动态重取同实例）；每调用现建 deps 的模块没有单例拦截点，监听器注册表是全覆盖分流的正解
 - [2026-10-12-merge-readme-regen-and-lint-baseline.md](notes/learn/2026-10/2026-10-12-merge-readme-regen-and-lint-baseline.md) — 双分支合并 review 经验——生成物 README 冲突必须重跑生成器收敛（手拼必漂移）；lint/测试「通过」注记要复跑验证，基线问题在两父提交上分别复跑定位归属
+- [2026-10-12-persistent-field-store-projection-checklist.md](notes/learn/2026-10/2026-10-12-persistent-field-store-projection-checklist.md) — 持久字段新增的完整落点清单——types/toMeta 之外还有 store 白名单投影与校验；漏投影的表象是读丢字段+切来源即冻结写入（误判外部修改）
 
 ### notes/task/
 
@@ -325,4 +326,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 235 documents -->
+<!-- 236 documents -->
