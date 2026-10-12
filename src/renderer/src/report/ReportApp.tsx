@@ -129,15 +129,17 @@ const ReportBody = ({ report }: { report: ReconcileReport }): React.JSX.Element 
               <p className="report-line">
                 {format(copy.orphanGroup, { id: orphan.id, detail: orphan.detail })}
               </p>
-              <button
-                type="button"
-                className="finder-btn"
-                onClick={() => {
-                  void window.api.dialog.showItemInFolder(orphan.path)
-                }}
-              >
-                {copy.showInFinder}
-              </button>
+              <div className="orphan-actions">
+                <button
+                  type="button"
+                  className="finder-btn"
+                  onClick={() => {
+                    void window.api.dialog.showItemInFolder(orphan.path)
+                  }}
+                >
+                  {copy.showInFinder}
+                </button>
+              </div>
             </div>
           ))}
         </section>
@@ -166,9 +168,18 @@ const ReportLayout = styled.div`
 
   .orphan-row {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+
+  .orphan-row .report-line {
+    align-self: stretch;
+  }
+
+  .orphan-actions {
+    display: flex;
+    justify-content: flex-end;
   }
 
   .finder-btn {
