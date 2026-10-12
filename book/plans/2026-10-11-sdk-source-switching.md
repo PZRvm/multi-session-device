@@ -270,4 +270,5 @@ interface SdkMigrationProgress {
 - **批 6**：`useSdkSource` hook + `PaneEmulator` 交互化（三态/确认卡/二选一卡/进度/崩溃恢复横幅/保留根清除，原生 dialog 确认必经，三语词条 49 键 ×3）+ `sdk:choose-custom-root` 目录选择；9 项交互测试 + 设置窗既有用例更新。
 - 验证：1046 项测试全绿（6 项原有跳过）、typecheck/lint/build 通过；踩坑与遗留见 [learn](../notes/learn/2026-10/2026-10-11-sdk-source-async-predicate-and-sync-guard.md) 与 [issue](../notes/issue/2026-10/2026-10-11-sdk-source-shared-wizard-guide-and-journal-corruption.md)。
 - **未做**：真机集成验收（Test plan ①–⑥——带镜像迁移断链验证、杀进程恢复、切共享/切回三分支、二选一实操）；干净机器画像枚举沿 issue 2026-10-09 口径待复核。
+- **2026-10-12 语义修订（用户批复，推翻原设计轴「清除永不触碰设备数据」）**：共享态下清除保留 SDK 时**级联删除全部项目自有设备**——镜像随保留根永久消失，设备留着只会是永不复原的死行。实现：devices 域 `purgeAppOwnedDevices`（逐台走删除流、运行先停、失败逐台收集；跨桶只读守卫在此路径放行——清除即对另一桶的系统性清理）+ `appOwnedDeviceCount`（确认框计数，`sdk:app-owned-device-count` 通道）；清根 handler 先删 SDK 后清设备（主操作优先完成，失败汇总上报）；确认框 detail 换级联警告（含设备数，settings 域新键 `clearConfirmDeviceCascade` 三语）。旧口径 `boundDevicesSuffix` 保留给迁移/二选一流程。新增 1 项域测试（只删项目自有、绕过守卫、共享机独存），全量 1130 项通过。
 - **2026-10-12 追加修复**：迁移完成后进度卡不消失（用户报障）——useSdkSource 终态停留 2.5s 自动收起 + done 标题；source-changed 刷新对滞留活动进度做防御性 done 收口（终态事件丢失兜底）；PaneEmulator.test 增 2 项回归（含 fake timers 与 async act 冲刷的时序写法）。
