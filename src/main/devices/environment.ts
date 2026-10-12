@@ -141,3 +141,20 @@ export const ensureFrameIndex = async (): Promise<void> => {
 
 export const frameKindOf = (profileId: string): DeviceFrameKind | undefined =>
   frameIndex?.lookup(profileId)
+
+/** legacy 摄像头键解析：known 模式直映射（virtualscene 接纳小写与历史 camelCase），
+ *  webcamN 保留资源 id，其余不可识别（启动仲裁与编辑草稿共用单源） */
+export const parseLegacyCamera = (
+  text: string | undefined
+): { mode: 'none' | 'emulated' | 'virtualScene' | 'webcam'; deviceId: string | null } | null => {
+  if (text === 'none' || text === 'emulated') {
+    return { mode: text, deviceId: null }
+  }
+  if (text === 'virtualscene' || text === 'virtualScene') {
+    return { mode: 'virtualScene', deviceId: null }
+  }
+  if (text !== undefined && /^webcam\d+$/.test(text)) {
+    return { mode: 'webcam', deviceId: text }
+  }
+  return null
+}
