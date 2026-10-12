@@ -196,3 +196,10 @@ const wrappedBroadcast = (channel, payload) => {
 
 - stage05 SDK 来源设置步骤附本批注记；[learn：freshDomain 模块重置后的静态 import 陷阱](../notes/learn/2026-10/2026-10-12-freshdomain-resetmodules-stale-import.md)。
 - 本 plan 保持 in_progress：验收清单 ①–⑦ 全过后翻 completed。
+
+### 验收期修复批 2 — 2026-10-12（用户真机三连报障的统一根因，已修并复核通过）
+
+- **根因**：`imageSourceOrigin` 未登记进 store 白名单投影（`projectV2Meta`——「未知顶层/嵌套键不进内存、不随写回盘」）——写侧落盘、**读侧剥离**。三条症状一因：① 创建后切来源 → 重查 `rereadStore` 以投影版（缺字段）比对内存版（带字段）→ 误判「外部修改」→ 冻结写入 → 无法创建/删除；② 重启后投影=内存 → 解冻能用（假象，代价是字段丢失）；③ 每次读盘出身被剥 → 全数回落 app-owned，双通道分类消失。
+- **修法**（`e3cd0b4`）：照 `cutoutResetPending` 模式补投影 + `firstInvalidV2Field` 闭集校验；store.test 增跨读盘保留回归。全量 1126 项通过、typecheck/lint/build 干净。
+- **用户真机复核通过**（「这次运行效果对了」）：切共享建设备 → 切回托管删除/创建 → 重启分类保留，三症状全消。
+- 教训入 [learn：持久字段四处同步清单](../notes/learn/2026-10/2026-10-12-persistent-field-store-projection-checklist.md)。另：仓库无 `requestSingleInstanceLock`，多构建并行共享 userData 会互踩（独立隐患，另立 issue）。
