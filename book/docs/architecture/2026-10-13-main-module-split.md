@@ -47,3 +47,10 @@ registerSdkIpc 单体（484 行、约 20 个 handler）拆为：
 ## 消费方零改动清单
 
 `src/main/ipc/index.ts`（devices 14 个符号 + emulator 3 个）、`src/main/index.ts`（prepareAppShutdown/resumeAfterShutdown）、`emulator/sdkSourceSwitch.ts`（runningDeviceCount，仓库唯一 emulator→devices 依赖）、`devices/__tests__/index.test.ts` 的 import 路径全部不变。
+
+## 测试布局（同日第二批：原 3359 行 index.test.ts 拆分）
+
+describe 块整块归位 8 个 `<模块名>.test.ts`（create/lifecycle/queries/startup/ipc/persistence/scan/edit），共享前导（18 个 vi.mock + freshDomain + quickDevice 等助手）抽 `__tests__/harness.ts`；断言零削弱、120 用例全过。要点：
+
+- **mock 注册放 harness 可行**：被测模块全部经 freshDomain 内动态 `import('..')` 加载，静态导入 harness 即完成注册，先于任何动态 import；vi.hoisted 块展开为普通导出对象（vitest 不允许导出 hoisted 变量，工厂惰性执行也不需要 hoisted）。
+- **拆分暴露了单文件时代的实现泄漏依赖**：Quick Boot 与 listDeviceNamesReferencing 两块原本靠更早 describe 的 beforeEach 播种 getMainWindow（`vi.clearAllMocks` 清调用不清实现）——已给两块补同等种子。

@@ -312,6 +312,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-12-network-switch-group.md](plans/2026-10-12-network-switch-group.md) — 断网开关组：工具条并排三开关——飞行模式总开关（真断网）+ Wi-Fi/移动数据分 radio（场景测试）；1s 轮询读回、变化才推、设备为唯一事实源
 - [2026-10-12-reconcile-report-panel.md](plans/2026-10-12-reconcile-report-panel.md) — 对账报告完整查看面板设计——主窗首个自绘弹层（BaseModal 原语 + 分组滚动明细），汇总条「查看详情」与摘要式原生通知双入口打开，原生长文本弹窗退役；关闭 issue 2026-10-12-reconcile-report-full-view
 - [2026-10-12-shared-mode-wizard-installed-only.md](plans/2026-10-12-shared-mode-wizard-installed-only.md) — 共享 Studio SDK 模式的向导收窄设计——画像页只显示与已装镜像匹配的设备、镜像区只列已装 API（无服务筛选/完整列表/Preview/不支持开关与下载卸载按钮）、清单本地化与指路 Studio 空态；托管/自选完全不变
+- [2026-10-13-devices-test-split.md](plans/2026-10-13-devices-test-split.md) — 把 devices/__tests__/index.test.ts（3359 行、120 用例）按 describe 块拆到 8 个 <模块名>.test.ts + 共享 harness.ts，对齐 emulator 测试惯例；断言零削弱、总数不变
 - [2026-10-13-main-devices-emulator-split.md](plans/2026-10-13-main-devices-emulator-split.md) — 纯机械拆分 src/main/devices/index.ts（2603 行 → 薄 index + 10 个域模块）与 src/main/emulator/index.ts（711 行 → 薄 index + 5 个文件）；对齐 emulator 目录「薄 index + 域模块」样板，公共契约（17 个导出符号）不变，行为零变化
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
@@ -332,4 +333,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 242 documents -->
+<!-- 243 documents -->

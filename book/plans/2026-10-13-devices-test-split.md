@@ -1,6 +1,6 @@
 ---
 description: 把 devices/__tests__/index.test.ts（3359 行、120 用例）按 describe 块拆到 8 个 <模块名>.test.ts + 共享 harness.ts，对齐 emulator 测试惯例；断言零削弱、总数不变
-status: in_progress
+status: completed
 created: 2026-10-13
 ---
 
