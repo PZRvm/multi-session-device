@@ -264,7 +264,11 @@ export function useDeviceScreen(device: ScreenTarget | null): {
     const current = deviceRef.current
     if (!current || current.status !== 'running') return
     setConn((prev) => ({ ...prev, status: 'connecting', error: null }))
-    void window.api.screen.retry(current.id, current.runId ?? '').catch((err) => {
+    // runId 取 envelope 里的会话代次（review 二轮 P2-A）：真机适配器不带 runId，
+    // 而状态消息持续把 envelope.runId 更新为当前会话代次——错误态可点时必有值；
+    // AVD 路径 envelope.runId 与 device.runId 一致
+    const runId = screenRef.current.envelope?.runId ?? current.runId ?? ''
+    void window.api.screen.retry(current.id, runId).catch((err) => {
       setConn((prev) => ({
         ...prev,
         status: 'error',

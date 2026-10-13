@@ -142,7 +142,11 @@ export function registerIpcHandlers(): void {
       if (event.kind === 'connected') {
         void scrcpy
           .ensureSession({ id: event.device.id, runId: event.runId, serial: event.device.serial })
-          .catch(() => undefined)
+          .catch((error) => {
+            // 桥路径的会话失败静默（track 下一帧会重发）；但退出恢复（P3-B）等
+            // 用户可感路径需要留痕，否则「留下后投屏没回来」无法归因
+            console.warn('[external] ensureSession failed for', event.device.id, String(error))
+          })
         network.startWatch(event.device.id, event.device.serial)
         logcat.ensureSession({
           id: event.device.id,

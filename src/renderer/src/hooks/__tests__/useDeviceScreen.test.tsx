@@ -82,3 +82,31 @@ it('AVD 语义不变：runId 恒在场，消息代次≠本地代次（重启中
   emitState({ deviceId: 'd1', runId: 'r2' })
   expect(result.current.status).toBe('connecting')
 })
+
+it('重试发 envelope 的会话代次（review 二轮 P2-A）：真机错误态可恢复', () => {
+  const api = (window as unknown as { api: { screen: { retry: ReturnType<typeof vi.fn> } } }).api
+  const { result } = renderHook(() => useDeviceScreen({ id: 'S', status: 'running' }))
+  // 错误态：会话代次随状态消息写入 envelope——这是重试按钮可点的前提
+  emitState({
+    deviceId: 'S',
+    runId: 'ext:S:1',
+    status: 'error',
+    format: undefined,
+    error: '流中断'
+  })
+  expect(result.current.status).toBe('error')
+  act(() => {
+    result.current.retry()
+  })
+  expect(api.screen.retry).toHaveBeenCalledWith('S', 'ext:S:1')
+})
+
+it('AVD 重试仍发 device.runId（envelope 与之一致）', () => {
+  const api = (window as unknown as { api: { screen: { retry: ReturnType<typeof vi.fn> } } }).api
+  const { result } = renderHook(() => useDeviceScreen({ id: 'd1', status: 'running', runId: 'r1' }))
+  emitState({ deviceId: 'd1', runId: 'r1', status: 'error', format: undefined, error: 'x' })
+  act(() => {
+    result.current.retry()
+  })
+  expect(api.screen.retry).toHaveBeenCalledWith('d1', 'r1')
+})

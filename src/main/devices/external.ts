@@ -148,15 +148,45 @@ const MAX_BACKOFF_MS = 30_000
 /** 连接代次表上限（review P3-6）：超出才清理已离场 serial */
 const EPOCHS_CAP = 64
 const HANDSHAKE_DEADLINE_MS = 5_000
+/** 空首帧 nudge 延迟（review 二轮 P3-C）：server 侧 USB 枚举可能晚于 track 首帧 */
+const EMPTY_FRAME_NUDGE_MS = 1_500
 
 let deps: ExternalDeps | null = null
 let cache: ExternalDevice[] = []
 let socket: Socket | null = null
 let reconnectTimer: NodeJS.Timeout | null = null
 let handshakeTimer: NodeJS.Timeout | null = null
+let nudgeTimer: NodeJS.Timeout | null = null
+/** nudge 一次性闩：空 streak 里最多重开一次，见到设备才复位（防循环） */
+let emptyNudgeLatched = false
 let backoffStep = 0
 let longFormat = true
 const epochs = new Map<string, number>()
+
+const clearNudgeTimer = (): void => {
+  if (nudgeTimer) {
+    clearTimeout(nudgeTimer)
+    nudgeTimer = null
+  }
+}
+
+/** 首帧为空且缓存也为空：延迟一拍重开 track 连接取全新全量列表（server 枚举竞态
+ *  的兜底；有界——闩住直到见到设备） */
+const armEmptyNudge = (): void => {
+  emptyNudgeLatched = true
+  nudgeTimer = setTimeout(() => {
+    nudgeTimer = null
+    if (cache.length > 0 || !deps) return
+    console.log('[external] empty first frame persisted — reopening track connection')
+    if (socket) {
+      const stale = socket
+      socket = null
+      stale.removeAllListeners()
+      stale.destroy()
+    }
+    void openSocket()
+  }, EMPTY_FRAME_NUDGE_MS)
+}
 
 /** 组合查询消费：外部设备缓存快照（未注册/未首帧时为空表） */
 export const externalDevicesNow = (): ExternalDevice[] => cache
@@ -202,7 +232,7 @@ const emitConnected = (device: ExternalDevice): void => {
   }
 }
 
-const applyList = (payload: string, reconnected: boolean): void => {
+const applyList = (payload: string, reconnected: boolean): number => {
   const next = toExternalDevices(parseTrackDevices(payload))
   // 消失或迁出 device 态 → 销毁会话（重连首帧同样结算断线期间的消失，漏帧不泄漏）
   for (const before of cache) {
@@ -218,13 +248,15 @@ const applyList = (payload: string, reconnected: boolean): void => {
     if (before?.state === 'device' && !reconnected) continue
     emitConnected(device)
   }
-  if (sameDevices(next, cache)) return
-  cache = next
-  console.log(
-    '[external] devices changed:',
-    next.map((device) => `${device.serial}(${device.state})`).join(', ') || '(none)'
-  )
-  ;(deps?.broadcast ?? broadcastDefault)(cache)
+  if (!sameDevices(next, cache)) {
+    cache = next
+    console.log(
+      '[external] devices changed:',
+      next.map((device) => `${device.serial}(${device.state})`).join(', ') || '(none)'
+    )
+    ;(deps?.broadcast ?? broadcastDefault)(cache)
+  }
+  return next.length
 }
 const clearHandshakeTimer = (): void => {
   if (handshakeTimer) {
@@ -289,11 +321,19 @@ const openSocket = async (): Promise<void> => {
       return
     }
     socket = sock
+    let firstFrame = true
     const parser = createTrackParser({
       onList: (payload) => {
         clearHandshakeTimer()
         backoffStep = 0
-        applyList(payload, reconnected)
+        const count = applyList(payload, reconnected)
+        if (count > 0) {
+          clearNudgeTimer()
+          emptyNudgeLatched = false
+        } else if (firstFrame && !emptyNudgeLatched) {
+          armEmptyNudge()
+        }
+        firstFrame = false
       },
       onFail: (reason) => {
         console.warn('[external] track handshake FAIL:', reason)
@@ -333,6 +373,7 @@ const openSocket = async (): Promise<void> => {
       console.log('[external] track socket closed')
       detach()
       clearHandshakeTimer()
+      clearNudgeTimer()
       if (socket === sock) socket = null
       scheduleReconnect()
       resolve()
@@ -373,6 +414,7 @@ export function stopExternalTracking(): void {
     reconnectTimer = null
   }
   clearHandshakeTimer()
+  clearNudgeTimer()
   if (socket) {
     const stale = socket
     socket = null

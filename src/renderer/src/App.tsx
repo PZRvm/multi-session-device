@@ -124,9 +124,13 @@ const App = (): React.JSX.Element => {
   // 网络态变化推送（plan 2026-10-12）：1s 轮询 + 下发读回，值变化才推；直写 store 键。
   // 挂载时先拉一次快照恢复初值（review P3-1：仅变化才推，刷新后不拉则开关禁用到下次变化）。
   // 真机适配（S4）：id 分流——外部键（serial）写 externalStore，AVD 键写 deviceStore
-  // （后者的 network 随快照 prune，外部键不能进）
+  // （后者的 network 随快照 prune，外部键不能进）。初拉先确保真机快照在场再分区
+  // （review 二轮 P3-A：getAll 先到时外部键会被在场守卫丢弃，靠 1s 轮询才补回）
   useEffect(() => {
-    void toApiResult(window.api.network.getAll()).then((result) => {
+    void (async () => {
+      const external = await toApiResult(window.api.devices.listExternal())
+      if (external.ok) applyExternalDevices(external.data)
+      const result = await toApiResult(window.api.network.getAll())
       if (!result.ok) return
       for (const [id, entry] of Object.entries(result.data)) {
         if (useExternalStore.getState().devices.some((device) => device.id === id)) {
@@ -135,7 +139,7 @@ const App = (): React.JSX.Element => {
           applyNetworkState(id, entry)
         }
       }
-    })
+    })()
     return window.api.network.onChanged((message) => {
       if (useExternalStore.getState().devices.some((device) => device.id === message.deviceId)) {
         useExternalStore.getState().applyNetworkState(message.deviceId, message.state)
@@ -143,7 +147,7 @@ const App = (): React.JSX.Element => {
         applyNetworkState(message.deviceId, message.state)
       }
     })
-  }, [applyNetworkState])
+  }, [applyNetworkState, applyExternalDevices])
 
   // 后台运行故障按 eventId 去重弹原生 dialog；行内 lastError 常驻。
   // copy 入依赖：语言切换后重建订阅，后续弹窗即新语言（已弹出的不追溯）

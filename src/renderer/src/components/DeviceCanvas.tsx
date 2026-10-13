@@ -356,10 +356,7 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
                 <div className="ear-piece" style={{ top: layout.frame.metrics.top / 2 - 2.5 }} />
               ) : null}
               {layout.frame.kind === 'phone' ? (
-                <div
-                  className="front-camera"
-                  style={{ top: layout.frame.metrics.top / 2 - 2.5 }}
-                />
+                <div className="front-camera" style={{ top: layout.frame.metrics.top / 2 - 2.5 }} />
               ) : null}
               {layout.frame.kind === 'tablet' ? (
                 <div className="tablet-camera" style={{ top: layout.frame.metrics.top / 2 - 2 }} />

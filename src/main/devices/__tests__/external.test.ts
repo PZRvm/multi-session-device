@@ -441,4 +441,39 @@ describe('track 客户端', () => {
     mod.resumeExternalSessions()
     expect(bags.onSession).toHaveBeenCalledTimes(2)
   })
+
+  it('空首帧 nudge（review 二轮 P3-C）：1.5s 仍空重开连接一次；重开仍空不再循环', async () => {
+    const mod = await fresh()
+    const bags = makeDeps()
+    mod.registerExternalIpc(bags.deps)
+    await flush()
+    const first = bags.sockets[0]
+    first.emit('connect')
+    first.emit('data', Buffer.concat([OKAY, frameOf('')]))
+    await vi.advanceTimersByTimeAsync(1_499)
+    expect(bags.sockets).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(bags.sockets).toHaveLength(2)
+    const second = bags.sockets[1]
+    second.emit('connect')
+    second.emit('data', Buffer.concat([OKAY, frameOf('')]))
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(bags.sockets).toHaveLength(2)
+  })
+
+  it('空首帧后设备经推送到达：nudge 清除且闩复位，连接不重开', async () => {
+    const mod = await fresh()
+    const bags = makeDeps()
+    mod.registerExternalIpc(bags.deps)
+    await flush()
+    const sock = bags.sockets[0]
+    sock.emit('connect')
+    sock.emit('data', Buffer.concat([OKAY, frameOf('')]))
+    sock.emit('data', frameOf('A\tdevice'))
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(bags.sockets).toHaveLength(1)
+    expect(bags.broadcast).toHaveBeenLastCalledWith([
+      { id: 'A', serial: 'A', transport: 'usb', state: 'device', model: null }
+    ])
+  })
 })
