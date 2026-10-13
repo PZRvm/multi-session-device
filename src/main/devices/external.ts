@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import type { Socket } from 'node:net'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
-import type { ExternalDevice } from '@shared/types'
+import type { DeviceRuntimeView, ExternalDevice } from '@shared/types'
 import { msg } from '../locale'
 import {
   ADB_HOST,
@@ -148,6 +148,24 @@ const epochs = new Map<string, number>()
 
 /** 组合查询消费：外部设备缓存快照（未注册/未首帧时为空表） */
 export const externalDevicesNow = (): ExternalDevice[] => cache
+
+/** 日志域合并视图消费（plan 2026-10-13-real-device-toolbar-parity）：device 态真机映射为
+ *  运行视图——status 'running' 是「已连接 ≡ 可订阅」的适配（DeviceRuntimeView 的 status
+ *  联合只有 AVD 生命周期态）；runId 省略，订阅侧可惰性建会话 */
+export const externalRuntimeViews = (): DeviceRuntimeView[] =>
+  cache
+    .filter((device) => device.state === 'device')
+    .map((device) => ({
+      id: device.id,
+      name: device.model ?? device.serial,
+      status: 'running',
+      serial: device.serial
+    }))
+
+/** 组合查询（queries.ts）的测试接缝：直写缓存快照（生产代码不得调用） */
+export const setExternalDevicesForTests = (devices: ExternalDevice[]): void => {
+  cache = devices
+}
 
 const sameDevices = (a: ExternalDevice[], b: ExternalDevice[]): boolean =>
   a.length === b.length &&

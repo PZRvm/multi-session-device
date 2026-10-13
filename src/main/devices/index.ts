@@ -10,6 +10,8 @@ export { prepareAppShutdown, purgeAppOwnedDevices, resumeAfterShutdown } from '.
 export { assertEditorTarget } from './edit'
 export {
   appOwnedDeviceCount,
+  deviceRefOfId,
+  isDeviceActiveOfId,
   isRunningDevice,
   listDeviceNamesReferencing,
   listDeviceRuntimeViews,
@@ -19,4 +21,4 @@ export {
   serialOfDeviceId
 } from './queries'
 export { registerDevicesIpc } from './ipc'
-export { registerExternalIpc, stopExternalTracking } from './external'
+export { externalRuntimeViews, registerExternalIpc, stopExternalTracking } from './external'

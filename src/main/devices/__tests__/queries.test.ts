@@ -82,3 +82,46 @@ describe('runningDeviceSerial（APK 安装域注入，plan 2026-10-10-drag-apk-i
     expect(domain.runningDeviceSerial(created.createdId)).toBe('emulator-5554')
   })
 })
+
+describe('deviceRefOfId / isDeviceActiveOfId（截屏/网络组合查询，plan 2026-10-13-real-device-toolbar-parity）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.readDeviceMetas.mockResolvedValue([quickDevice({ id: 'avd-1', name: '停止机' })] as never)
+    mocks.getMainWindow.mockReturnValue({ webContents: { id: 7, send: vi.fn() } })
+    mocks.checkDeviceHealth.mockResolvedValue({ state: 'valid', issues: [], checkedAt: 42 })
+  })
+
+  it('外部 device 态 → serial/名称（model 缺省 serial）；未就绪 → null/false', async () => {
+    await freshDomain()
+    const external = await import('../external')
+    external.setExternalDevicesForTests([
+      {
+        id: 'R58N',
+        serial: 'R58N',
+        transport: 'usb',
+        state: 'device',
+        model: 'EBG_AN00'
+      },
+      { id: 'X', serial: 'X', transport: 'usb', state: 'unauthorized', model: null },
+      { id: 'Y', serial: 'Y', transport: 'usb', state: 'offline', model: null }
+    ])
+    const domain = await import('..')
+    await expect(domain.deviceRefOfId('R58N')).resolves.toEqual({
+      serial: 'R58N',
+      name: 'EBG_AN00'
+    })
+    expect(domain.isDeviceActiveOfId('R58N')).toBe(true)
+    await expect(domain.deviceRefOfId('X')).resolves.toBeNull()
+    expect(domain.isDeviceActiveOfId('X')).toBe(false)
+    await expect(domain.deviceRefOfId('Y')).resolves.toBeNull()
+    expect(domain.isDeviceActiveOfId('Y')).toBe(false)
+  })
+
+  it('未命中外部 → 落 AVD：停止设备 null/false；missing id 抛错语义同 runningDeviceRef', async () => {
+    await freshDomain()
+    const domain = await import('..')
+    await expect(domain.deviceRefOfId('avd-1')).resolves.toBeNull()
+    expect(domain.isDeviceActiveOfId('avd-1')).toBe(false)
+    await expect(domain.deviceRefOfId('missing')).rejects.toThrow()
+  })
+})

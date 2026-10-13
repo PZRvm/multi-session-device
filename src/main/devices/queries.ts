@@ -72,6 +72,29 @@ export const serialOfDeviceId = (id: string): string => {
   return runningDeviceSerial(id)
 }
 
+/** 截屏/网络域注入用（plan 2026-10-13-real-device-toolbar-parity）：外部优先组合引用——
+ *  device 态真机 → serial/名称（model 缺省用 serial）；外部命中但未就绪 → null；
+ *  未命中 → 落 runningDeviceRef（AVD 行为不变，missing id 的抛错语义同源） */
+export const deviceRefOfId = async (
+  id: string
+): Promise<{ serial: string; name: string } | null> => {
+  const external = externalDevicesNow().find((device) => device.id === id)
+  if (external) {
+    return external.state === 'device'
+      ? { serial: external.serial, name: external.model ?? external.serial }
+      : null
+  }
+  return runningDeviceRef(id)
+}
+
+/** 截屏尾段同步复核用（与 isRunningDevice 同款零间隙语义）：外部命中 → device 态判定；
+ *  未命中 → 落 isRunningDevice */
+export const isDeviceActiveOfId = (id: string): boolean => {
+  const external = externalDevicesNow().find((device) => device.id === id)
+  if (external) return external.state === 'device'
+  return isRunningDevice(id)
+}
+
 /** 设置窗清除确认框的计数来源：项目自有出身设备总数（当前视图的另一桶全体） */
 export const appOwnedDeviceCount = async (): Promise<number> => {
   await ensureLoaded()

@@ -409,4 +409,17 @@ describe('track 客户端', () => {
     expect(bags.sockets).toHaveLength(1)
     expect(bags.send).toHaveBeenCalledTimes(1)
   })
+
+  it('externalRuntimeViews：只列 device 态，name 取 model 缺省 serial，status 适配 running', async () => {
+    const mod = await fresh()
+    const bags = makeDeps()
+    mod.registerExternalIpc(bags.deps)
+    await flush()
+    const sock = bags.sockets[0]
+    sock.emit('connect')
+    sock.emit('data', Buffer.concat([OKAY, frameOf('A\tdevice model:EBG_AN00\nB\tunauthorized')]))
+    expect(mod.externalRuntimeViews()).toEqual([
+      { id: 'A', name: 'EBG_AN00', status: 'running', serial: 'A' }
+    ])
+  })
 })
