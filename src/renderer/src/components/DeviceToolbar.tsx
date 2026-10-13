@@ -184,11 +184,16 @@ const Wrapper = styled.div`
     border-left: 1px solid var(--board-hairline);
   }
 
-  /* 开启态：强调色实感底 + 提亮图标（2026-10-13 用户反馈：hover 纱底 + 淡琥珀读作
-     禁用）；断网总开关开启 = 离线，用危险色同构处理 */
+  /* 开启态：强调色实底 + 反色图标（主按钮同语言，accent/accent-ink 三系都是成对
+     对比组合）——22% 混底在雾蓝系发灰读作浅禁（2026-10-13 二次反馈）；断网总开关
+     开启 = 离线，保持危险色混底 */
   .net-toggle[aria-pressed='true'] {
-    background: color-mix(in srgb, var(--accent) 22%, var(--board-bg));
-    color: var(--accent-strong);
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  .net-toggle[aria-pressed='true']:hover:not(:disabled) {
+    background: var(--accent-strong);
   }
 
   .net-airplane[aria-pressed='true'] {
