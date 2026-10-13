@@ -1,10 +1,18 @@
 ---
 description: stage06 第一批——USB 真机接入（track-devices-l 长连接插拔跟随 + 投屏第二桥 + 未授权引导）与 APK 拖装到真机（serialOf 组合查询 + 真机失败签名 + 「仍要安装」旗标重试）；依据 think-report 20261013013755 全批复
-status: in_progress
+status: completed
 created: 2026-10-13
 ---
 
 # 真机 USB 接入 + APK 拖装（stage06 第一批）— plan
+
+> 2026-10-13 实施完成（S1—S8 八步独立提交，每步 typecheck/lint/test 全绿；分支
+> feature/real-device-usb-and-apk-install）。两处对设计的实现偏差（均为实现期发现更优解）：
+> ①属性解析用 `key:value`（冒号）而非调研初稿的 `key=value`——adb -l 真实格式如此；
+> ②「重连首帧同 runId 重发 connected」改为「代次自增强制销毁重建」——scrcpy ensureSession
+> 同 runId 幂等早退，同 runId 无法复活已死会话（详见 learn 2026-10-13）。
+> 遗留：验收清单中需要物理设备的条目（插拔/投屏/拖装/MIUI 拦截/Android 14 旧包/kill-server
+> 恢复）待用户实测，已记 issue。
 
 调研与批复：[think-report 20261013013755](../notes/think-report/20261013013755-真机USB无线接入与APK拖装.md) 五项假设全部批复（2026-10-13）。关键批复点：①第一批 = USB + APK 拖装，WiFi 留第二批；②插拔检测用 `host:track-devices-l` 长连接推送（不用轮询）；③旧 APK 走 A 案——失败卡「仍要安装」按钮、用户确认后带旗标重试。
 

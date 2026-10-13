@@ -159,6 +159,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-12-source-aware-filter-batch-review.md](notes/issue/2026-10/2026-10-12-source-aware-filter-batch-review.md) — 出身标注 + 过滤视图两批（含六轮验收期修复）合并前 code review——无 P1；4 项 P2（跨桶运行设备查看回归、许可静默文本匹配、级联编排零测试、计数时间窗）与 8 项 P3
 - [2026-10-13-scrcpy-split-review.md](notes/issue/2026-10/2026-10-13-scrcpy-split-review.md) — scrcpy 拆分 review 发现（只记录不修复）——ipc.ts 部分入参校验文案是硬编码中文未走 msg() i18n；项目骨架.md 仍留着从未落地的 scrcpy/stream.ts【规划】行
 - [2026-10-13-存量lint不干净.md](notes/issue/2026-10/2026-10-13-存量lint不干净.md) — 存量 lint 不干净——sdkSourceSwitch.test.ts 一处缺函数返回类型（error 级），另有 DeviceWizard.tsx 等十余条 prettier 警告；2026-10-13 拆分验收时发现，与拆分无关
+- [2026-10-13-真机硬件验收待执行.md](notes/issue/2026-10/2026-10-13-真机硬件验收待执行.md) — 真机 USB 接入与 APK 拖装第一批代码完成，但验收清单中需要物理设备的条目全部未实测——插拔跟随、投屏操控、拖装链路、MIUI 拦截词条、Android 14 旧包「仍要安装」、kill-server 恢复
 
 ### notes/learn/
 
@@ -234,6 +235,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-12-persistent-field-store-projection-checklist.md](notes/learn/2026-10/2026-10-12-persistent-field-store-projection-checklist.md) — 持久字段新增的完整落点清单——types/toMeta 之外还有 store 白名单投影与校验；漏投影的表象是读丢字段+切来源即冻结写入（误判外部修改）
 - [2026-10-13-主进程大文件拆分的边界方法.md](notes/learn/2026-10/2026-10-13-主进程大文件拆分的边界方法.md) — 主进程大文件拆分的边界方法——ESM let 不可外部赋值决定的状态归属规则（单写方私有 vs state.ts 访问器）、vi.resetModules 单例语义保持、按消费方零改动倒推出口契约
 - [2026-10-13-拆工厂闭包用context不用访问器.md](notes/learn/2026-10/2026-10-13-拆工厂闭包用context不用访问器.md) — 拆工厂闭包与拆模块单例是两回事——工厂用 ManagerContext 首参显式化闭包状态（无 ESM let 问题、无单例重载问题），错误路径调 destroySession 决定分层；可选链收窄在属性链上依旧可用
+- [2026-10-13-真机接入的三个接缝经验.md](notes/learn/2026-10/2026-10-13-真机接入的三个接缝经验.md) — 真机接入实现的三个接缝经验——track 载荷是 key:value 冒号格式、ensureSession 同 runId 幂等决定了重连必须代次自增、投屏 hook 参数收窄为结构化最小形态即可被真机画布复用
 
 ### notes/task/
 
@@ -340,4 +342,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 250 documents -->
+<!-- 252 documents -->
