@@ -19,6 +19,14 @@ export interface ScreenViewRef {
 
 const ACK_INTERVAL_PACKETS = 8
 
+/**
+ * 连接目标键：${id}:${runId}。runId 缺席（真机适配器——会话代次在 main 侧持有，
+ * 且重连会自增）时退化为 `${id}:*`：接受任意代次的消息，不匹配就永远停在
+ * connecting（2026-10-13 真机「先连即选投屏卡住、切走再切回才好」的根因）。
+ * AVD 路径 runId 恒在场，键语义不变（重启换代次即换目标）。
+ */
+const targetKeyOf = (id: string, runId?: string): string => `${id}:${runId ?? '*'}`
+
 /** 投屏目标的最小形态：AVD Device 结构性满足；真机画布传 {id, status:'running'}
  *  适配器（runId 由 main 侧会话代次持有，renderer 不需要）——真机接入复用本 hook */
 export type ScreenTarget = Pick<Device, 'id' | 'status' | 'runId'>
@@ -171,7 +179,11 @@ export function useDeviceScreen(device: ScreenTarget | null): {
         screenRef.current.width = message.format.width
         screenRef.current.height = message.format.height
       }
-      const key = `${message.deviceId}:${message.runId}`
+      // 目标键随当前设备归一：真机（runId 缺席）按 id:* 收任意代次；AVD 用消息代次
+      const key =
+        deviceRef.current?.runId === undefined
+          ? targetKeyOf(message.deviceId)
+          : `${message.deviceId}:${message.runId}`
       // 状态/格式/错误各字段独立合并：消息缺省的字段沿用同目标的存量
       setConn((prev) => ({
         target: key,
@@ -197,7 +209,7 @@ export function useDeviceScreen(device: ScreenTarget | null): {
   useEffect(() => {
     const viewToken = viewTokenRef.current
     if (device?.status === 'running') {
-      const key = `${device.id}:${device.runId ?? ''}`
+      const key = targetKeyOf(device.id, device.runId)
       screenRef.current.envelope = {
         deviceId: device.id,
         runId: device.runId ?? '',
@@ -242,7 +254,7 @@ export function useDeviceScreen(device: ScreenTarget | null): {
   }, [device?.id, device?.status, device?.runId])
 
   // 派生：非运行 → idle；目标不一致（启动/切换/异步未返）→ connecting；仅同目标存量外显
-  const target = device?.status === 'running' ? `${device.id}:${device.runId ?? ''}` : null
+  const target = device?.status === 'running' ? targetKeyOf(device.id, device.runId) : null
   const live = target !== null && conn.target === target
   const status: ScreenViewStatus = target === null ? 'idle' : live ? conn.status : 'connecting'
   const format = live ? conn.format : null
