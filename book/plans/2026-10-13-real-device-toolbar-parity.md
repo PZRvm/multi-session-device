@@ -14,6 +14,10 @@ created: 2026-10-13
 > 新建，比引用会无限 setState）。硬件验收条目并入
 > [issue 2026-10-13-真机硬件验收待执行](../notes/issue/2026-10/2026-10-13-真机硬件验收待执行.md)。
 
+- **Phase 5 code review（2026-10-13，只记录不修）**：与第一批合并走查——总体 pass、
+  无 P1，1 项 P2（取消退出后真机跟踪不恢复，main/index 退出序）+ 8 项 P3，
+  [发现清单](../notes/issue/2026-10/2026-10-13-真机两批-review.md)。
+
 批复：用户 2026-10-13「全做」+「电源键可以不用」+「真机需要在外加一个通用边框」。本 plan 即 [think-report 20261013013755](../notes/think-report/20261013013755-真机USB无线接入与APK拖装.md) 假设 5 推迟项（截屏/断网/日志三域）的提前执行——技术通路已被第一批的 serialOfDeviceId 模式验证：三域本质都是 `adb -s <serial>`，serial 对真机语义不变，缺的只是「第二通路」。
 
 ## Requirements brief — Step 0

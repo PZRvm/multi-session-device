@@ -14,6 +14,10 @@ created: 2026-10-13
 > 遗留：验收清单中需要物理设备的条目（插拔/投屏/拖装/MIUI 拦截/Android 14 旧包/kill-server
 > 恢复）待用户实测，已记 issue。
 
+- **Phase 5 code review（2026-10-13，只记录不修）**：与工具条对齐批合并走查——总体
+  pass、无 P1，1 项 P2（取消退出后真机跟踪不恢复）+ 8 项 P3，
+  [发现清单](../notes/issue/2026-10/2026-10-13-真机两批-review.md)。
+
 调研与批复：[think-report 20261013013755](../notes/think-report/20261013013755-真机USB无线接入与APK拖装.md) 五项假设全部批复（2026-10-13）。关键批复点：①第一批 = USB + APK 拖装，WiFi 留第二批；②插拔检测用 `host:track-devices-l` 长连接推送（不用轮询）；③旧 APK 走 A 案——失败卡「仍要安装」按钮、用户确认后带旗标重试。
 
 ## Requirements brief — Step 0
