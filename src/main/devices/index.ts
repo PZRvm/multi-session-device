@@ -21,4 +21,9 @@ export {
   serialOfDeviceId
 } from './queries'
 export { registerDevicesIpc } from './ipc'
-export { externalRuntimeViews, registerExternalIpc, stopExternalTracking } from './external'
+export {
+  externalRuntimeViews,
+  registerExternalIpc,
+  resumeExternalSessions,
+  stopExternalTracking
+} from './external'

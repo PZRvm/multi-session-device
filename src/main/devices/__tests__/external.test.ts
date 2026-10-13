@@ -422,4 +422,23 @@ describe('track 客户端', () => {
       { id: 'A', name: 'EBG_AN00', status: 'running', serial: 'A' }
     ])
   })
+
+  it('resumeExternalSessions（review P2-1）：对 device 态条目代次自增重发 connected', async () => {
+    const mod = await fresh()
+    const bags = makeDeps()
+    mod.registerExternalIpc(bags.deps)
+    await flush()
+    const sock = bags.sockets[0]
+    sock.emit('connect')
+    sock.emit('data', Buffer.concat([OKAY, frameOf('A\tdevice model:X\nB\tunauthorized')]))
+    mod.resumeExternalSessions()
+    expect(bags.onSession).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'connected', runId: 'ext:A:2' })
+    )
+    expect(bags.onSession).toHaveBeenCalledTimes(2)
+    // 未注册（stopExternalTracking 后）时 no-op
+    mod.stopExternalTracking()
+    mod.resumeExternalSessions()
+    expect(bags.onSession).toHaveBeenCalledTimes(2)
+  })
 })

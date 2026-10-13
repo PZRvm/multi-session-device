@@ -342,3 +342,15 @@ export function stopExternalTracking(): void {
     stale.destroy()
   }
 }
+
+/**
+ * 取消退出（用户选择留下）后恢复外部会话（review P2-1）：shutdownStreams 的
+ * destroyAll 连带销毁了真机的投屏/日志会话与网络轮询，而 track 连接未断、也不会有
+ * 新帧（设备集没变）——对全部 device 态条目重发 connected（代次自增强制重建）。
+ */
+export function resumeExternalSessions(): void {
+  if (!deps) return
+  for (const device of cache) {
+    if (device.state === 'device') emitConnected(device)
+  }
+}

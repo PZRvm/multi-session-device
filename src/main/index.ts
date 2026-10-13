@@ -2,7 +2,12 @@ import { app, BrowserWindow, dialog } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createMainWindow } from './window'
 import { registerIpcHandlers, shutdownStreams } from './ipc'
-import { prepareAppShutdown, resumeAfterShutdown, stopExternalTracking } from './devices'
+import {
+  prepareAppShutdown,
+  resumeAfterShutdown,
+  resumeExternalSessions,
+  stopExternalTracking
+} from './devices'
 import { restoreTheme } from './theme'
 import { restoreLocale } from './locale'
 import { restoreSdkSource } from './emulator/sdkSource'
@@ -48,10 +53,10 @@ app.on('before-quit', (event) => {
   void (async () => {
     const { leftovers } = await prepareAppShutdown()
     await shutdownStreams()
-    // 真机 track 长连接收口：断 socket、清重连定时器（退出路径不允许残留计时器）
-    stopExternalTracking()
     if (leftovers.length === 0) {
       quitGuard = true
+      // 真机 track 收口只在确认退出分支执行（review P2-1：留在取消路径会永久停跟踪）
+      stopExternalTracking()
       app.quit()
       return
     }
@@ -66,9 +71,13 @@ app.on('before-quit', (event) => {
     })
     if (result.response === 0) {
       resumeAfterShutdown()
+      // 用户留下：外部会话随 shutdownStreams 的 destroyAll 一并销毁——重发 connected
+      // （代次自增）恢复真机投屏/网络/日志；track 连接全程未断
+      resumeExternalSessions()
       return
     }
     quitGuard = true
+    stopExternalTracking()
     app.exit(0)
   })()
 })
