@@ -23,6 +23,10 @@ created: 2026-10-13
   P2-1 退出收口挪确认分支 + resumeExternalSessions 恢复会话；P3 八项含 origin 判别
   拆桶、迟到写回守卫、真机未就绪词条、ExternalCanvas 组件测试、代次裁剪、互斥偏差
   补记等。全量 1185 项通过，[处置记录](../notes/issue/2026-10/2026-10-13-真机两批-review.md)。
+- **Phase 5 增量 review 第二轮（2026-10-13，只记录不修）**：覆盖修复批与后续两个
+  热修复（先插后开加固、connecting 卡住）——总体 pass，1 项 P2（真机投屏重试链路
+  runId 空串被拒）+ 3 项 P3，
+  [发现清单](../notes/issue/2026-10/2026-10-13-真机增量-review.md)。
 
 调研与批复：[think-report 20261013013755](../notes/think-report/20261013013755-真机USB无线接入与APK拖装.md) 五项假设全部批复（2026-10-13）。关键批复点：①第一批 = USB + APK 拖装，WiFi 留第二批；②插拔检测用 `host:track-devices-l` 长连接推送（不用轮询）；③旧 APK 走 A 案——失败卡「仍要安装」按钮、用户确认后带旗标重试。
 
