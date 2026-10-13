@@ -32,6 +32,30 @@ const baseProps: ToolbarProps = {
 }
 
 describe('DeviceToolbar 截屏钮与气泡', () => {
+  it('电源钮可选（plan 2026-10-13-real-device-toolbar-parity）：不传 onPower 不渲染，其余键齐全', () => {
+    const onButton = vi.fn()
+    const withoutPower: Omit<ToolbarProps, 'onPower' | 'powerDisabled'> = {
+      disabled: false,
+      onButton,
+      onRotate: () => undefined,
+      screenshotBusy: false,
+      screenshotState: idle,
+      onScreenshot: () => undefined,
+      onScreenshotSave: () => undefined,
+      onScreenshotDismiss: () => undefined,
+      networkState: netOnline,
+      networkBusy: null,
+      onNetworkToggle: () => undefined
+    }
+    render(<DeviceToolbar {...withoutPower} />)
+    expect(screen.queryByRole('button', { name: copy.powerOff })).toBeNull()
+    for (const label of [copy.back, copy.home, copy.overview, copy.volumeUp, copy.volumeDown]) {
+      expect(screen.getByRole('button', { name: label })).toBeTruthy()
+    }
+    fireEvent.click(screen.getByRole('button', { name: copy.back }))
+    expect(onButton).toHaveBeenCalledWith('back')
+  })
+
   it('相机按钮在场：本地化可访问名，点击触发 onScreenshot，不受投屏 disabled 牵连', () => {
     const onScreenshot = vi.fn()
     render(<DeviceToolbar {...baseProps} disabled onScreenshot={onScreenshot} />)

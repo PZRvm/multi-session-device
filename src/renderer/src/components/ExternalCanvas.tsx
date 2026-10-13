@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, RotateCcw, RotateCw, Smartphone } from 'lucide-react'
+import { Loader2, RotateCcw, Smartphone } from 'lucide-react'
 import styled from 'styled-components'
 import type { ExternalDevice, ScreenInput } from '@shared/types'
 import { computeLayout, type ScreenLayout } from '../screen/geometry'
@@ -10,6 +10,7 @@ import { useDeviceInput } from '../hooks/useDeviceInput'
 import { useDeviceScreen, type ScreenViewStatus } from '../hooks/useDeviceScreen'
 import { spinKeyframes } from '../styles/animations'
 import { toApiResult } from '../api'
+import DeviceToolbar from './DeviceToolbar'
 import InstallDropOverlay from './InstallDropOverlay'
 
 type ExternalCanvasProps = {
@@ -153,6 +154,21 @@ const ExternalCanvas = ({ device }: ExternalCanvasProps): React.JSX.Element => {
   return (
     <Wrapper>
       <div className="stage" ref={stageRef} onClick={focusProxy} {...apkInstall.dragHandlers}>
+        {/* 通用外框（用户 2026-10-13 批复）：generic 档圆角机身、无听筒/前摄装饰——
+            真机视频自带真刘海，画假的会穿帮；装饰位于视频之下（与 DeviceCanvas 同序） */}
+        {layout ? (
+          <div
+            className="frame-shell"
+            aria-hidden="true"
+            style={{
+              left: layout.frame.x,
+              top: layout.frame.y,
+              width: layout.frame.width,
+              height: layout.frame.height,
+              borderRadius: layout.frame.radius
+            }}
+          />
+        ) : null}
         <div
           className="canvas-slot"
           style={{
@@ -206,18 +222,25 @@ const ExternalCanvas = ({ device }: ExternalCanvasProps): React.JSX.Element => {
         />
       </div>
       <div className="toolbar-row">
-        <button
-          type="button"
-          className="rotate-button"
+        {/* 完整工具条（S1 先接六键 + 旋转；截屏/网络组在 S3/S4 换真实现；
+            电源钮不传——真机不能「停止」，电源注入闭集未开（用户裁定不做） */}
+        <DeviceToolbar
           disabled={!ready || rotating}
-          aria-label={copy.rotate}
-          title={copy.rotate}
-          onClick={() => {
+          onButton={(button) => {
+            void sendInput({ kind: 'button', button })
+          }}
+          onRotate={() => {
             void rotate()
           }}
-        >
-          <RotateCw size={16} />
-        </button>
+          screenshotBusy={false}
+          screenshotState={{ phase: 'idle' }}
+          onScreenshot={() => undefined}
+          onScreenshotSave={() => undefined}
+          onScreenshotDismiss={() => undefined}
+          networkState={null}
+          networkBusy={null}
+          onNetworkToggle={() => undefined}
+        />
       </div>
     </Wrapper>
   )
@@ -264,6 +287,15 @@ const Wrapper = styled.div`
     background: var(--board-bg);
     overflow: hidden;
     outline: none;
+  }
+
+  /* 通用外框：圆角机身只包屏幕之外（与 DeviceCanvas 同规则，generic 档无装饰） */
+  .frame-shell {
+    position: absolute;
+    background: var(--device-shell);
+    border: 1px solid var(--device-shell-edge);
+    overflow: hidden;
+    pointer-events: none;
   }
 
   .canvas-slot {
@@ -359,34 +391,6 @@ const Wrapper = styled.div`
 
   .toolbar-row {
     flex: none;
-  }
-
-  .rotate-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 30px;
-    padding: 0;
-    border: 1px solid var(--board-hairline);
-    border-radius: 6px;
-    background: var(--board-bg-raised);
-    color: var(--board-ink);
-    cursor: pointer;
-
-    &:disabled {
-      opacity: 0.45;
-      cursor: default;
-    }
-
-    &:hover:not(:disabled) {
-      background: var(--board-hover-veil);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 1px;
-    }
   }
 `
 
