@@ -46,6 +46,9 @@ export interface ProbeDeps {
   connect?: typeof tcpConnect
 }
 
+// 真机 track 客户端（devices/external）复用同一 connect 接缝（plan 2026-10-13-real-device-usb-and-apk-install）
+export { tcpConnect }
+
 /**
  * 只读探测共享 adb server（host:version 查询后立即断开）：
  * 不 start-server、不 kill-server——重启共享 server 的决定权永远不在这里。
