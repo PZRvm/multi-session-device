@@ -950,4 +950,7 @@ export interface DeviceRuntimeView {
   /** running 发布的 adb serial；停止清空 */
   serial?: string
   runId?: string
+  /** 来源判别（review P3-2）：'external' = 真机（status 'running' 是「已连接」适配、
+   *  runId 省略）；缺省 = AVD（devices.onChanged 派生视图不带本字段） */
+  origin?: 'external'
 }

@@ -73,16 +73,16 @@ export const serialOfDeviceId = (id: string): string => {
 }
 
 /** 截屏/网络域注入用（plan 2026-10-13-real-device-toolbar-parity）：外部优先组合引用——
- *  device 态真机 → serial/名称（model 缺省用 serial）；外部命中但未就绪 → null；
+ *  device 态真机 → serial/名称（model 缺省用 serial）；外部命中但未就绪 → 抛
+ *  externalDeviceNotReady（review P3-4：真机未授权不再误报「设备不在运行中」）；
  *  未命中 → 落 runningDeviceRef（AVD 行为不变，missing id 的抛错语义同源） */
 export const deviceRefOfId = async (
   id: string
 ): Promise<{ serial: string; name: string } | null> => {
   const external = externalDevicesNow().find((device) => device.id === id)
   if (external) {
-    return external.state === 'device'
-      ? { serial: external.serial, name: external.model ?? external.serial }
-      : null
+    if (external.state !== 'device') throw new Error(msg('externalDeviceNotReady'))
+    return { serial: external.serial, name: external.model ?? external.serial }
   }
   return runningDeviceRef(id)
 }

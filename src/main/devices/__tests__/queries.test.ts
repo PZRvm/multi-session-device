@@ -91,7 +91,7 @@ describe('deviceRefOfId / isDeviceActiveOfId（截屏/网络组合查询，plan 
     mocks.checkDeviceHealth.mockResolvedValue({ state: 'valid', issues: [], checkedAt: 42 })
   })
 
-  it('外部 device 态 → serial/名称（model 缺省 serial）；未就绪 → null/false', async () => {
+  it('外部 device 态 → serial/名称（model 缺省 serial）；未就绪 → 抛真机未就绪词条（review P3-4）', async () => {
     await freshDomain()
     const external = await import('../external')
     external.setExternalDevicesForTests([
@@ -111,9 +111,9 @@ describe('deviceRefOfId / isDeviceActiveOfId（截屏/网络组合查询，plan 
       name: 'EBG_AN00'
     })
     expect(domain.isDeviceActiveOfId('R58N')).toBe(true)
-    await expect(domain.deviceRefOfId('X')).resolves.toBeNull()
+    await expect(domain.deviceRefOfId('X')).rejects.toThrow('真机未就绪')
     expect(domain.isDeviceActiveOfId('X')).toBe(false)
-    await expect(domain.deviceRefOfId('Y')).resolves.toBeNull()
+    await expect(domain.deviceRefOfId('Y')).rejects.toThrow('真机未就绪')
     expect(domain.isDeviceActiveOfId('Y')).toBe(false)
   })
 

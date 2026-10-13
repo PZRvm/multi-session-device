@@ -37,7 +37,13 @@ export const useExternalStore = create<ExternalStoreState>((set) => ({
             : null
       }
     }),
+  /** 网络态直写；只接受当前在场设备（review P3-3——拔线后在途 toggle 的迟到读回
+   *  不得复活死键，等下次全量 apply 自然清理） */
   applyNetworkState: (id, entry) =>
-    set((current) => ({ network: { ...current.network, [id]: entry } })),
+    set((current) =>
+      current.devices.some((device) => device.id === id)
+        ? { network: { ...current.network, [id]: entry } }
+        : current
+    ),
   select: (id) => set({ selectedId: id })
 }))

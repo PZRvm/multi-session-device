@@ -65,6 +65,8 @@ export const parseTrackDevices = (payload: string): TrackDeviceEntry[] => {
     const match = /^(\S+)[ \t]+([a-z]+)(?:[ \t]+(.*))?$/.exec(line)
     if (!match) continue
     const [, serial, state, props = ''] = match
+    // 老 adb 的多词 state（如 "no permissions (…)"）在此被截为首词（'no'）——归入
+    // 未知态由 toExternalDevices 映射为 offline 展示，不视为非法行（review P3-7）
     const model = /(?:^|\s)model:([^\s]+)/.exec(props)?.[1]
     entries.push({ serial, state, model: model ?? null })
   }
@@ -142,6 +144,8 @@ export const createTrackParser = (sink: TrackParserSink): { push: (chunk: Buffer
 
 const START_BACKOFF_MS = 1_000
 const MAX_BACKOFF_MS = 30_000
+/** 连接代次表上限（review P3-6）：超出才清理已离场 serial */
+const EPOCHS_CAP = 64
 const HANDSHAKE_DEADLINE_MS = 5_000
 
 let deps: ExternalDeps | null = null
@@ -166,7 +170,8 @@ export const externalRuntimeViews = (): DeviceRuntimeView[] =>
       id: device.id,
       name: device.model ?? device.serial,
       status: 'running',
-      serial: device.serial
+      serial: device.serial,
+      origin: 'external' as const
     }))
 
 /** 组合查询（queries.ts）的测试接缝：直写缓存快照（生产代码不得调用） */
@@ -185,6 +190,15 @@ const emitConnected = (device: ExternalDevice): void => {
   const epoch = (epochs.get(device.serial) ?? 0) + 1
   epochs.set(device.serial, epoch)
   deps?.onSession?.({ kind: 'connected', device, runId: `ext:${device.serial}:${epoch}` })
+  // review P3-6：代次只增保证重连强制重建；removed 时保留是为了「拔插后 runId 不回退」。
+  // 长会话下防无界：超上限才清掉已不在场的 serial（清后重插从 1 起——destroySession
+  // 已清会话表，同 runId 复用无害；仅与在途 destroy 有极窄竞窗，下一次 track 帧即恢复）
+  if (epochs.size > EPOCHS_CAP) {
+    const alive = new Set(cache.map((entry) => entry.serial))
+    for (const serial of epochs.keys()) {
+      if (!alive.has(serial)) epochs.delete(serial)
+    }
+  }
 }
 
 const applyList = (payload: string, reconnected: boolean): void => {

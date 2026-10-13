@@ -463,6 +463,7 @@ const zhCN = {
     'APK 安装失败：设备系统禁止通过 USB 安装应用，请在手机开发者选项中开启「USB 安装」后重试（{detail}）',
   apkInstallDeprecatedSdk: 'APK 安装失败：targetSdk 低于 Android 14 允许的最低版本（{detail}）',
   apkExternalNotReady: '真机未就绪（未授权或已离线），无法安装 APK',
+  externalDeviceNotReady: '真机未就绪（未授权或已离线）',
   // ---- 日志域（plan 2026-10-10-logcat-panel）----
   logcatWindowTitle: '日志',
   loadLogcatFailed: '加载日志窗口失败：{detail}',
@@ -910,6 +911,7 @@ const zhTW: ErrorsCopy = {
     'APK 安裝失敗：裝置系統禁止透過 USB 安裝應用，請在手機開發者選項中開啟「USB 安裝」後重試（{detail}）',
   apkInstallDeprecatedSdk: 'APK 安裝失敗：targetSdk 低於 Android 14 允許的最低版本（{detail}）',
   apkExternalNotReady: '真機未就緒（未授權或已離線），無法安裝 APK',
+  externalDeviceNotReady: '真機未就緒（未授權或已離線）',
   // ---- 日誌域 ----
   logcatWindowTitle: '日誌',
   loadLogcatFailed: '載入日誌視窗失敗：{detail}',
@@ -1410,6 +1412,7 @@ const enUS: ErrorsCopy = {
     'APK install failed: the APK targets an SDK older than Android 14 allows ({detail})',
   apkExternalNotReady:
     'The physical device is not ready (unauthorized or offline); cannot install the APK',
+  externalDeviceNotReady: 'The physical device is not ready (unauthorized or offline)',
   // ---- Logcat domain ----
   logcatWindowTitle: 'Logs',
   loadLogcatFailed: 'Failed to load the log window: {detail}',

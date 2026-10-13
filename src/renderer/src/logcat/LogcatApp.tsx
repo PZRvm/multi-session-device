@@ -29,15 +29,15 @@ const externalViewsOf = (devices: ExternalDevice[]): DeviceRuntimeView[] =>
       id: device.id,
       name: device.model ?? device.serial,
       status: 'running',
-      serial: device.serial
+      serial: device.serial,
+      origin: 'external' as const
     }))
 
 /**
  * 独立日志窗：running 设备下拉 + 共用日志面板。关窗只是退订——会话跟设备走（plan）。
  * 双流订阅（2026-10-13 真机适配）：AVD 走 devices:changed 全窗广播，真机走
  * devices:external-changed 广播（都各自覆盖本流全量）；启动时 context() 一次取合并
- * 视图，按「runId 在场」拆两桶——AVD running 必带 runId，真机视图必不带（externalRuntimeViews
- * 契约）。拆桶只影响中途覆盖前的短暂窗口，running 过滤兜底不显示错行。
+ * 视图，按 origin 判别精确拆两桶（review P3-2——不再用 runId 启发式）。
  */
 const LogcatApp = (): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
@@ -51,8 +51,8 @@ const LogcatApp = (): React.JSX.Element => {
     void (async () => {
       const result = await toApiResult(window.api.logcat.context())
       if (alive && result.ok) {
-        setAvdViews(result.data.filter((view) => view.runId !== undefined))
-        setExternalViews(result.data.filter((view) => view.runId === undefined))
+        setAvdViews(result.data.filter((view) => view.origin !== 'external'))
+        setExternalViews(result.data.filter((view) => view.origin === 'external'))
       }
     })()
     const unbind = window.api.devices.onChanged((snapshot: DeviceSnapshot) => {

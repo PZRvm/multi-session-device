@@ -419,7 +419,7 @@ describe('track 客户端', () => {
     sock.emit('connect')
     sock.emit('data', Buffer.concat([OKAY, frameOf('A\tdevice model:EBG_AN00\nB\tunauthorized')]))
     expect(mod.externalRuntimeViews()).toEqual([
-      { id: 'A', name: 'EBG_AN00', status: 'running', serial: 'A' }
+      { id: 'A', name: 'EBG_AN00', status: 'running', serial: 'A', origin: 'external' }
     ])
   })
 

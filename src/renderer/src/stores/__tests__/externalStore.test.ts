@@ -54,4 +54,13 @@ describe('externalStore（真机列表状态）', () => {
     useExternalStore.getState().apply([device('A')])
     expect(Object.keys(useExternalStore.getState().network)).toEqual(['A'])
   })
+
+  it('网络态迟到写回（review P3-3）：设备已不在场时拒绝——不复活死键', () => {
+    useExternalStore.getState().apply([device('A')])
+    useExternalStore.getState().apply([])
+    useExternalStore
+      .getState()
+      .applyNetworkState('A', { airplane: false, wifi: false, data: false })
+    expect(useExternalStore.getState().network).toEqual({})
+  })
 })
