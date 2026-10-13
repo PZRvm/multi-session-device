@@ -9,10 +9,11 @@ import {
   listDeviceNamesReferencing,
   listDeviceRuntimeViews,
   purgeAppOwnedDevices,
+  registerExternalIpc,
   runningDeviceRef,
-  runningDeviceSerial,
   savedDeviceSkinRef,
   registerDevicesIpc,
+  serialOfDeviceId,
   triggerSourceChangeReconcile
 } from '../devices'
 import { createLogcatManager } from '../logcat'
@@ -53,10 +54,11 @@ export function registerIpcHandlers(): void {
   })
   // 编辑窗目标核验经注入进入向导域（开窗前 devices 域裁决，避免 wizard 反向依赖）
   registerWizardIpc({ assertEditorTarget })
-  // 拖拽 APK 安装：running/serial 断言经注入（安装域不反向依赖 devices）；仅主窗可发起
+  // 拖拽 APK 安装：serial 断言统一走组合查询（真机 connected 或 AVD running）经注入，
+  // 安装域自身不反向依赖 devices；仅主窗可发起
   registerApkInstallIpc({
     adbPath: adbBinaryPath,
-    serialOf: runningDeviceSerial,
+    serialOf: serialOfDeviceId,
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
   })
   // 截屏域（plan 2026-10-10）：running 校验经注入进入 devices 域，域自身不反向依赖；
@@ -121,6 +123,23 @@ export function registerIpcHandlers(): void {
       return Promise.all([scrcpy.destroySession(id), logcat.destroySession(id)]).then(
         () => undefined
       )
+    }
+  })
+
+  // 真机跟踪（track-devices-l 长连接）+ 会话第二桥：外部设备没有 runner，track 事件
+  // 直接驱动投屏会话（connected 建会话、removed 销毁）；截屏/网络/日志不接真机
+  // （PRD 后续批次，假设 5）。注册须在 scrcpy 创建之后（onSession 闭包引用它）
+  registerExternalIpc({
+    pushTarget: () => getMainWindow()?.webContents ?? null,
+    isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id,
+    onSession: (event) => {
+      if (event.kind === 'connected') {
+        void scrcpy
+          .ensureSession({ id: event.device.id, runId: event.runId, serial: event.device.serial })
+          .catch(() => undefined)
+      } else {
+        void scrcpy.destroySession(event.id).catch(() => undefined)
+      }
     }
   })
 }

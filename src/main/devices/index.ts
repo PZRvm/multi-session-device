@@ -1,4 +1,4 @@
-// devices 域公共出口（17 个符号；消费方：ipc/index.ts、main/index.ts、
+// devices 域公共出口（消费方：ipc/index.ts、main/index.ts、
 // emulator/sdkSourceSwitch.ts、__tests__ 经 import('..') 走本入口）
 // 分层：environment/state → persistence → scan/startup/lifecycle/create/edit
 // → queries/ipc → 本文件；状态单例语义依赖本入口的依赖图整体加载。
@@ -15,6 +15,8 @@ export {
   listDeviceRuntimeViews,
   runningDeviceRef,
   runningDeviceSerial,
-  savedDeviceSkinRef
+  savedDeviceSkinRef,
+  serialOfDeviceId
 } from './queries'
 export { registerDevicesIpc } from './ipc'
+export { registerExternalIpc, stopExternalTracking } from './external'

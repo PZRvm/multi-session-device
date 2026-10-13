@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createMainWindow } from './window'
 import { registerIpcHandlers, shutdownStreams } from './ipc'
-import { prepareAppShutdown, resumeAfterShutdown } from './devices'
+import { prepareAppShutdown, resumeAfterShutdown, stopExternalTracking } from './devices'
 import { restoreTheme } from './theme'
 import { restoreLocale } from './locale'
 import { restoreSdkSource } from './emulator/sdkSource'
@@ -48,6 +48,8 @@ app.on('before-quit', (event) => {
   void (async () => {
     const { leftovers } = await prepareAppShutdown()
     await shutdownStreams()
+    // 真机 track 长连接收口：断 socket、清重连定时器（退出路径不允许残留计时器）
+    stopExternalTracking()
     if (leftovers.length === 0) {
       quitGuard = true
       app.quit()
