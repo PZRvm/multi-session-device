@@ -8,6 +8,7 @@ import {
   ADB_SERVER_PORT,
   encodeAdbRequest,
   ensureSharedServer,
+  runAdb,
   tcpConnect
 } from '../emulator/adb'
 import { requireAdb } from './environment'
@@ -219,6 +220,10 @@ const applyList = (payload: string, reconnected: boolean): void => {
   }
   if (sameDevices(next, cache)) return
   cache = next
+  console.log(
+    '[external] devices changed:',
+    next.map((device) => `${device.serial}(${device.state})`).join(', ') || '(none)'
+  )
   ;(deps?.broadcast ?? broadcastDefault)(cache)
 }
 const clearHandshakeTimer = (): void => {
@@ -245,7 +250,23 @@ const scheduleReconnect = (): void => {
   }, delay)
 }
 
-const ensureServerDefault = async (): Promise<unknown> => ensureSharedServer(await requireAdb())
+const ensureServerDefault = async (): Promise<unknown> => {
+  const exec = await requireAdb()
+  try {
+    const descriptor = await ensureSharedServer(exec)
+    if (!descriptor.reused) {
+      // 全新 server 的 USB 枚举是异步的：track 立即连可能拿到空首帧且等不到推送
+      // （「手机先插、应用后起」读不到的一类根因）。主动跑一次 devices 逼扫描落地，
+      // 失败不阻断——track 与热插拔推送仍是兜底
+      await runAdb(exec.path, ['devices'], { timeoutMs: 10_000 }).catch(() => undefined)
+    }
+    return descriptor
+  } catch (error) {
+    // 后台客户端的静默失败就是「列表凭空消失」——失败必须进日志（learn：观测缺口）
+    console.warn('[external] ensureSharedServer failed:', String(error))
+    throw error
+  }
+}
 
 const openSocket = async (): Promise<void> => {
   const current = deps
@@ -274,7 +295,8 @@ const openSocket = async (): Promise<void> => {
         backoffStep = 0
         applyList(payload, reconnected)
       },
-      onFail: () => {
+      onFail: (reason) => {
+        console.warn('[external] track handshake FAIL:', reason)
         // 极老 server 不认 -l：FAIL 退短格式立即重试一次；短格式也败进退避
         const wasLong = longFormat
         if (wasLong) longFormat = false
@@ -288,6 +310,7 @@ const openSocket = async (): Promise<void> => {
       }
     })
     const onConnect = (): void => {
+      console.log('[external] track socket connected, requesting', longFormat ? 'long' : 'short')
       try {
         sock.write(encodeAdbRequest(longFormat ? 'host:track-devices-l' : 'host:track-devices'))
       } catch {
@@ -307,6 +330,7 @@ const openSocket = async (): Promise<void> => {
     }
     const onData = (chunk: Buffer): void => parser.push(chunk)
     const onClose = (): void => {
+      console.log('[external] track socket closed')
       detach()
       clearHandshakeTimer()
       if (socket === sock) socket = null

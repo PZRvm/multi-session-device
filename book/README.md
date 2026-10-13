@@ -235,6 +235,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-12-freshdomain-resetmodules-stale-import.md](notes/learn/2026-10/2026-10-12-freshdomain-resetmodules-stale-import.md) — 来源感知列表批经验——vi.resetModules 后静态 import 成旧模块（测试设态必须动态重取同实例）；每调用现建 deps 的模块没有单例拦截点，监听器注册表是全覆盖分流的正解
 - [2026-10-12-merge-readme-regen-and-lint-baseline.md](notes/learn/2026-10/2026-10-12-merge-readme-regen-and-lint-baseline.md) — 双分支合并 review 经验——生成物 README 冲突必须重跑生成器收敛（手拼必漂移）；lint/测试「通过」注记要复跑验证，基线问题在两父提交上分别复跑定位归属
 - [2026-10-12-persistent-field-store-projection-checklist.md](notes/learn/2026-10/2026-10-12-persistent-field-store-projection-checklist.md) — 持久字段新增的完整落点清单——types/toMeta 之外还有 store 白名单投影与校验；漏投影的表象是读丢字段+切来源即冻结写入（误判外部修改）
+- [2026-10-13-adb双server诊断污染与观测日志.md](notes/learn/2026-10/2026-10-13-adb双server诊断污染与观测日志.md) — 排查「真机先插、应用后起读不到」的三条经验——双 adb server 会互相抢 USB 接口造成假盲区、后台长连接客户端必须带观测日志否则故障不可归因、全新 server 的 USB 枚举是异步的需要 devices 逼一次落地
 - [2026-10-13-book相对链接按目录深度.md](notes/learn/2026-10/2026-10-13-book相对链接按目录深度.md) — book 内部相对链接的层级按「文件所在目录到仓库根的深度」算——notes/issue 与 notes/learn 有月份子目录（四级），链接 src 要 ../../../..；think-report 无子目录（三级）用 ../../..
 - [2026-10-13-主进程大文件拆分的边界方法.md](notes/learn/2026-10/2026-10-13-主进程大文件拆分的边界方法.md) — 主进程大文件拆分的边界方法——ESM let 不可外部赋值决定的状态归属规则（单写方私有 vs state.ts 访问器）、vi.resetModules 单例语义保持、按消费方零改动倒推出口契约
 - [2026-10-13-拆工厂闭包用context不用访问器.md](notes/learn/2026-10/2026-10-13-拆工厂闭包用context不用访问器.md) — 拆工厂闭包与拆模块单例是两回事——工厂用 ManagerContext 首参显式化闭包状态（无 ESM let 问题、无单例重载问题），错误路径调 destroySession 决定分层；可选链收窄在属性链上依旧可用
@@ -347,4 +348,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 257 documents -->
+<!-- 258 documents -->
