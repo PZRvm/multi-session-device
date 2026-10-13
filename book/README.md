@@ -243,6 +243,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261008112223-安卓模拟器节省空间与共享SDK.md](notes/think-report/20261008112223-安卓模拟器节省空间与共享SDK.md) — 优先共用官方 SDK 和系统镜像、保留独立 AVD；本机两套镜像无重合，第三方省盘收益未实测且需适配设备管理
 - [20261009022552-SDK共享检测与真机投屏.md](notes/think-report/20261009022552-SDK共享检测与真机投屏.md) — 设置项检测 Android Studio/SDK 并开放共享或自选路径（stage05 增强）；真机 USB/无线接入复用既有 scrcpy 投屏栈（stage06 新阶段）
 - [20261012031543-断网开关.md](notes/think-report/20261012031543-断网开关.md) — 断网开关：飞行模式总开关 + wifi/数据分 radio 开关（用户批复扩容），状态以设备读回为唯一事实源；实测模拟器单关 radio 不断网、logcat 无稳定监听锚点——轮询定案（stage05 步骤）
+- [20261013013755-真机USB无线接入与APK拖装.md](notes/think-report/20261013013755-真机USB无线接入与APK拖装.md) — stage06 真机接入按「先 USB 后 WiFi」两批复核可行性（既有批复结论对照重构后代码逐条验证 + 插拔检测选型）；新增调研 APK 拖装到真机——复用 apkInstall 域 + 真机特有失败签名
 
 ### plans/
 
@@ -314,6 +315,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-12-shared-mode-wizard-installed-only.md](plans/2026-10-12-shared-mode-wizard-installed-only.md) — 共享 Studio SDK 模式的向导收窄设计——画像页只显示与已装镜像匹配的设备、镜像区只列已装 API（无服务筛选/完整列表/Preview/不支持开关与下载卸载按钮）、清单本地化与指路 Studio 空态；托管/自选完全不变
 - [2026-10-13-devices-test-split.md](plans/2026-10-13-devices-test-split.md) — 把 devices/__tests__/index.test.ts（3359 行、120 用例）按 describe 块拆到 8 个 <模块名>.test.ts + 共享 harness.ts，对齐 emulator 测试惯例；断言零削弱、总数不变
 - [2026-10-13-main-devices-emulator-split.md](plans/2026-10-13-main-devices-emulator-split.md) — 纯机械拆分 src/main/devices/index.ts（2603 行 → 薄 index + 10 个域模块）与 src/main/emulator/index.ts（711 行 → 薄 index + 5 个文件）；对齐 emulator 目录「薄 index + 域模块」样板，公共契约（17 个导出符号）不变，行为零变化
+- [2026-10-13-real-device-usb-and-apk-install.md](plans/2026-10-13-real-device-usb-and-apk-install.md) — stage06 第一批——USB 真机接入（track-devices-l 长连接插拔跟随 + 投屏第二桥 + 未授权引导）与 APK 拖装到真机（serialOf 组合查询 + 真机失败签名 + 「仍要安装」旗标重试）；依据 think-report 20261013013755 全批复
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### stage/
@@ -333,4 +335,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 243 documents -->
+<!-- 245 documents -->
