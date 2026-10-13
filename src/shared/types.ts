@@ -874,12 +874,8 @@ export interface ScreenshotSaveResult {
 }
 
 // ---- APK 安装域（plan 2026-10-10-drag-apk-install）----
-/** apkInstall 通道返回：安装成功的 APK 文件名（回显用；不含路径） */
-export interface ApkInstallResult {
-  fileName: string
-}
 
-/** 拖拽安装结果（判别联合，S5 起替代 ApkInstallResult）：安装失败是「结果」不是「错误」——
+/** 拖拽安装结果（判别联合）：安装失败是「结果」不是「错误」——
  *  「仍要安装」重试需要机器可读标记，不能靠匹配文案 */
 export type ApkInstallOutcome =
   { ok: true; fileName: string } | { ok: false; message: string; canBypassLowTargetSdk: boolean }

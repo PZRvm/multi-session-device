@@ -89,6 +89,7 @@ describe('apkInstall 通道守卫', () => {
     const handler = handlerFor()
     mocks.run.mockResolvedValue(adbResult())
     await expect(handler(MAIN_SENDER, { deviceId: 'd1', filePath: '/x/a.APK' })).resolves.toEqual({
+      ok: true,
       fileName: 'a.APK'
     })
     expect(mocks.run).toHaveBeenCalledWith(
@@ -111,17 +112,42 @@ describe('apkInstall 通道守卫', () => {
 })
 
 describe('apkInstall 执行', () => {
-  it('成功：-s serial install -r，无硬超时，返回文件名', async () => {
+  it('成功：-s serial install -r，无硬超时，返回判别联合 ok 变体', async () => {
     const handler = handlerFor()
     mocks.run.mockResolvedValue(adbResult())
     await expect(
       handler(MAIN_SENDER, { deviceId: 'd1', filePath: '/x/app.debug.apk' })
-    ).resolves.toEqual({ fileName: 'app.debug.apk' })
+    ).resolves.toEqual({ ok: true, fileName: 'app.debug.apk' })
     expect(mocks.run).toHaveBeenCalledWith(
       '/sdk/platform-tools/adb',
       ['-s', 'emulator-5554', 'install', '-r', '/x/app.debug.apk'],
       { timeoutMs: 0 }
     )
+  })
+
+  it('「仍要安装」链路：allowLowTargetSdk 时插入 bypass 旗标', async () => {
+    const handler = handlerFor()
+    mocks.run.mockResolvedValue(adbResult())
+    await expect(
+      handler(MAIN_SENDER, {
+        deviceId: 'd1',
+        filePath: '/x/old.apk',
+        allowLowTargetSdk: true
+      })
+    ).resolves.toEqual({ ok: true, fileName: 'old.apk' })
+    expect(mocks.run).toHaveBeenCalledWith(
+      '/sdk/platform-tools/adb',
+      ['-s', 'emulator-5554', 'install', '--bypass-low-target-sdk-block', '-r', '/x/old.apk'],
+      { timeoutMs: 0 }
+    )
+  })
+
+  it('allowLowTargetSdk 非布尔：载荷拒绝', async () => {
+    const handler = handlerFor()
+    await expect(
+      handler(MAIN_SENDER, { deviceId: 'd1', filePath: '/x/a.apk', allowLowTargetSdk: 'yes' })
+    ).rejects.toThrow('apk:install')
+    expect(mocks.run).not.toHaveBeenCalled()
   })
 
   it('同设备串行：安装中再入直接拒绝，完成后可再装', async () => {
@@ -133,8 +159,9 @@ describe('apkInstall 执行', () => {
       '正在安装另一个 APK'
     )
     gate.resolve(adbResult())
-    await expect(first).resolves.toEqual({ fileName: 'a.apk' })
+    await expect(first).resolves.toEqual({ ok: true, fileName: 'a.apk' })
     await expect(handler(MAIN_SENDER, { deviceId: 'd1', filePath: '/x/b.apk' })).resolves.toEqual({
+      ok: true,
       fileName: 'b.apk'
     })
   })
@@ -146,15 +173,21 @@ describe('apkInstall 执行', () => {
     mocks.run.mockReturnValueOnce(gate.promise).mockResolvedValueOnce(adbResult())
     const first = handler(MAIN_SENDER, { deviceId: 'd1', filePath: '/x/a.apk' })
     await expect(handler(MAIN_SENDER, { deviceId: 'd2', filePath: '/x/b.apk' })).resolves.toEqual({
+      ok: true,
       fileName: 'b.apk'
     })
     gate.resolve(adbResult())
-    await expect(first).resolves.toEqual({ fileName: 'a.apk' })
+    await expect(first).resolves.toEqual({ ok: true, fileName: 'a.apk' })
   })
 })
 
-describe('apkInstall 失败映射（原文附详情）', () => {
-  const cases: Array<{ name: string; result: AdbRunResult; expectText: string }> = [
+describe('apkInstall 失败映射（结果非异常；原文附详情）', () => {
+  const cases: Array<{
+    name: string
+    result: AdbRunResult
+    expectText: string
+    canBypass?: boolean
+  }> = [
     {
       name: '签名不一致',
       result: adbResult({ code: 1, stdout: 'Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]' }),
@@ -181,6 +214,17 @@ describe('apkInstall 失败映射（原文附详情）', () => {
       expectText: '文件不是有效的 APK'
     },
     {
+      name: 'MIUI 拦截 USB 安装',
+      result: adbResult({ code: 1, stdout: 'Failure [INSTALL_FAILED_USER_RESTRICTED]' }),
+      expectText: '开启「USB 安装」'
+    },
+    {
+      name: 'Android 14+ 旧包：canBypass 置真（「仍要安装」可用）',
+      result: adbResult({ code: 1, stdout: 'Failure [INSTALL_FAILED_DEPRECATED_SDK_VERSION]' }),
+      expectText: 'targetSdk 低于 Android 14',
+      canBypass: true
+    },
+    {
       name: '未命中签名走通用词条',
       result: adbResult({ code: 1, stderr: 'unknown adb error' }),
       expectText: 'APK 安装失败'
@@ -197,18 +241,42 @@ describe('apkInstall 失败映射（原文附详情）', () => {
       const handler = handlerFor()
       mocks.run.mockResolvedValue(item.result)
       const call = handler(MAIN_SENDER, { deviceId: 'd1', filePath: '/x/a.apk' })
-      await expect(call).rejects.toThrow(item.expectText)
+      await expect(call).resolves.toMatchObject({
+        ok: false,
+        canBypassLowTargetSdk: item.canBypass ?? false
+      })
+      await expect(call).resolves.toMatchObject({
+        message: expect.stringContaining(item.expectText)
+      })
       // detail 保留 adb 原文（stdout/stderr 合并 trim 后为单行子串）
       const output = `${item.result.stdout}\n${item.result.stderr}`.trim()
-      if (output.length > 0) await expect(call).rejects.toThrow(output)
+      if (output.length > 0) {
+        await expect(call).resolves.toMatchObject({
+          message: expect.stringContaining(output)
+        })
+      }
     })
   }
+
+  it('已带旗标仍失败（老 adb 不认旗标）：canBypass 不再置真', async () => {
+    const handler = handlerFor()
+    mocks.run.mockResolvedValue(
+      adbResult({ code: 1, stderr: 'adb: unknown option -- bypass-low-target-sdk-block' })
+    )
+    await expect(
+      handler(MAIN_SENDER, { deviceId: 'd1', filePath: '/x/a.apk', allowLowTargetSdk: true })
+    ).resolves.toEqual({
+      ok: false,
+      message: expect.stringContaining('unknown option'),
+      canBypassLowTargetSdk: false
+    })
+  })
 
   it('失败详情兜底 exit 码', async () => {
     const handler = handlerFor()
     mocks.run.mockResolvedValue(adbResult({ code: 137, stdout: '', stderr: '' }))
-    await expect(handler(MAIN_SENDER, { deviceId: 'd1', filePath: '/x/a.apk' })).rejects.toThrow(
-      'exit 137'
-    )
+    await expect(
+      handler(MAIN_SENDER, { deviceId: 'd1', filePath: '/x/a.apk' })
+    ).resolves.toMatchObject({ ok: false, message: expect.stringContaining('exit 137') })
   })
 })

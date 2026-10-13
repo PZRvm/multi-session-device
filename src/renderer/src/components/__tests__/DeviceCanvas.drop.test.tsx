@@ -41,7 +41,17 @@ const device: Device = {
   createdAt: 0
 }
 
-const install = vi.fn<(deviceId: string, filePath: string) => Promise<{ fileName: string }>>()
+const install =
+  vi.fn<
+    (
+      deviceId: string,
+      filePath: string,
+      opts?: { allowLowTargetSdk?: boolean }
+    ) => Promise<
+      | { ok: true; fileName: string }
+      | { ok: false; message: string; canBypassLowTargetSdk: boolean }
+    >
+  >()
 const resolveDropPaths = vi.fn<(files: File[]) => string[]>()
 
 beforeEach(() => {
@@ -88,14 +98,14 @@ const apkFile = (): File =>
   new File(['bytes'], 'app.apk', { type: 'application/vnd.android.package-archive' })
 
 it('拖入 .stage 出现安装提示，松开安装成功显示结果', async () => {
-  install.mockResolvedValue({ fileName: 'app.apk' })
+  install.mockResolvedValue({ ok: true, fileName: 'app.apk' })
   resolveDropPaths.mockReturnValue(['/tmp/app.apk'])
   const { container } = render(<DeviceCanvas device={device} onStop={vi.fn(async () => {})} />)
   const stage = stageOf(container)
   fireEvent.dragEnter(stage, { dataTransfer: { types: ['Files'] } })
   expect(screen.getByText('松开安装到 Pixel test')).toBeTruthy()
   fireEvent.drop(stage, { dataTransfer: { types: ['Files'], files: [apkFile()] } })
-  expect(install).toHaveBeenCalledWith('d1', '/tmp/app.apk')
+  expect(install).toHaveBeenCalledWith('d1', '/tmp/app.apk', undefined)
   await waitFor(() => {
     expect(screen.getByText('已安装 app.apk')).toBeTruthy()
   })
