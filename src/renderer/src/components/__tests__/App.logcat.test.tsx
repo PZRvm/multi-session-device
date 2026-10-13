@@ -81,7 +81,9 @@ describe('主窗日志 dock', () => {
       devices: {
         list: vi.fn(async () => snapshotOf([runningDevice])),
         onChanged: () => () => {},
-        onRuntimeError: () => () => {}
+        onRuntimeError: () => () => {},
+        listExternal: vi.fn(async () => []),
+        onExternalChanged: () => () => {}
       },
       network: networkApiMock(),
       logcat: {

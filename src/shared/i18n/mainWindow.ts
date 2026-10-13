@@ -42,6 +42,7 @@ const zhCN = {
   otherOriginStudio: '另有 {count} 台 Android Studio SDK 设备',
   // ---- 真机区（plan 2026-10-13-real-device-usb-and-apk-install）----
   realDeviceSection: '真机',
+  realDeviceSectionCount: '真机（{count}）',
   realDeviceEmpty: '未检测到真机，USB 连接并打开调试后自动出现',
   realDeviceOnline: '已连接',
   realDeviceUnauthorized: '未授权',
@@ -229,6 +230,7 @@ const zhTW: MainWindowCopy = {
   otherOriginStudio: '另有 {count} 台 Android Studio SDK 裝置',
   // ---- 真機區（plan 2026-10-13-real-device-usb-and-apk-install）----
   realDeviceSection: '真機',
+  realDeviceSectionCount: '真機（{count}）',
   realDeviceEmpty: '未偵測到真機，USB 連接並開啟偵錯後自動出現',
   realDeviceOnline: '已連接',
   realDeviceUnauthorized: '未授權',
@@ -414,6 +416,7 @@ const enUS: MainWindowCopy = {
   otherOriginStudio: '{count} more Android Studio SDK devices',
   // ---- Physical devices section (plan 2026-10-13-real-device-usb-and-apk-install) ----
   realDeviceSection: 'Physical devices',
+  realDeviceSectionCount: 'Physical devices ({count})',
   realDeviceEmpty:
     'No physical device detected; connect over USB with debugging enabled and it appears here',
   realDeviceOnline: 'Connected',

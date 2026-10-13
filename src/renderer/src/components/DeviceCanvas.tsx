@@ -430,6 +430,7 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
           phase={apkInstall.phase}
           busyNote={apkInstall.busyNote}
           deviceName={device.name}
+          onRetryBypass={apkInstall.retryWithBypass}
         />
       </div>
       <div className="toolbar-row">

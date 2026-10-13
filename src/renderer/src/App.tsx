@@ -12,6 +12,7 @@ import CanvasPlaceholder from './components/CanvasPlaceholder'
 import DeviceCanvas from './components/DeviceCanvas'
 import DeviceHealthNotice from './components/DeviceHealthNotice'
 import DeviceListPane from './components/DeviceListPane'
+import ExternalCanvas, { ExternalCanvasPlaceholder } from './components/ExternalCanvas'
 import LogcatPanel from './components/LogcatPanel'
 import ResizeHandle from './components/ResizeHandle'
 import { clampListWidth, LIST_MAX_WIDTH } from './components/listWidth'
@@ -21,6 +22,7 @@ import {
   LOG_PANE_MIN_WIDTH
 } from './components/logPaneWidth'
 import { useDeviceStore } from './stores/deviceStore'
+import { useExternalStore } from './stores/externalStore'
 import { splitByOriginView } from './components/originView'
 
 /** 日志 dock 展开时画布至少保留的宽度（模拟器居中自适应的保底；不足则整栏退化） */
@@ -69,6 +71,12 @@ const App = (): React.JSX.Element => {
   const setSelected = useDeviceStore((state) => state.setSelected)
   const locale = useLocaleStore((state) => state.locale)
   const copy = useCopy(MAIN_COPY)
+  // 真机域（plan 2026-10-13-real-device-usb-and-apk-install）：推送直写 store；
+  // 与 AVD 选择的互斥在组合层裁决（点一边清另一边）
+  const externalDevices = useExternalStore((state) => state.devices)
+  const selectedExternalId = useExternalStore((state) => state.selectedId)
+  const applyExternalDevices = useExternalStore((state) => state.apply)
+  const selectExternal = useExternalStore((state) => state.select)
 
   const [listWidth, setListWidth] = useState(280)
   const [rechecking, setRechecking] = useState(false)
@@ -96,6 +104,23 @@ const App = (): React.JSX.Element => {
     void load()
     return window.api.devices.onChanged(applySnapshot)
   }, [load, applySnapshot])
+
+  // 真机快照初拉 + 推送订阅（main 侧 diff、变化才推全量；store 内自清失效选中）
+  useEffect(() => {
+    void toApiResult(window.api.devices.listExternal()).then((result) => {
+      if (result.ok) applyExternalDevices(result.data)
+    })
+    return window.api.devices.onExternalChanged(applyExternalDevices)
+  }, [applyExternalDevices])
+
+  // 选择互斥：点 AVD 行清真机选中（store 不交叉引用，组合层双向清）
+  const handleSelectAvd = useCallback(
+    (id: string): void => {
+      selectExternal(null)
+      setSelected(id)
+    },
+    [selectExternal, setSelected]
+  )
 
   // 网络态变化推送（plan 2026-10-12）：1s 轮询 + 下发读回，值变化才推；直写 store 键。
   // 挂载时先拉一次快照恢复初值（review P3-1：仅变化才推，刷新后不拉则开关禁用到下次变化）
@@ -314,9 +339,17 @@ const App = (): React.JSX.Element => {
   }
 
   // ---- 日志 dock（plan 2026-10-10-logcat-panel）----
-
+  // 真机选中时 AVD 画布不可见，dock 随之退场（日志域对真机的适配在后续批次，假设 5）
+  const externalSelected =
+    externalDevices.find((device) => device.id === selectedExternalId) ?? null
   const logcatDevice =
-    selected && selected.status === 'running' && selected.serial && selected.runId ? selected : null
+    externalSelected === null &&
+    selected &&
+    selected.status === 'running' &&
+    selected.serial &&
+    selected.runId
+      ? selected
+      : null
 
   // 画布剩余不足保底 560 时 dock 不渲染（兜底派生——正常路径由 main 侧 minWidth
   // 锁定与拉宽保证 dock 展开时不被窗口缩窄挤掉）
@@ -417,14 +450,17 @@ const App = (): React.JSX.Element => {
         />
         <DeviceListPane
           devices={devices}
-          selectedId={selectedId}
+          selectedId={externalSelected !== null ? null : selectedId}
           storeTrusted={storeTrusted}
           metaWritable={metaWritable}
           storeState={storeHealth.state}
           sourceBucket={sourceBucket}
           loadError={loadError}
+          externalDevices={externalDevices}
+          selectedExternalId={selectedExternalId}
+          onSelectExternal={selectExternal}
           onRetryLoad={handleRetryLoad}
-          onSelect={setSelected}
+          onSelect={handleSelectAvd}
           onStart={handleStart}
           onStop={handleStop}
           onCancelStart={handleCancelStart}
@@ -464,7 +500,13 @@ const App = (): React.JSX.Element => {
         }
       />
       <main className="canvas-area">
-        {selected && selected.status === 'running' ? (
+        {externalSelected !== null ? (
+          externalSelected.state === 'device' ? (
+            <ExternalCanvas key={externalSelected.id} device={externalSelected} />
+          ) : (
+            <ExternalCanvasPlaceholder device={externalSelected} />
+          )
+        ) : selected && selected.status === 'running' ? (
           <DeviceCanvas
             key={`${selected.id}:${selected.runId}`}
             device={selected}

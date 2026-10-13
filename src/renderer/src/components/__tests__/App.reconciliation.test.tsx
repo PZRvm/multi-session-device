@@ -110,7 +110,9 @@ beforeEach(() => {
         pushSnapshot = cb
         return () => {}
       },
-      onRuntimeError: () => () => {}
+      onRuntimeError: () => () => {},
+      listExternal: vi.fn(async () => []),
+      onExternalChanged: () => () => {}
     },
     network: networkApiMock()
   }

@@ -127,7 +127,9 @@ beforeEach(() => {
       reconciliationReport: async () => null,
       acknowledgeReconciliation: async () => {},
       onChanged: () => () => {},
-      onRuntimeError: () => () => {}
+      onRuntimeError: () => () => {},
+      listExternal: vi.fn(async () => []),
+      onExternalChanged: () => () => {}
     },
     network: networkApiMock()
   }

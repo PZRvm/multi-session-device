@@ -57,7 +57,9 @@ beforeEach(() => {
         reconciliation: useDeviceStore.getState().reconciliation
       })),
       onChanged: () => () => {},
-      onRuntimeError: () => () => {}
+      onRuntimeError: () => () => {},
+      listExternal: vi.fn(async () => []),
+      onExternalChanged: () => () => {}
     },
     network: networkApiMock()
   }

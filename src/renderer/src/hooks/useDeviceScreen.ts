@@ -19,11 +19,15 @@ export interface ScreenViewRef {
 
 const ACK_INTERVAL_PACKETS = 8
 
+/** 投屏目标的最小形态：AVD Device 结构性满足；真机画布传 {id, status:'running'}
+ *  适配器（runId 由 main 侧会话代次持有，renderer 不需要）——真机接入复用本 hook */
+export type ScreenTarget = Pick<Device, 'id' | 'status' | 'runId'>
+
 /**
  * 订阅投屏流：监听先安装、activate 后到（早到包按 viewToken 识别）。
  * 设备 running → 激活；切后台/停止 → 退订（连接保留在 main，仅停解码）。
  */
-export function useDeviceScreen(device: Device | null): {
+export function useDeviceScreen(device: ScreenTarget | null): {
   canvasRef: React.RefObject<HTMLCanvasElement | null>
   status: ScreenViewStatus
   format: ScreenFormat | null
