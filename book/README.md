@@ -235,6 +235,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-12-persistent-field-store-projection-checklist.md](notes/learn/2026-10/2026-10-12-persistent-field-store-projection-checklist.md) — 持久字段新增的完整落点清单——types/toMeta 之外还有 store 白名单投影与校验；漏投影的表象是读丢字段+切来源即冻结写入（误判外部修改）
 - [2026-10-13-主进程大文件拆分的边界方法.md](notes/learn/2026-10/2026-10-13-主进程大文件拆分的边界方法.md) — 主进程大文件拆分的边界方法——ESM let 不可外部赋值决定的状态归属规则（单写方私有 vs state.ts 访问器）、vi.resetModules 单例语义保持、按消费方零改动倒推出口契约
 - [2026-10-13-拆工厂闭包用context不用访问器.md](notes/learn/2026-10/2026-10-13-拆工厂闭包用context不用访问器.md) — 拆工厂闭包与拆模块单例是两回事——工厂用 ManagerContext 首参显式化闭包状态（无 ESM let 问题、无单例重载问题），错误路径调 destroySession 决定分层；可选链收窄在属性链上依旧可用
+- [2026-10-13-真机三域适配的组合查询与双源状态.md](notes/learn/2026-10/2026-10-13-真机三域适配的组合查询与双源状态.md) — 真机截屏/网络/日志三域适配的三个可复用结论——组合查询模式的第三次复用收口成两个函数、跨来源状态不能放进会 prune 的 store、派生对象的生命周期跟随要用原始值 key
 - [2026-10-13-真机接入的三个接缝经验.md](notes/learn/2026-10/2026-10-13-真机接入的三个接缝经验.md) — 真机接入实现的三个接缝经验——track 载荷是 key:value 冒号格式、ensureSession 同 runId 幂等决定了重连必须代次自增、投屏 hook 参数收窄为结构化最小形态即可被真机画布复用
 
 ### notes/task/
@@ -343,4 +344,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 253 documents -->
+<!-- 254 documents -->

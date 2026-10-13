@@ -1,10 +1,18 @@
 ---
 description: 真机工具条对齐——通用边框 + 六键（返回/主页/概览/音量±/旋转）+ 截屏/网络/日志三域真机适配（think-report 假设 5 推迟项提前执行，用户 2026-10-13 批复「全做」；电源键经用户裁定不做）；三域统一走 serialOfDeviceId 已验证的「外部表优先、miss 落 AVD」组合查询模式
-status: in_progress
+status: completed
 created: 2026-10-13
 ---
 
 # 真机工具条对齐 + 截屏/网络/日志三域适配 — plan
+
+> 2026-10-13 实施完成（S1—S5 五步独立提交，每步 typecheck/lint/test 全绿；分支
+> feature/real-device-usb-and-apk-install）。对设计的两处实现偏差：①网络 hook 未按
+> 「参数化状态源」改签名，改为**双源合并读**（externalStore ?? deviceStore，id 不相交
+> 故安全）——两个画布调用点零改动，写回按 externalStore 成员路由；②日志 dock 的生命
+> 周期跟随从「对象引用比较」改为**原始值 key 比较**（logTarget 是派生对象、引用每帧
+> 新建，比引用会无限 setState）。硬件验收条目并入
+> [issue 2026-10-13-真机硬件验收待执行](../notes/issue/2026-10/2026-10-13-真机硬件验收待执行.md)。
 
 批复：用户 2026-10-13「全做」+「电源键可以不用」+「真机需要在外加一个通用边框」。本 plan 即 [think-report 20261013013755](../notes/think-report/20261013013755-真机USB无线接入与APK拖装.md) 假设 5 推迟项（截屏/断网/日志三域）的提前执行——技术通路已被第一批的 serialOfDeviceId 模式验证：三域本质都是 `adb -s <serial>`，serial 对真机语义不变，缺的只是「第二通路」。
 
