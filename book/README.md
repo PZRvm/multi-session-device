@@ -52,6 +52,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [2026-10-08-android-runtime.md](docs/architecture/2026-10-08-android-runtime.md) — 阶段 4 收尾时的 Android 运行快照：模块、SDK/AVD 隔离、启停与投屏输入契约、操作和排查入口及未验边界
 - [2026-10-13-main-module-split.md](docs/architecture/2026-10-13-main-module-split.md) — main 进程模块拆分快照——devices 域从 2603 行单文件拆为薄 index + 10 个域模块、emulator/index.ts 拆为装配层 + 4 个 sdkIpc 分组；分层 DAG 与状态访问器规则
+- [2026-10-13-scrcpy-module-split.md](docs/architecture/2026-10-13-scrcpy-module-split.md) — scrcpy 域拆分快照——758 行工厂 index.ts 拆为 19 行装配 + 8 个域文件；闭包状态显式化为 ManagerContext 首参传递，分层 DAG 与错误路径向下调 destroySession 的规则
 - [README.md](docs/architecture/README.md) — 架构快照——带日期的文档，描述模块和数据流在当时的真实状态
 - [项目骨架.md](docs/architecture/项目骨架.md) — 多会话模拟器的项目骨架——技术栈、三进程结构、目录职责与规划模块落点（stage 01 改造后快照）
 
@@ -156,6 +157,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-12-reconcile-report-full-view.md](notes/issue/2026-10/2026-10-12-reconcile-report-full-view.md) — 对账明细弹窗经 40 行截断防线后，超长报告的后 N 行在弹窗内不可见——需要应用内完整查看入口（滚动面板或导出）
 - [2026-10-12-reconcile-window-review-findings.md](notes/issue/2026-10/2026-10-12-reconcile-window-review-findings.md) — 对账弹窗相关批次 code review 发现——shell 白名单 `..` 穿越绕过（P1）、在途互斥吞新签名通知（P2）、白名单与 report 窗域零测试（P2）及 8 项 P3
 - [2026-10-12-source-aware-filter-batch-review.md](notes/issue/2026-10/2026-10-12-source-aware-filter-batch-review.md) — 出身标注 + 过滤视图两批（含六轮验收期修复）合并前 code review——无 P1；4 项 P2（跨桶运行设备查看回归、许可静默文本匹配、级联编排零测试、计数时间窗）与 8 项 P3
+- [2026-10-13-scrcpy-split-review.md](notes/issue/2026-10/2026-10-13-scrcpy-split-review.md) — scrcpy 拆分 review 发现（只记录不修复）——ipc.ts 部分入参校验文案是硬编码中文未走 msg() i18n；项目骨架.md 仍留着从未落地的 scrcpy/stream.ts【规划】行
 - [2026-10-13-存量lint不干净.md](notes/issue/2026-10/2026-10-13-存量lint不干净.md) — 存量 lint 不干净——sdkSourceSwitch.test.ts 一处缺函数返回类型（error 级），另有 DeviceWizard.tsx 等十余条 prettier 警告；2026-10-13 拆分验收时发现，与拆分无关
 
 ### notes/learn/
@@ -231,6 +233,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-12-merge-readme-regen-and-lint-baseline.md](notes/learn/2026-10/2026-10-12-merge-readme-regen-and-lint-baseline.md) — 双分支合并 review 经验——生成物 README 冲突必须重跑生成器收敛（手拼必漂移）；lint/测试「通过」注记要复跑验证，基线问题在两父提交上分别复跑定位归属
 - [2026-10-12-persistent-field-store-projection-checklist.md](notes/learn/2026-10/2026-10-12-persistent-field-store-projection-checklist.md) — 持久字段新增的完整落点清单——types/toMeta 之外还有 store 白名单投影与校验；漏投影的表象是读丢字段+切来源即冻结写入（误判外部修改）
 - [2026-10-13-主进程大文件拆分的边界方法.md](notes/learn/2026-10/2026-10-13-主进程大文件拆分的边界方法.md) — 主进程大文件拆分的边界方法——ESM let 不可外部赋值决定的状态归属规则（单写方私有 vs state.ts 访问器）、vi.resetModules 单例语义保持、按消费方零改动倒推出口契约
+- [2026-10-13-拆工厂闭包用context不用访问器.md](notes/learn/2026-10/2026-10-13-拆工厂闭包用context不用访问器.md) — 拆工厂闭包与拆模块单例是两回事——工厂用 ManagerContext 首参显式化闭包状态（无 ESM let 问题、无单例重载问题），错误路径调 destroySession 决定分层；可选链收窄在属性链上依旧可用
 
 ### notes/task/
 
@@ -316,6 +319,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-13-devices-test-split.md](plans/2026-10-13-devices-test-split.md) — 把 devices/__tests__/index.test.ts（3359 行、120 用例）按 describe 块拆到 8 个 <模块名>.test.ts + 共享 harness.ts，对齐 emulator 测试惯例；断言零削弱、总数不变
 - [2026-10-13-main-devices-emulator-split.md](plans/2026-10-13-main-devices-emulator-split.md) — 纯机械拆分 src/main/devices/index.ts（2603 行 → 薄 index + 10 个域模块）与 src/main/emulator/index.ts（711 行 → 薄 index + 5 个文件）；对齐 emulator 目录「薄 index + 域模块」样板，公共契约（17 个导出符号）不变，行为零变化
 - [2026-10-13-real-device-usb-and-apk-install.md](plans/2026-10-13-real-device-usb-and-apk-install.md) — stage06 第一批——USB 真机接入（track-devices-l 长连接插拔跟随 + 投屏第二桥 + 未授权引导）与 APK 拖装到真机（serialOf 组合查询 + 真机失败签名 + 「仍要安装」旗标重试）；依据 think-report 20261013013755 全批复
+- [2026-10-13-scrcpy-module-split.md](plans/2026-10-13-scrcpy-module-split.md) — 纯机械拆分 src/main/scrcpy/index.ts（758 行 → 薄 index 装配 + 8 个域文件）；工厂闭包状态（sessions/active/deps）显式化为 ManagerContext 传参，公共契约（createScrcpyManager + 3 常量 + 2 类型）与行为零变化
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### stage/
@@ -335,4 +339,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 245 documents -->
+<!-- 249 documents -->
