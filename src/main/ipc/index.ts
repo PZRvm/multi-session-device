@@ -134,9 +134,9 @@ export function registerIpcHandlers(): void {
   // 真机跟踪（track-devices-l 长连接）+ 会话第二桥：外部设备没有 runner，track 事件
   // 直接驱动投屏会话（connected 建会话、removed 销毁）与网络轮询（connected 起、
   // removed 收；startWatch 幂等——重连首帧全量重发不叠 timer）；截屏缓存无进程无需
-  // 接，日志在 S5 接。注册须在 scrcpy/network 创建之后（onSession 闭包引用它们）
+  // 接，日志在 S5 接。注册须在 scrcpy/network/logcat 创建之后（onSession 闭包引用它们）；
+  // 变化广播默认发全部窗口（独立日志窗下拉跟随，对齐 devices:changed 语义）
   registerExternalIpc({
-    pushTarget: () => getMainWindow()?.webContents ?? null,
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id,
     onSession: (event) => {
       if (event.kind === 'connected') {

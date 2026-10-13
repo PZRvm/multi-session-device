@@ -157,6 +157,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-12-reconcile-report-full-view.md](notes/issue/2026-10/2026-10-12-reconcile-report-full-view.md) — 对账明细弹窗经 40 行截断防线后，超长报告的后 N 行在弹窗内不可见——需要应用内完整查看入口（滚动面板或导出）
 - [2026-10-12-reconcile-window-review-findings.md](notes/issue/2026-10/2026-10-12-reconcile-window-review-findings.md) — 对账弹窗相关批次 code review 发现——shell 白名单 `..` 穿越绕过（P1）、在途互斥吞新签名通知（P2）、白名单与 report 窗域零测试（P2）及 8 项 P3
 - [2026-10-12-source-aware-filter-batch-review.md](notes/issue/2026-10/2026-10-12-source-aware-filter-batch-review.md) — 出身标注 + 过滤视图两批（含六轮验收期修复）合并前 code review——无 P1；4 项 P2（跨桶运行设备查看回归、许可静默文本匹配、级联编排零测试、计数时间窗）与 8 项 P3
+- [2026-10-13-AppLogcatDock测试偶发抖动.md](notes/issue/2026-10/2026-10-13-AppLogcatDock测试偶发抖动.md) — App.logcat.test.tsx 的「dock 默认收起；点击展开并订阅，再点收起退订」用例在整仓并行跑时偶发失败（单独跑稳定通过），2026-10-13 两个不同批次各中一次
 - [2026-10-13-scrcpy-split-review.md](notes/issue/2026-10/2026-10-13-scrcpy-split-review.md) — scrcpy 拆分 review 发现（只记录不修复）——ipc.ts 部分入参校验文案是硬编码中文未走 msg() i18n；项目骨架.md 仍留着从未落地的 scrcpy/stream.ts【规划】行
 - [2026-10-13-存量lint不干净.md](notes/issue/2026-10/2026-10-13-存量lint不干净.md) — 存量 lint 不干净——sdkSourceSwitch.test.ts 一处缺函数返回类型（error 级），另有 DeviceWizard.tsx 等十余条 prettier 警告；2026-10-13 拆分验收时发现，与拆分无关
 - [2026-10-13-真机硬件验收待执行.md](notes/issue/2026-10/2026-10-13-真机硬件验收待执行.md) — 真机 USB 接入与 APK 拖装第一批代码完成，但验收清单中需要物理设备的条目全部未实测——插拔跟随、投屏操控、拖装链路、MIUI 拦截词条、Android 14 旧包「仍要安装」、kill-server 恢复
@@ -344,4 +345,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 254 documents -->
+<!-- 255 documents -->

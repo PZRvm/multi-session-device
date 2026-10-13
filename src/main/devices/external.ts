@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import type { Socket } from 'node:net'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { DeviceRuntimeView, ExternalDevice } from '@shared/types'
@@ -31,8 +31,9 @@ export type ExternalSessionEvent =
   { kind: 'connected'; device: ExternalDevice; runId: string } | { kind: 'removed'; id: string }
 
 export interface ExternalDeps {
-  /** 变化推送目标（主窗 webContents；窗口不在时静默跳过，下次变化再推） */
-  pushTarget: () => Electron.WebContents | null
+  /** 变化广播（默认发全部窗口——对齐 devices:changed 语义：独立日志窗的下拉也跟随真机；
+   *  测试替身注入断言） */
+  broadcast?: (devices: ExternalDevice[]) => void
   isMainSender: (sender: Electron.WebContents) => boolean
   /** 会话桥事件（测试断言 / 装配层消费） */
   onSession?: (event: ExternalSessionEvent) => void
@@ -40,6 +41,12 @@ export interface ExternalDeps {
   connect?: typeof tcpConnect
   /** server 存续接缝（测试替身；默认 requireAdb + ensureSharedServer） */
   ensureServer?: () => Promise<unknown>
+}
+
+const broadcastDefault = (devices: ExternalDevice[]): void => {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send(IPC_CHANNELS.devicesExternalChanged, devices)
+  }
 }
 
 // ---- 载荷解析（长/短格式共用）----
@@ -198,9 +205,8 @@ const applyList = (payload: string, reconnected: boolean): void => {
   }
   if (sameDevices(next, cache)) return
   cache = next
-  deps?.pushTarget()?.send(IPC_CHANNELS.devicesExternalChanged, cache)
+  ;(deps?.broadcast ?? broadcastDefault)(cache)
 }
-
 const clearHandshakeTimer = (): void => {
   if (handshakeTimer) {
     clearTimeout(handshakeTimer)

@@ -30,18 +30,18 @@ const fresh = async (): Promise<typeof import('../external')> => {
 interface DepsBag {
   deps: ExternalDeps
   sockets: FakeSocket[]
-  send: ReturnType<typeof vi.fn>
+  broadcast: ReturnType<typeof vi.fn>
   onSession: ReturnType<typeof vi.fn>
   ensureServer: ReturnType<typeof vi.fn>
 }
 
 const makeDeps = (overrides: Partial<ExternalDeps> = {}): DepsBag => {
   const sockets: FakeSocket[] = []
-  const send = vi.fn()
+  const broadcast = vi.fn()
   const onSession = vi.fn()
   const ensureServer = vi.fn(async () => null)
   const deps: ExternalDeps = {
-    pushTarget: () => ({ send }) as unknown as Electron.WebContents,
+    broadcast,
     isMainSender: () => true,
     onSession,
     connect: (() => {
@@ -52,7 +52,7 @@ const makeDeps = (overrides: Partial<ExternalDeps> = {}): DepsBag => {
     ensureServer,
     ...overrides
   }
-  return { deps, sockets, send, onSession, ensureServer }
+  return { deps, sockets, broadcast, onSession, ensureServer }
 }
 
 const listHandler = (): ((event: { sender: Electron.WebContents }) => unknown) => {
@@ -236,7 +236,7 @@ describe('track 客户端', () => {
       device: { id: 'A', serial: 'A', transport: 'usb', state: 'device', model: 'Pixel_6' },
       runId: 'ext:A:1'
     })
-    expect(bags.send).toHaveBeenCalledWith('devices:external-changed', [
+    expect(bags.broadcast).toHaveBeenCalledWith([
       { id: 'A', serial: 'A', transport: 'usb', state: 'device', model: 'Pixel_6' }
     ])
   })
@@ -251,9 +251,9 @@ describe('track 客户端', () => {
     const whole = Buffer.concat([OKAY, frameOf('A\tdevice model:Pixel_6')])
     sock.emit('data', whole.subarray(0, 5))
     sock.emit('data', whole.subarray(5))
-    expect(bags.send).toHaveBeenCalledTimes(1)
+    expect(bags.broadcast).toHaveBeenCalledTimes(1)
     sock.emit('data', frameOf('A\tdevice model:Pixel_6'))
-    expect(bags.send).toHaveBeenCalledTimes(1)
+    expect(bags.broadcast).toHaveBeenCalledTimes(1)
     expect(bags.onSession).toHaveBeenCalledTimes(1)
   })
 
@@ -266,7 +266,7 @@ describe('track 客户端', () => {
     sock.emit('connect')
     sock.emit('data', Buffer.concat([OKAY, frameOf('A\tunauthorized')]))
     expect(bags.onSession).not.toHaveBeenCalled()
-    expect(bags.send).toHaveBeenCalledTimes(1)
+    expect(bags.broadcast).toHaveBeenCalledTimes(1)
     sock.emit('data', frameOf('A\tdevice model:Pixel_6'))
     expect(bags.onSession).toHaveBeenCalledWith(
       expect.objectContaining({ runId: 'ext:A:1', kind: 'connected' })
@@ -284,8 +284,8 @@ describe('track 客户端', () => {
     sock.emit('data', frameOf('B\toffline'))
     expect(bags.onSession).toHaveBeenCalledWith({ kind: 'removed', id: 'A' })
     expect(bags.onSession).toHaveBeenCalledWith({ kind: 'removed', id: 'B' })
-    expect(bags.send).toHaveBeenCalledTimes(2)
-    expect(bags.send).toHaveBeenLastCalledWith('devices:external-changed', [
+    expect(bags.broadcast).toHaveBeenCalledTimes(2)
+    expect(bags.broadcast).toHaveBeenLastCalledWith([
       { id: 'B', serial: 'B', transport: 'usb', state: 'offline', model: null }
     ])
   })
@@ -304,7 +304,7 @@ describe('track 客户端', () => {
     second.emit('connect')
     expect(second.write).toHaveBeenCalledWith(SHORT_REQUEST)
     second.emit('data', Buffer.concat([OKAY, frameOf('A\tdevice')]))
-    expect(bags.send).toHaveBeenLastCalledWith('devices:external-changed', [
+    expect(bags.broadcast).toHaveBeenLastCalledWith([
       { id: 'A', serial: 'A', transport: 'usb', state: 'device', model: null }
     ])
   })
@@ -366,7 +366,7 @@ describe('track 客户端', () => {
     second.emit('connect')
     second.emit('data', Buffer.concat([OKAY, frameOf('')]))
     expect(bags.onSession).toHaveBeenCalledWith({ kind: 'removed', id: 'A' })
-    expect(bags.send).toHaveBeenLastCalledWith('devices:external-changed', [])
+    expect(bags.broadcast).toHaveBeenLastCalledWith([])
   })
 
   it('握手超时（5s 无首帧）→ 销毁并退避重连', async () => {
@@ -407,7 +407,7 @@ describe('track 客户端', () => {
     sock.emit('close')
     await vi.advanceTimersByTimeAsync(60_000)
     expect(bags.sockets).toHaveLength(1)
-    expect(bags.send).toHaveBeenCalledTimes(1)
+    expect(bags.broadcast).toHaveBeenCalledTimes(1)
   })
 
   it('externalRuntimeViews：只列 device 态，name 取 model 缺省 serial，status 适配 running', async () => {
