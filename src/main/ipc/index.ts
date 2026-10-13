@@ -11,7 +11,6 @@ import {
   listDeviceRuntimeViews,
   purgeAppOwnedDevices,
   registerExternalIpc,
-  runningDeviceRef,
   savedDeviceSkinRef,
   registerDevicesIpc,
   serialOfDeviceId,
@@ -72,10 +71,11 @@ export function registerIpcHandlers(): void {
     isRunningDevice: isDeviceActiveOfId,
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
   })
-  // 网络开关域（plan 2026-10-12）：注入同截屏域；句柄供桥启停轮询（running 起、停止收）
+  // 网络开关域（plan 2026-10-12）：注入同截屏域；句柄供桥启停轮询（running 起、停止收）。
+  // 真机适配（plan 2026-10-13-real-device-toolbar-parity）：注入换组合查询
   const network = registerNetworkIpc({
     adbPath: adbBinaryPath,
-    runningDevice: runningDeviceRef,
+    runningDevice: deviceRefOfId,
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id,
     pushTarget: () => getMainWindow()?.webContents ?? null
   })
@@ -130,8 +130,9 @@ export function registerIpcHandlers(): void {
   })
 
   // 真机跟踪（track-devices-l 长连接）+ 会话第二桥：外部设备没有 runner，track 事件
-  // 直接驱动投屏会话（connected 建会话、removed 销毁）；截屏/网络/日志不接真机
-  // （PRD 后续批次，假设 5）。注册须在 scrcpy 创建之后（onSession 闭包引用它）
+  // 直接驱动投屏会话（connected 建会话、removed 销毁）与网络轮询（connected 起、
+  // removed 收；startWatch 幂等——重连首帧全量重发不叠 timer）；截屏缓存无进程无需
+  // 接，日志在 S5 接。注册须在 scrcpy/network 创建之后（onSession 闭包引用它们）
   registerExternalIpc({
     pushTarget: () => getMainWindow()?.webContents ?? null,
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id,
@@ -140,8 +141,10 @@ export function registerIpcHandlers(): void {
         void scrcpy
           .ensureSession({ id: event.device.id, runId: event.runId, serial: event.device.serial })
           .catch(() => undefined)
+        network.startWatch(event.device.id, event.device.serial)
       } else {
         void scrcpy.destroySession(event.id).catch(() => undefined)
+        network.clearWatch(event.id)
       }
     }
   })

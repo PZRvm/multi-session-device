@@ -9,6 +9,7 @@ import { useApkInstall } from '../hooks/useApkInstall'
 import { useDeviceInput } from '../hooks/useDeviceInput'
 import { useDeviceScreen, type ScreenViewStatus } from '../hooks/useDeviceScreen'
 import { useScreenshot } from '../hooks/useScreenshot'
+import { useNetworkSwitch } from '../hooks/useNetworkSwitch'
 import { spinKeyframes } from '../styles/animations'
 import { toApiResult } from '../api'
 import DeviceToolbar from './DeviceToolbar'
@@ -141,6 +142,9 @@ const ExternalCanvas = ({ device }: ExternalCanvasProps): React.JSX.Element => {
     status: device.state === 'device' ? 'running' : 'stopped'
   })
 
+  // 网络开关组（S4）：adb 链路 + external 桥挂的 1s 轮询；态经 useNetworkSwitch 双源合并读
+  const net = useNetworkSwitch({ id: device.id })
+
   useDeviceInput({
     canvasContainerRef: stageRef,
     inputProxyRef: proxyRef,
@@ -249,9 +253,11 @@ const ExternalCanvas = ({ device }: ExternalCanvasProps): React.JSX.Element => {
             void shot.save()
           }}
           onScreenshotDismiss={shot.dismiss}
-          networkState={null}
-          networkBusy={null}
-          onNetworkToggle={() => undefined}
+          networkState={device.state === 'device' ? net.state : null}
+          networkBusy={net.busyTarget}
+          onNetworkToggle={(target) => {
+            void net.toggle(target)
+          }}
         />
       </div>
     </Wrapper>

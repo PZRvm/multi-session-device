@@ -41,4 +41,17 @@ describe('externalStore（真机列表状态）', () => {
     useExternalStore.getState().select(null)
     expect(useExternalStore.getState().selectedId).toBeNull()
   })
+
+  it('网络态（S4）：直写独立 map，设备消失时随 apply prune', () => {
+    useExternalStore.getState().apply([device('A'), device('B')])
+    useExternalStore.getState().applyNetworkState('A', { airplane: false, wifi: true, data: true })
+    useExternalStore.getState().applyNetworkState('B', { airplane: true, wifi: false, data: false })
+    expect(useExternalStore.getState().network['A']).toEqual({
+      airplane: false,
+      wifi: true,
+      data: true
+    })
+    useExternalStore.getState().apply([device('A')])
+    expect(Object.keys(useExternalStore.getState().network)).toEqual(['A'])
+  })
 })
