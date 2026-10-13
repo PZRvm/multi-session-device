@@ -351,17 +351,19 @@ const App = (): React.JSX.Element => {
   }
 
   // ---- 日志 dock（plan 2026-10-10-logcat-panel）----
-  // 真机选中时 AVD 画布不可见，dock 随之退场（日志域对真机的适配在后续批次，假设 5）
+  // 日志目标（S5 真机扩展）：真机选中且 connected → {id}（runId 在 main 会话代次，
+  // renderer 不需要）；否则 AVD running（serial + runId 在场）。外部选中时 AVD 画布
+  // 不可见，反之亦然——同一时刻至多一个目标
   const externalSelected =
     externalDevices.find((device) => device.id === selectedExternalId) ?? null
-  const logcatDevice =
-    externalSelected === null &&
-    selected &&
-    selected.status === 'running' &&
-    selected.serial &&
-    selected.runId
-      ? selected
-      : null
+  const logTarget: { id: string; runId: string | null } | null =
+    externalSelected !== null
+      ? externalSelected.state === 'device'
+        ? { id: externalSelected.id, runId: null }
+        : null
+      : selected && selected.status === 'running' && selected.serial && selected.runId
+        ? { id: selected.id, runId: selected.runId }
+        : null
 
   // 画布剩余不足保底 560 时 dock 不渲染（兜底派生——正常路径由 main 侧 minWidth
   // 锁定与拉宽保证 dock 展开时不被窗口缩窄挤掉）
@@ -371,15 +373,17 @@ const App = (): React.JSX.Element => {
   // dock 展开所需的主窗最小宽（列表 + 分隔条 + 日志栏 + 画布保底）
   const dockNeedWidth = listWidth + 5 + logPaneWidth + LOG_CANVAS_MIN_WIDTH
 
-  // dock 跟随设备生命周期：无 running 设备（停止/删除/选中切走）时自动收起。
+  // dock 跟随设备生命周期：无可用目标（停止/删除/选中切走/真机失联）时自动收起。
   // 否则 dock 空态挂死——入口按钮随设备消失、弹出按钮无设备直接 return，
   // dock 关不掉且 minWidth 锁残留（用户反馈「打开过 logcat 后窗口缩不小」）。
   // 渲染期对齐（React「adjust state during render」模式）：状态重置不进 effect，
-  // 无 set-state-in-effect 的级联提交
-  const [prevLogcatDevice, setPrevLogcatDevice] = useState(logcatDevice)
-  if (logcatDevice !== prevLogcatDevice) {
-    setPrevLogcatDevice(logcatDevice)
-    if (!logcatDevice) setLogDockOpen(false)
+  // 无 set-state-in-effect 的级联提交。logTarget 是派生对象（引用每帧新建），
+  // 生命周期跟随用原始值 key 比较，不比引用
+  const logcatKey = logTarget ? `${logTarget.id}:${logTarget.runId ?? ''}` : null
+  const [prevLogcatKey, setPrevLogcatKey] = useState(logcatKey)
+  if (logcatKey !== prevLogcatKey) {
+    setPrevLogcatKey(logcatKey)
+    if (!logcatKey) setLogDockOpen(false)
   }
 
   // 声明式同步：dock 可见 → 锁主窗 minWidth（拖宽变化跟随）；不可见（收起、
@@ -404,7 +408,7 @@ const App = (): React.JSX.Element => {
     const windowOpen = await toApiResult(window.api.logcat.isWindowOpen())
     if (windowOpen.ok && windowOpen.data) {
       void requestWindow('logcat', copy.openLogcatWindowFailed, () =>
-        window.api.logcat.openWindow(logcatDevice?.id)
+        window.api.logcat.openWindow(logTarget?.id)
       )
       return
     }
@@ -416,10 +420,10 @@ const App = (): React.JSX.Element => {
   }
 
   const handlePopOutLogcat = async (): Promise<void> => {
-    if (!logcatDevice) return
+    if (!logTarget) return
     // 失败弹原生 dialog（15s 超时/did-fail-load/renderer 崩溃带 detail）——不再静默
     const ok = await requestWindow('logcat-popout', copy.openLogcatWindowFailed, () =>
-      window.api.logcat.openWindow(logcatDevice.id)
+      window.api.logcat.openWindow(logTarget.id)
     )
     if (ok) setLogDockOpen(false)
   }
@@ -534,7 +538,7 @@ const App = (): React.JSX.Element => {
             createDisabled={!metaWritable}
           />
         )}
-        {logcatDevice ? (
+        {logTarget ? (
           <button
             type="button"
             className="log-toggle"
@@ -567,9 +571,9 @@ const App = (): React.JSX.Element => {
           />
           <aside className="log-pane" style={{ width: logPaneWidth }}>
             <LogcatPanel
-              key={`${logcatDevice?.id ?? 'none'}:${logcatDevice?.runId ?? ''}`}
-              deviceId={logcatDevice?.id ?? null}
-              runId={logcatDevice?.runId ?? null}
+              key={logcatKey ?? 'none:'}
+              deviceId={logTarget?.id ?? null}
+              runId={logTarget?.runId ?? null}
               onPopOut={() => void handlePopOutLogcat()}
             />
           </aside>

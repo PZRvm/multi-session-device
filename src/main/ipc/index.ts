@@ -6,6 +6,7 @@ import {
   androidToolEnv,
   appOwnedDeviceCount,
   deviceRefOfId,
+  externalRuntimeViews,
   isDeviceActiveOfId,
   listDeviceNamesReferencing,
   listDeviceRuntimeViews,
@@ -93,10 +94,11 @@ export function registerIpcHandlers(): void {
   })
   scrcpy.registerIpc()
 
+  // 日志域：运行视图合并（S5）——AVD 视图 + 已连接真机（订阅惰性建会与独立窗下拉共用）
   const logcat = createLogcatManager({
     adbPath: adbBinaryPath,
     toolEnv: androidToolEnv,
-    runtimeViews: listDeviceRuntimeViews,
+    runtimeViews: () => [...listDeviceRuntimeViews(), ...externalRuntimeViews()],
     isLogcatWindow: isLogcatWindowSender
   })
   logcat.registerIpc()
@@ -142,9 +144,15 @@ export function registerIpcHandlers(): void {
           .ensureSession({ id: event.device.id, runId: event.runId, serial: event.device.serial })
           .catch(() => undefined)
         network.startWatch(event.device.id, event.device.serial)
+        logcat.ensureSession({
+          id: event.device.id,
+          runId: event.runId,
+          serial: event.device.serial
+        })
       } else {
         void scrcpy.destroySession(event.id).catch(() => undefined)
         network.clearWatch(event.id)
+        logcat.destroySession(event.id)
       }
     }
   })
