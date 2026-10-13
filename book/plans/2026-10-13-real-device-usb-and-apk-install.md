@@ -93,7 +93,7 @@ FAIL 应答（极老 server 不认 `-l`）→ 回退 `host:track-devices` 短格
 ### 5. renderer（界面布局与视觉走 impeccable 技能）
 
 - **stores/externalStore.ts**（zustand）：`devices: ExternalDevice[]`、`selectedExternalId`；挂载时 `listExternal()` 初拉 + `onExternalChanged` 订阅。与 deviceStore 的 AVD 选择并列，App 组合层判定当前画布目标（点真机行 → 画布切真机；点 AVD 行切回；两列表互斥呈现选中态）。
-- **DeviceListPane**：新增「真机」分区（有设备才出现或常驻空态提示「未检测到真机，USB 连接并打开调试后自动出现」）；未授权态行内引导（提示手机侧授权；撤销重授权路径文案）。
+- **DeviceListPane**：新增「真机」分区，行卡**复用既有 AVD 行的视觉语言**（用户 2026-10-13 指定按现有列表样式渲染，不另起样式）：组头同折叠组样式（chevron + 计数）；行卡三行——① 粗体标题（model，缺省用 serial）+ 右侧类型角标换成 **USB / WiFi 图标**（接入方式靠图标传达，同现有机型角标位）；② 状态点（已连接=常规色、未授权=警示色、离线=灰）+ 点分隔元信息 `型号 · serial · 状态`（无线 serial 本身即 ip:port）；③ 未授权/离线时的引导行（同现有警示行样式：手机侧授权指引，撤销重授权路径）。真机行第一批**无内联操作图标**（无启停/编辑/删除；点击行即选中投屏，第二批无线批再加「断开」）。无真机时一条 muted 空态行「未检测到真机，USB 连接并打开调试后自动出现」。USB 与 WiFi 同区混排、靠角标与 serial 形态区分，不拆两个分区。像素级细节走 impeccable。
 - **画布分支**：外部设备画布复用既有投屏渲染（viewToken/screenActivate 机制不变，id 用外部 serial）+ `useApkInstall` 拖拽安装；画布 key 用外部 id。
 - **useApkInstall**：failed phase 增 `canBypass?: true` 字段与 `retryWithBypass()`（以同一 filePath 带 `allowLowTargetSdk: true` 重发）；`startInstall` 改读 `ApkInstallOutcome`（throw 型错误仍走 toApiResult）。
 - **InstallDropOverlay**：failed 卡在 `canBypass` 时展示「仍要安装」按钮 → 触发 retryWithBypass。
