@@ -879,6 +879,25 @@ export interface ApkInstallResult {
   fileName: string
 }
 
+/** 拖拽安装结果（判别联合，S5 起替代 ApkInstallResult）：安装失败是「结果」不是「错误」——
+ *  「仍要安装」重试需要机器可读标记，不能靠匹配文案 */
+export type ApkInstallOutcome =
+  { ok: true; fileName: string } | { ok: false; message: string; canBypassLowTargetSdk: boolean }
+
+// ---- 真机域（plan 2026-10-13-real-device-usb-and-apk-install；stage06 第一批）----
+
+/** 外部物理设备（USB / 无线）：id 即 serial（稳定唯一）；纯内存跟踪，不进 DeviceSnapshot */
+export interface ExternalDevice {
+  /** 与 serial 同值（renderer 以 id 键控画布与安装态） */
+  id: string
+  serial: string
+  /** serial 含 ':' 即无线（ip:port 形态）；本批只会出现 usb */
+  transport: 'usb' | 'wireless'
+  state: 'device' | 'unauthorized' | 'offline'
+  /** 长格式 model= 属性；短格式回退或属性缺席时为 null */
+  model: string | null
+}
+
 // ---- 网络开关域（plan 2026-10-12-network-switch-group）----
 /** 开关目标：airplane = 飞行模式（真断网总闸）；wifi/data = 分 radio 场景开关 */
 export type NetworkTarget = 'airplane' | 'wifi' | 'data'

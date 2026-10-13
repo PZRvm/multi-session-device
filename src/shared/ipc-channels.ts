@@ -25,6 +25,11 @@ export const IPC_CHANNELS = {
   devicesChanged: 'devices:changed',
   /** 后台运行故障推送（main → 主窗）：spawn/崩溃/停止失败等，renderer 按 eventId 去重 */
   devicesRuntimeError: 'devices:runtime-error',
+  // ---- 真机域（plan 2026-10-13-real-device-usb-and-apk-install；仅登记主窗）----
+  /** 拉取外部设备快照（main 内存缓存；track-devices-l 跟踪） */
+  devicesExternalList: 'devices:external-list',
+  /** main → 主窗：外部设备全量推送（main 侧 diff，变化才推） */
+  devicesExternalChanged: 'devices:external-changed',
   // ---- 持久化对账域（plan 2026-10-05-avd-reconciliation；仅登记主窗）----
   /** 人工重查：受控重读元数据 + AVD/镜像只读核验，返回合并快照与本轮报告 */
   devicesReconcile: 'devices:reconcile',

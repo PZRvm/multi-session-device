@@ -459,6 +459,10 @@ const zhCN = {
   apkInstallOlderSdk: 'APK 安装失败：APK 要求的系统版本高于设备当前版本（{detail}）',
   apkInstallTestOnly: 'APK 安装失败：testOnly 包需正式签名或 adb 加 -t 安装（{detail}）',
   apkInstallNotApk: 'APK 安装失败：文件不是有效的 APK（{detail}）',
+  apkInstallUserRestricted:
+    'APK 安装失败：设备系统禁止通过 USB 安装应用，请在手机开发者选项中开启「USB 安装」后重试（{detail}）',
+  apkInstallDeprecatedSdk: 'APK 安装失败：targetSdk 低于 Android 14 允许的最低版本（{detail}）',
+  apkExternalNotReady: '真机未就绪（未授权或已离线），无法安装 APK',
   // ---- 日志域（plan 2026-10-10-logcat-panel）----
   logcatWindowTitle: '日志',
   loadLogcatFailed: '加载日志窗口失败：{detail}',
@@ -902,6 +906,10 @@ const zhTW: ErrorsCopy = {
   apkInstallOlderSdk: 'APK 安裝失敗：APK 要求的系統版本高於裝置目前版本（{detail}）',
   apkInstallTestOnly: 'APK 安裝失敗：testOnly 套件需正式簽章或 adb 加 -t 安裝（{detail}）',
   apkInstallNotApk: 'APK 安裝失敗：檔案不是有效的 APK（{detail}）',
+  apkInstallUserRestricted:
+    'APK 安裝失敗：裝置系統禁止透過 USB 安裝應用，請在手機開發者選項中開啟「USB 安裝」後重試（{detail}）',
+  apkInstallDeprecatedSdk: 'APK 安裝失敗：targetSdk 低於 Android 14 允許的最低版本（{detail}）',
+  apkExternalNotReady: '真機未就緒（未授權或已離線），無法安裝 APK',
   // ---- 日誌域 ----
   logcatWindowTitle: '日誌',
   loadLogcatFailed: '載入日誌視窗失敗：{detail}',
@@ -1396,6 +1404,12 @@ const enUS: ErrorsCopy = {
   apkInstallTestOnly:
     'APK install failed: test-only package needs a release signature or adb -t ({detail})',
   apkInstallNotApk: 'APK install failed: file is not a valid APK ({detail})',
+  apkInstallUserRestricted:
+    'APK install failed: the device blocks installs over USB; enable "USB installs" in developer options on the phone and retry ({detail})',
+  apkInstallDeprecatedSdk:
+    'APK install failed: the APK targets an SDK older than Android 14 allows ({detail})',
+  apkExternalNotReady:
+    'The physical device is not ready (unauthorized or offline); cannot install the APK',
   // ---- Logcat domain ----
   logcatWindowTitle: 'Logs',
   loadLogcatFailed: 'Failed to load the log window: {detail}',
