@@ -183,116 +183,120 @@ const DeviceListPane = ({
 
   return (
     <Wrapper>
-      {devices.length === 0 ? (
-        loadError !== null ? (
-          // invoke 级失败不经过 storeHealth——按读取失败展示并保留重试（plan 差距表）
-          <p className="empty-hint">
-            {format(copy.loadFailed, { message: loadError })}
-            <br />
-            <button type="button" className="retry-link" onClick={onRetryLoad}>
-              {copy.retryLoad}
-            </button>
-          </p>
-        ) : storeState === 'error' ? (
-          <p className="empty-hint">{copy.listReadFailed}</p>
-        ) : storeState === 'read-only' ? (
-          <p className="empty-hint">{copy.readOnlyEmpty}</p>
-        ) : (
-          <p className="empty-hint">{copy.emptyList}</p>
-        )
-      ) : (
-        <div className="list">
-          <div className="origin-main">
-            {active.map((device) =>
-              rowHandlers(device, {
-                selectedId,
-                storeTrusted,
-                metaWritable,
-                sourceBucket,
-                onSelect,
-                onStart,
-                onStop,
-                onCancelStart,
-                onCopySerial,
-                onDelete,
-                onRename,
-                onEdit,
-                onRenameBlocked,
-                onCrossBucketBlocked
-              })
-            )}
-          </div>
-          {foldedLine !== null ? (
-            <div className="origin-folded">
-              <button
-                type="button"
-                className="folded-toggle"
-                aria-expanded={foldedOpen}
-                onClick={() => setFoldedOpen((open) => !open)}
-              >
-                {foldedOpen ? (
-                  <ChevronDown size={12} aria-hidden="true" />
-                ) : (
-                  <ChevronRight size={12} aria-hidden="true" />
-                )}
-                {foldedLine}
+      {/* 单一滚动容器：AVD 分区（或空库提示）之后紧跟真机区——不钉在栏底（用户
+          2026-10-13 反馈：真机列表要贴上方列表下方） */}
+      <div className="list">
+        {devices.length === 0 ? (
+          loadError !== null ? (
+            // invoke 级失败不经过 storeHealth——按读取失败展示并保留重试（plan 差距表）
+            <p className="empty-hint">
+              {format(copy.loadFailed, { message: loadError })}
+              <br />
+              <button type="button" className="retry-link" onClick={onRetryLoad}>
+                {copy.retryLoad}
               </button>
-              {foldedOpen ? (
-                <div className="origin-folded-body">
-                  {folded.map((device) =>
-                    rowHandlers(device, {
-                      selectedId,
-                      storeTrusted,
-                      metaWritable,
-                      sourceBucket,
-                      onSelect,
-                      onStart,
-                      onStop,
-                      onCancelStart,
-                      onCopySerial,
-                      onDelete,
-                      onRename,
-                      onEdit,
-                      onRenameBlocked,
-                      onCrossBucketBlocked
-                    })
+            </p>
+          ) : storeState === 'error' ? (
+            <p className="empty-hint">{copy.listReadFailed}</p>
+          ) : storeState === 'read-only' ? (
+            <p className="empty-hint">{copy.readOnlyEmpty}</p>
+          ) : (
+            <p className="empty-hint">{copy.emptyList}</p>
+          )
+        ) : (
+          <>
+            <div className="origin-main">
+              {active.map((device) =>
+                rowHandlers(device, {
+                  selectedId,
+                  storeTrusted,
+                  metaWritable,
+                  sourceBucket,
+                  onSelect,
+                  onStart,
+                  onStop,
+                  onCancelStart,
+                  onCopySerial,
+                  onDelete,
+                  onRename,
+                  onEdit,
+                  onRenameBlocked,
+                  onCrossBucketBlocked
+                })
+              )}
+            </div>
+            {foldedLine !== null ? (
+              <div className="origin-folded">
+                <button
+                  type="button"
+                  className="folded-toggle"
+                  aria-expanded={foldedOpen}
+                  onClick={() => setFoldedOpen((open) => !open)}
+                >
+                  {foldedOpen ? (
+                    <ChevronDown size={12} aria-hidden="true" />
+                  ) : (
+                    <ChevronRight size={12} aria-hidden="true" />
                   )}
-                </div>
-              ) : null}
+                  {foldedLine}
+                </button>
+                {foldedOpen ? (
+                  <div className="origin-folded-body">
+                    {folded.map((device) =>
+                      rowHandlers(device, {
+                        selectedId,
+                        storeTrusted,
+                        metaWritable,
+                        sourceBucket,
+                        onSelect,
+                        onStart,
+                        onStop,
+                        onCancelStart,
+                        onCopySerial,
+                        onDelete,
+                        onRename,
+                        onEdit,
+                        onRenameBlocked,
+                        onCrossBucketBlocked
+                      })
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </>
+        )}
+        <div className="real-devices">
+          <button
+            type="button"
+            className="folded-toggle"
+            aria-expanded={realOpen}
+            onClick={() => setRealOpen((open) => !open)}
+          >
+            {realOpen ? (
+              <ChevronDown size={12} aria-hidden="true" />
+            ) : (
+              <ChevronRight size={12} aria-hidden="true" />
+            )}
+            {format(copy.realDeviceSectionCount, { count: externalDevices.length })}
+          </button>
+          {realOpen ? (
+            <div className="real-body">
+              {externalDevices.length === 0 ? (
+                <p className="real-empty">{copy.realDeviceEmpty}</p>
+              ) : (
+                externalDevices.map((device) => (
+                  <ExternalRow
+                    key={device.id}
+                    device={device}
+                    selected={device.id === selectedExternalId}
+                    onSelect={() => onSelectExternal(device.id)}
+                  />
+                ))
+              )}
             </div>
           ) : null}
         </div>
-      )}
-      <div className="real-devices">
-        <button
-          type="button"
-          className="folded-toggle"
-          aria-expanded={realOpen}
-          onClick={() => setRealOpen((open) => !open)}
-        >
-          {realOpen ? (
-            <ChevronDown size={12} aria-hidden="true" />
-          ) : (
-            <ChevronRight size={12} aria-hidden="true" />
-          )}
-          {format(copy.realDeviceSectionCount, { count: externalDevices.length })}
-        </button>
-        {realOpen ? (
-          <div className="real-body">
-            {externalDevices.length === 0 ? (
-              <p className="real-empty">{copy.realDeviceEmpty}</p>
-            ) : (
-              externalDevices.map((device) => (
-                <ExternalRow
-                  key={device.id}
-                  device={device}
-                  selected={device.id === selectedExternalId}
-                  onSelect={() => onSelectExternal(device.id)}
-                />
-              ))
-            )}
-          </div>
-        ) : null}
       </div>
     </Wrapper>
   )
@@ -377,9 +381,9 @@ const Wrapper = styled.div`
   }
 
   /* 真机区（plan 2026-10-13-real-device-usb-and-apk-install）：组头同折叠组样式，
-     行卡复用 AVD 行的视觉语言（发丝线分隔、选中 accent 底） */
+     行卡复用 AVD 行的视觉语言（发丝线分隔、选中 accent 底）。位于滚动列表流内——
+     紧跟 AVD 分区（或空库提示）之后，不钉在栏底（用户 2026-10-13 反馈） */
   .real-devices {
-    flex: none;
     border-top: 1px solid var(--board-hairline);
     background: var(--board-bg-raised);
   }

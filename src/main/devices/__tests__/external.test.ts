@@ -84,6 +84,14 @@ describe('parseTrackDevices', () => {
     ).toEqual([{ serial: 'R58N', state: 'device', model: 'Pixel_6_Pro' }])
   })
 
+  it('真实载荷（空格对齐长格式，2026-10-13 EBG_AN00 实测）——serial 与 state 间是空格串', async () => {
+    expect(
+      await parse(
+        'DSLDU20B12002637       device usb:0-1 product:EBG-AN00 model:EBG_AN00 device:HWEBG transport_id:2\n'
+      )
+    ).toEqual([{ serial: 'DSLDU20B12002637', state: 'device', model: 'EBG_AN00' }])
+  })
+
   it('短格式行：无属性区 model 为 null', async () => {
     expect(await parse('abc\tdevice')).toEqual([{ serial: 'abc', state: 'device', model: null }])
   })

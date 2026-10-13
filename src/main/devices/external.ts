@@ -51,16 +51,15 @@ export interface ExternalDeps {
 export const parseTrackDevices = (payload: string): TrackDeviceEntry[] => {
   const entries: TrackDeviceEntry[] = []
   for (const line of payload.split('\n')) {
-    const tab = line.indexOf('\t')
-    if (tab <= 0) continue
-    const serial = line.slice(0, tab)
-    const rest = line.slice(tab + 1)
-    const space = rest.indexOf(' ')
-    const state = space === -1 ? rest : rest.slice(0, space)
-    if (!/^[a-z]+$/i.test(state)) continue
-    const props = space === -1 ? '' : rest.slice(space + 1)
-    const model = /(?:^|\s)model:([^\s]*)/.exec(props)?.[1]
-    entries.push({ serial, state, model: model && model.length > 0 ? model : null })
+    // 分隔符两种形态：host:devices 短格式 serial\tstate；-l 长格式与 CLI 对齐一致、
+    // serial 与 state 之间是空格串（2026-10-13 真机实测 EBG_AN00 载荷）。serial 自身
+    // 不含空白，首个空白串后取状态词，其余留给属性区——不按空白切整行（mDNS 同族
+    // 服务名含空格的教训不适用于设备行，但仍留单串切法防 serial 含空格的未来形态）
+    const match = /^(\S+)[ \t]+([a-z]+)(?:[ \t]+(.*))?$/.exec(line)
+    if (!match) continue
+    const [, serial, state, props = ''] = match
+    const model = /(?:^|\s)model:([^\s]+)/.exec(props)?.[1]
+    entries.push({ serial, state, model: model ?? null })
   }
   return entries
 }
