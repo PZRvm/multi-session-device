@@ -121,20 +121,27 @@ const Card = styled.div`
     color: var(--danger);
   }
 
+  /* 主操作钮用强调色实底（同 Button primary 语言）——描边 + 淡字在浅底上像禁用态
+     （用户 2026-10-13 反馈），实底 + 深字明确可点 */
   .save-btn {
     align-self: stretch;
     height: 26px;
-    border: 1px solid var(--accent);
+    border: none;
     border-radius: 6px;
-    background: transparent;
-    color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-ink);
     font-size: 12px;
+    font-weight: 500;
     cursor: pointer;
     transition: background-color 0.12s;
   }
 
   .save-btn:hover {
-    background: var(--board-hover-veil);
+    background: var(--accent-strong);
+  }
+
+  .save-btn:active {
+    background: var(--accent-press);
   }
 
   .save-btn:focus-visible {

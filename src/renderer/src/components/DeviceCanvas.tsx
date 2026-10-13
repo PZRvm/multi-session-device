@@ -350,17 +350,25 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
                 borderRadius: layout.frame.radius
               }}
             >
+              {/* 听筒：手机与通用档（通用档 2026-10-13 起带装饰）；前摄只属手机——
+                  通用档可能承载真机画面，视频自带前摄，画假的开孔会穿帮 */}
+              {layout.frame.kind === 'phone' || layout.frame.kind === 'generic' ? (
+                <div className="ear-piece" style={{ top: layout.frame.metrics.top / 2 - 2.5 }} />
+              ) : null}
               {layout.frame.kind === 'phone' ? (
-                <>
-                  <div className="ear-piece" style={{ top: layout.frame.metrics.top / 2 - 2.5 }} />
-                  <div
-                    className="front-camera"
-                    style={{ top: layout.frame.metrics.top / 2 - 2.5 }}
-                  />
-                </>
+                <div
+                  className="front-camera"
+                  style={{ top: layout.frame.metrics.top / 2 - 2.5 }}
+                />
               ) : null}
               {layout.frame.kind === 'tablet' ? (
                 <div className="tablet-camera" style={{ top: layout.frame.metrics.top / 2 - 2 }} />
+              ) : null}
+              {layout.frame.kind === 'generic' ? (
+                <div
+                  className="home-indicator"
+                  style={{ bottom: layout.frame.metrics.bottom / 2 - 2 }}
+                />
               ) : null}
             </div>
           )
@@ -539,6 +547,18 @@ const Wrapper = styled.div`
     border-radius: 50%;
     background: var(--device-bezel-ink);
     opacity: 0.7;
+  }
+
+  /* 通用档底部指示条：下边框居中小胶囊（2026-10-13 用户反馈补底部装饰） */
+  .home-indicator {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--device-bezel-ink);
+    opacity: 0.55;
   }
 
   .skin-mask {

@@ -166,8 +166,9 @@ const ExternalCanvas = ({ device }: ExternalCanvasProps): React.JSX.Element => {
   return (
     <Wrapper>
       <div className="stage" ref={stageRef} onClick={focusProxy} {...apkInstall.dragHandlers}>
-        {/* 通用外框（用户 2026-10-13 批复）：generic 档圆角机身、无听筒/前摄装饰——
-            真机视频自带真刘海，画假的会穿帮；装饰位于视频之下（与 DeviceCanvas 同序） */}
+        {/* 通用外框（用户 2026-10-13 批复）：generic 档圆角机身 + 顶部听筒/底部指示条
+            （与 DeviceCanvas 通用档同规则）；不画前摄开孔——真机视频自带前摄，画假的
+            会穿帮；装饰位于视频之下（与 DeviceCanvas 同序） */}
         {layout ? (
           <div
             className="frame-shell"
@@ -179,7 +180,13 @@ const ExternalCanvas = ({ device }: ExternalCanvasProps): React.JSX.Element => {
               height: layout.frame.height,
               borderRadius: layout.frame.radius
             }}
-          />
+          >
+            <div className="ear-piece" style={{ top: layout.frame.metrics.top / 2 - 2.5 }} />
+            <div
+              className="home-indicator"
+              style={{ bottom: layout.frame.metrics.bottom / 2 - 2 }}
+            />
+          </div>
         ) : null}
         <div
           className="canvas-slot"
@@ -307,13 +314,35 @@ const Wrapper = styled.div`
     outline: none;
   }
 
-  /* 通用外框：圆角机身只包屏幕之外（与 DeviceCanvas 同规则，generic 档无装饰） */
+  /* 通用外框：圆角机身只包屏幕之外（与 DeviceCanvas 同规则，generic 档带听筒/指示条） */
   .frame-shell {
     position: absolute;
     background: var(--device-shell);
     border: 1px solid var(--device-shell-edge);
     overflow: hidden;
     pointer-events: none;
+  }
+
+  .ear-piece {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--device-bezel-ink);
+    opacity: 0.55;
+  }
+
+  .home-indicator {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--device-bezel-ink);
+    opacity: 0.55;
   }
 
   .canvas-slot {
