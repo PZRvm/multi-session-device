@@ -5,7 +5,8 @@ import {
   adbBinaryPath,
   androidToolEnv,
   appOwnedDeviceCount,
-  isRunningDevice,
+  deviceRefOfId,
+  isDeviceActiveOfId,
   listDeviceNamesReferencing,
   listDeviceRuntimeViews,
   purgeAppOwnedDevices,
@@ -62,11 +63,13 @@ export function registerIpcHandlers(): void {
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
   })
   // 截屏域（plan 2026-10-10）：running 校验经注入进入 devices 域，域自身不反向依赖；
-  // 尾段复核用同步 isRunningDevice——迟到回填与停止钩子清缓存之间零异步间隙
+  // 尾段复核用同步 isRunningDevice——迟到回填与停止钩子清缓存之间零异步间隙。
+  // 真机适配（plan 2026-10-13-real-device-toolbar-parity）：注入换组合查询（外部 device
+  // 态优先，miss 落 AVD running），AVD 行为不变
   registerScreenshotIpc({
     adbPath: adbBinaryPath,
-    runningDevice: runningDeviceRef,
-    isRunningDevice,
+    runningDevice: deviceRefOfId,
+    isRunningDevice: isDeviceActiveOfId,
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
   })
   // 网络开关域（plan 2026-10-12）：注入同截屏域；句柄供桥启停轮询（running 起、停止收）

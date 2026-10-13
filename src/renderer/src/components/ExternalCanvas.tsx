@@ -8,6 +8,7 @@ import { useCopy } from '../hooks/useCopy'
 import { useApkInstall } from '../hooks/useApkInstall'
 import { useDeviceInput } from '../hooks/useDeviceInput'
 import { useDeviceScreen, type ScreenViewStatus } from '../hooks/useDeviceScreen'
+import { useScreenshot } from '../hooks/useScreenshot'
 import { spinKeyframes } from '../styles/animations'
 import { toApiResult } from '../api'
 import DeviceToolbar from './DeviceToolbar'
@@ -133,6 +134,13 @@ const ExternalCanvas = ({ device }: ExternalCanvasProps): React.JSX.Element => {
   // 拖拽安装与 AVD 画布同一 hook（id = serial，main 侧组合查询出 serial）
   const apkInstall = useApkInstall(device.id)
 
+  // 截屏（S3）：adb 链路与设备来源无关；status 适配——connected ≡ running，
+  // 失联时气泡随渲染期派生收起（同模拟器停止语义）
+  const shot = useScreenshot({
+    id: device.id,
+    status: device.state === 'device' ? 'running' : 'stopped'
+  })
+
   useDeviceInput({
     canvasContainerRef: stageRef,
     inputProxyRef: proxyRef,
@@ -222,8 +230,8 @@ const ExternalCanvas = ({ device }: ExternalCanvasProps): React.JSX.Element => {
         />
       </div>
       <div className="toolbar-row">
-        {/* 完整工具条（S1 先接六键 + 旋转；截屏/网络组在 S3/S4 换真实现；
-            电源钮不传——真机不能「停止」，电源注入闭集未开（用户裁定不做） */}
+        {/* 完整工具条：六键 + 旋转 + 截屏组；网络组在 S4 接真实现；电源钮不传——
+            真机不能「停止」，电源注入闭集未开（用户裁定不做） */}
         <DeviceToolbar
           disabled={!ready || rotating}
           onButton={(button) => {
@@ -232,11 +240,15 @@ const ExternalCanvas = ({ device }: ExternalCanvasProps): React.JSX.Element => {
           onRotate={() => {
             void rotate()
           }}
-          screenshotBusy={false}
-          screenshotState={{ phase: 'idle' }}
-          onScreenshot={() => undefined}
-          onScreenshotSave={() => undefined}
-          onScreenshotDismiss={() => undefined}
+          screenshotBusy={shot.busy}
+          screenshotState={shot.state}
+          onScreenshot={() => {
+            void shot.capture()
+          }}
+          onScreenshotSave={() => {
+            void shot.save()
+          }}
+          onScreenshotDismiss={shot.dismiss}
           networkState={null}
           networkBusy={null}
           onNetworkToggle={() => undefined}
