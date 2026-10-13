@@ -23,13 +23,13 @@ export const registerIpc = (ctx: ManagerContext): void => {
     IPC_CHANNELS.screenActivate,
     async (event, raw: unknown): Promise<ScreenStateMessage | null> => {
       if (!ctx.deps.isMainSender(event.sender)) throw new Error(msg('screenUnregisteredWindow'))
-      if (typeof raw !== 'object' || raw === null) throw new Error('screen:activate: 非法的入参')
+      if (typeof raw !== 'object' || raw === null) throw new Error(msg('activateInvalidPayload'))
       const value = raw as Record<string, unknown>
       const id = value['id']
       const viewToken = value['viewToken']
-      if (id !== null && typeof id !== 'string') throw new Error('screen:activate: 非法的 id')
+      if (id !== null && typeof id !== 'string') throw new Error(msg('activateInvalidId'))
       if (typeof viewToken !== 'string' || viewToken.length === 0) {
-        throw new Error('screen:activate: 非法的 viewToken')
+        throw new Error(msg('activateInvalidViewToken'))
       }
       if (id === null) {
         ctx.active = null
@@ -52,10 +52,10 @@ export const registerIpc = (ctx: ManagerContext): void => {
 
   ipcMain.handle(IPC_CHANNELS.screenRetry, async (event, raw: unknown): Promise<void> => {
     if (!ctx.deps.isMainSender(event.sender)) throw new Error(msg('screenUnregisteredWindow'))
-    if (typeof raw !== 'object' || raw === null) throw new Error('screen:retry: 非法的入参')
+    if (typeof raw !== 'object' || raw === null) throw new Error(msg('retryInvalidPayload'))
     const value = raw as Record<string, unknown>
     if (typeof value['id'] !== 'string' || typeof value['runId'] !== 'string') {
-      throw new Error('screen:retry: 非法的入参')
+      throw new Error(msg('retryInvalidPayload'))
     }
     const session = ctx.sessions.get(value['id'])
     if (!session) throw new Error(msg('retryNoSession'))
@@ -84,7 +84,7 @@ export const registerIpc = (ctx: ManagerContext): void => {
   ipcMain.handle(IPC_CHANNELS.screenInput, async (event, raw: unknown): Promise<void> => {
     const session = requireReadySession(ctx, event.sender)
     const request = validateInputRequest(raw)
-    if (!request) throw new Error('screen:input: 非法的入参')
+    if (!request) throw new Error(msg('inputInvalidPayload'))
     if (
       request.deviceId !== session.deviceId ||
       request.runId !== session.runId ||

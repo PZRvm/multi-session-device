@@ -320,6 +320,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-13-main-devices-emulator-split.md](plans/2026-10-13-main-devices-emulator-split.md) — 纯机械拆分 src/main/devices/index.ts（2603 行 → 薄 index + 10 个域模块）与 src/main/emulator/index.ts（711 行 → 薄 index + 5 个文件）；对齐 emulator 目录「薄 index + 域模块」样板，公共契约（17 个导出符号）不变，行为零变化
 - [2026-10-13-real-device-usb-and-apk-install.md](plans/2026-10-13-real-device-usb-and-apk-install.md) — stage06 第一批——USB 真机接入（track-devices-l 长连接插拔跟随 + 投屏第二桥 + 未授权引导）与 APK 拖装到真机（serialOf 组合查询 + 真机失败签名 + 「仍要安装」旗标重试）；依据 think-report 20261013013755 全批复
 - [2026-10-13-scrcpy-module-split.md](plans/2026-10-13-scrcpy-module-split.md) — 纯机械拆分 src/main/scrcpy/index.ts（758 行 → 薄 index 装配 + 8 个域文件）；工厂闭包状态（sessions/active/deps）显式化为 ManagerContext 传参，公共契约（createScrcpyManager + 3 常量 + 2 类型）与行为零变化
+- [2026-10-13-scrcpy-split-review-fixes.md](plans/2026-10-13-scrcpy-split-review-fixes.md) — 修复 scrcpy 拆分 review 的两个存量 issue——ipc.ts 六处入参校验硬编码中文迁移 msg()（新增 5 词条 × zh-CN/zh-TW/en 三语块，zh 文本逐字保持）；项目骨架.md 删掉已落地的 scrcpy/stream.ts【规划】行并在顶部指引补模块拆分快照链接
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### stage/
@@ -339,4 +340,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 249 documents -->
+<!-- 250 documents -->

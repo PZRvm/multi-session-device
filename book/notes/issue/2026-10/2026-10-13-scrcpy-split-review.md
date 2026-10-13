@@ -15,3 +15,10 @@ tags: [i18n, 文档过期, scrcpy, review]
 
 1. 若要做 scrcpy 域的 i18n 收口，把这批硬编码串迁 `locale` 并补 en 词条即可，改动集中在 ipc.ts 三个 handler 头部。
 2. 项目骨架.md 的 scrcpy 段可直接指向 [2026-10-13 scrcpy 拆分快照](../../../docs/architecture/2026-10-13-scrcpy-module-split.md)，删掉【规划】行。
+
+**已解决（2026-10-13）**：用户批复修复，plan 见 [2026-10-13-scrcpy-split-review-fixes](../../../plans/2026-10-13-scrcpy-split-review-fixes.md)。
+
+1. `ipc.ts` 六处 throw 全部迁 `msg()`：新增 `activateInvalidPayload` / `activateInvalidId` / `activateInvalidViewToken` / `retryInvalidPayload` / `inputInvalidPayload` 五词条，zh-CN / zh-TW / en 三语块各补齐（前缀沿字典惯例嵌在词条文本里）；zh-CN 文本逐字保持，行为零变化。
+2. `项目骨架.md` 删除 `src/main/scrcpy/stream.ts`【规划】行，顶部「实现现状」指引补 main 模块拆分两快照链接（emulator 三行的现行布局同由此指路，行本身未动）。
+
+typecheck / lint / 全量 1139 项测试保持通过。
