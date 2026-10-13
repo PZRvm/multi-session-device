@@ -11,12 +11,18 @@ created: 2026-10-13
 > ①属性解析用 `key:value`（冒号）而非调研初稿的 `key=value`——adb -l 真实格式如此；
 > ②「重连首帧同 runId 重发 connected」改为「代次自增强制销毁重建」——scrcpy ensureSession
 > 同 runId 幂等早退，同 runId 无法复活已死会话（详见 learn 2026-10-13）。
+> ③选中互斥（review P3-8 补记）：实现为呈现层互斥（外部选中时 `selectedId` 传 null，
+> deviceStore 选中保留）——真机拔线后 AVD 选择自动回位，优于 plan 字面的「双向清」。
 > 遗留：验收清单中需要物理设备的条目（插拔/投屏/拖装/MIUI 拦截/Android 14 旧包/kill-server
 > 恢复）待用户实测，已记 issue。
 
 - **Phase 5 code review（2026-10-13，只记录不修）**：与工具条对齐批合并走查——总体
   pass、无 P1，1 项 P2（取消退出后真机跟踪不恢复）+ 8 项 P3，
   [发现清单](../notes/issue/2026-10/2026-10-13-真机两批-review.md)。
+- **review 修复批（用户批复「P2 和 P3 修复掉」，2026-10-13）**：九项全部清零——
+  P2-1 退出收口挪确认分支 + resumeExternalSessions 恢复会话；P3 八项含 origin 判别
+  拆桶、迟到写回守卫、真机未就绪词条、ExternalCanvas 组件测试、代次裁剪、互斥偏差
+  补记等。全量 1185 项通过，[处置记录](../notes/issue/2026-10/2026-10-13-真机两批-review.md)。
 
 调研与批复：[think-report 20261013013755](../notes/think-report/20261013013755-真机USB无线接入与APK拖装.md) 五项假设全部批复（2026-10-13）。关键批复点：①第一批 = USB + APK 拖装，WiFi 留第二批；②插拔检测用 `host:track-devices-l` 长连接推送（不用轮询）；③旧 APK 走 A 案——失败卡「仍要安装」按钮、用户确认后带旗标重试。
 
