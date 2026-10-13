@@ -1,7 +1,7 @@
 ---
 description: App.logcat.test.tsx 的「dock 默认收起；点击展开并订阅，再点收起退订」用例在整仓并行跑时偶发失败（单独跑稳定通过），2026-10-13 两个不同批次各中一次
 created: 2026-10-13
-status: open
+status: resolved
 ---
 
 # App.logcat dock 测试整跑偶发抖动
@@ -22,3 +22,11 @@ status: open
 
 - 用 `pool: 'vmThreads'`（vitest 提示的每文件隔离方案）整跑验证是否消失。
 - 或检查该用例的 fake timers 与 React act 边界——展开/收起断言前是否漏了一个微任务拍。
+
+## 处置（2026-10-13）
+
+根因：收起/聚焦链是「isWindowOpen IPC → setLogDockOpen → 卸载 effect → unsubscribe」
+多个微任务拍，原断言前只 `await Promise.resolve()` 固定一拍——单文件时微任务队列浅、
+恰好在拍内收敛，整仓并行时队列深一拍即抖。修法：全文件五处固定拍数的
+`await act(async () => { await Promise.resolve() })` 改为 `waitFor` 轮询（断言不变），
+与既有 `findByRole` 的轮询风格一致。整仓连跑三次全绿（1180×3）。
