@@ -18,7 +18,7 @@ const AUTO_DISMISS_MS = 10_000
 /** 截屏两段式流程的 renderer 侧状态：capture（入剪贴板）→ save（写下载目录）。
  *  暂态只存本 hook：设备离开 running 时气泡经渲染期派生收起，不落盘、不入 store */
 export const useScreenshot = (
-  device: Device
+  device: Pick<Device, 'id' | 'status'>
 ): {
   state: ScreenshotState
   busy: boolean

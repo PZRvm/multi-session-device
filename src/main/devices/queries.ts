@@ -2,6 +2,7 @@ import type { DeviceRuntimeView } from '@shared/types'
 import { originOfMeta } from '@shared/deviceOrigin'
 import { msg } from '../locale'
 import { ensureLoaded } from './scan'
+import { externalDevicesNow } from './external'
 import { devicesNow, requireDevice } from './state'
 
 // ---- 对外只读查询（跨域注入消费；不触发写路径）----
@@ -57,6 +58,41 @@ export const runningDeviceSerial = (id: string): string => {
     throw new Error(msg('apkDeviceNotRunning'))
   }
   return device.serial
+}
+
+/** 安装域的统一 serial 入口（plan 2026-10-13-real-device-usb-and-apk-install）：
+ *  外部设备 connected 态 → serial；外部但未就绪 → 真机未就绪词条；未命中 → 落
+ *  runningDeviceSerial（AVD 路径行为不变） */
+export const serialOfDeviceId = (id: string): string => {
+  const external = externalDevicesNow().find((device) => device.id === id)
+  if (external) {
+    if (external.state === 'device') return external.serial
+    throw new Error(msg('apkExternalNotReady'))
+  }
+  return runningDeviceSerial(id)
+}
+
+/** 截屏/网络域注入用（plan 2026-10-13-real-device-toolbar-parity）：外部优先组合引用——
+ *  device 态真机 → serial/名称（model 缺省用 serial）；外部命中但未就绪 → 抛
+ *  externalDeviceNotReady（review P3-4：真机未授权不再误报「设备不在运行中」）；
+ *  未命中 → 落 runningDeviceRef（AVD 行为不变，missing id 的抛错语义同源） */
+export const deviceRefOfId = async (
+  id: string
+): Promise<{ serial: string; name: string } | null> => {
+  const external = externalDevicesNow().find((device) => device.id === id)
+  if (external) {
+    if (external.state !== 'device') throw new Error(msg('externalDeviceNotReady'))
+    return { serial: external.serial, name: external.model ?? external.serial }
+  }
+  return runningDeviceRef(id)
+}
+
+/** 截屏尾段同步复核用（与 isRunningDevice 同款零间隙语义）：外部命中 → device 态判定；
+ *  未命中 → 落 isRunningDevice */
+export const isDeviceActiveOfId = (id: string): boolean => {
+  const external = externalDevicesNow().find((device) => device.id === id)
+  if (external) return external.state === 'device'
+  return isRunningDevice(id)
 }
 
 /** 设置窗清除确认框的计数来源：项目自有出身设备总数（当前视图的另一桶全体） */

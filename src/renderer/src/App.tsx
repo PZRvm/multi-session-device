@@ -12,6 +12,7 @@ import CanvasPlaceholder from './components/CanvasPlaceholder'
 import DeviceCanvas from './components/DeviceCanvas'
 import DeviceHealthNotice from './components/DeviceHealthNotice'
 import DeviceListPane from './components/DeviceListPane'
+import ExternalCanvas, { ExternalCanvasPlaceholder } from './components/ExternalCanvas'
 import LogcatPanel from './components/LogcatPanel'
 import ResizeHandle from './components/ResizeHandle'
 import { clampListWidth, LIST_MAX_WIDTH } from './components/listWidth'
@@ -21,6 +22,7 @@ import {
   LOG_PANE_MIN_WIDTH
 } from './components/logPaneWidth'
 import { useDeviceStore } from './stores/deviceStore'
+import { useExternalStore } from './stores/externalStore'
 import { splitByOriginView } from './components/originView'
 
 /** 日志 dock 展开时画布至少保留的宽度（模拟器居中自适应的保底；不足则整栏退化） */
@@ -60,7 +62,6 @@ const App = (): React.JSX.Element => {
   const reconcile = useDeviceStore((state) => state.reconcile)
   const applySnapshot = useDeviceStore((state) => state.applySnapshot)
   const applyNetworkState = useDeviceStore((state) => state.applyNetworkState)
-  const applyNetworkStates = useDeviceStore((state) => state.applyNetworkStates)
   const renameDevice = useDeviceStore((state) => state.rename)
   const removeDevice = useDeviceStore((state) => state.remove)
   const startDevice = useDeviceStore((state) => state.start)
@@ -69,6 +70,12 @@ const App = (): React.JSX.Element => {
   const setSelected = useDeviceStore((state) => state.setSelected)
   const locale = useLocaleStore((state) => state.locale)
   const copy = useCopy(MAIN_COPY)
+  // 真机域（plan 2026-10-13-real-device-usb-and-apk-install）：推送直写 store；
+  // 与 AVD 选择的互斥在组合层裁决（点一边清另一边）
+  const externalDevices = useExternalStore((state) => state.devices)
+  const selectedExternalId = useExternalStore((state) => state.selectedId)
+  const applyExternalDevices = useExternalStore((state) => state.apply)
+  const selectExternal = useExternalStore((state) => state.select)
 
   const [listWidth, setListWidth] = useState(280)
   const [rechecking, setRechecking] = useState(false)
@@ -97,16 +104,50 @@ const App = (): React.JSX.Element => {
     return window.api.devices.onChanged(applySnapshot)
   }, [load, applySnapshot])
 
-  // 网络态变化推送（plan 2026-10-12）：1s 轮询 + 下发读回，值变化才推；直写 store 键。
-  // 挂载时先拉一次快照恢复初值（review P3-1：仅变化才推，刷新后不拉则开关禁用到下次变化）
+  // 真机快照初拉 + 推送订阅（main 侧 diff、变化才推全量；store 内自清失效选中）
   useEffect(() => {
-    void toApiResult(window.api.network.getAll()).then((result) => {
-      if (result.ok) applyNetworkStates(result.data)
+    void toApiResult(window.api.devices.listExternal()).then((result) => {
+      if (result.ok) applyExternalDevices(result.data)
     })
-    return window.api.network.onChanged((message) =>
-      applyNetworkState(message.deviceId, message.state)
-    )
-  }, [applyNetworkState, applyNetworkStates])
+    return window.api.devices.onExternalChanged(applyExternalDevices)
+  }, [applyExternalDevices])
+
+  // 选择互斥：点 AVD 行清真机选中（store 不交叉引用，组合层双向清）
+  const handleSelectAvd = useCallback(
+    (id: string): void => {
+      selectExternal(null)
+      setSelected(id)
+    },
+    [selectExternal, setSelected]
+  )
+
+  // 网络态变化推送（plan 2026-10-12）：1s 轮询 + 下发读回，值变化才推；直写 store 键。
+  // 挂载时先拉一次快照恢复初值（review P3-1：仅变化才推，刷新后不拉则开关禁用到下次变化）。
+  // 真机适配（S4）：id 分流——外部键（serial）写 externalStore，AVD 键写 deviceStore
+  // （后者的 network 随快照 prune，外部键不能进）。初拉先确保真机快照在场再分区
+  // （review 二轮 P3-A：getAll 先到时外部键会被在场守卫丢弃，靠 1s 轮询才补回）
+  useEffect(() => {
+    void (async () => {
+      const external = await toApiResult(window.api.devices.listExternal())
+      if (external.ok) applyExternalDevices(external.data)
+      const result = await toApiResult(window.api.network.getAll())
+      if (!result.ok) return
+      for (const [id, entry] of Object.entries(result.data)) {
+        if (useExternalStore.getState().devices.some((device) => device.id === id)) {
+          useExternalStore.getState().applyNetworkState(id, entry)
+        } else {
+          applyNetworkState(id, entry)
+        }
+      }
+    })()
+    return window.api.network.onChanged((message) => {
+      if (useExternalStore.getState().devices.some((device) => device.id === message.deviceId)) {
+        useExternalStore.getState().applyNetworkState(message.deviceId, message.state)
+      } else {
+        applyNetworkState(message.deviceId, message.state)
+      }
+    })
+  }, [applyNetworkState, applyExternalDevices])
 
   // 后台运行故障按 eventId 去重弹原生 dialog；行内 lastError 常驻。
   // copy 入依赖：语言切换后重建订阅，后续弹窗即新语言（已弹出的不追溯）
@@ -314,9 +355,19 @@ const App = (): React.JSX.Element => {
   }
 
   // ---- 日志 dock（plan 2026-10-10-logcat-panel）----
-
-  const logcatDevice =
-    selected && selected.status === 'running' && selected.serial && selected.runId ? selected : null
+  // 日志目标（S5 真机扩展）：真机选中且 connected → {id}（runId 在 main 会话代次，
+  // renderer 不需要）；否则 AVD running（serial + runId 在场）。外部选中时 AVD 画布
+  // 不可见，反之亦然——同一时刻至多一个目标
+  const externalSelected =
+    externalDevices.find((device) => device.id === selectedExternalId) ?? null
+  const logTarget: { id: string; runId: string | null } | null =
+    externalSelected !== null
+      ? externalSelected.state === 'device'
+        ? { id: externalSelected.id, runId: null }
+        : null
+      : selected && selected.status === 'running' && selected.serial && selected.runId
+        ? { id: selected.id, runId: selected.runId }
+        : null
 
   // 画布剩余不足保底 560 时 dock 不渲染（兜底派生——正常路径由 main 侧 minWidth
   // 锁定与拉宽保证 dock 展开时不被窗口缩窄挤掉）
@@ -326,15 +377,17 @@ const App = (): React.JSX.Element => {
   // dock 展开所需的主窗最小宽（列表 + 分隔条 + 日志栏 + 画布保底）
   const dockNeedWidth = listWidth + 5 + logPaneWidth + LOG_CANVAS_MIN_WIDTH
 
-  // dock 跟随设备生命周期：无 running 设备（停止/删除/选中切走）时自动收起。
+  // dock 跟随设备生命周期：无可用目标（停止/删除/选中切走/真机失联）时自动收起。
   // 否则 dock 空态挂死——入口按钮随设备消失、弹出按钮无设备直接 return，
   // dock 关不掉且 minWidth 锁残留（用户反馈「打开过 logcat 后窗口缩不小」）。
   // 渲染期对齐（React「adjust state during render」模式）：状态重置不进 effect，
-  // 无 set-state-in-effect 的级联提交
-  const [prevLogcatDevice, setPrevLogcatDevice] = useState(logcatDevice)
-  if (logcatDevice !== prevLogcatDevice) {
-    setPrevLogcatDevice(logcatDevice)
-    if (!logcatDevice) setLogDockOpen(false)
+  // 无 set-state-in-effect 的级联提交。logTarget 是派生对象（引用每帧新建），
+  // 生命周期跟随用原始值 key 比较，不比引用
+  const logcatKey = logTarget ? `${logTarget.id}:${logTarget.runId ?? ''}` : null
+  const [prevLogcatKey, setPrevLogcatKey] = useState(logcatKey)
+  if (logcatKey !== prevLogcatKey) {
+    setPrevLogcatKey(logcatKey)
+    if (!logcatKey) setLogDockOpen(false)
   }
 
   // 声明式同步：dock 可见 → 锁主窗 minWidth（拖宽变化跟随）；不可见（收起、
@@ -359,7 +412,7 @@ const App = (): React.JSX.Element => {
     const windowOpen = await toApiResult(window.api.logcat.isWindowOpen())
     if (windowOpen.ok && windowOpen.data) {
       void requestWindow('logcat', copy.openLogcatWindowFailed, () =>
-        window.api.logcat.openWindow(logcatDevice?.id)
+        window.api.logcat.openWindow(logTarget?.id)
       )
       return
     }
@@ -371,10 +424,10 @@ const App = (): React.JSX.Element => {
   }
 
   const handlePopOutLogcat = async (): Promise<void> => {
-    if (!logcatDevice) return
+    if (!logTarget) return
     // 失败弹原生 dialog（15s 超时/did-fail-load/renderer 崩溃带 detail）——不再静默
     const ok = await requestWindow('logcat-popout', copy.openLogcatWindowFailed, () =>
-      window.api.logcat.openWindow(logcatDevice.id)
+      window.api.logcat.openWindow(logTarget.id)
     )
     if (ok) setLogDockOpen(false)
   }
@@ -417,14 +470,17 @@ const App = (): React.JSX.Element => {
         />
         <DeviceListPane
           devices={devices}
-          selectedId={selectedId}
+          selectedId={externalSelected !== null ? null : selectedId}
           storeTrusted={storeTrusted}
           metaWritable={metaWritable}
           storeState={storeHealth.state}
           sourceBucket={sourceBucket}
           loadError={loadError}
+          externalDevices={externalDevices}
+          selectedExternalId={selectedExternalId}
+          onSelectExternal={selectExternal}
           onRetryLoad={handleRetryLoad}
-          onSelect={setSelected}
+          onSelect={handleSelectAvd}
           onStart={handleStart}
           onStop={handleStop}
           onCancelStart={handleCancelStart}
@@ -464,7 +520,13 @@ const App = (): React.JSX.Element => {
         }
       />
       <main className="canvas-area">
-        {selected && selected.status === 'running' ? (
+        {externalSelected !== null ? (
+          externalSelected.state === 'device' ? (
+            <ExternalCanvas key={externalSelected.id} device={externalSelected} />
+          ) : (
+            <ExternalCanvasPlaceholder device={externalSelected} />
+          )
+        ) : selected && selected.status === 'running' ? (
           <DeviceCanvas
             key={`${selected.id}:${selected.runId}`}
             device={selected}
@@ -480,7 +542,7 @@ const App = (): React.JSX.Element => {
             createDisabled={!metaWritable}
           />
         )}
-        {logcatDevice ? (
+        {logTarget ? (
           <button
             type="button"
             className="log-toggle"
@@ -513,9 +575,9 @@ const App = (): React.JSX.Element => {
           />
           <aside className="log-pane" style={{ width: logPaneWidth }}>
             <LogcatPanel
-              key={`${logcatDevice?.id ?? 'none'}:${logcatDevice?.runId ?? ''}`}
-              deviceId={logcatDevice?.id ?? null}
-              runId={logcatDevice?.runId ?? null}
+              key={logcatKey ?? 'none:'}
+              deviceId={logTarget?.id ?? null}
+              runId={logTarget?.runId ?? null}
               onPopOut={() => void handlePopOutLogcat()}
             />
           </aside>

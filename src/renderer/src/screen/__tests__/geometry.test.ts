@@ -32,18 +32,18 @@ describe('computeLayout 等比居中（外框预留）', () => {
   it('竖屏视频进横屏容器：以高为限，屏幕与视频同比例、整只外框居中', () => {
     const layout = computeLayout(800, 600, 360, 720)
     expect(layout).not.toBeNull()
-    // generic：pad 12 + 左右边距 8 → 可用宽 760 / 高 560，以高为限
-    expect(layout!.scale).toBeCloseTo(560 / 720)
-    expect(layout!.width).toBeCloseTo(280)
-    expect(layout!.height).toBeCloseTo(560)
+    // generic：pad 12×2 + 上下边距 24/16、左右 14 → 可用宽 748 / 高 536，以高为限
+    expect(layout!.scale).toBeCloseTo(536 / 720)
+    expect(layout!.width).toBeCloseTo(268)
+    expect(layout!.height).toBeCloseTo(536)
     expectContainment(layout!, 800, 600)
   })
 
   it('横屏视频进竖屏容器：以宽为限', () => {
     const layout = computeLayout(400, 800, 1920, 1080)
     expect(layout).not.toBeNull()
-    expect(layout!.scale).toBeCloseTo(360 / 1920)
-    expect(layout!.height).toBeCloseTo(202.5)
+    expect(layout!.scale).toBeCloseTo(348 / 1920)
+    expect(layout!.height).toBeCloseTo(195.75)
     expectContainment(layout!, 400, 800)
   })
 
@@ -106,7 +106,8 @@ describe('坐标换算', () => {
   const layout = computeLayout(800, 600, 360, 720)
 
   it('屏幕矩形内 → 归一化坐标', () => {
-    const point = toNormalized(260 + 140, 20 + 280, layout!, 0, 0)
+    // generic 加粗后屏幕矩形从 (266, 36) 起、268×536——中心 (400, 304)
+    const point = toNormalized(266 + 134, 36 + 268, layout!, 0, 0)
     expect(point).not.toBeNull()
     expect(point!.x).toBeCloseTo(0.5)
     expect(point!.y).toBeCloseTo(0.5)
@@ -126,7 +127,7 @@ describe('坐标换算', () => {
   })
 
   it('Stage 有偏移时坐标按容器偏移换算', () => {
-    const point = toNormalized(120 + 260 + 140, 40 + 20 + 280, layout!, 120, 40)
+    const point = toNormalized(120 + 400, 40 + 304, layout!, 120, 40)
     expect(point).not.toBeNull()
     expect(point!.x).toBeCloseTo(0.5)
     expect(point!.y).toBeCloseTo(0.5)

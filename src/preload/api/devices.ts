@@ -5,6 +5,7 @@ import type {
   CreateDeviceResult,
   DeviceEditSnapshot,
   DeviceSnapshot,
+  ExternalDevice,
   ReconcileReport,
   ReconcileResult,
   RuntimeErrorMessage,
@@ -61,6 +62,20 @@ export const devicesApi = {
     ipcRenderer.on(IPC_CHANNELS.devicesRuntimeError, listener)
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.devicesRuntimeError, listener)
+    }
+  },
+  // ---- 真机域（plan 2026-10-13-real-device-usb-and-apk-install；仅主窗可用）----
+  /** 外部设备快照（main 内存缓存；track-devices-l 跟踪） */
+  listExternal: (): Promise<ExternalDevice[]> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesExternalList),
+  /** 外部设备变化订阅（main 侧 diff，变化才推全量），返回解绑函数 */
+  onExternalChanged: (callback: (devices: ExternalDevice[]) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, devices: ExternalDevice[]): void => {
+      callback(devices)
+    }
+    ipcRenderer.on(IPC_CHANNELS.devicesExternalChanged, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.devicesExternalChanged, listener)
     }
   }
 }

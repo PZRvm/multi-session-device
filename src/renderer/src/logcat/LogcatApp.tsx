@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { PanelLeftClose } from 'lucide-react'
 import styled from 'styled-components'
-import type { DeviceRuntimeView, DeviceSnapshot } from '@shared/types'
+import type { DeviceRuntimeView, DeviceSnapshot, ExternalDevice } from '@shared/types'
 import { MAIN_COPY } from '@shared/i18n'
 import { toApiResult } from '../api'
 import { useCopy } from '../hooks/useCopy'
@@ -21,31 +21,56 @@ const runtimeViewsOf = (snapshot: DeviceSnapshot): DeviceRuntimeView[] =>
     runId: device.runId
   }))
 
-/** 独立日志窗：running 设备下拉 + 共用日志面板。关窗只是退订——会话跟设备走（plan） */
+/** 真机推送 → 运行视图（只有 device 态可订阅；runId 在 main 会话代次，本窗不需要） */
+const externalViewsOf = (devices: ExternalDevice[]): DeviceRuntimeView[] =>
+  devices
+    .filter((device) => device.state === 'device')
+    .map((device) => ({
+      id: device.id,
+      name: device.model ?? device.serial,
+      status: 'running',
+      serial: device.serial,
+      origin: 'external' as const
+    }))
+
+/**
+ * 独立日志窗：running 设备下拉 + 共用日志面板。关窗只是退订——会话跟设备走（plan）。
+ * 双流订阅（2026-10-13 真机适配）：AVD 走 devices:changed 全窗广播，真机走
+ * devices:external-changed 广播（都各自覆盖本流全量）；启动时 context() 一次取合并
+ * 视图，按 origin 判别精确拆两桶（review P3-2——不再用 runId 启发式）。
+ */
 const LogcatApp = (): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
   const locale = useLocaleStore((state) => state.locale)
-  const [devices, setDevices] = useState<DeviceRuntimeView[]>([])
+  const [avdViews, setAvdViews] = useState<DeviceRuntimeView[]>([])
+  const [externalViews, setExternalViews] = useState<DeviceRuntimeView[]>([])
   const [pickedId, setPickedId] = useState<string | null>(null)
 
-  // 启动上下文（仅日志窗可调）+ devicesChanged 全窗广播跟随
   useEffect(() => {
     let alive = true
     void (async () => {
       const result = await toApiResult(window.api.logcat.context())
-      if (alive && result.ok) setDevices(result.data)
+      if (alive && result.ok) {
+        setAvdViews(result.data.filter((view) => view.origin !== 'external'))
+        setExternalViews(result.data.filter((view) => view.origin === 'external'))
+      }
     })()
     const unbind = window.api.devices.onChanged((snapshot: DeviceSnapshot) => {
-      setDevices(runtimeViewsOf(snapshot))
+      setAvdViews(runtimeViewsOf(snapshot))
+    })
+    const unbindExternal = window.api.devices.onExternalChanged((devices: ExternalDevice[]) => {
+      setExternalViews(externalViewsOf(devices))
     })
     return () => {
       alive = false
       unbind()
+      unbindExternal()
     }
   }, [])
 
-  const running = devices.filter(
-    (device) => device.status === 'running' && device.serial && device.runId
+  // 真机视图无 runId（main 会话代次不进 renderer）——可订阅判据只看 running + serial
+  const running = [...avdViews, ...externalViews].filter(
+    (device) => device.status === 'running' && device.serial
   )
   // 目标链：手选（仍 running）→ 弹出时带来的 ?device= → 首个 running；目标停止自动回退
   const effectiveId =

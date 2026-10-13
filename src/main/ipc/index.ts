@@ -5,14 +5,16 @@ import {
   adbBinaryPath,
   androidToolEnv,
   appOwnedDeviceCount,
-  isRunningDevice,
+  deviceRefOfId,
+  externalRuntimeViews,
+  isDeviceActiveOfId,
   listDeviceNamesReferencing,
   listDeviceRuntimeViews,
   purgeAppOwnedDevices,
-  runningDeviceRef,
-  runningDeviceSerial,
+  registerExternalIpc,
   savedDeviceSkinRef,
   registerDevicesIpc,
+  serialOfDeviceId,
   triggerSourceChangeReconcile
 } from '../devices'
 import { createLogcatManager } from '../logcat'
@@ -53,24 +55,28 @@ export function registerIpcHandlers(): void {
   })
   // 编辑窗目标核验经注入进入向导域（开窗前 devices 域裁决，避免 wizard 反向依赖）
   registerWizardIpc({ assertEditorTarget })
-  // 拖拽 APK 安装：running/serial 断言经注入（安装域不反向依赖 devices）；仅主窗可发起
+  // 拖拽 APK 安装：serial 断言统一走组合查询（真机 connected 或 AVD running）经注入，
+  // 安装域自身不反向依赖 devices；仅主窗可发起
   registerApkInstallIpc({
     adbPath: adbBinaryPath,
-    serialOf: runningDeviceSerial,
+    serialOf: serialOfDeviceId,
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
   })
   // 截屏域（plan 2026-10-10）：running 校验经注入进入 devices 域，域自身不反向依赖；
-  // 尾段复核用同步 isRunningDevice——迟到回填与停止钩子清缓存之间零异步间隙
+  // 尾段复核用同步 isRunningDevice——迟到回填与停止钩子清缓存之间零异步间隙。
+  // 真机适配（plan 2026-10-13-real-device-toolbar-parity）：注入换组合查询（外部 device
+  // 态优先，miss 落 AVD running），AVD 行为不变
   registerScreenshotIpc({
     adbPath: adbBinaryPath,
-    runningDevice: runningDeviceRef,
-    isRunningDevice,
+    runningDevice: deviceRefOfId,
+    isRunningDevice: isDeviceActiveOfId,
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
   })
-  // 网络开关域（plan 2026-10-12）：注入同截屏域；句柄供桥启停轮询（running 起、停止收）
+  // 网络开关域（plan 2026-10-12）：注入同截屏域；句柄供桥启停轮询（running 起、停止收）。
+  // 真机适配（plan 2026-10-13-real-device-toolbar-parity）：注入换组合查询
   const network = registerNetworkIpc({
     adbPath: adbBinaryPath,
-    runningDevice: runningDeviceRef,
+    runningDevice: deviceRefOfId,
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id,
     pushTarget: () => getMainWindow()?.webContents ?? null
   })
@@ -88,10 +94,11 @@ export function registerIpcHandlers(): void {
   })
   scrcpy.registerIpc()
 
+  // 日志域：运行视图合并（S5）——AVD 视图 + 已连接真机（订阅惰性建会与独立窗下拉共用）
   const logcat = createLogcatManager({
     adbPath: adbBinaryPath,
     toolEnv: androidToolEnv,
-    runtimeViews: listDeviceRuntimeViews,
+    runtimeViews: () => [...listDeviceRuntimeViews(), ...externalRuntimeViews()],
     isLogcatWindow: isLogcatWindowSender
   })
   logcat.registerIpc()
@@ -121,6 +128,36 @@ export function registerIpcHandlers(): void {
       return Promise.all([scrcpy.destroySession(id), logcat.destroySession(id)]).then(
         () => undefined
       )
+    }
+  })
+
+  // 真机跟踪（track-devices-l 长连接）+ 会话第二桥：外部设备没有 runner，track 事件
+  // 直接驱动投屏会话（connected 建会话、removed 销毁）与网络轮询（connected 起、
+  // removed 收；startWatch 幂等——重连首帧全量重发不叠 timer）；截屏缓存无进程无需
+  // 接，日志在 S5 接。注册须在 scrcpy/network/logcat 创建之后（onSession 闭包引用它们）；
+  // 变化广播默认发全部窗口（独立日志窗下拉跟随，对齐 devices:changed 语义）
+  registerExternalIpc({
+    isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id,
+    onSession: (event) => {
+      if (event.kind === 'connected') {
+        void scrcpy
+          .ensureSession({ id: event.device.id, runId: event.runId, serial: event.device.serial })
+          .catch((error) => {
+            // 桥路径的会话失败静默（track 下一帧会重发）；但退出恢复（P3-B）等
+            // 用户可感路径需要留痕，否则「留下后投屏没回来」无法归因
+            console.warn('[external] ensureSession failed for', event.device.id, String(error))
+          })
+        network.startWatch(event.device.id, event.device.serial)
+        logcat.ensureSession({
+          id: event.device.id,
+          runId: event.runId,
+          serial: event.device.serial
+        })
+      } else {
+        void scrcpy.destroySession(event.id).catch(() => undefined)
+        network.clearWatch(event.id)
+        logcat.destroySession(event.id)
+      }
     }
   })
 }

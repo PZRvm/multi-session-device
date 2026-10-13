@@ -20,9 +20,11 @@ import ScreenshotPopover from './ScreenshotPopover'
 
 type DeviceToolbarProps = {
   disabled: boolean
-  powerDisabled: boolean
+  /** 电源钮可选（真机画布不传——真机不能「停止」，电源注入闭集未开，plan 2026-10-13-real-device-toolbar-parity） */
+  powerDisabled?: boolean
   onButton: (button: ScreenToolbarButton) => void
-  onPower: () => void
+  /** 不传则不渲染电源钮（模拟器语义 = 停止设备） */
+  onPower?: () => void
   onRotate: () => void
   /** 截屏（plan 2026-10-10）：走 adb，不依赖投屏流，故不受 disabled 牵连 */
   screenshotBusy: boolean
@@ -62,7 +64,9 @@ const DeviceToolbar = ({
     { button: 'back', label: copy.back, icon: <ChevronLeft size={16} /> },
     { button: 'home', label: copy.home, icon: <Home size={16} /> },
     { button: 'overview', label: copy.overview, icon: <SquareStack size={16} /> },
-    { button: 'power', label: copy.powerOff, icon: <Power size={16} /> },
+    ...(onPower
+      ? [{ button: 'power' as const, label: copy.powerOff, icon: <Power size={16} /> }]
+      : []),
     { button: 'volume-up', label: copy.volumeUp, icon: <Volume2 size={16} /> },
     { button: 'volume-down', label: copy.volumeDown, icon: <Volume1 size={16} /> }
   ]
@@ -75,8 +79,10 @@ const DeviceToolbar = ({
           type="button"
           aria-label={entry.label}
           title={entry.label}
-          disabled={entry.button === 'power' ? powerDisabled : disabled}
-          onClick={() => (entry.button === 'power' ? onPower() : onButton(entry.button))}
+          disabled={entry.button === 'power' ? (powerDisabled ?? false) : disabled}
+          onClick={() =>
+            entry.button === 'power' ? onPower?.() : onButton(entry.button as ScreenToolbarButton)
+          }
         >
           {entry.icon}
         </button>

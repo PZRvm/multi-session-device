@@ -20,10 +20,22 @@ export interface ScreenViewRef {
 const ACK_INTERVAL_PACKETS = 8
 
 /**
+ * 连接目标键：${id}:${runId}。runId 缺席（真机适配器——会话代次在 main 侧持有，
+ * 且重连会自增）时退化为 `${id}:*`：接受任意代次的消息，不匹配就永远停在
+ * connecting（2026-10-13 真机「先连即选投屏卡住、切走再切回才好」的根因）。
+ * AVD 路径 runId 恒在场，键语义不变（重启换代次即换目标）。
+ */
+const targetKeyOf = (id: string, runId?: string): string => `${id}:${runId ?? '*'}`
+
+/** 投屏目标的最小形态：AVD Device 结构性满足；真机画布传 {id, status:'running'}
+ *  适配器（runId 由 main 侧会话代次持有，renderer 不需要）——真机接入复用本 hook */
+export type ScreenTarget = Pick<Device, 'id' | 'status' | 'runId'>
+
+/**
  * 订阅投屏流：监听先安装、activate 后到（早到包按 viewToken 识别）。
  * 设备 running → 激活；切后台/停止 → 退订（连接保留在 main，仅停解码）。
  */
-export function useDeviceScreen(device: Device | null): {
+export function useDeviceScreen(device: ScreenTarget | null): {
   canvasRef: React.RefObject<HTMLCanvasElement | null>
   status: ScreenViewStatus
   format: ScreenFormat | null
@@ -167,7 +179,11 @@ export function useDeviceScreen(device: Device | null): {
         screenRef.current.width = message.format.width
         screenRef.current.height = message.format.height
       }
-      const key = `${message.deviceId}:${message.runId}`
+      // 目标键随当前设备归一：真机（runId 缺席）按 id:* 收任意代次；AVD 用消息代次
+      const key =
+        deviceRef.current?.runId === undefined
+          ? targetKeyOf(message.deviceId)
+          : `${message.deviceId}:${message.runId}`
       // 状态/格式/错误各字段独立合并：消息缺省的字段沿用同目标的存量
       setConn((prev) => ({
         target: key,
@@ -193,7 +209,7 @@ export function useDeviceScreen(device: Device | null): {
   useEffect(() => {
     const viewToken = viewTokenRef.current
     if (device?.status === 'running') {
-      const key = `${device.id}:${device.runId ?? ''}`
+      const key = targetKeyOf(device.id, device.runId)
       screenRef.current.envelope = {
         deviceId: device.id,
         runId: device.runId ?? '',
@@ -238,7 +254,7 @@ export function useDeviceScreen(device: Device | null): {
   }, [device?.id, device?.status, device?.runId])
 
   // 派生：非运行 → idle；目标不一致（启动/切换/异步未返）→ connecting；仅同目标存量外显
-  const target = device?.status === 'running' ? `${device.id}:${device.runId ?? ''}` : null
+  const target = device?.status === 'running' ? targetKeyOf(device.id, device.runId) : null
   const live = target !== null && conn.target === target
   const status: ScreenViewStatus = target === null ? 'idle' : live ? conn.status : 'connecting'
   const format = live ? conn.format : null
@@ -248,7 +264,11 @@ export function useDeviceScreen(device: Device | null): {
     const current = deviceRef.current
     if (!current || current.status !== 'running') return
     setConn((prev) => ({ ...prev, status: 'connecting', error: null }))
-    void window.api.screen.retry(current.id, current.runId ?? '').catch((err) => {
+    // runId 取 envelope 里的会话代次（review 二轮 P2-A）：真机适配器不带 runId，
+    // 而状态消息持续把 envelope.runId 更新为当前会话代次——错误态可点时必有值；
+    // AVD 路径 envelope.runId 与 device.runId 一致
+    const runId = screenRef.current.envelope?.runId ?? current.runId ?? ''
+    void window.api.screen.retry(current.id, runId).catch((err) => {
       setConn((prev) => ({
         ...prev,
         status: 'error',

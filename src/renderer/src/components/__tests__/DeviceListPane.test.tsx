@@ -33,6 +33,9 @@ const renderPane = (overrides: Partial<Parameters<typeof DeviceListPane>[0]>): v
       storeState="ok"
       sourceBucket="app-owned"
       loadError={null}
+      externalDevices={[]}
+      selectedExternalId={null}
+      onSelectExternal={vi.fn()}
       onRetryLoad={vi.fn()}
       onSelect={vi.fn()}
       onStart={vi.fn()}
@@ -84,6 +87,9 @@ describe('DeviceListPane 空库文案（review P2-3/P3）', () => {
         storeState="ok"
         sourceBucket="app-owned"
         loadError={null}
+        externalDevices={[]}
+        selectedExternalId={null}
+        onSelectExternal={vi.fn()}
         onRetryLoad={vi.fn()}
         onSelect={vi.fn()}
         onStart={vi.fn()}
@@ -96,6 +102,37 @@ describe('DeviceListPane 空库文案（review P2-3/P3）', () => {
       />
     )
     expect(screen.getByText('Pixel test')).toBeTruthy()
+  })
+
+  it('真机区（plan 2026-10-13-real-device-usb-and-apk-install）：组头计数、行卡标题与未授权引导', () => {
+    renderPane({
+      externalDevices: [
+        {
+          id: 'R58N',
+          serial: 'R58N',
+          transport: 'usb',
+          state: 'unauthorized',
+          model: 'Pixel_6_Pro'
+        }
+      ]
+    })
+    expect(screen.getByText(format(copy.realDeviceSectionCount, { count: 1 }))).toBeTruthy()
+    expect(screen.getByText('Pixel_6_Pro')).toBeTruthy()
+    expect(screen.getByText(copy.realDeviceUnauthorizedHint)).toBeTruthy()
+    expect(screen.getByRole('img', { name: copy.usbTransportAria })).toBeTruthy()
+  })
+
+  it('真机区点击行选中；无真机时空态提示', () => {
+    const onSelectExternal = vi.fn()
+    renderPane({ externalDevices: [], onSelectExternal })
+    expect(screen.getByText(copy.realDeviceEmpty)).toBeTruthy()
+    renderPane({
+      externalDevices: [{ id: 'X', serial: 'X', transport: 'usb', state: 'device', model: null }],
+      onSelectExternal
+    })
+    // model 缺省：标题落 serial，元信息只带状态
+    fireEvent.click(screen.getAllByText(copy.realDeviceOnline)[0])
+    expect(onSelectExternal).toHaveBeenCalledWith('X')
   })
 
   it('出身过滤视图（plan 2026-10-12-device-list-origin-view-filter）：跨桶设备进折叠区，过渡态豁免，展开后独立分区', () => {

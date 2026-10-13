@@ -874,9 +874,24 @@ export interface ScreenshotSaveResult {
 }
 
 // ---- APK 安装域（plan 2026-10-10-drag-apk-install）----
-/** apkInstall 通道返回：安装成功的 APK 文件名（回显用；不含路径） */
-export interface ApkInstallResult {
-  fileName: string
+
+/** 拖拽安装结果（判别联合）：安装失败是「结果」不是「错误」——
+ *  「仍要安装」重试需要机器可读标记，不能靠匹配文案 */
+export type ApkInstallOutcome =
+  { ok: true; fileName: string } | { ok: false; message: string; canBypassLowTargetSdk: boolean }
+
+// ---- 真机域（plan 2026-10-13-real-device-usb-and-apk-install；stage06 第一批）----
+
+/** 外部物理设备（USB / 无线）：id 即 serial（稳定唯一）；纯内存跟踪，不进 DeviceSnapshot */
+export interface ExternalDevice {
+  /** 与 serial 同值（renderer 以 id 键控画布与安装态） */
+  id: string
+  serial: string
+  /** serial 含 ':' 即无线（ip:port 形态）；本批只会出现 usb */
+  transport: 'usb' | 'wireless'
+  state: 'device' | 'unauthorized' | 'offline'
+  /** 长格式 model= 属性；短格式回退或属性缺席时为 null */
+  model: string | null
 }
 
 // ---- 网络开关域（plan 2026-10-12-network-switch-group）----
@@ -935,4 +950,7 @@ export interface DeviceRuntimeView {
   /** running 发布的 adb serial；停止清空 */
   serial?: string
   runId?: string
+  /** 来源判别（review P3-2）：'external' = 真机（status 'running' 是「已连接」适配、
+   *  runId 省略）；缺省 = AVD（devices.onChanged 派生视图不带本字段） */
+  origin?: 'external'
 }

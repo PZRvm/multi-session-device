@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toApiResult } from '../api'
-import type { ApkInstallResult } from '@shared/types'
+import type { ApkInstallOutcome } from '@shared/types'
 
 // 拖拽 APK 安装状态机（plan 2026-10-10-drag-apk-install）：dragging 高亮 → installing
 // （不定进度）→ installed / failed；busyNote 是安装中再次拖入的 4 秒提示。
-// 守卫在两处：这里先拦「单文件 + .apk + 未在安装中」，main 再校验 running/serial 与串行。
+// 守卫在两处：这里先拦「单文件 + .apk + 未在安装中」，main 再校验 serial 与串行。
+// canBypass 是「仍要安装」链路（真机旧 APK，plan 2026-10-13-real-device-usb-and-apk-install）：
+// 仅 failed 结果携带，点击后带旗标重发。
 
 export type ApkInstallPhase =
   | { phase: 'idle' }
   | { phase: 'dragging' }
   | { phase: 'installing'; fileName: string }
   | { phase: 'installed'; fileName: string }
-  | { phase: 'failed'; message: string }
+  | { phase: 'failed'; message: string; canBypass?: true; filePath?: string }
 
 const INSTALLED_AUTO_CLEAR_MS = 5_000
 const FAILED_AUTO_CLEAR_MS = 10_000
@@ -60,6 +62,7 @@ export const useApkInstall = (
 ): {
   phase: ApkInstallPhase
   busyNote: boolean
+  retryWithBypass: () => void
   dragHandlers: {
     onDragEnter: (event: React.DragEvent) => void
     onDragOver: (event: React.DragEvent) => void
@@ -124,19 +127,44 @@ export const useApkInstall = (
   }, [deviceId])
 
   const startInstall = useCallback(
-    async (filePath: string): Promise<void> => {
+    async (filePath: string, opts?: { allowLowTargetSdk?: boolean }): Promise<void> => {
       window.clearTimeout(clearTimerRef.current)
       emitPhase(deviceId, { phase: 'installing', fileName: fileNameOf(filePath) }, 0)
-      const result = await toApiResult(window.api.install.install(deviceId, filePath))
-      if (result.ok) {
-        const { fileName } = result.data as ApkInstallResult
-        emitPhase(deviceId, { phase: 'installed', fileName }, INSTALLED_AUTO_CLEAR_MS)
-      } else {
+      const result = await toApiResult(window.api.install.install(deviceId, filePath, opts))
+      if (!result.ok) {
         emitPhase(deviceId, { phase: 'failed', message: result.error }, FAILED_AUTO_CLEAR_MS)
+        return
+      }
+      const outcome = result.data as ApkInstallOutcome
+      if (outcome.ok) {
+        emitPhase(
+          deviceId,
+          { phase: 'installed', fileName: outcome.fileName },
+          INSTALLED_AUTO_CLEAR_MS
+        )
+      } else {
+        // filePath 留原始绝对路径：「仍要安装」带旗标重发要用（文件名从它派生）
+        emitPhase(
+          deviceId,
+          {
+            phase: 'failed',
+            message: outcome.message,
+            canBypass: outcome.canBypassLowTargetSdk ? true : undefined,
+            filePath
+          },
+          FAILED_AUTO_CLEAR_MS
+        )
       }
     },
     [deviceId]
   )
+
+  /** 失败卡「仍要安装」：同一文件带旗标重发（仅 canBypass 失败卡可触发） */
+  const retryWithBypass = useCallback((): void => {
+    const current = phaseRef.current
+    if (current.phase !== 'failed' || !current.canBypass || !current.filePath) return
+    void startInstall(current.filePath, { allowLowTargetSdk: true })
+  }, [startInstall])
 
   const flashBusyNote = useCallback((): void => {
     window.clearTimeout(busyTimerRef.current)
@@ -215,5 +243,10 @@ export const useApkInstall = (
     [flashBusyNote, setPhaseBoth, startInstall]
   )
 
-  return { phase, busyNote, dragHandlers: { onDragEnter, onDragOver, onDragLeave, onDrop } }
+  return {
+    phase,
+    busyNote,
+    retryWithBypass,
+    dragHandlers: { onDragEnter, onDragOver, onDragLeave, onDrop }
+  }
 }

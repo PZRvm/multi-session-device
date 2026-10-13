@@ -18,11 +18,13 @@ export interface FrameMetrics {
 }
 
 /** 各类别的外框度量（plan 2026-10-05-device-frame-and-canvas 初始设计，真机窗口调校；
- * 手机侧边 2026-10-06 由 8 加宽到 12——8px 侧边配 24px 外圆角在四角收窄发撇） */
+ * 手机侧边 2026-10-06 由 8 加宽到 12——8px 侧边配 24px 外圆角在四角收窄发撇）；
+ * 通用档 2026-10-13 加粗并配顶部听筒/底部指示条装饰（用户反馈）——14px 侧边配
+ * 22px 圆角同判不收撇 */
 export const FRAME_METRICS: Record<DeviceFrameKind, FrameMetrics> = {
   phone: { left: 12, right: 12, top: 18, bottom: 12, outerRadius: 20 },
   tablet: { left: 12, right: 12, top: 12, bottom: 12, outerRadius: 16 },
-  generic: { left: 8, right: 8, top: 8, bottom: 8, outerRadius: 10 }
+  generic: { left: 14, right: 14, top: 24, bottom: 16, outerRadius: 22 }
 }
 
 /** 外框与视口边缘的安全间距 */

@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../../App'
 import { useDeviceStore } from '../../stores/deviceStore'
@@ -81,7 +81,9 @@ describe('主窗日志 dock', () => {
       devices: {
         list: vi.fn(async () => snapshotOf([runningDevice])),
         onChanged: () => () => {},
-        onRuntimeError: () => () => {}
+        onRuntimeError: () => () => {},
+        listExternal: vi.fn(async () => []),
+        onExternalChanged: () => () => {}
       },
       network: networkApiMock(),
       logcat: {
@@ -116,21 +118,17 @@ describe('主窗日志 dock', () => {
     expect(subscribe).toHaveBeenCalledWith('d1')
     expect(button.getAttribute('aria-pressed')).toBe('true')
     fireEvent.click(button)
-    await act(async () => {
-      await Promise.resolve()
-    })
+    // 收起链经 isWindowOpen IPC + setLogDockOpen + 卸载 effect 多个微任务拍——
+    // 固定拍数在整仓并行下会抖（issue 2026-10-13-AppLogcatDock测试偶发抖动），改轮询
+    await waitFor(() => expect(unsubscribe).toHaveBeenCalledWith('d1'))
     expect(screen.queryByRole('log')).toBeNull()
-    expect(unsubscribe).toHaveBeenCalledWith('d1')
   })
 
   it('独立日志窗开着时点击入口 = 聚焦该窗，不重开 dock', async () => {
     isWindowOpen.mockResolvedValueOnce(true)
     render(<App />)
     fireEvent.click(toggleButton())
-    await act(async () => {
-      await Promise.resolve()
-    })
-    expect(openLogcatWindow).toHaveBeenCalledWith('d1')
+    await waitFor(() => expect(openLogcatWindow).toHaveBeenCalledWith('d1'))
     expect(screen.queryByRole('log')).toBeNull()
     expect(subscribe).not.toHaveBeenCalled()
   })
@@ -141,11 +139,7 @@ describe('主窗日志 dock', () => {
     fireEvent.click(toggleButton())
     await screen.findByRole('log')
     fireEvent.click(screen.getByTitle(copy.logcatPopOut))
-    await act(async () => {
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-    expect(dialogShow).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(dialogShow).toHaveBeenCalledTimes(1))
     expect(dialogShow).toHaveBeenCalledWith(
       expect.objectContaining({ title: copy.openLogcatWindowFailed })
     )
@@ -187,10 +181,7 @@ describe('主窗日志 dock', () => {
     fireEvent.click(toggleButton())
     await screen.findByRole('log')
     fireEvent.click(toggleButton())
-    await act(async () => {
-      await Promise.resolve()
-    })
-    expect(setDockState).toHaveBeenLastCalledWith({ expanded: false })
+    await waitFor(() => expect(setDockState).toHaveBeenLastCalledWith({ expanded: false }))
     expect(screen.queryByRole('log')).toBeNull()
   })
 
@@ -216,10 +207,7 @@ describe('主窗日志 dock', () => {
     await screen.findByRole('log')
     fireEvent.click(screen.getByTitle(copy.logcatPopOut))
     expect(openLogcatWindow).toHaveBeenCalledWith('d1')
-    await act(async () => {
-      await Promise.resolve()
-    })
-    expect(screen.queryByRole('log')).toBeNull()
+    await waitFor(() => expect(screen.queryByRole('log')).toBeNull())
     // 独立窗口态主窗宽度自由：dock 不可见即解锁
     expect(setDockState).toHaveBeenLastCalledWith({ expanded: false })
   })

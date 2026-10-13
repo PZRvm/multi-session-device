@@ -2,7 +2,17 @@ import { act, cleanup, fireEvent, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useApkInstall, fileNameOf, resetApkInstallStateForTests } from '../useApkInstall'
 
-const install = vi.fn<(deviceId: string, filePath: string) => Promise<{ fileName: string }>>()
+const install =
+  vi.fn<
+    (
+      deviceId: string,
+      filePath: string,
+      opts?: { allowLowTargetSdk?: boolean }
+    ) => Promise<
+      | { ok: true; fileName: string }
+      | { ok: false; message: string; canBypassLowTargetSdk: boolean }
+    >
+  >()
 const resolveDropPaths = vi.fn<(files: File[]) => string[]>()
 
 beforeEach(() => {
@@ -76,13 +86,13 @@ describe('useApkInstall 状态机', () => {
   })
 
   it('单个 .apk：installing → installed，5 秒后回 idle', async () => {
-    install.mockResolvedValue({ fileName: 'app.apk' })
+    install.mockResolvedValue({ ok: true, fileName: 'app.apk' })
     resolveDropPaths.mockReturnValue(['/tmp/app.apk'])
     const { result } = renderHook(() => useApkInstall('d1'))
     const target = mountTarget(result.current.dragHandlers)
     drop(target, [apkFile()])
     expect(result.current.phase).toEqual({ phase: 'installing', fileName: 'app.apk' })
-    expect(install).toHaveBeenCalledWith('d1', '/tmp/app.apk')
+    expect(install).toHaveBeenCalledWith('d1', '/tmp/app.apk', undefined)
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
@@ -123,7 +133,7 @@ describe('useApkInstall 状态机', () => {
   })
 
   it('安装中再拖入（真实序列 dragenter→drop）：不打断 spinner，busyNote 4 秒后消失，无失败卡', async () => {
-    let resolveInstall!: (value: { fileName: string }) => void
+    let resolveInstall!: (value: { ok: true; fileName: string }) => void
     install.mockReturnValue(
       new Promise((resolve) => {
         resolveInstall = resolve
@@ -148,14 +158,14 @@ describe('useApkInstall 状态机', () => {
     expect(result.current.busyNote).toBe(false)
     expect(result.current.phase.phase).toBe('installing')
     await act(async () => {
-      resolveInstall({ fileName: 'app.apk' })
+      resolveInstall({ ok: true as const, fileName: 'app.apk' })
       await vi.advanceTimersByTimeAsync(0)
     })
     expect(result.current.phase.phase).toBe('installed')
   })
 
   it('结果卡展示中拖入新文件：进入新一轮高亮，不残留旧结果', async () => {
-    install.mockResolvedValue({ fileName: 'a.apk' })
+    install.mockResolvedValue({ ok: true, fileName: 'a.apk' })
     resolveDropPaths.mockReturnValue(['/tmp/a.apk'])
     const { result } = renderHook(() => useApkInstall('d1'))
     const target = mountTarget(result.current.dragHandlers)
@@ -174,7 +184,7 @@ describe('useApkInstall 状态机', () => {
   })
 
   it('切设备卸载后重挂载：恢复 installing 并接住结局（busy 不再误呈失败卡）', async () => {
-    let resolveInstall!: (value: { fileName: string }) => void
+    let resolveInstall!: (value: { ok: true; fileName: string }) => void
     install.mockReturnValue(
       new Promise((resolve) => {
         resolveInstall = resolve
@@ -194,7 +204,7 @@ describe('useApkInstall 状态机', () => {
     expect(second.result.current.busyNote).toBe(true)
     expect(install).toHaveBeenCalledTimes(1)
     await act(async () => {
-      resolveInstall({ fileName: 'app.apk' })
+      resolveInstall({ ok: true as const, fileName: 'app.apk' })
       await vi.advanceTimersByTimeAsync(0)
     })
     expect(second.result.current.phase).toEqual({ phase: 'installed', fileName: 'app.apk' })
@@ -202,7 +212,7 @@ describe('useApkInstall 状态机', () => {
   })
 
   it('卸载后安装完成：保留窗口内重挂载直接看到结果卡并自动清理，超窗不再展示', async () => {
-    install.mockResolvedValue({ fileName: 'app.apk' })
+    install.mockResolvedValue({ ok: true, fileName: 'app.apk' })
     resolveDropPaths.mockReturnValue(['/tmp/app.apk'])
     const first = renderHook(() => useApkInstall('d1'))
     drop(mountTarget(first.result.current.dragHandlers), [apkFile()])
@@ -225,7 +235,7 @@ describe('useApkInstall 状态机', () => {
   })
 
   it('安装先于 busyNote 4 秒完成：busyNote 随终态清理，不与结果卡同屏', async () => {
-    install.mockResolvedValue({ fileName: 'app.apk' })
+    install.mockResolvedValue({ ok: true, fileName: 'app.apk' })
     resolveDropPaths.mockReturnValue(['/tmp/app.apk'])
     const { result } = renderHook(() => useApkInstall('d1'))
     const target = mountTarget(result.current.dragHandlers)
