@@ -1,10 +1,18 @@
 ---
 description: stage06 第二批——真机无线接入：荣耀/华为系「一键转无线」（tcpip 5555 → 读 wlan0 IP → connect，覆盖 adbd 重启竞态）为无持久化主路径；mDNS 扫描 + 配对码走小米等有官方无线调试开关的机型（验收待用户持机手动执行）；网段扫描与手动 IP:5555 为辅助入口。端口钉死 5555，不存设备记录，USB/无线双条目并存不聚合
-status: draft
+status: in_progress
 created: 2026-10-15
 ---
 
 # 真机无线接入（stage06 第二批）— plan
+
+> 2026-10-15 实施完成（S1—S4 四步独立提交，分支 feature/real-device-wireless，
+> typecheck/lint/全量 1230 测试全绿，基线 +38；开发期 dev 冒烟通过）。对设计的两处
+> 实现补充：①`devices:external-promote` 第五通道——plan 通道清单漏列「转无线」的
+> invoke 入口，实现期补；②连接器弹层为非模态卡（对齐 ScreenshotPopover 先例）而非
+> 模态对话框。验收清单需物理设备条目（荣耀实测 + 小米 mDNS/配对）待用户手动执行，
+> [验收 issue](../notes/issue/2026-10/2026-10-15-真机无线批硬件验收待执行.md)——
+> 通过销账后翻 completed。
 
 > 2026-10-15 会话内实测定调（荣耀 30 Pro / EBG_AN00 / Android 12 / Magic UI 4.1）：
 > 荣耀与华为系系统**没有**「无线调试」开关（华为官方支持页明确「没有无线调试设置项」，
