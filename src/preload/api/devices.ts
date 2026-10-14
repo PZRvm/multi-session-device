@@ -9,7 +9,13 @@ import type {
   ReconcileReport,
   ReconcileResult,
   RuntimeErrorMessage,
-  UpdateDeviceInput
+  UpdateDeviceInput,
+  WirelessCandidate,
+  WirelessConnectInput,
+  WirelessConnectOutcome,
+  WirelessPairInput,
+  WirelessPairOutcome,
+  WirelessPromoteInput
 } from '@shared/types'
 
 export const devicesApi = {
@@ -77,5 +83,21 @@ export const devicesApi = {
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.devicesExternalChanged, listener)
     }
-  }
+  },
+  // ---- 无线域（plan 2026-10-15-real-device-wireless；失败是 outcome 不是异常）----
+  /** 无线扫描：mDNS 服务 + 本网段 5555 探活（弹层打开即调） */
+  scanExternalWireless: (): Promise<WirelessCandidate[]> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesExternalScan),
+  /** 配对码配对（小米系等有官方无线调试开关的机型） */
+  pairExternalWireless: (input: WirelessPairInput): Promise<WirelessPairOutcome> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesExternalPair, input),
+  /** 直连 host[:5555]；adbd 重启竞态由 main 侧退避重试吸收 */
+  connectExternalWireless: (input: WirelessConnectInput): Promise<WirelessConnectOutcome> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesExternalConnect, input),
+  /** USB 一键转无线：读 wlan0 IP → tcpip 5555 → connect */
+  promoteExternalWireless: (input: WirelessPromoteInput): Promise<WirelessConnectOutcome> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesExternalPromote, input),
+  /** 断开无线条目（track 下一帧推消失，会话桥销毁） */
+  disconnectExternal: (serial: string): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesExternalDisconnect, { serial })
 }
