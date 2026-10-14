@@ -163,6 +163,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-13-真机两批-review.md](notes/issue/2026-10/2026-10-13-真机两批-review.md) — 真机两批（USB 接入+APK 拖装 / 工具条对齐+三域）合并前 code review——1 项 P2（取消退出后真机跟踪不恢复）与 8 项 P3；只记录不修，修复另开一轮
 - [2026-10-13-真机增量-review.md](notes/issue/2026-10/2026-10-13-真机增量-review.md) — 上轮 review 后的增量代码走查（review 修复批 ec9a4e5/f2d1bb7 + 两个热修复 516864a/834f020）——1 项 P2（真机投屏重试链路失效）与 3 项 P3；只记录不修
 - [2026-10-13-真机硬件验收待执行.md](notes/issue/2026-10/2026-10-13-真机硬件验收待执行.md) — 真机 USB 接入与 APK 拖装第一批代码完成，但验收清单中需要物理设备的条目全部未实测——插拔跟随、投屏操控、拖装链路、MIUI 拦截词条、Android 14 旧包「仍要安装」、kill-server 恢复
+- [2026-10-15-荣耀30Pro-USB-serial漂移.md](notes/issue/2026-10/2026-10-15-荣耀30Pro-USB-serial漂移.md) — 荣耀 30 Pro（EBG_AN00）USB serial 在会话内漂移——DSLDU20B12002637 与 DSLU20B12002637 两种形态出现，设备身份按 serial 键控会闪断重建；只记录不修
 
 ### notes/learn/
 
@@ -239,9 +240,11 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-13-adb双server诊断污染与观测日志.md](notes/learn/2026-10/2026-10-13-adb双server诊断污染与观测日志.md) — 排查「真机先插、应用后起读不到」的三条经验——双 adb server 会互相抢 USB 接口造成假盲区、后台长连接客户端必须带观测日志否则故障不可归因、全新 server 的 USB 枚举是异步的需要 devices 逼一次落地
 - [2026-10-13-book相对链接按目录深度.md](notes/learn/2026-10/2026-10-13-book相对链接按目录深度.md) — book 内部相对链接的层级按「文件所在目录到仓库根的深度」算——notes/issue 与 notes/learn 有月份子目录（四级），链接 src 要 ../../../..；think-report 无子目录（三级）用 ../../..
 - [2026-10-13-主进程大文件拆分的边界方法.md](notes/learn/2026-10/2026-10-13-主进程大文件拆分的边界方法.md) — 主进程大文件拆分的边界方法——ESM let 不可外部赋值决定的状态归属规则（单写方私有 vs state.ts 访问器）、vi.resetModules 单例语义保持、按消费方零改动倒推出口契约
+- [2026-10-13-打包竞态asar错位与隐藏目录.md](notes/learn/2026-10/2026-10-13-打包竞态asar错位与隐藏目录.md) — electron-builder 打包时 .zcode/.workbuddy 等隐藏目录被工具实时写入，asar 内容区与索引错位，主入口混入他文件字节致 SyntaxError 静默闪退；files 排除隐藏目录 + afterPack ad-hoc 签名 + asar 校验脚本三件套根治
 - [2026-10-13-拆工厂闭包用context不用访问器.md](notes/learn/2026-10/2026-10-13-拆工厂闭包用context不用访问器.md) — 拆工厂闭包与拆模块单例是两回事——工厂用 ManagerContext 首参显式化闭包状态（无 ESM let 问题、无单例重载问题），错误路径调 destroySession 决定分层；可选链收窄在属性链上依旧可用
 - [2026-10-13-真机三域适配的组合查询与双源状态.md](notes/learn/2026-10/2026-10-13-真机三域适配的组合查询与双源状态.md) — 真机截屏/网络/日志三域适配的三个可复用结论——组合查询模式的第三次复用收口成两个函数、跨来源状态不能放进会 prune 的 store、派生对象的生命周期跟随要用原始值 key
 - [2026-10-13-真机接入的三个接缝经验.md](notes/learn/2026-10/2026-10-13-真机接入的三个接缝经验.md) — 真机接入实现的三个接缝经验——track 载荷是 key:value 冒号格式、ensureSession 同 runId 幂等决定了重连必须代次自增、投屏 hook 参数收窄为结构化最小形态即可被真机画布复用
+- [2026-10-13-自签项目签名身份专用钥匙串.md](notes/learn/2026-10/2026-10-13-自签项目签名身份专用钥匙串.md) — 本机无 Apple 证书时给项目签名的完整方案——openssl 自签 codeSigning 证书放专用钥匙串（密码本地 600 文件、签名前解锁、分区访问控制预授权 codesign），appId 换正式反域名，DR 锚定证书实现升级后 TCC 授权保留
 
 ### notes/task/
 
@@ -330,6 +333,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-13-real-device-usb-and-apk-install.md](plans/2026-10-13-real-device-usb-and-apk-install.md) — stage06 第一批——USB 真机接入（track-devices-l 长连接插拔跟随 + 投屏第二桥 + 未授权引导）与 APK 拖装到真机（serialOf 组合查询 + 真机失败签名 + 「仍要安装」旗标重试）；依据 think-report 20261013013755 全批复
 - [2026-10-13-scrcpy-module-split.md](plans/2026-10-13-scrcpy-module-split.md) — 纯机械拆分 src/main/scrcpy/index.ts（758 行 → 薄 index 装配 + 8 个域文件）；工厂闭包状态（sessions/active/deps）显式化为 ManagerContext 传参，公共契约（createScrcpyManager + 3 常量 + 2 类型）与行为零变化
 - [2026-10-13-scrcpy-split-review-fixes.md](plans/2026-10-13-scrcpy-split-review-fixes.md) — 修复 scrcpy 拆分 review 的两个存量 issue——ipc.ts 六处入参校验硬编码中文迁移 msg()（新增 5 词条 × zh-CN/zh-TW/en 三语块，zh 文本逐字保持）；项目骨架.md 删掉已落地的 scrcpy/stream.ts【规划】行并在顶部指引补模块拆分快照链接
+- [2026-10-15-real-device-wireless.md](plans/2026-10-15-real-device-wireless.md) — stage06 第二批——真机无线接入：荣耀/华为系「一键转无线」（tcpip 5555 → 读 wlan0 IP → connect，覆盖 adbd 重启竞态）为无持久化主路径；mDNS 扫描 + 配对码走小米等有官方无线调试开关的机型（验收待用户持机手动执行）；网段扫描与手动 IP:5555 为辅助入口。端口钉死 5555，不存设备记录，USB/无线双条目并存不聚合
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### stage/
@@ -349,4 +353,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 259 documents -->
+<!-- 263 documents -->
