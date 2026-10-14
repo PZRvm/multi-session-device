@@ -30,6 +30,15 @@ export const IPC_CHANNELS = {
   devicesExternalList: 'devices:external-list',
   /** main → 主窗：外部设备全量推送（main 侧 diff，变化才推） */
   devicesExternalChanged: 'devices:external-changed',
+  // ---- 真机无线域（plan 2026-10-15-real-device-wireless；仅登记主窗）----
+  /** 无线扫描：mDNS 服务 + 本网段 5555 探活，返回候选列表 */
+  devicesExternalScan: 'devices:external-scan',
+  /** 配对码配对（小米系等有官方无线调试开关的机型） */
+  devicesExternalPair: 'devices:external-pair',
+  /** 直连 host:port（缺省 5555；也承载「转无线」成功后的连接段） */
+  devicesExternalConnect: 'devices:external-connect',
+  /** 断开无线条目（track 自然推消失，会话桥销毁） */
+  devicesExternalDisconnect: 'devices:external-disconnect',
   // ---- 持久化对账域（plan 2026-10-05-avd-reconciliation；仅登记主窗）----
   /** 人工重查：受控重读元数据 + AVD/镜像只读核验，返回合并快照与本轮报告 */
   devicesReconcile: 'devices:reconcile',
