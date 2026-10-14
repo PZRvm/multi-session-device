@@ -1,10 +1,19 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, Usb, Wifi } from 'lucide-react'
+import { ChevronDown, ChevronRight, Loader2, Usb, Wifi } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
-import type { Device, ExternalDevice, StoreHealthState } from '@shared/types'
+import type {
+  Device,
+  ExternalDevice,
+  StoreHealthState,
+  WirelessConnectOutcome
+} from '@shared/types'
+import { toApiResult } from '../api'
 import { useCopy } from '../hooks/useCopy'
+import { spinKeyframes } from '../styles/animations'
 import DeviceRow from './DeviceRow'
+import WirelessConnector from './WirelessConnector'
+import { wirelessConnectFailureText } from './wirelessOutcome'
 import { splitByOriginView, originOf, type SourceBucket } from './originView'
 
 type DeviceListPaneProps = {
@@ -79,16 +88,29 @@ const rowHandlers = (
   />
 )
 
+/** 转无线反馈（行内呈现）：working 进行中 / done 成功待拔线 / fail 带原因文案 */
+type PromoteState =
+  | { serial: string; phase: 'working' }
+  | { serial: string; phase: 'done' }
+  | { serial: string; phase: 'fail'; text: string }
+
 /** 真机行（plan 2026-10-13-real-device-usb-and-apk-install）：复用 AVD 行的视觉语言——
- *  三行结构（标题 + 角标 / 状态点 + 元信息 / 引导行），无内联操作（点击行即选中投屏） */
+ *  三行结构（标题 + 角标 / 状态点 + 元信息 / 引导行），点击行即选中投屏。无线批
+ *  （plan 2026-10-15-real-device-wireless）加行内动作：USB 行「转为无线」、无线行「断开」 */
 const ExternalRow = ({
   device,
   selected,
-  onSelect
+  onSelect,
+  promoteState,
+  onPromote,
+  onDisconnect
 }: {
   device: ExternalDevice
   selected: boolean
   onSelect: () => void
+  promoteState?: PromoteState
+  onPromote?: (serial: string) => void
+  onDisconnect?: (serial: string) => void
 }): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
   const stateText =
@@ -115,6 +137,35 @@ const ExternalRow = ({
     >
       <span className="row-head">
         <span className="row-title">{title}</span>
+        {device.state === 'device' && device.transport === 'usb' && onPromote ? (
+          <button
+            type="button"
+            className="row-action"
+            disabled={promoteState?.phase === 'working'}
+            onClick={(event) => {
+              event.stopPropagation()
+              onPromote(device.serial)
+            }}
+          >
+            {promoteState?.phase === 'working' ? (
+              <Loader2 size={11} className="row-action-spin" aria-hidden="true" />
+            ) : (
+              copy.wirelessPromote
+            )}
+          </button>
+        ) : null}
+        {device.state === 'device' && device.transport === 'wireless' && onDisconnect ? (
+          <button
+            type="button"
+            className="row-action"
+            onClick={(event) => {
+              event.stopPropagation()
+              onDisconnect(device.serial)
+            }}
+          >
+            {copy.wirelessDisconnect}
+          </button>
+        ) : null}
         <span
           className="transport"
           role="img"
@@ -137,6 +188,10 @@ const ExternalRow = ({
         <span className="row-hint">{copy.realDeviceUnauthorizedHint}</span>
       ) : device.state === 'offline' ? (
         <span className="row-hint">{copy.realDeviceOfflineHint}</span>
+      ) : promoteState?.phase === 'done' && promoteState.serial === device.serial ? (
+        <span className="row-hint promote-done">{copy.wirelessPromoteDone}</span>
+      ) : promoteState?.phase === 'fail' && promoteState.serial === device.serial ? (
+        <span className="row-hint promote-fail">{promoteState.text}</span>
       ) : null}
     </div>
   )
@@ -173,7 +228,35 @@ const DeviceListPane = ({
   const copy = useCopy(MAIN_COPY)
   const [foldedOpen, setFoldedOpen] = useState(false)
   const [realOpen, setRealOpen] = useState(true)
+  // 无线批（plan 2026-10-15-real-device-wireless）：弹层开合与转无线反馈都是行内瞬态，
+  // 不进 store——无状态裁定（刷新即丢，设备由 track 推送呈现）
+  const [wirelessOpen, setWirelessOpen] = useState(false)
+  const [promote, setPromote] = useState<PromoteState | null>(null)
   const { active, folded } = splitByOriginView(devices, sourceBucket)
+  // 反馈只在设备在场时呈现（渲染期派生，不用 effect 清账）：拔线后行不在即不显示
+  const activePromote =
+    promote && externalDevices.some((device) => device.serial === promote.serial) ? promote : null
+
+  const handlePromote = (serial: string): void => {
+    setPromote({ serial, phase: 'working' })
+    void toApiResult(window.api.devices.promoteExternalWireless({ serial })).then((result) => {
+      if (!result.ok) {
+        setPromote({ serial, phase: 'fail', text: result.error })
+        return
+      }
+      const outcome: WirelessConnectOutcome = result.data
+      setPromote(
+        outcome.ok
+          ? { serial, phase: 'done' }
+          : { serial, phase: 'fail', text: wirelessConnectFailureText(copy, outcome) }
+      )
+    })
+  }
+
+  const handleDisconnect = (serial: string): void => {
+    void toApiResult(window.api.devices.disconnectExternal(serial))
+  }
+
   const foldedLine =
     folded.length > 0
       ? format(sourceBucket === 'shared-studio' ? copy.otherOriginOwned : copy.otherOriginStudio, {
@@ -267,23 +350,44 @@ const DeviceListPane = ({
           </>
         )}
         <div className="real-devices">
-          <button
-            type="button"
-            className="folded-toggle"
-            aria-expanded={realOpen}
-            onClick={() => setRealOpen((open) => !open)}
-          >
-            {realOpen ? (
-              <ChevronDown size={12} aria-hidden="true" />
-            ) : (
-              <ChevronRight size={12} aria-hidden="true" />
-            )}
-            {format(copy.realDeviceSectionCount, { count: externalDevices.length })}
-          </button>
+          {wirelessOpen ? <WirelessConnector onClose={() => setWirelessOpen(false)} /> : null}
+          <div className="real-head">
+            <button
+              type="button"
+              className="folded-toggle real-toggle"
+              aria-expanded={realOpen}
+              onClick={() => setRealOpen((open) => !open)}
+            >
+              {realOpen ? (
+                <ChevronDown size={12} aria-hidden="true" />
+              ) : (
+                <ChevronRight size={12} aria-hidden="true" />
+              )}
+              {format(copy.realDeviceSectionCount, { count: externalDevices.length })}
+            </button>
+            <button
+              type="button"
+              className="real-wireless-btn"
+              aria-label={copy.wirelessConnectAria}
+              title={copy.wirelessConnectAria}
+              onClick={() => setWirelessOpen(true)}
+            >
+              <Wifi size={12} aria-hidden="true" />
+            </button>
+          </div>
           {realOpen ? (
             <div className="real-body">
               {externalDevices.length === 0 ? (
-                <p className="real-empty">{copy.realDeviceEmpty}</p>
+                <p className="real-empty">
+                  {copy.realDeviceEmpty}
+                  <button
+                    type="button"
+                    className="real-empty-action"
+                    onClick={() => setWirelessOpen(true)}
+                  >
+                    {copy.wirelessConnectEmpty}
+                  </button>
+                </p>
               ) : (
                 externalDevices.map((device) => (
                   <ExternalRow
@@ -291,6 +395,11 @@ const DeviceListPane = ({
                     device={device}
                     selected={device.id === selectedExternalId}
                     onSelect={() => onSelectExternal(device.id)}
+                    promoteState={
+                      activePromote?.serial === device.serial ? activePromote : undefined
+                    }
+                    onPromote={handlePromote}
+                    onDisconnect={handleDisconnect}
                   />
                 ))
               )}
@@ -382,10 +491,53 @@ const Wrapper = styled.div`
 
   /* 真机区（plan 2026-10-13-real-device-usb-and-apk-install）：组头同折叠组样式，
      行卡复用 AVD 行的视觉语言（发丝线分隔、选中 accent 底）。位于滚动列表流内——
-     紧跟 AVD 分区（或空库提示）之后，不钉在栏底（用户 2026-10-13 反馈） */
+     紧跟 AVD 分区（或空库提示）之后，不钉在栏底（用户 2026-10-13 反馈）。
+     无线批（2026-10-15）：组头拆成容器行（按钮嵌按钮不合法）+ 右侧常驻无线入口；
+     弹层锚在本区（position: relative） */
   .real-devices {
+    position: relative;
     border-top: 1px solid var(--board-hairline);
     background: var(--board-bg-raised);
+  }
+
+  .real-head {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding-right: 6px;
+  }
+
+  .real-toggle {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .real-wireless-btn {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--board-ink-dim);
+    cursor: pointer;
+    transition:
+      background-color 0.12s,
+      color 0.12s;
+  }
+
+  .real-wireless-btn:hover {
+    background: var(--board-hover-veil);
+    color: var(--board-ink);
+  }
+
+  .real-wireless-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
 
   .real-body {
@@ -403,6 +555,73 @@ const Wrapper = styled.div`
     font-size: 11px;
     line-height: 1.7;
     color: var(--board-ink-dim);
+  }
+
+  .real-empty-action {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--board-tile-ink);
+    font-size: 11px;
+    font-family: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .real-empty-action:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .row-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 8px;
+    margin-right: 6px;
+    border: 1px solid var(--board-control-line);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--board-ink-dim);
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+    transition:
+      background-color 0.12s,
+      color 0.12s,
+      border-color 0.12s;
+  }
+
+  .row-action:hover:not(:disabled) {
+    background: var(--board-hover-veil);
+    color: var(--board-ink);
+    border-color: var(--board-ink-dim);
+  }
+
+  .row-action:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .row-action:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .row-action-spin {
+    animation: ${spinKeyframes} 0.9s linear infinite;
+  }
+
+  .promote-done {
+    color: var(--board-tile-ink);
+  }
+
+  .promote-fail {
+    color: var(--danger);
   }
 
   .external-row {
