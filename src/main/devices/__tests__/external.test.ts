@@ -198,12 +198,17 @@ describe('createTrackParser', () => {
 })
 
 describe('track 客户端', () => {
-  it('注册幂等：ipcMain.handle 只登记一次', async () => {
+  it('注册幂等：两轮注册无重复通道（无线批后一次注册 6 个）', async () => {
     const mod = await fresh()
     const bags = makeDeps()
     mod.registerExternalIpc(bags.deps)
     mod.registerExternalIpc(bags.deps)
-    expect(vi.mocked(ipcMain.handle)).toHaveBeenCalledTimes(1)
+    const channels = vi
+      .mocked(ipcMain.handle)
+      .mock.calls.map((call) => call[0])
+      .sort()
+    expect(channels).toHaveLength(6)
+    expect(new Set(channels).size).toBe(6)
   })
 
   it('list 通道：未登记 sender 抛错；已登记返回缓存', async () => {

@@ -37,6 +37,8 @@ export const IPC_CHANNELS = {
   devicesExternalPair: 'devices:external-pair',
   /** 直连 host:port（缺省 5555；也承载「转无线」成功后的连接段） */
   devicesExternalConnect: 'devices:external-connect',
+  /** USB 一键转无线：读 wlan0 IP → tcpip 5555 → connect（plan 漏列，实现期补） */
+  devicesExternalPromote: 'devices:external-promote',
   /** 断开无线条目（track 自然推消失，会话桥销毁） */
   devicesExternalDisconnect: 'devices:external-disconnect',
   // ---- 持久化对账域（plan 2026-10-05-avd-reconciliation；仅登记主窗）----
