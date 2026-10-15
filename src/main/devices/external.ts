@@ -541,7 +541,11 @@ export interface AdbProbeResult {
 const WIRELESS_PORT = 5555
 /** adbd 重启竞态退避（plan 风险表）：`tcpip` 下发后 adbd 重启数秒不应答，重试吸收 */
 const CONNECT_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000]
-const HOST_PATTERN = /^\d{1,3}(?:\.\d{1,3}){3}$/
+/** TCP 层失败的快速退避（P2-1）：重启窗口内监听短暂消失，前 3 拍先别下结论 */
+const TCP_RETRY_DELAYS_MS = [500, 1_000, 2_000]
+/** 点分 IPv4：形态 + 每段 0–255（P3-5——999.1.1.1 曾通过并误报 cross-subnet） */
+const HOST_PATTERN =
+  /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/
 
 const runCmdDefault = async (args: string[], timeoutMs = 15_000): Promise<AdbRunResult> => {
   const exec = await requireAdb()
@@ -691,7 +695,13 @@ export const connectWirelessDevice = async (
       if (state === 'unauthorized') return { ok: false, reason: 'unauthorized', host }
       // offline / 未列出 → adbd 重启竞态窗口，退避后重连
     } else {
-      // TCP 层失败（failed/cannot connect）：同网段与否决定提示方向
+      // TCP 层失败（failed/cannot connect）：前几拍可能是 adbd 重启窗口（监听短暂
+      // 消失，2026-10-15 实测连续两次 refused 才通）——快速退避重试，耗尽再按同网段
+      // 与否给终态提示
+      if (attempt < TCP_RETRY_DELAYS_MS.length) {
+        await delay(TCP_RETRY_DELAYS_MS[attempt])
+        continue
+      }
       const same = localSubnets().some((prefix) => host.startsWith(prefix))
       return { ok: false, reason: same ? 'unreachable' : 'cross-subnet', host }
     }
@@ -728,19 +738,29 @@ export const scanWireless = async (
     .then((result) => parseMdnsServices(result.stdout))
     .catch(() => [])
   // 网段探活走 CNXN 握手（用户 2026-10-15 需求）：只认以 ADB 协议应答的对端——
-  // 5555 端口开着的不一定是安卓机；身份串顺带带回 model 作候选名
-  const probes: Array<Promise<WirelessCandidate | null>> = []
+  // 5555 端口开着的不一定是安卓机；身份串顺带带回 model 作候选名。
+  // 并发帽 256（P3-6）：多网卡主机瞬时 sockets 有界；同一网段内的次序无关紧要
+  const hosts: string[] = []
   for (const prefix of localSubnets()) {
-    for (let i = 1; i <= 254; i++) {
-      const host = `${prefix}${i}`
-      probes.push(
-        probeAdb(host, WIRELESS_PORT, 1_500).then((probe) =>
-          probe.ok ? { source: 'subnet-scan', name: probe.model, host, port: WIRELESS_PORT } : null
-        )
-      )
-    }
+    for (let i = 1; i <= 254; i++) hosts.push(`${prefix}${i}`)
   }
-  const subnetHits = (await Promise.all(probes)).filter(
+  const SCAN_CONCURRENCY = 256
+  const cursor = { index: 0 }
+  const workers: Array<Promise<WirelessCandidate | null>> = Array.from(
+    { length: Math.min(SCAN_CONCURRENCY, hosts.length) },
+    () =>
+      (async (): Promise<WirelessCandidate | null> => {
+        for (;;) {
+          const index = cursor.index++
+          if (index >= hosts.length) return null
+          const host = hosts[index]
+          const probe = await probeAdb(host, WIRELESS_PORT, 1_500)
+          if (probe.ok)
+            return { source: 'subnet-scan', name: probe.model, host, port: WIRELESS_PORT }
+        }
+      })()
+  )
+  const subnetHits = (await Promise.all(workers)).filter(
     (candidate): candidate is WirelessCandidate => candidate !== null
   )
   // mDNS 命中优先（有实例名）；网段扫描只补 mDNS 看不见的 tcpip 设备（荣耀系）

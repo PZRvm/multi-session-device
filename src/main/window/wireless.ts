@@ -59,6 +59,18 @@ export function openWirelessWindow(): void {
     window.show()
     window.focus()
   })
+  // 加载失败兜底（P3-1）：白窗滞留且单例占位比崩溃更糟——关窗留痕，下次打开重建。
+  // 向导窗有 result Promise 可上报；本窗无返回值，失败进日志即收口。
+  const fail = (what: string, detail: string): void => {
+    console.warn(`[wireless] ${what}: ${detail}`)
+    if (wirelessWindow === window && !window.isDestroyed()) window.close()
+  }
+  window.webContents.on('did-fail-load', (_event, code, description, _url, isMainFrame) => {
+    if (isMainFrame) fail('load failed', `${description}（${code}）`)
+  })
+  window.webContents.on('render-process-gone', (_event, details) => {
+    fail('renderer gone', details.reason)
+  })
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     void window.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/wireless.html`)
   } else {

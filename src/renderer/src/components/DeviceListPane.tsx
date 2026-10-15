@@ -250,10 +250,18 @@ const DeviceListPane = ({
   // 渲染层弹层与窗口几何打架）——这里只发起开窗；转无线反馈是行内瞬态，不进 store
   // （无状态裁定：刷新即丢，设备由 track 推送呈现）
   const [promote, setPromote] = useState<PromoteState | null>(null)
+  // 断开/删除失败反馈（P3-3）：serial → 文案，行卡沿用 promote-fail 样式位
+  const [disconnectError, setDisconnectError] = useState<{ serial: string; text: string } | null>(
+    null
+  )
   const { active, folded } = splitByOriginView(devices, sourceBucket)
   // 反馈只在设备在场时呈现（渲染期派生，不用 effect 清账）：拔线后行不在即不显示
   const activePromote =
     promote && externalDevices.some((device) => device.serial === promote.serial) ? promote : null
+  const activeDisconnectError =
+    disconnectError && externalDevices.some((device) => device.serial === disconnectError.serial)
+      ? disconnectError
+      : null
 
   const handlePromote = (serial: string): void => {
     setPromote({ serial, phase: 'working' })
@@ -268,11 +276,28 @@ const DeviceListPane = ({
           ? { serial, phase: 'done' }
           : { serial, phase: 'fail', text: wirelessConnectFailureText(copy, outcome) }
       )
+      // done 提示 6 秒后自清（P3-4：重插同 serial 不重显旧提示）；失败态不自动清，
+      // 随设备离场消失（派生收口）
+      if (outcome.ok) {
+        window.setTimeout(
+          () => setPromote((cur) => (cur?.serial === serial && cur.phase === 'done' ? null : cur)),
+          6_000
+        )
+      }
     })
   }
 
   const handleDisconnect = (serial: string): void => {
-    void toApiResult(window.api.devices.disconnectExternal(serial))
+    void toApiResult(window.api.devices.disconnectExternal(serial)).then((result) => {
+      if (!result.ok) {
+        // P3-3：断开/删除失败不再全静默——行内一句，8 秒自清或随离场消失
+        setDisconnectError({ serial, text: result.error })
+        window.setTimeout(
+          () => setDisconnectError((cur) => (cur?.serial === serial ? null : cur)),
+          8_000
+        )
+      }
+    })
   }
 
   const foldedLine =
@@ -406,19 +431,29 @@ const DeviceListPane = ({
                   </button>
                 </p>
               ) : (
-                externalDevices.map((device) => (
-                  <ExternalRow
-                    key={device.id}
-                    device={device}
-                    selected={device.id === selectedExternalId}
-                    onSelect={() => onSelectExternal(device.id)}
-                    promoteState={
-                      activePromote?.serial === device.serial ? activePromote : undefined
-                    }
-                    onPromote={handlePromote}
-                    onDisconnect={handleDisconnect}
-                  />
-                ))
+                externalDevices.map((device) => {
+                  const rowFeedback =
+                    activePromote?.serial === device.serial
+                      ? activePromote
+                      : activeDisconnectError?.serial === device.serial
+                        ? {
+                            serial: device.serial,
+                            phase: 'fail' as const,
+                            text: activeDisconnectError.text
+                          }
+                        : undefined
+                  return (
+                    <ExternalRow
+                      key={device.id}
+                      device={device}
+                      selected={device.id === selectedExternalId}
+                      onSelect={() => onSelectExternal(device.id)}
+                      promoteState={rowFeedback}
+                      onPromote={handlePromote}
+                      onDisconnect={handleDisconnect}
+                    />
+                  )
+                })
               )}
             </div>
           ) : null}

@@ -845,4 +845,71 @@ describe('息屏唤醒冻结回归（2026-10-15 真机 Wi-Fi 投屏调查）', (
       expect(packets.length).toBeGreaterThan(frozenAt)
     })
   }, 20_000)
+
+  it('P3-7：自救节拍在 fake timers 下确定性收敛（400ms 推帧 + 3s 看门狗两拍）', async () => {
+    const { manager, transportOf } = await importManager()
+    const ctl = (): number =>
+      (transportOf('emulator-5554').controlSocket as unknown as FakeSocket).written.length
+    const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+    const ack = await handlerFor(IPC_CHANNELS.screenAck)
+
+    await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+    await vi.waitFor(() => {
+      expect(collect().states.some((state) => state.status === 'ready')).toBe(true)
+    })
+    await activate({ sender: {} }, { id: 'd1', viewToken: 'vt2' })
+
+    const push = transportOf('emulator-5554').__push
+    push({ type: 'configuration', data: new Uint8Array([1]) })
+    push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+    for (let i = 1; i <= 3; i++) {
+      push({ type: 'data', pts: BigInt(33_000 * i), keyframe: false, data: new Uint8Array(10) })
+    }
+    await vi.waitFor(() => {
+      expect(collect().packets).toHaveLength(5)
+    })
+    await ack({ sender: {} }, { viewToken: 'vt2', generation: 1, throughSeq: 4 })
+
+    // 冻结条件与上一测同构：PTS 跨度清链 + 超预算突发
+    for (let i = 0; i < 20; i++) {
+      push({
+        type: 'data',
+        pts: 10_000_000n + BigInt(33_000 * i),
+        keyframe: false,
+        data: new Uint8Array(10)
+      })
+    }
+    await vi.waitFor(() => {
+      expect(collect().packets.length).toBeGreaterThan(5)
+    })
+    await ack(
+      { sender: {} },
+      { viewToken: 'vt2', generation: 1, throughSeq: collect().packets.at(-1)!.seq }
+    )
+
+    // fake timers：自救节拍（2×ACK_STALL_MS）确定性推进，毫秒级墙钟完成
+    vi.useFakeTimers()
+    try {
+      const deadline = Date.now() + 10_000
+      const ctlBefore = ctl()
+      let resetSeen = false
+      for (;;) {
+        push({
+          type: 'data',
+          pts: 10_700_000n + BigInt(Math.floor(Math.random() * 1_000_000)),
+          keyframe: false,
+          data: new Uint8Array(10)
+        })
+        await vi.advanceTimersByTimeAsync(400)
+        if (ctl() > ctlBefore) {
+          resetSeen = true
+          break
+        }
+        if (Date.now() > deadline) break
+      }
+      expect(resetSeen).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

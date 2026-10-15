@@ -19,7 +19,8 @@ type Feedback =
   | { kind: 'pair-ok' }
   | { kind: 'pair-fail'; text: string }
 
-const HOST_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/
+// 与 main 侧 HOST_PATTERN 同规：形态 + 八位组 0–255（P3-5）
+const HOST_RE = /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/
 
 /** 无线连接器窗内容（plan 2026-10-15-real-device-wireless；2026-10-15 用户裁定由
  *  渲染层弹层改为 mac 原生弹窗——本组件即窗体页面，非绝对定位卡）。打开即扫描

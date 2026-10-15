@@ -208,21 +208,46 @@ describe('connectWirelessDevice', () => {
     expect(callsOf(deps.runCmd).filter((args) => args[0] === 'connect')).toHaveLength(6)
   })
 
-  it('TCP 层失败同网段 → unreachable；跨网段 → cross-subnet（不退避）', async () => {
-    const failed = ok("failed to connect to '192.168.31.102:5555': Operation timed out")
+  it('TCP 层失败先进快速退避（P2-1 adbd 重启窗口），耗尽才判 unreachable', async () => {
+    const failed = ok("failed to connect to '192.168.31.102:5555': Connection refused")
+    let refused = 0
+    const deps = makeDeps({
+      runCmd: vi.fn(async (args: string[]) => {
+        if (args[0] !== 'connect')
+          return ok('List of devices attached\n192.168.31.102:5555\tdevice\n')
+        refused += 1
+        if (refused <= 2) return failed
+        return CONNECTED
+      })
+    })
+    expect(await connectWirelessDevice({ host: '192.168.31.102' }, deps)).toEqual({
+      ok: true,
+      serial: '192.168.31.102:5555'
+    })
+    expect(callsOf(deps.runCmd).filter((args) => args[0] === 'connect')).toHaveLength(3)
+    expect((deps.delay as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0])).toEqual([
+      500, 1_000
+    ])
+  })
+
+  it('TCP 失败耗尽快速退避 → unreachable / cross-subnet 终态', async () => {
+    const failed = ok("failed to connect to '192.168.31.102:5555': Connection refused")
     const same = makeDeps({ runCmd: vi.fn(async () => failed) })
     expect(await connectWirelessDevice({ host: '192.168.31.102' }, same)).toEqual({
       ok: false,
       reason: 'unreachable',
       host: '192.168.31.102'
     })
+    expect(callsOf(same.runCmd).filter((args) => args[0] === 'connect')).toHaveLength(4)
+    expect((same.delay as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0])).toEqual([
+      500, 1_000, 2_000
+    ])
     const away = makeDeps({ runCmd: vi.fn(async () => failed), localSubnets: () => [] })
     expect(await connectWirelessDevice({ host: '192.168.0.108' }, away)).toEqual({
       ok: false,
       reason: 'cross-subnet',
       host: '192.168.0.108'
     })
-    expect(away.delay).not.toHaveBeenCalled()
   })
 
   it('unauthorized 即时失败——重试不会让用户去手机上点授权变快', async () => {
@@ -323,6 +348,10 @@ describe('载荷校验', () => {
     expect(isWirelessConnectInput({ host: '192.168.31.102' })).toBe(true)
     expect(isWirelessConnectInput({ host: '192.168.31.102', port: 5555 })).toBe(true)
     expect(isWirelessConnectInput({ host: 'foo' })).toBe(false)
+    expect(isWirelessConnectInput({ host: '999.1.1.1' })).toBe(false)
+    expect(isWirelessConnectInput({ host: '256.0.0.1' })).toBe(false)
+    expect(isWirelessConnectInput({ host: '255.255.255.255' })).toBe(true)
+    expect(isWirelessConnectInput({ host: '0.0.0.0' })).toBe(true)
     expect(isWirelessConnectInput({ host: '192.168.31.102', port: 0 })).toBe(false)
     expect(isWirelessConnectInput({ host: '192.168.31.102', port: 70_000 })).toBe(false)
     expect(isWirelessConnectInput(null)).toBe(false)
@@ -350,9 +379,14 @@ describe('无线通道装配', () => {
   })
   afterEach(() => stopExternalTracking())
 
-  const wire = (wireless: Partial<WirelessDeps>, isMainSender = true): void => {
+  const wire = (
+    wireless: Partial<WirelessDeps>,
+    isMainSender = true,
+    isWirelessSender = false
+  ): void => {
     registerExternalIpc({
       isMainSender: () => isMainSender,
+      isWirelessSender: () => isWirelessSender,
       ensureServer: async () => ({}),
       connect: () => new DormantSocket() as never,
       wireless
@@ -375,6 +409,20 @@ describe('无线通道装配', () => {
     wire(makeDeps(), false)
     const scan = handlers.get(IPC_CHANNELS.devicesExternalScan) as Handler
     expect(() => scan({ sender: {} })).toThrow(/devices:external-scan/)
+  })
+
+  it('无线连接窗 sender：isMainSender 假但 isWirelessSender 真 → 放行（P3-2）', async () => {
+    wire(
+      makeDeps({
+        runCmd: vi.fn(async () => ok('adb-x._adb-tls-connect._tcp 192.168.31.7:5555'))
+      }),
+      false,
+      true
+    )
+    const scan = handlers.get(IPC_CHANNELS.devicesExternalScan) as Handler
+    await expect(scan({ sender: {} })).resolves.toEqual([
+      { source: 'mdns-connect', name: 'adb-x', host: '192.168.31.7', port: 5555 }
+    ])
   })
 
   it('connect 载荷非法 → invalidPayload；合法 → outcome 直达', async () => {
