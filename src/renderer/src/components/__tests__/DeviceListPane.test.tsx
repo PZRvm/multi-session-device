@@ -213,35 +213,37 @@ const usbDevice = (over: Partial<ExternalDevice> = {}): ExternalDevice => ({
 
 const wirelessApi = (
   over: {
+    open?: () => Promise<void>
     scan?: () => Promise<unknown>
     promote?: (input: unknown) => Promise<unknown>
     disconnect?: (serial: string) => Promise<unknown>
   } = {}
-): void => {
+): { open: ReturnType<typeof vi.fn> } => {
+  const open = vi.fn(over.open ?? (async () => undefined))
   ;(window as { api?: unknown }).api = {
     devices: {
+      openExternalWireless: open,
       scanExternalWireless: over.scan ?? vi.fn(async () => []),
       promoteExternalWireless:
         over.promote ?? vi.fn(async () => ({ ok: true, serial: '192.168.31.102:5555' })),
       disconnectExternal: over.disconnect ?? vi.fn(async () => undefined)
     }
   }
+  return { open }
 }
 
 describe('真机区无线入口（plan 2026-10-15-real-device-wireless）', () => {
-  it('组头常驻无线按钮 + 空态内联动作都打开连接器（打开即扫描）', async () => {
-    wirelessApi()
+  it('组头常驻无线按钮 + 空态内联动作都发起开原生窗（渲染层不再有弹层）', async () => {
+    const { open } = wirelessApi()
     renderPane({})
     fireEvent.click(screen.getByRole('button', { name: copy.wirelessConnectAria }))
     await waitFor(() => {
-      expect(screen.getByRole('dialog', { name: copy.wirelessDialogTitle })).toBeTruthy()
-      expect(screen.getByText(copy.wirelessScanEmpty)).toBeTruthy()
+      expect(open).toHaveBeenCalledTimes(1)
     })
-    fireEvent.click(screen.getByRole('button', { name: copy.cancel }))
     expect(screen.queryByRole('dialog')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: copy.wirelessConnectEmpty }))
     await waitFor(() => {
-      expect(screen.getByRole('dialog', { name: copy.wirelessDialogTitle })).toBeTruthy()
+      expect(open).toHaveBeenCalledTimes(2)
     })
   })
 

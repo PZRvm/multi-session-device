@@ -9,6 +9,7 @@ import { spinKeyframes } from '../styles/animations'
 import { wirelessConnectFailureText } from './wirelessOutcome'
 
 type WirelessConnectorProps = {
+  /** 连接成功后的收口（原生窗由 WirelessApp 传 window.close；测试替身断言） */
   onClose: () => void
 }
 
@@ -20,10 +21,11 @@ type Feedback =
 
 const HOST_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/
 
-/** 无线连接器弹层（plan 2026-10-15-real-device-wireless）：锚在真机区组头上方的
- *  非模态卡。打开即扫描（mDNS + 本网段 5555）；手动 IP 一等入口；配对码表单收在
- *  折叠区（小米系）。无状态裁定：不记任何历史，关闭即清。连接成功即关——设备
- *  由 track 推送自然出现在列表，不在本层重复呈现。 */
+/** 无线连接器窗内容（plan 2026-10-15-real-device-wireless；2026-10-15 用户裁定由
+ *  渲染层弹层改为 mac 原生弹窗——本组件即窗体页面，非绝对定位卡）。打开即扫描
+ *  （mDNS + 本网段 5555 CNXN 握手）；手动 IP 一等入口；配对码表单收在折叠区（小米
+ *  系）。无状态裁定：不记任何历史，关闭即清。连接成功即关——设备由 track 推送
+ *  自然出现在列表，不在本层重复呈现。 */
 const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
   const [scanning, setScanning] = useState(true)
@@ -97,7 +99,7 @@ const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Eleme
   const manualReady = HOST_RE.test(manualHost)
 
   return (
-    <Popover
+    <Page
       role="dialog"
       aria-label={copy.wirelessDialogTitle}
       onKeyDown={(event) => {
@@ -293,7 +295,7 @@ const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Eleme
               : feedback.text}
         </p>
       ) : null}
-    </Popover>
+    </Page>
   )
 }
 
@@ -301,23 +303,16 @@ const Input = (props: React.ComponentPropsWithoutRef<'input'>): React.JSX.Elemen
   <input {...props} />
 )
 
-const Popover = styled.div`
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  /* 宽度脱锚定：弹层不该跟锚点等宽拉伸（面板拖宽后曾整窗破版），窄面板时仍占满 */
-  width: min(300px, 100%);
-  z-index: 20;
+/** 原生窗页面容器：hiddenInset 三灯占顶部 ~44px，内容下让；整窗滚动 */
+const Page = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 420px;
+  gap: 10px;
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 46px 14px 14px;
   overflow-y: auto;
-  padding: 10px;
-  border-radius: 8px;
-  background: var(--board-bg-raised);
-  border: 1px solid var(--board-hairline);
-  box-shadow: 0 6px 18px rgb(0 0 0 / 18%);
+  background: var(--board-bg);
 
   .spin {
     animation: ${spinKeyframes} 0.9s linear infinite;

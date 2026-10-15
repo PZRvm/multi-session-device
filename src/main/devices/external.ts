@@ -55,6 +55,9 @@ export interface ExternalDeps {
   ensureServer?: () => Promise<unknown>
   /** 无线域接缝组（测试替身注入；缺省用本文件 wirelessDefaults） */
   wireless?: Partial<WirelessDeps>
+  /** 无线连接窗 sender 判定（五个无线通道同时接受主窗与连接窗——连接窗是原生弹窗
+   *  化后的调用方，2026-10-15 用户裁定） */
+  isWirelessSender?: (sender: Electron.WebContents) => boolean
 }
 
 const broadcastDefault = (devices: ExternalDevice[]): void => {
@@ -415,6 +418,12 @@ export function registerExternalIpc(input: ExternalDeps): void {
       throw new Error(`${channel}: ${msg('unregisteredWindowSuffix')}`)
     }
   }
+  // 无线五通道的守卫放行主窗与无线连接窗（后者是原生弹窗化后的发起方）
+  const requireWirelessCaller = (channel: string, sender: Electron.WebContents): void => {
+    if (!input.isMainSender(sender) && !(input.isWirelessSender?.(sender) ?? false)) {
+      throw new Error(`${channel}: ${msg('unregisteredWindowSuffix')}`)
+    }
+  }
   ipcMain.handle(IPC_CHANNELS.devicesExternalList, (event): ExternalDevice[] => {
     requireMain(IPC_CHANNELS.devicesExternalList, event.sender)
     return cache
@@ -422,13 +431,13 @@ export function registerExternalIpc(input: ExternalDeps): void {
   // ---- 无线域通道（plan 2026-10-15-real-device-wireless）：失败是结果不是错误，
   // outcome 判别联合直达 renderer；载荷非法才 throw（对齐其余通道惯例）----
   ipcMain.handle(IPC_CHANNELS.devicesExternalScan, (event): Promise<WirelessCandidate[]> => {
-    requireMain(IPC_CHANNELS.devicesExternalScan, event.sender)
+    requireWirelessCaller(IPC_CHANNELS.devicesExternalScan, event.sender)
     return scanWireless(input.wireless)
   })
   ipcMain.handle(
     IPC_CHANNELS.devicesExternalPair,
     (event, raw: unknown): Promise<WirelessPairOutcome> => {
-      requireMain(IPC_CHANNELS.devicesExternalPair, event.sender)
+      requireWirelessCaller(IPC_CHANNELS.devicesExternalPair, event.sender)
       if (!isWirelessPairInput(raw)) {
         throw new Error(`${IPC_CHANNELS.devicesExternalPair}${msg('invalidPayload')}`)
       }
@@ -438,7 +447,7 @@ export function registerExternalIpc(input: ExternalDeps): void {
   ipcMain.handle(
     IPC_CHANNELS.devicesExternalConnect,
     (event, raw: unknown): Promise<WirelessConnectOutcome> => {
-      requireMain(IPC_CHANNELS.devicesExternalConnect, event.sender)
+      requireWirelessCaller(IPC_CHANNELS.devicesExternalConnect, event.sender)
       if (!isWirelessConnectInput(raw)) {
         throw new Error(`${IPC_CHANNELS.devicesExternalConnect}${msg('invalidPayload')}`)
       }
@@ -448,7 +457,7 @@ export function registerExternalIpc(input: ExternalDeps): void {
   ipcMain.handle(
     IPC_CHANNELS.devicesExternalPromote,
     (event, raw: unknown): Promise<WirelessConnectOutcome> => {
-      requireMain(IPC_CHANNELS.devicesExternalPromote, event.sender)
+      requireWirelessCaller(IPC_CHANNELS.devicesExternalPromote, event.sender)
       if (
         typeof raw !== 'object' ||
         raw === null ||
@@ -462,7 +471,7 @@ export function registerExternalIpc(input: ExternalDeps): void {
   ipcMain.handle(
     IPC_CHANNELS.devicesExternalDisconnect,
     async (event, raw: unknown): Promise<void> => {
-      requireMain(IPC_CHANNELS.devicesExternalDisconnect, event.sender)
+      requireWirelessCaller(IPC_CHANNELS.devicesExternalDisconnect, event.sender)
       if (
         typeof raw !== 'object' ||
         raw === null ||
@@ -513,12 +522,19 @@ export function resumeExternalSessions(): void {
 export interface WirelessDeps {
   /** adb 命令接缝（默认 requireAdb + runAdb） */
   runCmd: (args: string[], timeoutMs?: number) => Promise<AdbRunResult>
-  /** TCP 探活接缝（默认 node:net 连接即活；网段扫描用） */
-  probeTcp: (host: string, port: number, timeoutMs: number) => Promise<boolean>
+  /** ADB 握手探活接缝（默认 node:net 发 CNXN 收应答；网段扫描用——只认 adbd，顺带
+   *  取 model，非安卓服务一律 false，用户 2026-10-15 需求「检测 IP 是不是手机」） */
+  probeAdb: (host: string, port: number, timeoutMs: number) => Promise<AdbProbeResult>
   /** 延时接缝（默认 setTimeout；连接重试退避用） */
   delay: (ms: number) => Promise<void>
   /** 本机 IPv4 网段前缀接缝（默认 networkInterfaces 过滤内网；如 '192.168.31.'） */
   localSubnets: () => string[]
+}
+
+/** 网段探活结果：ok = 对端以 ADB CNXN 应答（是 adbd）；model 取自身份串 */
+export interface AdbProbeResult {
+  ok: boolean
+  model: string | null
 }
 
 /** 端口钉死 5555（用户裁定 2026-10-15）：adbd 每机各听各的，IP 已区分，配置零收益 */
@@ -532,31 +548,65 @@ const runCmdDefault = async (args: string[], timeoutMs = 15_000): Promise<AdbRun
   return runAdb(exec.path, args, { timeoutMs })
 }
 
-const probeTcpDefault = (host: string, port: number, timeoutMs: number): Promise<boolean> =>
+// ---- ADB CNXN 握手（amessage：command[4] arg1 arg2 data_length data_check magic，
+// 小端；magic = command ^ 0xffffffff。无载荷请求 24 字节）----
+
+export const buildCnxnRequest = (): Buffer => {
+  const buf = Buffer.alloc(24)
+  buf.write('CNXN', 0, 'utf8')
+  buf.writeUInt32LE(0x01000000, 4) // A_VERSION
+  buf.writeUInt32LE(4_096, 8) // MAX_PAYLOAD
+  buf.writeUInt32LE(0, 12)
+  buf.writeUInt32LE(0, 16)
+  buf.writeUInt32LE((buf.readUInt32LE(0) ^ 0xffff_ffff) >>> 0, 20)
+  return buf
+}
+
+/** 设备身份串（`device::ro.product.model=X;ro.serialno=Y;…`）→ model；非 device 串为 null */
+export const parseCnxnIdentity = (payload: string): string | null =>
+  /^device::/i.test(payload) ? (/ro\.product\.model=([^\s;]+)/.exec(payload)?.[1] ?? null) : null
+
+const probeAdbDefault = (host: string, port: number, timeoutMs: number): Promise<AdbProbeResult> =>
   new Promise((resolve) => {
     let sock: Socket
     try {
       sock = tcpConnect({ host, port })
     } catch {
-      resolve(false)
+      resolve({ ok: false, model: null })
       return
     }
     let settled = false
-    const timer = setTimeout(() => {
-      if (settled) return
-      settled = true
-      sock.destroy()
-      resolve(false)
-    }, timeoutMs)
-    const done = (ok: boolean): void => {
+    let buffer = Buffer.alloc(0)
+    const finish = (result: AdbProbeResult): void => {
       if (settled) return
       settled = true
       clearTimeout(timer)
       sock.destroy()
-      resolve(ok)
+      resolve(result)
     }
-    sock.once('connect', () => done(true))
-    sock.once('error', () => done(false))
+    const timer = setTimeout(() => finish({ ok: false, model: null }), timeoutMs)
+    const onData = (chunk: Buffer): void => {
+      buffer = Buffer.concat([buffer, chunk])
+      if (buffer.length < 24) return
+      const command = buffer.subarray(0, 4).toString('utf8')
+      if (command !== 'CNXN') {
+        finish({ ok: false, model: null })
+        return
+      }
+      const payloadLength = buffer.readUInt32LE(12)
+      if (buffer.length < 24 + payloadLength) return
+      const payload = buffer.subarray(24, 24 + payloadLength).toString('utf8')
+      finish({ ok: true, model: parseCnxnIdentity(payload) })
+    }
+    sock.once('connect', () => {
+      try {
+        sock.write(buildCnxnRequest())
+      } catch {
+        finish({ ok: false, model: null })
+      }
+    })
+    sock.once('error', () => finish({ ok: false, model: null }))
+    sock.on('data', onData)
   })
 
 const delayDefault = (ms: number): Promise<void> =>
@@ -571,8 +621,7 @@ const VIRTUAL_INTERFACE_RE =
 export const isLanInterface = (
   name: string,
   info: { family: string; internal: boolean }
-): boolean =>
-  info.family === 'IPv4' && !info.internal && !VIRTUAL_INTERFACE_RE.test(name)
+): boolean => info.family === 'IPv4' && !info.internal && !VIRTUAL_INTERFACE_RE.test(name)
 
 /** /24 前提的粗粒度网段采集：cross-subnet 提示是 best-effort，不做精确掩码运算 */
 const localSubnetsDefault = (): string[] => {
@@ -588,7 +637,7 @@ const localSubnetsDefault = (): string[] => {
 
 const wirelessDefaults: WirelessDeps = {
   runCmd: runCmdDefault,
-  probeTcp: probeTcpDefault,
+  probeAdb: probeAdbDefault,
   delay: delayDefault,
   localSubnets: localSubnetsDefault
 }
@@ -673,18 +722,20 @@ export const promoteToWireless = async (
 export const scanWireless = async (
   overrides?: Partial<WirelessDeps>
 ): Promise<WirelessCandidate[]> => {
-  const { runCmd, probeTcp, localSubnets } = resolveWirelessDeps(overrides)
+  const { runCmd, probeAdb, localSubnets } = resolveWirelessDeps(overrides)
   // mdns daemon 不在/不可用 → 该源静默空（手动输入是一等入口，不是降级）
   const mdns = await runCmd(['mdns', 'services'], 8_000)
     .then((result) => parseMdnsServices(result.stdout))
     .catch(() => [])
+  // 网段探活走 CNXN 握手（用户 2026-10-15 需求）：只认以 ADB 协议应答的对端——
+  // 5555 端口开着的不一定是安卓机；身份串顺带带回 model 作候选名
   const probes: Array<Promise<WirelessCandidate | null>> = []
   for (const prefix of localSubnets()) {
     for (let i = 1; i <= 254; i++) {
       const host = `${prefix}${i}`
       probes.push(
-        probeTcp(host, WIRELESS_PORT, 1_000).then((alive) =>
-          alive ? { source: 'subnet-scan', name: null, host, port: WIRELESS_PORT } : null
+        probeAdb(host, WIRELESS_PORT, 1_500).then((probe) =>
+          probe.ok ? { source: 'subnet-scan', name: probe.model, host, port: WIRELESS_PORT } : null
         )
       )
     }

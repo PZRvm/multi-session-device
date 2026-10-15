@@ -85,7 +85,10 @@ export const devicesApi = {
     }
   },
   // ---- 无线域（plan 2026-10-15-real-device-wireless；失败是 outcome 不是异常）----
-  /** 无线扫描：mDNS 服务 + 本网段 5555 探活（弹层打开即调） */
+  /** 打开无线连接原生窗（仅主窗；重复打开聚焦既有窗） */
+  openExternalWireless: (): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesExternalConnectorOpen),
+  /** 无线扫描：mDNS 服务 + 本网段 5555 CNXN 握手（窗体打开即调） */
   scanExternalWireless: (): Promise<WirelessCandidate[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.devicesExternalScan),
   /** 配对码配对（小米系等有官方无线调试开关的机型） */

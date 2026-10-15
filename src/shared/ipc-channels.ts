@@ -41,6 +41,8 @@ export const IPC_CHANNELS = {
   devicesExternalPromote: 'devices:external-promote',
   /** 断开无线条目（track 自然推消失，会话桥销毁） */
   devicesExternalDisconnect: 'devices:external-disconnect',
+  /** 打开无线连接原生窗（2026-10-15 用户裁定：弹层改 mac 原生弹窗） */
+  devicesExternalConnectorOpen: 'devices:external-connector-open',
   // ---- 持久化对账域（plan 2026-10-05-avd-reconciliation；仅登记主窗）----
   /** 人工重查：受控重读元数据 + AVD/镜像只读核验，返回合并快照与本轮报告 */
   devicesReconcile: 'devices:reconcile',

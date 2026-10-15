@@ -12,7 +12,6 @@ import { toApiResult } from '../api'
 import { useCopy } from '../hooks/useCopy'
 import { spinKeyframes } from '../styles/animations'
 import DeviceRow from './DeviceRow'
-import WirelessConnector from './WirelessConnector'
 import { wirelessConnectFailureText } from './wirelessOutcome'
 import { splitByOriginView, originOf, type SourceBucket } from './originView'
 
@@ -228,9 +227,9 @@ const DeviceListPane = ({
   const copy = useCopy(MAIN_COPY)
   const [foldedOpen, setFoldedOpen] = useState(false)
   const [realOpen, setRealOpen] = useState(true)
-  // 无线批（plan 2026-10-15-real-device-wireless）：弹层开合与转无线反馈都是行内瞬态，
-  // 不进 store——无状态裁定（刷新即丢，设备由 track 推送呈现）
-  const [wirelessOpen, setWirelessOpen] = useState(false)
+  // 无线批（plan 2026-10-15-real-device-wireless）：连接器已改 mac 原生弹窗（用户裁定，
+  // 渲染层弹层与窗口几何打架）——这里只发起开窗；转无线反馈是行内瞬态，不进 store
+  // （无状态裁定：刷新即丢，设备由 track 推送呈现）
   const [promote, setPromote] = useState<PromoteState | null>(null)
   const { active, folded } = splitByOriginView(devices, sourceBucket)
   // 反馈只在设备在场时呈现（渲染期派生，不用 effect 清账）：拔线后行不在即不显示
@@ -350,7 +349,6 @@ const DeviceListPane = ({
           </>
         )}
         <div className="real-devices">
-          {wirelessOpen ? <WirelessConnector onClose={() => setWirelessOpen(false)} /> : null}
           <div className="real-head">
             <button
               type="button"
@@ -370,7 +368,7 @@ const DeviceListPane = ({
               className="real-wireless-btn"
               aria-label={copy.wirelessConnectAria}
               title={copy.wirelessConnectAria}
-              onClick={() => setWirelessOpen(true)}
+              onClick={() => void toApiResult(window.api.devices.openExternalWireless())}
             >
               <Wifi size={12} aria-hidden="true" />
             </button>
@@ -383,7 +381,7 @@ const DeviceListPane = ({
                   <button
                     type="button"
                     className="real-empty-action"
-                    onClick={() => setWirelessOpen(true)}
+                    onClick={() => void toApiResult(window.api.devices.openExternalWireless())}
                   >
                     {copy.wirelessConnectEmpty}
                   </button>

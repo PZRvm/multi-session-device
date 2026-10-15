@@ -39,7 +39,7 @@ const ok = (stdout: string): CmdResult => ({ code: 0, stdout, stderr: '' })
 
 const makeDeps = (overrides: Partial<WirelessDeps> = {}): WirelessDeps => ({
   runCmd: vi.fn(async () => ok('')),
-  probeTcp: vi.fn(async () => false),
+  probeAdb: vi.fn(async () => ({ ok: false, model: null })),
   delay: vi.fn(async () => undefined),
   localSubnets: vi.fn(() => ['192.168.31.']),
   ...overrides
@@ -94,40 +94,67 @@ describe('parseMdnsServices', () => {
 })
 
 describe('scanWireless', () => {
-  it('两源合并：mDNS 候选在前，网段探活补漏，同址去重', async () => {
+  it('两源合并：mDNS 候选在前，CNXN 探活补漏（带 model），同址去重', async () => {
     const deps = makeDeps({
       runCmd: vi.fn(async () =>
         ok(
           '\tadb-abc-._adb-tls-connect._tcp.\t192.168.31.102:5555\n\tadb-pp._adb-tls-pairing._tcp.\t192.168.31.60:35001'
         )
       ),
-      probeTcp: vi.fn(
-        async (host: string) => host === '192.168.31.102' || host === '192.168.31.200'
+      probeAdb: vi.fn(async (host: string) =>
+        host === '192.168.31.102'
+          ? { ok: true, model: 'EBG_AN00' } // 已被 mDNS 命中 → 去重
+          : host === '192.168.31.200'
+            ? { ok: true, model: 'Pixel_8' }
+            : { ok: false, model: null }
       )
     })
     const found = await scanWireless(deps)
     expect(found).toEqual([
       { source: 'mdns-connect', name: 'adb-abc-', host: '192.168.31.102', port: 5555 },
       { source: 'mdns-pairing', name: 'adb-pp', host: '192.168.31.60', port: 35001 },
-      { source: 'subnet-scan', name: null, host: '192.168.31.200', port: 5555 }
+      { source: 'subnet-scan', name: 'Pixel_8', host: '192.168.31.200', port: 5555 }
     ])
-    // 全网段并行探活：.1—.254，5555，1s 超时
-    const probes = (deps.probeTcp as ReturnType<typeof vi.fn>).mock.calls
+    // 全网段并行 CNXN 探活：.1—.254，5555，1.5s 超时
+    const probes = (deps.probeAdb as ReturnType<typeof vi.fn>).mock.calls
     expect(probes).toHaveLength(254)
-    expect(probes[0]).toEqual(['192.168.31.1', 5555, 1_000])
-    expect(probes[101]).toEqual(['192.168.31.102', 5555, 1_000])
+    expect(probes[0]).toEqual(['192.168.31.1', 5555, 1_500])
+    expect(probes[101]).toEqual(['192.168.31.102', 5555, 1_500])
   })
 
-  it('mdns daemon 不可用 → 该源静默空（手动输入一等入口，不是降级）', async () => {
+  it('非安卓对端（CNXN 不应答）不入列表——5555 开着不等于手机', async () => {
     const deps = makeDeps({
       runCmd: vi.fn(async () => {
         throw new Error('mdns daemon not running')
       }),
-      probeTcp: vi.fn(async (host: string) => host === '192.168.31.9')
+      probeAdb: vi.fn(async (host: string) =>
+        host === '192.168.31.9' ? { ok: true, model: null } : { ok: false, model: null }
+      )
     })
     expect(await scanWireless(deps)).toEqual([
       { source: 'subnet-scan', name: null, host: '192.168.31.9', port: 5555 }
     ])
+  })
+})
+
+describe('CNXN 握手纯函数', () => {
+  it('请求包 24 字节：命令/版本/长度/校验与 magic（command ^ 0xffffffff）', async () => {
+    const { buildCnxnRequest } = await import('../external')
+    const packet = buildCnxnRequest()
+    expect(packet).toHaveLength(24)
+    expect(packet.subarray(0, 4).toString('utf8')).toBe('CNXN')
+    expect(packet.readUInt32LE(4)).toBe(0x01000000)
+    expect(packet.readUInt32LE(12)).toBe(0)
+    expect(packet.readUInt32LE(20)).toBe((packet.readUInt32LE(0) ^ 0xffff_ffff) >>> 0)
+  })
+
+  it('身份串解析：device:: 开头才认，提取 ro.product.model；host:: 归 null', async () => {
+    const { parseCnxnIdentity } = await import('../external')
+    expect(
+      parseCnxnIdentity('device::ro.product.name=EBG;ro.product.model=EBG_AN00;ro.serialno=X;')
+    ).toBe('EBG_AN00')
+    expect(parseCnxnIdentity('device::features=shell_v2')).toBeNull()
+    expect(parseCnxnIdentity('host::features=cmd')).toBeNull()
   })
 })
 
