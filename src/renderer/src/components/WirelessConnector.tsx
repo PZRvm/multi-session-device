@@ -182,7 +182,7 @@ const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Eleme
           <Input
             className="host-input"
             value={manualHost}
-            placeholder="192.168.31.102"
+            placeholder={copy.wirelessManualHostLabel}
             inputMode="decimal"
             autoComplete="off"
             spellCheck={false}
@@ -239,7 +239,7 @@ const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Eleme
               <Input
                 className="host-input"
                 value={pairHost}
-                placeholder="192.168.31.60"
+                placeholder={copy.wirelessManualHostLabel}
                 inputMode="decimal"
                 autoComplete="off"
                 spellCheck={false}
@@ -249,7 +249,7 @@ const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Eleme
               <Input
                 className="port-input"
                 value={pairPort}
-                placeholder="35001"
+                placeholder={copy.wirelessPairPortLabel}
                 inputMode="numeric"
                 autoComplete="off"
                 spellCheck={false}
@@ -261,7 +261,7 @@ const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Eleme
               <Input
                 className="code-input"
                 value={pairCode}
-                placeholder="123456"
+                placeholder={copy.wirelessPairCodeLabel}
                 inputMode="numeric"
                 autoComplete="off"
                 spellCheck={false}
