@@ -163,6 +163,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-13-真机两批-review.md](notes/issue/2026-10/2026-10-13-真机两批-review.md) — 真机两批（USB 接入+APK 拖装 / 工具条对齐+三域）合并前 code review——1 项 P2（取消退出后真机跟踪不恢复）与 8 项 P3；只记录不修，修复另开一轮
 - [2026-10-13-真机增量-review.md](notes/issue/2026-10/2026-10-13-真机增量-review.md) — 上轮 review 后的增量代码走查（review 修复批 ec9a4e5/f2d1bb7 + 两个热修复 516864a/834f020）——1 项 P2（真机投屏重试链路失效）与 3 项 P3；只记录不修
 - [2026-10-13-真机硬件验收待执行.md](notes/issue/2026-10/2026-10-13-真机硬件验收待执行.md) — 真机 USB 接入与 APK 拖装第一批代码完成，但验收清单中需要物理设备的条目全部未实测——插拔跟随、投屏操控、拖装链路、MIUI 拦截词条、Android 14 旧包「仍要安装」、kill-server 恢复
+- [2026-10-15-无线批-review.md](notes/issue/2026-10/2026-10-15-无线批-review.md) — 无线批（plan 2026-10-15-real-device-wireless）Phase 5 code review 发现清单——1 项 P2（connect TCP 层失败不重试，promote 穿 adbd 重启窗口假报 unreachable）+ 8 项 P3；只记录不修复
 - [2026-10-15-真机无线批硬件验收待执行.md](notes/issue/2026-10/2026-10-15-真机无线批硬件验收待执行.md) — 真机无线批代码完成、自动化门禁全绿（1230 测试），但需要物理设备与真实手机交互的验收条目未实测——荣耀转无线/扫描/双条目并存/断开（用户可验），小米 mDNS+配对码（暂无设备，用户批复留手动验收）
 - [2026-10-15-荣耀30Pro-USB-serial漂移.md](notes/issue/2026-10/2026-10-15-荣耀30Pro-USB-serial漂移.md) — 荣耀 30 Pro（EBG_AN00）USB serial 在会话内漂移——DSLDU20B12002637 与 DSLU20B12002637 两种形态出现，设备身份按 serial 键控会闪断重建；只记录不修
 
@@ -354,4 +355,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 264 documents -->
+<!-- 265 documents -->

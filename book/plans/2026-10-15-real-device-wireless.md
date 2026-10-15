@@ -20,6 +20,10 @@ created: 2026-10-15
 > 的对端并顺带取 model 作候选名；⑤localSubnets 过滤虚拟接口族（utun 的 198.18.x 被
 > 代理假应答扫出幽灵候选，实测教训）。全量 1233 测试绿。
 
+- **Phase 5 code review（2026-10-15，只记录不修复）**：结构 pass、无 P1；1 项 P2
+  （connect TCP 层失败不重试——promote 穿 adbd 重启窗口假报 unreachable，实测有据）
+  + 8 项 P3，[发现清单](../notes/issue/2026-10/2026-10-15-无线批-review.md)。
+
 > 2026-10-15 会话内实测定调（荣耀 30 Pro / EBG_AN00 / Android 12 / Magic UI 4.1）：
 > 荣耀与华为系系统**没有**「无线调试」开关（华为官方支持页明确「没有无线调试设置项」，
 > 荣耀俱乐部有用户催加未果），mDNS 永远发现不了它们——经典 `adb tcpip 5555` 是唯一
