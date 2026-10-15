@@ -22,13 +22,14 @@ export default defineConfig({
     plugins: [react()],
     build: {
       rollupOptions: {
-        // 五个独立入口：主窗、设备向导、设置窗、日志窗、对账详情窗。
+        // 六个独立入口：主窗、设备向导、设置窗、日志窗、对账详情窗、无线连接窗。
         input: {
           index: resolve('src/renderer/index.html'),
           wizard: resolve('src/renderer/wizard.html'),
           settings: resolve('src/renderer/settings.html'),
           logcat: resolve('src/renderer/logcat.html'),
-          report: resolve('src/renderer/report.html')
+          report: resolve('src/renderer/report.html'),
+          wireless: resolve('src/renderer/wireless.html')
         }
       }
     }

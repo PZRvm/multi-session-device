@@ -1,10 +1,18 @@
-import { useState } from 'react'
-import { ChevronDown, ChevronRight, Usb, Wifi } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ChevronDown, ChevronRight, Loader2, Usb, Wifi } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
-import type { Device, ExternalDevice, StoreHealthState } from '@shared/types'
+import type {
+  Device,
+  ExternalDevice,
+  StoreHealthState,
+  WirelessConnectOutcome
+} from '@shared/types'
+import { toApiResult } from '../api'
 import { useCopy } from '../hooks/useCopy'
+import { spinKeyframes } from '../styles/animations'
 import DeviceRow from './DeviceRow'
+import { wirelessConnectFailureText } from './wirelessOutcome'
 import { splitByOriginView, originOf, type SourceBucket } from './originView'
 
 type DeviceListPaneProps = {
@@ -79,16 +87,29 @@ const rowHandlers = (
   />
 )
 
+/** 转无线反馈（行内呈现）：working 进行中 / done 成功待拔线 / fail 带原因文案 */
+type PromoteState =
+  | { serial: string; phase: 'working' }
+  | { serial: string; phase: 'done' }
+  | { serial: string; phase: 'fail'; text: string }
+
 /** 真机行（plan 2026-10-13-real-device-usb-and-apk-install）：复用 AVD 行的视觉语言——
- *  三行结构（标题 + 角标 / 状态点 + 元信息 / 引导行），无内联操作（点击行即选中投屏） */
+ *  三行结构（标题 + 角标 / 状态点 + 元信息 / 引导行），点击行即选中投屏。无线批
+ *  （plan 2026-10-15-real-device-wireless）加行内动作：USB 行「转为无线」、无线行「断开」 */
 const ExternalRow = ({
   device,
   selected,
-  onSelect
+  onSelect,
+  promoteState,
+  onPromote,
+  onDisconnect
 }: {
   device: ExternalDevice
   selected: boolean
   onSelect: () => void
+  promoteState?: PromoteState
+  onPromote?: (serial: string) => void
+  onDisconnect?: (serial: string) => void
 }): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
   const stateText =
@@ -115,6 +136,50 @@ const ExternalRow = ({
     >
       <span className="row-head">
         <span className="row-title">{title}</span>
+        {device.state === 'device' && device.transport === 'usb' && onPromote ? (
+          <button
+            type="button"
+            className="row-action"
+            disabled={promoteState?.phase === 'working'}
+            onClick={(event) => {
+              event.stopPropagation()
+              onPromote(device.serial)
+            }}
+          >
+            {promoteState?.phase === 'working' ? (
+              <Loader2 size={11} className="row-action-spin" aria-hidden="true" />
+            ) : (
+              copy.wirelessPromote
+            )}
+          </button>
+        ) : null}
+        {device.state === 'device' && device.transport === 'wireless' && onDisconnect ? (
+          <button
+            type="button"
+            className="row-action danger"
+            onClick={(event) => {
+              event.stopPropagation()
+              onDisconnect(device.serial)
+            }}
+          >
+            {copy.wirelessDisconnect}
+          </button>
+        ) : null}
+        {/* 无线 offline 是死条目（连上过即被 adb server 记住，失联后永远挂在列表）：
+            允许删除——adb disconnect 摘掉 transport，track 下一帧即消失（用户
+            2026-10-15 需求，TUN 幽灵条目教训）。USB offline 插拔即愈，不给按钮 */}
+        {device.state === 'offline' && device.transport === 'wireless' && onDisconnect ? (
+          <button
+            type="button"
+            className="row-action danger"
+            onClick={(event) => {
+              event.stopPropagation()
+              onDisconnect(device.serial)
+            }}
+          >
+            {copy.wirelessDelete}
+          </button>
+        ) : null}
         <span
           className="transport"
           role="img"
@@ -136,7 +201,15 @@ const ExternalRow = ({
       {device.state === 'unauthorized' ? (
         <span className="row-hint">{copy.realDeviceUnauthorizedHint}</span>
       ) : device.state === 'offline' ? (
-        <span className="row-hint">{copy.realDeviceOfflineHint}</span>
+        <span className="row-hint">
+          {device.transport === 'wireless'
+            ? copy.realDeviceOfflineWirelessHint
+            : copy.realDeviceOfflineHint}
+        </span>
+      ) : promoteState?.phase === 'done' && promoteState.serial === device.serial ? (
+        <span className="row-hint promote-done">{copy.wirelessPromoteDone}</span>
+      ) : promoteState?.phase === 'fail' && promoteState.serial === device.serial ? (
+        <span className="row-hint promote-fail">{promoteState.text}</span>
       ) : null}
     </div>
   )
@@ -173,7 +246,74 @@ const DeviceListPane = ({
   const copy = useCopy(MAIN_COPY)
   const [foldedOpen, setFoldedOpen] = useState(false)
   const [realOpen, setRealOpen] = useState(true)
+  // 无线批（plan 2026-10-15-real-device-wireless）：连接器已改 mac 原生弹窗（用户裁定，
+  // 渲染层弹层与窗口几何打架）——这里只发起开窗；转无线反馈是行内瞬态，不进 store
+  // （无状态裁定：刷新即丢，设备由 track 推送呈现）
+  const [promote, setPromote] = useState<PromoteState | null>(null)
+  // 断开/删除失败反馈（P3-3）：serial → 文案（map——P3-10：多台先后失败并存不覆盖）
+  const [disconnectErrors, setDisconnectErrors] = useState<Record<string, string>>({})
   const { active, folded } = splitByOriginView(devices, sourceBucket)
+  // 自清定时器登记（P3-9）：卸载统一清理（对齐 inputErrorTimerRef 先例）
+  const timersRef = useRef(new Set<number>())
+  useEffect(
+    () => () => {
+      for (const id of timersRef.current) window.clearTimeout(id)
+    },
+    []
+  )
+  const later = (fn: () => void, ms: number): void => {
+    const id = window.setTimeout(() => {
+      timersRef.current.delete(id)
+      fn()
+    }, ms)
+    timersRef.current.add(id)
+  }
+  // 反馈只在设备在场时呈现（渲染期派生，不用 effect 清账）：拔线后行不在即不显示
+  const activePromote =
+    promote && externalDevices.some((device) => device.serial === promote.serial) ? promote : null
+
+  const handlePromote = (serial: string): void => {
+    setPromote({ serial, phase: 'working' })
+    void toApiResult(window.api.devices.promoteExternalWireless({ serial })).then((result) => {
+      if (!result.ok) {
+        setPromote({ serial, phase: 'fail', text: result.error })
+        return
+      }
+      const outcome: WirelessConnectOutcome = result.data
+      setPromote(
+        outcome.ok
+          ? { serial, phase: 'done' }
+          : { serial, phase: 'fail', text: wirelessConnectFailureText(copy, outcome) }
+      )
+      // done 提示 6 秒后自清（P3-4：重插同 serial 不重显旧提示）；失败态不自动清，
+      // 随设备离场消失（派生收口）
+      if (outcome.ok) {
+        later(
+          () => setPromote((cur) => (cur?.serial === serial && cur.phase === 'done' ? null : cur)),
+          6_000
+        )
+      }
+    })
+  }
+
+  const handleDisconnect = (serial: string): void => {
+    void toApiResult(window.api.devices.disconnectExternal(serial)).then((result) => {
+      if (!result.ok) {
+        // P3-3：断开/删除失败不再全静默——行内一句，8 秒自清或随离场消失
+        setDisconnectErrors((cur) => ({ ...cur, [serial]: result.error }))
+        later(
+          () =>
+            setDisconnectErrors((cur) => {
+              const rest = { ...cur }
+              delete rest[serial]
+              return rest
+            }),
+          8_000
+        )
+      }
+    })
+  }
+
   const foldedLine =
     folded.length > 0
       ? format(sourceBucket === 'shared-studio' ? copy.otherOriginOwned : copy.otherOriginStudio, {
@@ -267,32 +407,68 @@ const DeviceListPane = ({
           </>
         )}
         <div className="real-devices">
-          <button
-            type="button"
-            className="folded-toggle"
-            aria-expanded={realOpen}
-            onClick={() => setRealOpen((open) => !open)}
-          >
-            {realOpen ? (
-              <ChevronDown size={12} aria-hidden="true" />
-            ) : (
-              <ChevronRight size={12} aria-hidden="true" />
-            )}
-            {format(copy.realDeviceSectionCount, { count: externalDevices.length })}
-          </button>
+          <div className="real-head">
+            <button
+              type="button"
+              className="folded-toggle real-toggle"
+              aria-expanded={realOpen}
+              onClick={() => setRealOpen((open) => !open)}
+            >
+              {realOpen ? (
+                <ChevronDown size={12} aria-hidden="true" />
+              ) : (
+                <ChevronRight size={12} aria-hidden="true" />
+              )}
+              {format(copy.realDeviceSectionCount, { count: externalDevices.length })}
+            </button>
+            <button
+              type="button"
+              className="real-wireless-btn"
+              aria-label={copy.wirelessConnectAria}
+              title={copy.wirelessConnectAria}
+              onClick={() => void toApiResult(window.api.devices.openExternalWireless())}
+            >
+              <Wifi size={12} aria-hidden="true" />
+            </button>
+          </div>
           {realOpen ? (
             <div className="real-body">
               {externalDevices.length === 0 ? (
-                <p className="real-empty">{copy.realDeviceEmpty}</p>
+                <p className="real-empty">
+                  {copy.realDeviceEmpty}
+                  <button
+                    type="button"
+                    className="real-empty-action"
+                    onClick={() => void toApiResult(window.api.devices.openExternalWireless())}
+                  >
+                    {copy.wirelessConnectEmpty}
+                  </button>
+                </p>
               ) : (
-                externalDevices.map((device) => (
-                  <ExternalRow
-                    key={device.id}
-                    device={device}
-                    selected={device.id === selectedExternalId}
-                    onSelect={() => onSelectExternal(device.id)}
-                  />
-                ))
+                externalDevices.map((device) => {
+                  const disconnectErrorText = disconnectErrors[device.serial]
+                  const rowFeedback =
+                    activePromote?.serial === device.serial
+                      ? activePromote
+                      : disconnectErrorText !== undefined
+                        ? {
+                            serial: device.serial,
+                            phase: 'fail' as const,
+                            text: disconnectErrorText
+                          }
+                        : undefined
+                  return (
+                    <ExternalRow
+                      key={device.id}
+                      device={device}
+                      selected={device.id === selectedExternalId}
+                      onSelect={() => onSelectExternal(device.id)}
+                      promoteState={rowFeedback}
+                      onPromote={handlePromote}
+                      onDisconnect={handleDisconnect}
+                    />
+                  )
+                })
               )}
             </div>
           ) : null}
@@ -382,10 +558,53 @@ const Wrapper = styled.div`
 
   /* 真机区（plan 2026-10-13-real-device-usb-and-apk-install）：组头同折叠组样式，
      行卡复用 AVD 行的视觉语言（发丝线分隔、选中 accent 底）。位于滚动列表流内——
-     紧跟 AVD 分区（或空库提示）之后，不钉在栏底（用户 2026-10-13 反馈） */
+     紧跟 AVD 分区（或空库提示）之后，不钉在栏底（用户 2026-10-13 反馈）。
+     无线批（2026-10-15）：组头拆成容器行（按钮嵌按钮不合法）+ 右侧常驻无线入口；
+     弹层锚在本区（position: relative） */
   .real-devices {
+    position: relative;
     border-top: 1px solid var(--board-hairline);
     background: var(--board-bg-raised);
+  }
+
+  .real-head {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding-right: 6px;
+  }
+
+  .real-toggle {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .real-wireless-btn {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--board-ink-dim);
+    cursor: pointer;
+    transition:
+      background-color 0.12s,
+      color 0.12s;
+  }
+
+  .real-wireless-btn:hover {
+    background: var(--board-hover-veil);
+    color: var(--board-ink);
+  }
+
+  .real-wireless-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
 
   .real-body {
@@ -403,6 +622,84 @@ const Wrapper = styled.div`
     font-size: 11px;
     line-height: 1.7;
     color: var(--board-ink-dim);
+  }
+
+  .real-empty-action {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--board-tile-ink);
+    font-size: 11px;
+    font-family: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .real-empty-action:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .row-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 8px;
+    border: 1px solid var(--board-control-line);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--board-ink-dim);
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+    transition:
+      background-color 0.12s,
+      color 0.12s,
+      border-color 0.12s;
+  }
+
+  .row-action:hover:not(:disabled) {
+    background: var(--board-hover-veil);
+    color: var(--board-ink);
+    border-color: var(--board-ink-dim);
+  }
+
+  .row-action:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .row-action:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  /* 断开/删除是破坏性动作：红字红边，hover 红混底（对齐 net-airplane 的 danger 惯用式） */
+  .row-action.danger {
+    color: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 45%, var(--board-control-line));
+  }
+
+  .row-action.danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 18%, var(--board-bg));
+    color: var(--danger);
+    border-color: var(--danger);
+  }
+
+  .row-action-spin {
+    animation: ${spinKeyframes} 0.9s linear infinite;
+  }
+
+  .promote-done {
+    color: var(--board-tile-ink);
+  }
+
+  .promote-fail {
+    color: var(--danger);
   }
 
   .external-row {
@@ -443,11 +740,14 @@ const Wrapper = styled.div`
   .row-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
   }
 
+  /* 标题吃满余宽：行内动作钮与传输角标一起贴右（用户 2026-10-15 反馈：断开钮要贴
+     最右侧 Wi-Fi 图标左边，不悬在中间） */
   .row-title {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     font-size: 13px;
     font-weight: 600;

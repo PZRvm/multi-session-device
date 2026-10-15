@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Device } from '@shared/types'
+import type { Device, ExternalDevice } from '@shared/types'
 import DeviceListPane from '../DeviceListPane'
 import { MAIN_COPY, format } from '@shared/i18n'
 const copy = MAIN_COPY['zh-CN']
@@ -197,5 +197,175 @@ describe('DeviceListPane 空库文案（review P2-3/P3）', () => {
     expect(screen.queryByText('Pixel test')).toBeNull()
     renderPane({ devices: [baseDevice], sourceBucket: 'app-owned' })
     expect(screen.getByText('Pixel test')).toBeTruthy()
+  })
+})
+
+// ---- 无线批（plan 2026-10-15-real-device-wireless）----
+
+const usbDevice = (over: Partial<ExternalDevice> = {}): ExternalDevice => ({
+  id: 'DSLU20B12002637',
+  serial: 'DSLU20B12002637',
+  transport: 'usb',
+  state: 'device',
+  model: 'EBG_AN00',
+  ...over
+})
+
+const wirelessApi = (
+  over: {
+    open?: () => Promise<void>
+    scan?: () => Promise<unknown>
+    promote?: (input: unknown) => Promise<unknown>
+    disconnect?: (serial: string) => Promise<unknown>
+  } = {}
+): { open: ReturnType<typeof vi.fn> } => {
+  const open = vi.fn(over.open ?? (async () => undefined))
+  ;(window as { api?: unknown }).api = {
+    devices: {
+      openExternalWireless: open,
+      scanExternalWireless: over.scan ?? vi.fn(async () => []),
+      promoteExternalWireless:
+        over.promote ?? vi.fn(async () => ({ ok: true, serial: '192.168.31.102:5555' })),
+      disconnectExternal: over.disconnect ?? vi.fn(async () => undefined)
+    }
+  }
+  return { open }
+}
+
+describe('真机区无线入口（plan 2026-10-15-real-device-wireless）', () => {
+  it('组头常驻无线按钮 + 空态内联动作都发起开原生窗（渲染层不再有弹层）', async () => {
+    const { open } = wirelessApi()
+    renderPane({})
+    fireEvent.click(screen.getByRole('button', { name: copy.wirelessConnectAria }))
+    await waitFor(() => {
+      expect(open).toHaveBeenCalledTimes(1)
+    })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: copy.wirelessConnectEmpty }))
+    await waitFor(() => {
+      expect(open).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('USB device 行有「转为无线」：成功后行内提示可拔线；失败带原因文案', async () => {
+    wirelessApi()
+    renderPane({ externalDevices: [usbDevice()] })
+    fireEvent.click(screen.getByRole('button', { name: copy.wirelessPromote }))
+    await waitFor(() => {
+      expect(screen.getByText(copy.wirelessPromoteDone)).toBeTruthy()
+    })
+    cleanup()
+    wirelessApi({
+      promote: vi.fn(async () => ({ ok: false, reason: 'no-wifi', host: 'DSLU20B12002637' }))
+    })
+    renderPane({ externalDevices: [usbDevice()] })
+    fireEvent.click(screen.getByRole('button', { name: copy.wirelessPromote }))
+    await waitFor(() => {
+      expect(screen.getByText(copy.wirelessFailNoWifi)).toBeTruthy()
+    })
+  })
+
+  it('无线 device 行有「断开」；无线 offline 死条目有「删除」并走 disconnect；USB offline 无钮', async () => {
+    const disconnect = vi.fn(async () => undefined)
+    wirelessApi({ disconnect })
+    renderPane({
+      externalDevices: [
+        usbDevice({
+          id: '192.168.31.102:5555',
+          serial: '192.168.31.102:5555',
+          transport: 'wireless'
+        }),
+        usbDevice({
+          id: '198.18.0.7:5555',
+          serial: '198.18.0.7:5555',
+          transport: 'wireless',
+          state: 'offline'
+        }),
+        usbDevice({ id: 'U2', serial: 'U2', state: 'unauthorized' }),
+        usbDevice({ id: 'O3', serial: 'O3', state: 'offline' })
+      ]
+    })
+    fireEvent.click(screen.getByRole('button', { name: copy.wirelessDisconnect }))
+    await waitFor(() => {
+      expect(disconnect).toHaveBeenCalledWith('192.168.31.102:5555')
+    })
+    // 无线 offline（如 TUN 幽灵死条目）：删除入口存在，文案分流为无线引导
+    fireEvent.click(screen.getByRole('button', { name: copy.wirelessDelete }))
+    await waitFor(() => {
+      expect(disconnect).toHaveBeenCalledWith('198.18.0.7:5555')
+    })
+    expect(screen.getByText(copy.realDeviceOfflineWirelessHint)).toBeTruthy()
+    expect(screen.getByText(copy.realDeviceOfflineHint)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: copy.wirelessPromote })).toBeNull()
+  })
+
+  it('P3-10：两台设备先后断开失败，行内错误并存不互相覆盖', async () => {
+    const fail = vi.fn(async () => {
+      throw new Error('adb 不在线')
+    })
+    wirelessApi({ disconnect: fail })
+    renderPane({
+      externalDevices: [
+        usbDevice({ id: 'A:5555', serial: 'A:5555', transport: 'wireless' }),
+        usbDevice({ id: 'B:5555', serial: 'B:5555', transport: 'wireless' })
+      ]
+    })
+    const buttons = screen.getAllByRole('button', { name: copy.wirelessDisconnect })
+    expect(buttons).toHaveLength(2)
+    fireEvent.click(buttons[0])
+    await waitFor(() => {
+      expect(screen.getByText('adb 不在线')).toBeTruthy()
+    })
+    fireEvent.click(buttons[1])
+    await waitFor(() => {
+      expect(screen.getAllByText('adb 不在线')).toHaveLength(2)
+    })
+  })
+
+  it('P3-9：卸载清理自清定时器（clearTimeout 被调用）', async () => {
+    wirelessApi()
+    renderPane({ externalDevices: [usbDevice()] })
+    fireEvent.click(screen.getByRole('button', { name: copy.wirelessPromote }))
+    await waitFor(() => {
+      expect(screen.getByText(copy.wirelessPromoteDone)).toBeTruthy()
+    })
+    const clearSpy = vi.spyOn(window, 'clearTimeout')
+    cleanup()
+    expect(clearSpy).toHaveBeenCalled()
+    clearSpy.mockRestore()
+  })
+
+  it('转无线反馈随设备离场清账（拔线后不悬挂）', async () => {
+    wirelessApi()
+    const defaults = {
+      devices: [],
+      selectedId: null,
+      storeTrusted: true,
+      metaWritable: true,
+      storeState: 'ok' as const,
+      sourceBucket: 'app-owned' as const,
+      loadError: null,
+      externalDevices: [usbDevice()],
+      selectedExternalId: null,
+      onSelectExternal: vi.fn(),
+      onRetryLoad: vi.fn(),
+      onSelect: vi.fn(),
+      onStart: vi.fn(),
+      onStop: vi.fn(),
+      onCancelStart: vi.fn(),
+      onCopySerial: vi.fn(),
+      onDelete: vi.fn(),
+      onRename: vi.fn(),
+      onEdit: vi.fn()
+    }
+    const { rerender } = render(<DeviceListPane {...defaults} />)
+    fireEvent.click(screen.getByRole('button', { name: copy.wirelessPromote }))
+    await waitFor(() => {
+      expect(screen.getByText(copy.wirelessPromoteDone)).toBeTruthy()
+    })
+    rerender(<DeviceListPane {...defaults} externalDevices={[]} />)
+    await waitFor(() => {
+      expect(screen.queryByText(copy.wirelessPromoteDone)).toBeNull()
+    })
   })
 })

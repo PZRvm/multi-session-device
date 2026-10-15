@@ -887,12 +887,62 @@ export interface ExternalDevice {
   /** 与 serial 同值（renderer 以 id 键控画布与安装态） */
   id: string
   serial: string
-  /** serial 含 ':' 即无线（ip:port 形态）；本批只会出现 usb */
+  /** serial 含 ':' 即无线（ip:port 形态） */
   transport: 'usb' | 'wireless'
   state: 'device' | 'unauthorized' | 'offline'
   /** 长格式 model= 属性；短格式回退或属性缺席时为 null */
   model: string | null
 }
+
+// ---- 真机无线域（plan 2026-10-15-real-device-wireless；无状态：不存任何设备记录）----
+
+/** 无线扫描候选（scanWireless 两源合并：mDNS 服务 + 本网段 5555 探活） */
+export interface WirelessCandidate {
+  /** mdns-connect = 可直连的官方无线调试服务；mdns-pairing = 配对服务；subnet-scan = 网段探活命中（无名字） */
+  source: 'mdns-connect' | 'mdns-pairing' | 'subnet-scan'
+  /** mDNS 实例名（可含空格）；网段扫描为 null，连上后 track 的 model 自然补全 */
+  name: string | null
+  host: string
+  port: number
+}
+
+export interface WirelessConnectInput {
+  host: string
+  /** 缺省 5555（裁定钉死：adbd 每机各听各的，可配置零收益） */
+  port?: number
+}
+
+export interface WirelessPairInput {
+  host: string
+  /** 配对端口是临时的、≠连接端口（配对成功后回扫描列表选 connect 条目） */
+  port: number
+  code: string
+}
+
+/** 转无线入参：USB 设备的 serial（device 态才可转） */
+export interface WirelessPromoteInput {
+  serial: string
+}
+
+/**
+ * 连接/转无线的失败是「结果」不是「错误」（对齐 ApkInstallOutcome）：reason 机器
+ * 可读，renderer 映射词条；cross-subnet 携带同网段检查结论（跨网段/TUN 劫持教训）。
+ */
+export type WirelessConnectOutcome =
+  | { ok: true; serial: string }
+  | {
+      ok: false
+      reason:
+        | 'unreachable' // TCP 层连不上且同网段（Wi-Fi 断/地址错/省电深睡）
+        | 'offline-race' // 重试耗尽仍 offline（adbd 切换窗口异常拉长）
+        | 'cross-subnet' // 目标不在本机任何网段——连同一 Wi-Fi，或查代理 TUN
+        | 'unauthorized' // RSA 未授权（手机侧弹框未允许）
+        | 'no-wifi' // 转无线：手机 wlan0 无地址
+        | 'not-found' // 转无线：USB serial 已不在线
+      host: string
+    }
+
+export type WirelessPairOutcome = { ok: true } | { ok: false; message: string }
 
 // ---- 网络开关域（plan 2026-10-12-network-switch-group）----
 /** 开关目标：airplane = 飞行模式（真断网总闸）；wifi/data = 分 radio 场景开关 */

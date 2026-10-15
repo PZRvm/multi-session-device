@@ -27,6 +27,7 @@ import { registerWizardIpc } from '../window/wizard'
 import { registerSettingsIpc } from '../window/settings'
 import { registerLogcatIpc, isLogcatWindowSender } from '../window/logcat'
 import { registerReportIpc } from '../window/report'
+import { wirelessOwns, registerWirelessIpc } from '../window/wireless'
 import { registerThemeIpc } from '../theme'
 import { registerLocaleIpc } from '../locale'
 import { getMainWindow } from '../window'
@@ -55,6 +56,8 @@ export function registerIpcHandlers(): void {
   })
   // 编辑窗目标核验经注入进入向导域（开窗前 devices 域裁决，避免 wizard 反向依赖）
   registerWizardIpc({ assertEditorTarget })
+  // 无线连接原生窗（2026-10-15 用户裁定：弹层改原生弹窗）——打开通道 + 五通道放行
+  registerWirelessIpc()
   // 拖拽 APK 安装：serial 断言统一走组合查询（真机 connected 或 AVD running）经注入，
   // 安装域自身不反向依赖 devices；仅主窗可发起
   registerApkInstallIpc({
@@ -138,6 +141,8 @@ export function registerIpcHandlers(): void {
   // 变化广播默认发全部窗口（独立日志窗下拉跟随，对齐 devices:changed 语义）
   registerExternalIpc({
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id,
+    // 无线五通道放行无线连接窗（原生弹窗化后的调用方）
+    isWirelessSender: wirelessOwns,
     onSession: (event) => {
       if (event.kind === 'connected') {
         void scrcpy

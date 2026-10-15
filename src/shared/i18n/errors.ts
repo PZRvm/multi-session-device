@@ -322,6 +322,7 @@ const zhCN = {
   adbServerOccupied: '请关闭占用 adb server 的程序后重试；本应用不会自动重启共享 server。',
   adbNotFound: '找不到可用的 adb（PATH、标准 SDK 与应用自有目录都没有可执行文件），请完成 SDK 引导',
   adbOperationCancelled: 'ADB 操作已取消',
+  wirelessWindowTitle: '无线连接',
   adbSharedServerMissing: 'adb start-server 后仍探测不到相容的共享 server（127.0.0.1:5037）',
   adbProtocolIncompatible:
     '共享 adb server 协议版本不兼容（运行中 {running} / 本应用 adb {ours}）。',
@@ -772,6 +773,7 @@ const zhTW: ErrorsCopy = {
   adbNotFound:
     '找不到可用的 adb（PATH、標準 SDK 與應用程式自有目錄都沒有可執行檔），請完成 SDK 引導',
   adbOperationCancelled: 'ADB 操作已取消',
+  wirelessWindowTitle: '無線連接',
   adbSharedServerMissing: 'adb start-server 後仍探測不到相容的共享 server（127.0.0.1:5037）',
   adbProtocolIncompatible:
     '共享 adb server 協議版本不相容（執行中 {running} / 本應用程式 adb {ours}）。',
@@ -1258,6 +1260,7 @@ const enUS: ErrorsCopy = {
   adbNotFound:
     'No usable adb found (nothing in PATH, the standard SDK, or the app-owned directory); finish SDK bootstrap',
   adbOperationCancelled: 'ADB operation canceled',
+  wirelessWindowTitle: 'Wireless connect',
   adbSharedServerMissing:
     'No compatible shared server detected after adb start-server (127.0.0.1:5037)',
   adbProtocolIncompatible:
