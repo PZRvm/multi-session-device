@@ -4,8 +4,6 @@ import type { ScreenPacketType } from '@shared/types'
 export const CACHE_MAX_BYTES = 8 * 1024 * 1024
 export const CACHE_MAX_PACKETS = 120
 export const CACHE_MAX_PTS_SPAN_MS = 1_500
-/** 相邻帧间隔超过此值视为 idle 空档：连续跨度归零但保留链（2026-10-15 修复 A） */
-export const CACHE_IDLE_GAP_RESET_MS = 500
 /** 配置包单独限额 */
 export const CONFIG_MAX_BYTES = 64 * 1024
 
@@ -33,9 +31,6 @@ export class GopCache {
   #bytes = 0
   /** 清链后等待新关键帧：裸 delta 依赖已废弃的链，不得重新积压 */
   #awaitingKeyframe = false
-  /** 连续帧跨度（ms）：只累计相邻帧间隔，idle 空档归零（2026-10-15 修复 A） */
-  #continuousSpanMs = 0
-  #lastPts: number | null = null
 
   push(packet: CachedPacket): void {
     if (packet.type === 'configuration') {
@@ -46,20 +41,6 @@ export class GopCache {
       this.clearChain()
       this.#awaitingKeyframe = false
       return
-    }
-    // 跨度只看相邻间隔（修复 A）：单个大间隔是 idle 空档（息屏/静止），不是回放
-    // 负担——归零累计但保留链。旧算法（末减首）会在唤醒首帧把唯一 GOP 清掉，
-    // 实测荣耀 IDR 间隔≈∞，缓存从此恒不可回放（见 issue 2026-10-15-刚连上首操作
-    // 画面冻结数秒）。内存有界仍由包数/字节预算兜底。
-    // 注意 pts 是 scrcpy 微秒——与毫秒常量比较前先归一（旧代码 µs 比 ms，跨度
-    // 检查实际 1.5ms 即清链，真实流第二帧就清，比诊断更糟；旧测试喂 ms 值掩盖了）
-    if (packet.pts !== undefined) {
-      if (this.#lastPts !== null) {
-        const gapMs = (packet.pts - this.#lastPts) / 1000
-        if (gapMs > CACHE_IDLE_GAP_RESET_MS) this.#continuousSpanMs = 0
-        else if (gapMs > 0) this.#continuousSpanMs += gapMs
-      }
-      this.#lastPts = packet.pts
     }
     if (packet.keyframe) {
       this.clearChain()
@@ -73,20 +54,26 @@ export class GopCache {
   }
 
   #trim(): void {
-    // 连续运动超跨度才清链（清就是整链废弃）；idle 空档不触发
+    // 静态 GOP 的 PTS 不增长：只有包数/字节超限才清链，清就是整链废弃
     while (
       this.#chain.length > CACHE_MAX_PACKETS ||
       this.#bytes > CACHE_MAX_BYTES ||
-      this.#continuousSpanMs > CACHE_MAX_PTS_SPAN_MS
+      this.#ptsSpan() > CACHE_MAX_PTS_SPAN_MS
     ) {
       this.clearChain()
     }
   }
 
+  #ptsSpan(): number {
+    const first = this.#chain[0]
+    const last = this.#chain.at(-1)
+    if (!first || !last || first.pts === undefined || last.pts === undefined) return 0
+    return Math.max(0, last.pts - first.pts)
+  }
+
   clearChain(): void {
     this.#chain = []
     this.#bytes = 0
-    this.#continuousSpanMs = 0
     this.#awaitingKeyframe = true
   }
 

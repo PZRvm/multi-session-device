@@ -129,18 +129,9 @@ export const handleMediaPacket = (
   if (session.waitingResync && cached.type !== 'configuration') return
   sendPacket(ctx, session, cached, viewToken)
 
-  // 预算/停滞都只在武装状态下触发，突发后等 ACK 再武装（防风暴）。
-  // 缓存可回放 → 作废重发（原突发吸收）；不可回放 → 立即 resetVideo（修复 B：
-  // 荣耀 IDR 间隔≈∞ 时曾悬空丢包冻结 3s 等看门狗——新配置包自带新关键帧，即时
-  // 恢复且序号无断档；resyncArmed 摘下防风暴，ACK 后重挂）
+  // 预算/停滞都只在武装状态下触发，突发后等 ACK 再武装（防风暴）
   if (session.resyncArmed && overBudget(session)) {
-    if (session.cache.hasKeyframe) {
-      session.waitingResync = true
-      sendResync(ctx, session)
-    } else {
-      session.resyncArmed = false
-      session.nullReplayStalls = 0
-      void session.writer?.resetVideo().catch(() => undefined)
-    }
+    session.waitingResync = true
+    sendResync(ctx, session)
   }
 }
