@@ -265,8 +265,7 @@ describe('真机区无线入口（plan 2026-10-15-real-device-wireless）', () =
     })
   })
 
-  it('无线 device 行有「断开」；unauthorized/offline 行无动作钮', async () => {
-    wirelessApi()
+  it('无线 device 行有「断开」；无线 offline 死条目有「删除」并走 disconnect；USB offline 无钮', async () => {
     const disconnect = vi.fn(async () => undefined)
     wirelessApi({ disconnect })
     renderPane({
@@ -276,6 +275,12 @@ describe('真机区无线入口（plan 2026-10-15-real-device-wireless）', () =
           serial: '192.168.31.102:5555',
           transport: 'wireless'
         }),
+        usbDevice({
+          id: '198.18.0.7:5555',
+          serial: '198.18.0.7:5555',
+          transport: 'wireless',
+          state: 'offline'
+        }),
         usbDevice({ id: 'U2', serial: 'U2', state: 'unauthorized' }),
         usbDevice({ id: 'O3', serial: 'O3', state: 'offline' })
       ]
@@ -284,6 +289,13 @@ describe('真机区无线入口（plan 2026-10-15-real-device-wireless）', () =
     await waitFor(() => {
       expect(disconnect).toHaveBeenCalledWith('192.168.31.102:5555')
     })
+    // 无线 offline（如 TUN 幽灵死条目）：删除入口存在，文案分流为无线引导
+    fireEvent.click(screen.getByRole('button', { name: copy.wirelessDelete }))
+    await waitFor(() => {
+      expect(disconnect).toHaveBeenCalledWith('198.18.0.7:5555')
+    })
+    expect(screen.getByText(copy.realDeviceOfflineWirelessHint)).toBeTruthy()
+    expect(screen.getByText(copy.realDeviceOfflineHint)).toBeTruthy()
     expect(screen.queryByRole('button', { name: copy.wirelessPromote })).toBeNull()
   })
 

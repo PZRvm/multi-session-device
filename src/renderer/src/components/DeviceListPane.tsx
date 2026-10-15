@@ -165,6 +165,21 @@ const ExternalRow = ({
             {copy.wirelessDisconnect}
           </button>
         ) : null}
+        {/* 无线 offline 是死条目（连上过即被 adb server 记住，失联后永远挂在列表）：
+            允许删除——adb disconnect 摘掉 transport，track 下一帧即消失（用户
+            2026-10-15 需求，TUN 幽灵条目教训）。USB offline 插拔即愈，不给按钮 */}
+        {device.state === 'offline' && device.transport === 'wireless' && onDisconnect ? (
+          <button
+            type="button"
+            className="row-action"
+            onClick={(event) => {
+              event.stopPropagation()
+              onDisconnect(device.serial)
+            }}
+          >
+            {copy.wirelessDelete}
+          </button>
+        ) : null}
         <span
           className="transport"
           role="img"
@@ -186,7 +201,11 @@ const ExternalRow = ({
       {device.state === 'unauthorized' ? (
         <span className="row-hint">{copy.realDeviceUnauthorizedHint}</span>
       ) : device.state === 'offline' ? (
-        <span className="row-hint">{copy.realDeviceOfflineHint}</span>
+        <span className="row-hint">
+          {device.transport === 'wireless'
+            ? copy.realDeviceOfflineWirelessHint
+            : copy.realDeviceOfflineHint}
+        </span>
       ) : promoteState?.phase === 'done' && promoteState.serial === device.serial ? (
         <span className="row-hint promote-done">{copy.wirelessPromoteDone}</span>
       ) : promoteState?.phase === 'fail' && promoteState.serial === device.serial ? (

@@ -49,6 +49,7 @@ const zhCN = {
   realDeviceUnauthorizedHint:
     '未授权：请在手机上允许 USB 调试；如无弹窗，到开发者选项撤销 USB 调试授权后重新插拔',
   realDeviceOfflineHint: '设备离线：请重新插拔数据线或确认调试开关',
+  realDeviceOfflineWirelessHint: '无线连接已失联——可删除此条目；手机网络恢复后重新连接即可',
   usbTransportAria: 'USB 接入',
   wirelessTransportAria: 'Wi-Fi 接入',
   // ---- 无线连接器（plan 2026-10-15-real-device-wireless）----
@@ -77,6 +78,7 @@ const zhCN = {
   wirelessPromoteWorking: '正在转换…',
   wirelessPromoteDone: '已转无线，可拔掉数据线',
   wirelessDisconnect: '断开',
+  wirelessDelete: '删除',
   wirelessConnectDone: '已连接 {serial}',
   wirelessFailUnreachable: '连不上 {host}：确认手机 Wi-Fi 在线、地址正确',
   wirelessFailCrossSubnet:
@@ -270,6 +272,7 @@ const zhTW: MainWindowCopy = {
   realDeviceUnauthorizedHint:
     '未授權：請在手機上允許 USB 偵錯；如無彈窗，到開發者選項撤銷 USB 偵錯授權後重新插拔',
   realDeviceOfflineHint: '裝置離線：請重新插拔傳輸線或確認偵錯開關',
+  realDeviceOfflineWirelessHint: '無線連線已失聯——可刪除此條目；手機網路恢復後重新連線即可',
   usbTransportAria: 'USB 接入',
   wirelessTransportAria: 'Wi-Fi 接入',
   // ---- 無線連接器（plan 2026-10-15-real-device-wireless）----
@@ -298,6 +301,7 @@ const zhTW: MainWindowCopy = {
   wirelessPromoteWorking: '正在轉換…',
   wirelessPromoteDone: '已轉無線，可拔掉傳輸線',
   wirelessDisconnect: '中斷連接',
+  wirelessDelete: '刪除',
   wirelessConnectDone: '已連接 {serial}',
   wirelessFailUnreachable: '連不上 {host}：確認手機 Wi-Fi 線上、位址正確',
   wirelessFailCrossSubnet:
@@ -490,6 +494,8 @@ const enUS: MainWindowCopy = {
   realDeviceUnauthorizedHint:
     'Unauthorized: allow USB debugging on the phone; if no prompt appears, revoke USB debugging authorizations in developer options and replug',
   realDeviceOfflineHint: 'Offline: replug the cable or check that debugging stays on',
+  realDeviceOfflineWirelessHint:
+    'Wireless link lost — delete this entry and reconnect once the phone is back on the network',
   usbTransportAria: 'USB connected',
   wirelessTransportAria: 'Wi-Fi connected',
   // ---- Wireless connector (plan 2026-10-15-real-device-wireless) ----
@@ -518,6 +524,7 @@ const enUS: MainWindowCopy = {
   wirelessPromoteWorking: 'Switching…',
   wirelessPromoteDone: 'Wireless now — you can unplug the cable',
   wirelessDisconnect: 'Disconnect',
+  wirelessDelete: 'Delete',
   wirelessConnectDone: 'Connected {serial}',
   wirelessFailUnreachable: 'Cannot reach {host}: check the phone Wi-Fi and the address',
   wirelessFailCrossSubnet:
