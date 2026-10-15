@@ -299,6 +299,42 @@ describe('真机区无线入口（plan 2026-10-15-real-device-wireless）', () =
     expect(screen.queryByRole('button', { name: copy.wirelessPromote })).toBeNull()
   })
 
+  it('P3-10：两台设备先后断开失败，行内错误并存不互相覆盖', async () => {
+    const fail = vi.fn(async () => {
+      throw new Error('adb 不在线')
+    })
+    wirelessApi({ disconnect: fail })
+    renderPane({
+      externalDevices: [
+        usbDevice({ id: 'A:5555', serial: 'A:5555', transport: 'wireless' }),
+        usbDevice({ id: 'B:5555', serial: 'B:5555', transport: 'wireless' })
+      ]
+    })
+    const buttons = screen.getAllByRole('button', { name: copy.wirelessDisconnect })
+    expect(buttons).toHaveLength(2)
+    fireEvent.click(buttons[0])
+    await waitFor(() => {
+      expect(screen.getByText('adb 不在线')).toBeTruthy()
+    })
+    fireEvent.click(buttons[1])
+    await waitFor(() => {
+      expect(screen.getAllByText('adb 不在线')).toHaveLength(2)
+    })
+  })
+
+  it('P3-9：卸载清理自清定时器（clearTimeout 被调用）', async () => {
+    wirelessApi()
+    renderPane({ externalDevices: [usbDevice()] })
+    fireEvent.click(screen.getByRole('button', { name: copy.wirelessPromote }))
+    await waitFor(() => {
+      expect(screen.getByText(copy.wirelessPromoteDone)).toBeTruthy()
+    })
+    const clearSpy = vi.spyOn(window, 'clearTimeout')
+    cleanup()
+    expect(clearSpy).toHaveBeenCalled()
+    clearSpy.mockRestore()
+  })
+
   it('转无线反馈随设备离场清账（拔线后不悬挂）', async () => {
     wirelessApi()
     const defaults = {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Loader2, Usb, Wifi } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
@@ -250,18 +250,27 @@ const DeviceListPane = ({
   // 渲染层弹层与窗口几何打架）——这里只发起开窗；转无线反馈是行内瞬态，不进 store
   // （无状态裁定：刷新即丢，设备由 track 推送呈现）
   const [promote, setPromote] = useState<PromoteState | null>(null)
-  // 断开/删除失败反馈（P3-3）：serial → 文案，行卡沿用 promote-fail 样式位
-  const [disconnectError, setDisconnectError] = useState<{ serial: string; text: string } | null>(
-    null
-  )
+  // 断开/删除失败反馈（P3-3）：serial → 文案（map——P3-10：多台先后失败并存不覆盖）
+  const [disconnectErrors, setDisconnectErrors] = useState<Record<string, string>>({})
   const { active, folded } = splitByOriginView(devices, sourceBucket)
+  // 自清定时器登记（P3-9）：卸载统一清理（对齐 inputErrorTimerRef 先例）
+  const timersRef = useRef(new Set<number>())
+  useEffect(
+    () => () => {
+      for (const id of timersRef.current) window.clearTimeout(id)
+    },
+    []
+  )
+  const later = (fn: () => void, ms: number): void => {
+    const id = window.setTimeout(() => {
+      timersRef.current.delete(id)
+      fn()
+    }, ms)
+    timersRef.current.add(id)
+  }
   // 反馈只在设备在场时呈现（渲染期派生，不用 effect 清账）：拔线后行不在即不显示
   const activePromote =
     promote && externalDevices.some((device) => device.serial === promote.serial) ? promote : null
-  const activeDisconnectError =
-    disconnectError && externalDevices.some((device) => device.serial === disconnectError.serial)
-      ? disconnectError
-      : null
 
   const handlePromote = (serial: string): void => {
     setPromote({ serial, phase: 'working' })
@@ -279,7 +288,7 @@ const DeviceListPane = ({
       // done 提示 6 秒后自清（P3-4：重插同 serial 不重显旧提示）；失败态不自动清，
       // 随设备离场消失（派生收口）
       if (outcome.ok) {
-        window.setTimeout(
+        later(
           () => setPromote((cur) => (cur?.serial === serial && cur.phase === 'done' ? null : cur)),
           6_000
         )
@@ -291,9 +300,14 @@ const DeviceListPane = ({
     void toApiResult(window.api.devices.disconnectExternal(serial)).then((result) => {
       if (!result.ok) {
         // P3-3：断开/删除失败不再全静默——行内一句，8 秒自清或随离场消失
-        setDisconnectError({ serial, text: result.error })
-        window.setTimeout(
-          () => setDisconnectError((cur) => (cur?.serial === serial ? null : cur)),
+        setDisconnectErrors((cur) => ({ ...cur, [serial]: result.error }))
+        later(
+          () =>
+            setDisconnectErrors((cur) => {
+              const rest = { ...cur }
+              delete rest[serial]
+              return rest
+            }),
           8_000
         )
       }
@@ -432,14 +446,15 @@ const DeviceListPane = ({
                 </p>
               ) : (
                 externalDevices.map((device) => {
+                  const disconnectErrorText = disconnectErrors[device.serial]
                   const rowFeedback =
                     activePromote?.serial === device.serial
                       ? activePromote
-                      : activeDisconnectError?.serial === device.serial
+                      : disconnectErrorText !== undefined
                         ? {
                             serial: device.serial,
                             phase: 'fail' as const,
-                            text: activeDisconnectError.text
+                            text: disconnectErrorText
                           }
                         : undefined
                   return (
