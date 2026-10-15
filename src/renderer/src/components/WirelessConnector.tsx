@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Loader2, RefreshCw, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Loader2, RefreshCw } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
 import type { WirelessCandidate } from '@shared/types'
@@ -108,6 +108,7 @@ const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Eleme
     >
       <div className="pop-head">
         <span className="pop-title">{copy.wirelessDialogTitle}</span>
+        {/* 关闭走原生窗三灯与 Esc，页面内不再放关闭钮（用户 2026-10-15 裁定） */}
         <button
           ref={firstFieldRef}
           type="button"
@@ -117,9 +118,6 @@ const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Eleme
           onClick={() => void scan()}
         >
           <RefreshCw size={12} aria-hidden="true" />
-        </button>
-        <button type="button" className="icon-btn" aria-label={copy.cancel} onClick={onClose}>
-          <X size={12} aria-hidden="true" />
         </button>
       </div>
 

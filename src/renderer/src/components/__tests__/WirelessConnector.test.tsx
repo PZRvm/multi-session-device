@@ -152,7 +152,7 @@ describe('WirelessConnector', () => {
     })
   })
 
-  it('Escape 与关闭钮都收口', async () => {
+  it('Escape 收口；页面内无关闭钮（原生窗三灯负责关闭）', async () => {
     scanFn.mockResolvedValue([])
     const onClose = vi.fn()
     render(<WirelessConnector onClose={onClose} />)
@@ -161,7 +161,6 @@ describe('WirelessConnector', () => {
     })
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
-    fireEvent.click(screen.getByRole('button', { name: copy.cancel }))
-    expect(onClose).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('button', { name: copy.cancel })).toBeNull()
   })
 })
