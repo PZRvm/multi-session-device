@@ -562,12 +562,24 @@ const probeTcpDefault = (host: string, port: number, timeoutMs: number): Promise
 const delayDefault = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms))
 
+/** 虚拟/隧道接口名族（2026-10-15 实测教训：utun 的 198.18.x 网段被扫描后，代理对
+ *  探活假应答，列表出现幽灵候选——TUN 网段只扫得出鬼，必须整族排除） */
+const VIRTUAL_INTERFACE_RE =
+  /^(utun|tun|tap|awdl|llw|bridge|veth|vmnet|docker|gif|stf|ppp|ipsec|anpi|wg)/i
+
+/** LAN 接口判定（导出供测试）：物理网卡上的 IPv4、非内部、非虚拟接口族 */
+export const isLanInterface = (
+  name: string,
+  info: { family: string; internal: boolean }
+): boolean =>
+  info.family === 'IPv4' && !info.internal && !VIRTUAL_INTERFACE_RE.test(name)
+
 /** /24 前提的粗粒度网段采集：cross-subnet 提示是 best-effort，不做精确掩码运算 */
 const localSubnetsDefault = (): string[] => {
   const prefixes = new Set<string>()
-  for (const infos of Object.values(networkInterfaces())) {
+  for (const [name, infos] of Object.entries(networkInterfaces())) {
     for (const info of infos ?? []) {
-      if (info.family !== 'IPv4' || info.internal) continue
+      if (!isLanInterface(name, info)) continue
       prefixes.add(`${info.address.replace(/\.\d+$/, '')}.`)
     }
   }

@@ -305,7 +305,8 @@ const Popover = styled.div`
   position: absolute;
   bottom: calc(100% + 8px);
   left: 0;
-  right: 0;
+  /* 宽度脱锚定：弹层不该跟锚点等宽拉伸（面板拖宽后曾整窗破版），窄面板时仍占满 */
+  width: min(300px, 100%);
   z-index: 20;
   display: flex;
   flex-direction: column;

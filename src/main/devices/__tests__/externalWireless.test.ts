@@ -392,3 +392,17 @@ describe('无线通道装配', () => {
     setExternalDevicesForTests([])
   })
 })
+
+describe('isLanInterface（幽灵网段过滤）', () => {
+  it('物理网卡 IPv4 放行；虚拟/隧道/内部整族拒绝', async () => {
+    const { isLanInterface } = await import('../external')
+    expect(isLanInterface('en0', { family: 'IPv4', internal: false })).toBe(true)
+    expect(isLanInterface('en5', { family: 'IPv6', internal: false })).toBe(false)
+    expect(isLanInterface('lo0', { family: 'IPv4', internal: true })).toBe(false)
+    // 2026-10-15 实测：utun1500 的 198.18.x 被 TUN 代理假应答，扫出幽灵候选
+    expect(isLanInterface('utun1500', { family: 'IPv4', internal: false })).toBe(false)
+    expect(isLanInterface('bridge100', { family: 'IPv4', internal: false })).toBe(false)
+    expect(isLanInterface('awdl0', { family: 'IPv4', internal: false })).toBe(false)
+    expect(isLanInterface('veth0x', { family: 'IPv4', internal: false })).toBe(false)
+  })
+})

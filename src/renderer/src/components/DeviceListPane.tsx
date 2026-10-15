@@ -582,7 +582,6 @@ const Wrapper = styled.div`
     gap: 4px;
     height: 20px;
     padding: 0 8px;
-    margin-right: 6px;
     border: 1px solid var(--board-control-line);
     border-radius: 4px;
     background: transparent;
@@ -662,11 +661,14 @@ const Wrapper = styled.div`
   .row-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
   }
 
+  /* 标题吃满余宽：行内动作钮与传输角标一起贴右（用户 2026-10-15 反馈：断开钮要贴
+     最右侧 Wi-Fi 图标左边，不悬在中间） */
   .row-title {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     font-size: 13px;
     font-weight: 600;
