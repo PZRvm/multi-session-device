@@ -70,6 +70,19 @@ export const runSession = async (ctx: ManagerContext, session: StreamSession): P
         ) {
           session.waitingResync = true
           sendResync(ctx, session)
+        } else if (
+          session.waitingResync &&
+          now - session.lastAckAt > ACK_STALL_MS &&
+          ctx.active?.deviceId === session.deviceId
+        ) {
+          // waitingResync 悬空自救（2026-10-15 息屏唤醒冻结根因）：长息屏后唤醒的
+          // 突发帧同时打爆 GOP 缓存的 PTS 跨度预算（清链等关键帧）与未 ACK 包预算，
+          // sendResync 拿不到可回放链即悬空丢包；渲染端照常 ACK 已收包 → outbox 归
+          // 零 → 上方条件永不再触发，会话永久冻结（控制通道不受影响）。此处重试
+          // sendResync：链恢复则重放解困，两轮仍空则 nullReplayStalls 走 resetVideo
+          // 强制编码器出新配置包。lastAckAt 兼作重试节拍防风暴。
+          sendResync(ctx, session)
+          session.lastAckAt = Date.now()
         }
       }
     }
