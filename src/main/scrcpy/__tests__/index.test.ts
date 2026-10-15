@@ -750,14 +750,7 @@ describe('ScrcpyManager（fake transport）', () => {
   })
 })
 
-describe('息屏唤醒冻结回归（2026-10-15 真机 Wi-Fi 投屏调查）', () => {
-  beforeEach(() => {
-    mocks.windowRef.current = {
-      isDestroyed: () => false,
-      webContents: { send: vi.fn() }
-    } as unknown as BrowserWindow
-  })
-
+describe('刚连上首操作冻结修复回归（2026-10-15 修复 A+B）', () => {
   const collect = (): { states: ScreenStateMessage[]; packets: ScreenPacketMessage[] } => {
     const send = (
       mocks.windowRef.current!.webContents as unknown as { send: ReturnType<typeof vi.fn> }
@@ -772,21 +765,28 @@ describe('息屏唤醒冻结回归（2026-10-15 真机 Wi-Fi 投屏调查）', (
         .map(([, payload]) => payload as ScreenPacketMessage)
     }
   }
-  it('PTS 跨度清链 + 突发超预算：waitingResync 悬空后看门狗必须自救（resetVideo）', async () => {
+  beforeEach(() => {
+    mocks.windowRef.current = {
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    } as unknown as BrowserWindow
+  })
+
+  const ctl = (t: PushableTransport): number =>
+    (t.controlSocket as unknown as FakeSocket).written.length
+
+  it('修复 A：idle 空档不清链——突发超预算被回放即时吸收，无冻结无 resetVideo', async () => {
     const { manager, transportOf } = await importManager()
-    const ctl = (): number =>
-      (transportOf('emulator-5554').controlSocket as unknown as FakeSocket).written.length
     const activate = await handlerFor(IPC_CHANNELS.screenActivate)
     const ack = await handlerFor(IPC_CHANNELS.screenAck)
-
     await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
     await vi.waitFor(() => {
       expect(collect().states.some((state) => state.status === 'ready')).toBe(true)
     })
+    const t = transportOf('emulator-5554')
     await activate({ sender: {} }, { id: 'd1', viewToken: 'vt1' })
 
-    const push = transportOf('emulator-5554').__push
-    // 建链：配置 + 关键帧 + 静态增量，全量 ACK（resyncArmed 重挂、outbox 清空）
+    const push = t.__push
     push({ type: 'configuration', data: new Uint8Array([1]) })
     push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
     for (let i = 1; i <= 3; i++) {
@@ -797,10 +797,9 @@ describe('息屏唤醒冻结回归（2026-10-15 真机 Wi-Fi 投屏调查）', (
     })
     await ack({ sender: {} }, { viewToken: 'vt1', generation: 1, throughSeq: 4 })
 
-    // 「息屏」后唤醒：增量帧 PTS 跨过睡眠间隔（10s ≫ 1.5s 预算）→ GopCache 清链
-    // 等关键帧；紧接着无关键帧突发 >16 包 → 超预算 → sendResync 空手而归 →
-    // waitingResync=true 开始丢包（渲染端画面就此冻结）
-    const beforeFreeze = collect().packets.length
+    // 「息屏后唤醒」突发：PTS 跨 10s 空档（修复 A 前会清链）+ 无关键帧 20 连发
+    const before = collect().packets.length
+    const ctlBefore = ctl(t)
     for (let i = 0; i < 20; i++) {
       push({
         type: 'data',
@@ -809,107 +808,64 @@ describe('息屏唤醒冻结回归（2026-10-15 真机 Wi-Fi 投屏调查）', (
         data: new Uint8Array(10)
       })
     }
-    // 渲染端如实 ACK 已收到的包（ACK 只看收到不看画面）→ outbox 归零
+    // 修复 A：链保留 → 超预算走作废重发，帧持续流动（冻结消失）
     await vi.waitFor(() => {
-      expect(collect().packets.length).toBeGreaterThan(beforeFreeze)
+      expect(collect().packets.length).toBeGreaterThan(before)
     })
-    await ack(
-      { sender: {} },
-      { viewToken: 'vt1', generation: 1, throughSeq: collect().packets.at(-1)!.seq }
-    )
-
-    // 冻结期：持续有新帧到达（唤醒后的锁屏动画/用户滑动）但全部被丢
-    const frozenAt = collect().packets.length
-    expect(frozenAt).toBeGreaterThan(beforeFreeze)
-    // 看门狗（ACK_STALL_MS=3s）应识别「waitingResync 悬空」并重试：nullReplayStalls
-    // 自增到 2 → resetVideo 下发编码器重置 → 死锁解除。无此分支则永不恢复。
-    const ctlBefore = ctl()
-    const deadline = Date.now() + 8_000
-    for (;;) {
+    for (let i = 20; i < 28; i++) {
       push({
         type: 'data',
-        pts: 10_700_000n + BigInt((Math.random() * 1_000_000) | 0),
+        pts: 10_700_000n + BigInt(33_000 * i),
         keyframe: false,
         data: new Uint8Array(10)
       })
-      if (ctl() > ctlBefore) break
-      if (Date.now() > deadline) throw new Error('看门狗未在 8s 内自救——waitingResync 死锁仍在')
-      await new Promise((resolve) => setTimeout(resolve, 400))
     }
-
-    // resetVideo → 编码器重置 → 新配置包 → 解除悬空，帧恢复流动
-    push({ type: 'configuration', data: new Uint8Array([2]) })
-    push({ type: 'data', pts: 20_000_000n, keyframe: true, data: new Uint8Array(10) })
     await vi.waitFor(() => {
-      const packets = collect().packets
-      expect(packets.length).toBeGreaterThan(frozenAt)
+      expect(collect().packets.length).toBeGreaterThanOrEqual(before + 20)
     })
-  }, 20_000)
+    // 全程无需 resetVideo（编码器重置是旧路径的兜底）
+    expect(ctl(t)).toBe(ctlBefore)
+  })
 
-  it('P3-7：自救节拍在 fake timers 下确定性收敛（400ms 推帧 + 3s 看门狗两拍）', async () => {
+  it('修复 B：缓存无关键帧时超预算 → 立即 resetVideo（新配置即恢复，无 3s 冻结）', async () => {
     const { manager, transportOf } = await importManager()
-    const ctl = (): number =>
-      (transportOf('emulator-5554').controlSocket as unknown as FakeSocket).written.length
     const activate = await handlerFor(IPC_CHANNELS.screenActivate)
     const ack = await handlerFor(IPC_CHANNELS.screenAck)
-
     await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
     await vi.waitFor(() => {
       expect(collect().states.some((state) => state.status === 'ready')).toBe(true)
     })
-    await activate({ sender: {} }, { id: 'd1', viewToken: 'vt2' })
+    const t = transportOf('emulator-5554')
+    await activate({ sender: {} }, { id: 'd1', viewToken: 'vt1' })
 
-    const push = transportOf('emulator-5554').__push
+    const push = t.__push
+    const ctl = (): number => (t.controlSocket as unknown as FakeSocket).written.length
     push({ type: 'configuration', data: new Uint8Array([1]) })
     push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
-    for (let i = 1; i <= 3; i++) {
+    // 预阶段：60 帧连续运动（跨度累计 >1.5s → 清链等关键帧），末尾 ACK 排空重挂
+    for (let i = 1; i <= 60; i++) {
       push({ type: 'data', pts: BigInt(33_000 * i), keyframe: false, data: new Uint8Array(10) })
     }
     await vi.waitFor(() => {
-      expect(collect().packets).toHaveLength(5)
+      expect(collect().packets.length).toBeGreaterThanOrEqual(60)
     })
-    await ack({ sender: {} }, { viewToken: 'vt2', generation: 1, throughSeq: 4 })
-
-    // 冻结条件与上一测同构：PTS 跨度清链 + 超预算突发
-    for (let i = 0; i < 20; i++) {
-      push({
-        type: 'data',
-        pts: 10_000_000n + BigInt(33_000 * i),
-        keyframe: false,
-        data: new Uint8Array(10)
-      })
+    await ack({ sender: {} }, { viewToken: 'vt1', generation: 1, throughSeq: 60 })
+    // 缓存无关键帧 + 不 ACK 突发 → 16 包后超预算 → 立即 resetVideo（不等看门狗）
+    const ctlBefore = ctl()
+    for (let i = 61; i <= 80; i++) {
+      push({ type: 'data', pts: BigInt(33_000 * i), keyframe: false, data: new Uint8Array(10) })
     }
     await vi.waitFor(() => {
-      expect(collect().packets.length).toBeGreaterThan(5)
+      expect(ctl()).toBeGreaterThan(ctlBefore)
     })
-    await ack(
-      { sender: {} },
-      { viewToken: 'vt2', generation: 1, throughSeq: collect().packets.at(-1)!.seq }
-    )
-
-    // fake timers：自救节拍（2×ACK_STALL_MS）确定性推进，毫秒级墙钟完成
-    vi.useFakeTimers()
-    try {
-      const deadline = Date.now() + 10_000
-      const ctlBefore = ctl()
-      let resetSeen = false
-      for (;;) {
-        push({
-          type: 'data',
-          pts: 10_700_000n + BigInt(Math.floor(Math.random() * 1_000_000)),
-          keyframe: false,
-          data: new Uint8Array(10)
-        })
-        await vi.advanceTimersByTimeAsync(400)
-        if (ctl() > ctlBefore) {
-          resetSeen = true
-          break
-        }
-        if (Date.now() > deadline) break
-      }
-      expect(resetSeen).toBe(true)
-    } finally {
-      vi.useRealTimers()
-    }
+    // resetVideo → 编码器重置 → 新配置包（generation 2）+ 新关键帧 → 流恢复
+    push({ type: 'configuration', data: new Uint8Array([2]) })
+    push({ type: 'data', pts: 2_000_000n, keyframe: true, data: new Uint8Array(10) })
+    const before = collect().packets.length
+    await vi.waitFor(() => {
+      expect(collect().packets.length).toBeGreaterThan(before)
+    })
+    // 编码器重置后的新关键帧已送达 renderer
+    expect(collect().packets.some((packet) => packet.keyframe)).toBe(true)
   })
 })
