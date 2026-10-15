@@ -156,7 +156,7 @@ const ExternalRow = ({
         {device.state === 'device' && device.transport === 'wireless' && onDisconnect ? (
           <button
             type="button"
-            className="row-action"
+            className="row-action danger"
             onClick={(event) => {
               event.stopPropagation()
               onDisconnect(device.serial)
@@ -171,7 +171,7 @@ const ExternalRow = ({
         {device.state === 'offline' && device.transport === 'wireless' && onDisconnect ? (
           <button
             type="button"
-            className="row-action"
+            className="row-action danger"
             onClick={(event) => {
               event.stopPropagation()
               onDisconnect(device.serial)
@@ -626,6 +626,18 @@ const Wrapper = styled.div`
   .row-action:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+
+  /* 断开/删除是破坏性动作：红字红边，hover 红混底（对齐 net-airplane 的 danger 惯用式） */
+  .row-action.danger {
+    color: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 45%, var(--board-control-line));
+  }
+
+  .row-action.danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 18%, var(--board-bg));
+    color: var(--danger);
+    border-color: var(--danger);
   }
 
   .row-action-spin {
