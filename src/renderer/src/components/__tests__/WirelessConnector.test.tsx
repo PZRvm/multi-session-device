@@ -97,7 +97,7 @@ describe('WirelessConnector', () => {
     })
   })
 
-  it('手动连接：空端口缺省 5555 缺省下发；未输 IP 时按钮禁用', async () => {
+  it('手动连接：端口钉死 5555 只有 IP 框；未输 IP 时按钮禁用', async () => {
     scanFn.mockResolvedValue([])
     connectFn.mockResolvedValue({ ok: true, serial: '10.0.0.9:5555' })
     render(<WirelessConnector onClose={vi.fn()} />)
@@ -116,7 +116,7 @@ describe('WirelessConnector', () => {
     })
     fireEvent.click(submit)
     await waitFor(() => {
-      expect(connectFn).toHaveBeenCalledWith({ host: '10.0.0.9', port: undefined })
+      expect(connectFn).toHaveBeenCalledWith({ host: '10.0.0.9' })
     })
   })
 

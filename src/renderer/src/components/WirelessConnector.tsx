@@ -31,8 +31,8 @@ const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Eleme
   const [scanning, setScanning] = useState(true)
   const [candidates, setCandidates] = useState<WirelessCandidate[]>([])
   const [connectingKey, setConnectingKey] = useState<string | null>(null)
+  // 手动直连端口钉死 5555（用户裁定）：只有 IP 输入，不再有端口框
   const [manualHost, setManualHost] = useState('')
-  const [manualPort, setManualPort] = useState('')
   const [pairOpen, setPairOpen] = useState(false)
   const [pairHost, setPairHost] = useState('')
   const [pairPort, setPairPort] = useState('')
@@ -100,15 +100,17 @@ const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Eleme
 
   return (
     <Page
+      $darwin={window.api.platform === 'darwin'}
       role="dialog"
       aria-label={copy.wirelessDialogTitle}
       onKeyDown={(event) => {
         if (event.key === 'Escape') onClose()
       }}
     >
-      <div className="pop-head">
+      {/* hiddenInset 无系统标题栏，头带即拖拽带（对齐 LogcatApp 惯用式：darwin 左侧
+          80px 让位三灯；子控件 no-drag）。关闭走三灯与 Esc，页内不放关闭钮 */}
+      <div className="drag-head">
         <span className="pop-title">{copy.wirelessDialogTitle}</span>
-        {/* 关闭走原生窗三灯与 Esc，页面内不再放关闭钮（用户 2026-10-15 裁定） */}
         <button
           ref={firstFieldRef}
           type="button"
@@ -121,181 +123,172 @@ const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Eleme
         </button>
       </div>
 
-      <div className="scan-body" aria-busy={scanning}>
-        {scanning ? (
-          <p className="scan-line">
-            <Loader2 size={13} className="spin" aria-hidden="true" />
-            {copy.wirelessScanning}
-          </p>
-        ) : candidates.length > 0 ? (
-          candidates.map((candidate) => {
-            const key = `${candidate.host}:${candidate.port}`
-            return (
-              <div className="candidate" key={key}>
-                <span className="cand-main">
-                  <span className="cand-name">{candidate.name ?? candidate.host}</span>
-                  <span className="cand-addr">
-                    {candidate.host}:{candidate.port}
+      <div className="page-body">
+        <div className="scan-body" aria-busy={scanning}>
+          {scanning ? (
+            <p className="scan-line">
+              <Loader2 size={13} className="spin" aria-hidden="true" />
+              {copy.wirelessScanning}
+            </p>
+          ) : candidates.length > 0 ? (
+            candidates.map((candidate) => {
+              const key = `${candidate.host}:${candidate.port}`
+              return (
+                <div className="candidate" key={key}>
+                  <span className="cand-main">
+                    <span className="cand-name">{candidate.name ?? candidate.host}</span>
+                    <span className="cand-addr">
+                      {candidate.host}:{candidate.port}
+                    </span>
                   </span>
-                </span>
-                <span className="cand-source">
-                  {candidate.source === 'subnet-scan'
-                    ? copy.wirelessSourceSubnet
-                    : candidate.source === 'mdns-pairing'
-                      ? copy.wirelessSourceMdns
-                      : copy.wirelessSourceMdns}
-                </span>
+                  <span className="cand-source">
+                    {candidate.source === 'subnet-scan'
+                      ? copy.wirelessSourceSubnet
+                      : candidate.source === 'mdns-pairing'
+                        ? copy.wirelessSourceMdns
+                        : copy.wirelessSourceMdns}
+                  </span>
+                  <button
+                    type="button"
+                    className="connect-btn"
+                    disabled={connectingKey !== null}
+                    onClick={() => void connect(candidate.host, candidate.port, key)}
+                  >
+                    {connectingKey === key ? (
+                      <Loader2 size={11} className="spin" aria-hidden="true" />
+                    ) : (
+                      copy.wirelessConnectAction
+                    )}
+                  </button>
+                </div>
+              )
+            })
+          ) : (
+            <p className="scan-line empty">{copy.wirelessScanEmpty}</p>
+          )}
+        </div>
+
+        <form
+          className="manual"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (manualReady && connectingKey === null) {
+              void connect(manualHost, undefined, `manual:${manualHost}`)
+            }
+          }}
+        >
+          <span className="section-title">{copy.wirelessManualTitle}</span>
+          <div className="manual-row">
+            <Input
+              className="host-input"
+              value={manualHost}
+              placeholder={copy.wirelessManualHostLabel}
+              inputMode="decimal"
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(event) => setManualHost(event.target.value)}
+              aria-label={copy.wirelessManualHostLabel}
+            />
+            <button
+              type="submit"
+              className="connect-btn"
+              disabled={!manualReady || connectingKey !== null}
+            >
+              {connectingKey === `manual:${manualHost}` ? (
+                <Loader2 size={11} className="spin" aria-hidden="true" />
+              ) : (
+                copy.wirelessConnectAction
+              )}
+            </button>
+          </div>
+        </form>
+
+        <div className="pair">
+          <button
+            type="button"
+            className="pair-toggle"
+            aria-expanded={pairOpen}
+            onClick={() => setPairOpen((open) => !open)}
+          >
+            {pairOpen ? (
+              <ChevronDown size={11} aria-hidden="true" />
+            ) : (
+              <ChevronRight size={11} aria-hidden="true" />
+            )}
+            {copy.wirelessPairTitle}
+          </button>
+          {pairOpen ? (
+            <form
+              className="pair-form"
+              onSubmit={(event) => {
+                event.preventDefault()
+                if (!pairing) void pair()
+              }}
+            >
+              <div className="manual-row">
+                <Input
+                  className="host-input"
+                  value={pairHost}
+                  placeholder={copy.wirelessManualHostLabel}
+                  inputMode="decimal"
+                  autoComplete="off"
+                  spellCheck={false}
+                  onChange={(event) => setPairHost(event.target.value)}
+                  aria-label={copy.wirelessPairHostLabel}
+                />
+                <Input
+                  className="port-input"
+                  value={pairPort}
+                  placeholder={copy.wirelessPairPortLabel}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  spellCheck={false}
+                  onChange={(event) => setPairPort(event.target.value)}
+                  aria-label={copy.wirelessPairPortLabel}
+                />
+              </div>
+              <div className="manual-row">
+                <Input
+                  className="code-input"
+                  value={pairCode}
+                  placeholder={copy.wirelessPairCodeLabel}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  spellCheck={false}
+                  onChange={(event) => setPairCode(event.target.value)}
+                  aria-label={copy.wirelessPairCodeLabel}
+                />
                 <button
-                  type="button"
+                  type="submit"
                   className="connect-btn"
-                  disabled={connectingKey !== null}
-                  onClick={() => void connect(candidate.host, candidate.port, key)}
+                  disabled={
+                    pairing ||
+                    !HOST_RE.test(pairHost) ||
+                    pairPort.trim() === '' ||
+                    pairCode.trim() === ''
+                  }
                 >
-                  {connectingKey === key ? (
+                  {pairing ? (
                     <Loader2 size={11} className="spin" aria-hidden="true" />
                   ) : (
-                    copy.wirelessConnectAction
+                    copy.wirelessPairSubmit
                   )}
                 </button>
               </div>
-            )
-          })
-        ) : (
-          <p className="scan-line empty">{copy.wirelessScanEmpty}</p>
-        )}
-      </div>
-
-      <form
-        className="manual"
-        onSubmit={(event) => {
-          event.preventDefault()
-          if (manualReady && connectingKey === null) {
-            const port = manualPort.trim() === '' ? undefined : Number.parseInt(manualPort, 10)
-            void connect(manualHost, port, `manual:${manualHost}`)
-          }
-        }}
-      >
-        <span className="section-title">{copy.wirelessManualTitle}</span>
-        <div className="manual-row">
-          <Input
-            className="host-input"
-            value={manualHost}
-            placeholder={copy.wirelessManualHostLabel}
-            inputMode="decimal"
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(event) => setManualHost(event.target.value)}
-            aria-label={copy.wirelessManualHostLabel}
-          />
-          <Input
-            className="port-input"
-            value={manualPort}
-            placeholder={copy.wirelessManualPortPlaceholder}
-            inputMode="numeric"
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(event) => setManualPort(event.target.value)}
-            aria-label={copy.wirelessManualPortLabel}
-          />
-          <button
-            type="submit"
-            className="connect-btn"
-            disabled={!manualReady || connectingKey !== null}
-          >
-            {connectingKey === `manual:${manualHost}` ? (
-              <Loader2 size={11} className="spin" aria-hidden="true" />
-            ) : (
-              copy.wirelessConnectAction
-            )}
-          </button>
+            </form>
+          ) : null}
         </div>
-      </form>
 
-      <div className="pair">
-        <button
-          type="button"
-          className="pair-toggle"
-          aria-expanded={pairOpen}
-          onClick={() => setPairOpen((open) => !open)}
-        >
-          {pairOpen ? (
-            <ChevronDown size={11} aria-hidden="true" />
-          ) : (
-            <ChevronRight size={11} aria-hidden="true" />
-          )}
-          {copy.wirelessPairTitle}
-        </button>
-        {pairOpen ? (
-          <form
-            className="pair-form"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (!pairing) void pair()
-            }}
-          >
-            <div className="manual-row">
-              <Input
-                className="host-input"
-                value={pairHost}
-                placeholder={copy.wirelessManualHostLabel}
-                inputMode="decimal"
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(event) => setPairHost(event.target.value)}
-                aria-label={copy.wirelessPairHostLabel}
-              />
-              <Input
-                className="port-input"
-                value={pairPort}
-                placeholder={copy.wirelessPairPortLabel}
-                inputMode="numeric"
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(event) => setPairPort(event.target.value)}
-                aria-label={copy.wirelessPairPortLabel}
-              />
-            </div>
-            <div className="manual-row">
-              <Input
-                className="code-input"
-                value={pairCode}
-                placeholder={copy.wirelessPairCodeLabel}
-                inputMode="numeric"
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(event) => setPairCode(event.target.value)}
-                aria-label={copy.wirelessPairCodeLabel}
-              />
-              <button
-                type="submit"
-                className="connect-btn"
-                disabled={
-                  pairing ||
-                  !HOST_RE.test(pairHost) ||
-                  pairPort.trim() === '' ||
-                  pairCode.trim() === ''
-                }
-              >
-                {pairing ? (
-                  <Loader2 size={11} className="spin" aria-hidden="true" />
-                ) : (
-                  copy.wirelessPairSubmit
-                )}
-              </button>
-            </div>
-          </form>
+        {feedback ? (
+          <p className="feedback" role="status" aria-live="polite">
+            {feedback.kind === 'ok'
+              ? format(copy.wirelessConnectDone, { serial: feedback.serial })
+              : feedback.kind === 'pair-ok'
+                ? copy.wirelessPairSuccess
+                : feedback.text}
+          </p>
         ) : null}
       </div>
-
-      {feedback ? (
-        <p className="feedback" role="status" aria-live="polite">
-          {feedback.kind === 'ok'
-            ? format(copy.wirelessConnectDone, { serial: feedback.serial })
-            : feedback.kind === 'pair-ok'
-              ? copy.wirelessPairSuccess
-              : feedback.text}
-        </p>
-      ) : null}
     </Page>
   )
 }
@@ -304,25 +297,40 @@ const Input = (props: React.ComponentPropsWithoutRef<'input'>): React.JSX.Elemen
   <input {...props} />
 )
 
-/** 原生窗页面容器：hiddenInset 三灯占顶部 ~44px，内容下让；整窗滚动 */
-const Page = styled.div`
+/** 原生窗页面容器：drag-head 是拖拽带（hiddenInset 无系统标题栏），正文在 page-body 滚动 */
+const Page = styled.div<{ $darwin: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  min-height: 100vh;
+  height: 100vh;
   box-sizing: border-box;
-  padding: 46px 14px 14px;
-  overflow-y: auto;
   background: var(--board-bg);
 
   .spin {
     animation: ${spinKeyframes} 0.9s linear infinite;
   }
 
-  .pop-head {
+  .drag-head {
     display: flex;
     align-items: center;
     gap: 4px;
+    flex: none;
+    height: 40px;
+    padding: 0 14px;
+    /* darwin 原生三灯安全区（hiddenInset 灯组右缘约 x=66，对齐 LogcatApp 的 80px） */
+    padding-left: ${(props) => (props.$darwin ? '80px' : '14px')};
+    border-bottom: 1px solid var(--board-hairline);
+    background: var(--board-bg-raised);
+    -webkit-app-region: ${(props) => (props.$darwin ? 'drag' : 'no-drag')};
+  }
+
+  .page-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px 14px 14px;
   }
 
   .pop-title {
@@ -330,9 +338,13 @@ const Page = styled.div`
     font-size: 13px;
     font-weight: 600;
     color: var(--board-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .icon-btn {
+    flex: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -345,6 +357,8 @@ const Page = styled.div`
     color: var(--board-ink);
     cursor: pointer;
     transition: background-color 0.12s;
+    /* 头带是拖拽区，按钮必须脱离 drag 才可点 */
+    -webkit-app-region: no-drag;
   }
 
   .icon-btn:hover:not(:disabled) {
