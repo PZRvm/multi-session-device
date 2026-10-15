@@ -15,7 +15,7 @@ import { appIcon } from './app-icon'
 import { msg } from './locale'
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.foreunit.multi-session-device')
   if (process.platform === 'darwin') app.dock?.setIcon(appIcon)
 
   app.on('browser-window-created', (_, window) => {
