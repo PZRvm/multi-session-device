@@ -541,7 +541,8 @@ const Page = styled.div`
   }
 
   input.port-input {
-    width: 56px;
+    /* 88px 容纳描述性 placeholder（「配对端口」/ Pairing port）不截断 */
+    width: 88px;
     font-family: ui-monospace, 'SF Mono', Menlo, monospace;
   }
 
