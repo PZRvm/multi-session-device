@@ -8,6 +8,7 @@ import { destroySession } from './lifecycle'
 import { sendResync } from './media'
 import { runAdb } from './proc'
 import { ensureSession } from './session'
+import { cancelRecovery } from './recovery'
 import type { ManagerContext, StreamSession } from './types'
 
 const requireReadySession = (ctx: ManagerContext, sender: Electron.WebContents): StreamSession => {
@@ -31,6 +32,8 @@ export const registerIpc = (ctx: ManagerContext): void => {
       if (typeof viewToken !== 'string' || viewToken.length === 0) {
         throw new Error(msg('activateInvalidViewToken'))
       }
+      const previous = ctx.active && ctx.sessions.get(ctx.active.deviceId)
+      if (previous) cancelRecovery(previous)
       if (id === null) {
         ctx.active = null
         return null
@@ -60,7 +63,8 @@ export const registerIpc = (ctx: ManagerContext): void => {
     const session = ctx.sessions.get(value['id'])
     if (!session) throw new Error(msg('retryNoSession'))
     if (session.runId !== value['runId']) throw new Error(msg('retryGenerationStale'))
-    await destroySession(ctx, value['id'])
+    // 重建保留当前绑定；清理期间发生的切换/退订仍由 activate 正常接管。
+    await destroySession(ctx, value['id'], true)
     await ensureSession(ctx, { id: value['id'], runId: value['runId'], serial: session.serial })
   })
 
@@ -71,11 +75,22 @@ export const registerIpc = (ctx: ManagerContext): void => {
       !ack ||
       ack.viewToken !== ctx.active?.viewToken ||
       ack.generation !== session.generation ||
-      !Number.isFinite(ack.throughSeq)
+      !Number.isSafeInteger(ack.throughSeq) ||
+      (ack.throughSeq as number) < 0 ||
+      (ack.resync !== undefined && ack.resync !== true)
     ) {
       return // 旧代次/旧视图的 ACK 直接忽略
     }
-    if ((ack.throughSeq as number) > session.seq) return // 拒绝大于已发送 seq 的 ACK
+    if ((ack.throughSeq as number) >= session.seq) return // seq 是下一待分配值，最后已发值至多 seq - 1
+    if (ack.resync) {
+      if (session.waitingResync) return // 等新配置期间合并重复请求
+      // 接收端已丢弃依赖，重复回放同一拥堵 GOP 无法解困；从新配置/关键帧重建。
+      session.cache.clearChain()
+      session.outbox = []
+      session.waitingResync = true
+      sendResync(ctx, session, true)
+      return
+    }
     session.outbox = session.outbox.filter((packet) => packet.seq > (ack.throughSeq as number))
     session.lastAckAt = Date.now()
     session.resyncArmed = true

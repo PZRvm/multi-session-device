@@ -1,12 +1,15 @@
 import type { ManagerContext, StreamSession } from './types'
+import { cancelRecovery } from './recovery'
 
 export const cleanupSession = async (
   ctx: ManagerContext,
-  session: StreamSession
+  session: StreamSession,
+  preserveActive = false
 ): Promise<void> => {
   // 幂等清理：撤销活动归属 → abort 循环 → 关 writer/socket → 结束 server → 删 forward
   session.abort.abort()
-  if (ctx.active?.deviceId === session.deviceId) ctx.active = null
+  cancelRecovery(session)
+  if (!preserveActive && ctx.active?.deviceId === session.deviceId) ctx.active = null
   try {
     void session.writer?.close().catch(() => undefined)
   } catch {
@@ -25,10 +28,14 @@ export const cleanupSession = async (
   session.state = 'closed'
 }
 
-export const destroySession = async (ctx: ManagerContext, deviceId: string): Promise<void> => {
+export const destroySession = async (
+  ctx: ManagerContext,
+  deviceId: string,
+  preserveActive = false
+): Promise<void> => {
   const session = ctx.sessions.get(deviceId)
   if (!session) return
-  if (!session.cleanup) session.cleanup = cleanupSession(ctx, session)
+  if (!session.cleanup) session.cleanup = cleanupSession(ctx, session, preserveActive)
   await session.cleanup
 }
 

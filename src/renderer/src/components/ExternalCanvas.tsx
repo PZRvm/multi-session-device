@@ -151,17 +151,9 @@ const ExternalCanvas = ({ device }: ExternalCanvasProps): React.JSX.Element => {
     screenRef,
     layoutRef,
     enabled: ready && !rotating,
+    onGenerationChange,
     onInputError: showInputError
   })
-
-  // 旋转：main 先释放输入；renderer 释放本地手势并等新尺寸
-  useEffect(
-    () =>
-      onGenerationChange(() => {
-        void sendInput({ kind: 'release-all' })
-      }),
-    [onGenerationChange, sendInput]
-  )
 
   return (
     <Wrapper>

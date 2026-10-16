@@ -35,6 +35,8 @@ export interface DeviceInputParams {
   /** 最终屏幕矩形（geometry 单源；offsetX/Y 即屏幕左上角，外框/留白不在命中范围） */
   layoutRef: RefObject<ScreenLayout | null>
   enabled: boolean
+  /** 视频代次改变时取消本地手势，并用新归属释放设备端输入。 */
+  onGenerationChange?: (listener: () => void) => () => void
   /** 同一手势失败只提示一次（由调用方节流展示） */
   onInputError: (message: string) => void
 }
@@ -44,7 +46,15 @@ export interface DeviceInputParams {
  * 焦点键盘白名单、beforeinput/IME 文本。手势结束/失焦/隐藏时统一释放。
  */
 export function useDeviceInput(params: DeviceInputParams): void {
-  const { canvasContainerRef, inputProxyRef, screenRef, layoutRef, enabled, onInputError } = params
+  const {
+    canvasContainerRef,
+    inputProxyRef,
+    screenRef,
+    layoutRef,
+    enabled,
+    onGenerationChange,
+    onInputError
+  } = params
 
   const pointersRef = useRef(new Map<number, PointerSlot>())
   const modeRef = useRef<GestureMode>('none')
@@ -64,10 +74,10 @@ export function useDeviceInput(params: DeviceInputParams): void {
   }, [enabled])
 
   const send = useCallback(
-    (input: ScreenInput): void => {
+    (input: ScreenInput, currentView = false): void => {
       // 释放使用最后一次输入的归属，布局消失不阻断；旧代次仍由 main 拒绝。
       const releasing = input.kind === 'release-all'
-      const view = releasing ? lastInputViewRef.current : screenRef.current
+      const view = releasing && !currentView ? lastInputViewRef.current : screenRef.current
       if (
         (!releasing && !enabledRef.current) ||
         !view?.envelope ||
@@ -75,7 +85,7 @@ export function useDeviceInput(params: DeviceInputParams): void {
         view.height <= 0
       )
         return
-      if (releasing) {
+      if (releasing && !currentView) {
         const current = screenRef.current
         const live = current.envelope
         if (
@@ -108,19 +118,24 @@ export function useDeviceInput(params: DeviceInputParams): void {
     [screenRef, onInputError]
   )
 
-  const releaseAll = useCallback((): void => {
-    if (pointersRef.current.size > 0 || pressedKeysRef.current.size > 0) {
-      send({ kind: 'release-all' })
-    }
-    pointersRef.current.clear()
-    pressedKeysRef.current.clear()
-    modeRef.current = 'none'
-    if (moveRafRef.current !== 0) cancelAnimationFrame(moveRafRef.current)
-    moveRafRef.current = 0
-    pendingMovesRef.current.clear()
-    lastInputViewRef.current = null
-    if (composingRef.current) discardCompositionRef.current = true
-  }, [send])
+  const releaseAll = useCallback(
+    (currentView = false): void => {
+      if (pointersRef.current.size > 0 || pressedKeysRef.current.size > 0) {
+        send({ kind: 'release-all' }, currentView)
+      }
+      pointersRef.current.clear()
+      pressedKeysRef.current.clear()
+      modeRef.current = 'none'
+      if (moveRafRef.current !== 0) cancelAnimationFrame(moveRafRef.current)
+      moveRafRef.current = 0
+      pendingMovesRef.current.clear()
+      lastInputViewRef.current = null
+      if (composingRef.current) discardCompositionRef.current = true
+    },
+    [send]
+  )
+
+  useEffect(() => onGenerationChange?.(() => releaseAll(true)), [onGenerationChange, releaseAll])
 
   // 坐标换算统一走 geometry（与布局同源）：屏幕矩形之外（外框/留白）不发 down，
   // 手势内出界由调用方夹取

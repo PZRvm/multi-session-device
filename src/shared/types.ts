@@ -498,6 +498,8 @@ export interface ScreenAckMessage {
   viewToken: string
   generation: number
   throughSeq: number
+  /** 接收端依赖断裂或解码拥堵：请求丢弃旧链，从新配置与关键帧重建。 */
+  resync?: true
 }
 
 /** 工具条物理键（main 白名单映射 Android keycode，成对 Down/Up） */

@@ -14,7 +14,12 @@ const configPacket = {
   data: new Uint8Array([1, 2, 3])
 }
 
-const dataPacket = (seq: number, keyframe = false, pts = seq * 33, size = 10): CachedPacket => ({
+const dataPacket = (
+  seq: number,
+  keyframe = false,
+  pts = seq * 33_000,
+  size = 10
+): CachedPacket => ({
   seq,
   type: 'data' as const,
   pts,
@@ -77,10 +82,10 @@ describe('GopCache', () => {
     cache.push(configPacket)
     cache.push(dataPacket(1, true, 0))
     for (let seq = 2; seq <= 50; seq += 1) cache.push(dataPacket(seq, false, 0))
-    cache.push(dataPacket(51, false, 2_000)) // PTS 跨度超限 → 清链
-    cache.push(dataPacket(52, false, 2_033)) // 裸 delta：丢弃
+    cache.push(dataPacket(51, false, 2_000_000)) // 2s（微秒）跨度超限 → 清链
+    cache.push(dataPacket(52, false, 2_033_000)) // 裸 delta：丢弃
     expect(cache.snapshot().chain).toHaveLength(0)
-    cache.push(dataPacket(53, true, 2_066)) // 新关键帧：重建链
+    cache.push(dataPacket(53, true, 2_066_000)) // 新关键帧：重建链
     expect(cache.snapshot().chain.map((packet) => packet.seq)).toEqual([53])
   })
 
@@ -92,7 +97,19 @@ describe('GopCache', () => {
     for (let seq = 2; seq <= 50; seq += 1) cache.push(dataPacket(seq, false, 0))
     expect(cache.snapshot().chain).toHaveLength(50)
     // PTS 跨度超限 → 清链
-    cache.push(dataPacket(51, false, 2_000))
+    cache.push(dataPacket(51, false, 2_000_000))
     expect(cache.snapshot().chain).toHaveLength(0)
+  })
+
+  it('真实微秒 PTS：33ms 帧间隔不清链，恰好 1.5s 仍可回放，超过才清链', () => {
+    const cache = new GopCache()
+    cache.push(configPacket)
+    cache.push(dataPacket(1, true, 5_000_000))
+    cache.push(dataPacket(2, false, 5_033_000))
+    expect(buildReplay(cache)?.map((packet) => packet.seq)).toEqual([0, 1, 2])
+    cache.push(dataPacket(3, false, 6_500_000))
+    expect(buildReplay(cache)?.map((packet) => packet.seq)).toEqual([0, 1, 2, 3])
+    cache.push(dataPacket(4, false, 6_500_001))
+    expect(buildReplay(cache)).toBeNull()
   })
 })

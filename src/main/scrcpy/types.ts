@@ -49,6 +49,12 @@ export interface StreamSession {
   /** 重同步时缓存无关键帧的连续次数（≥2 才升级 resetVideo） */
   nullReplayStalls: number
   lastAckAt: number
+  recovery: {
+    timer: ReturnType<typeof setTimeout> | null
+    viewToken: string
+    generation: number
+    attempts: number
+  } | null
   /** 按下指针（兜底释放） */
   pressedPointers: Set<number>
   /** 已接受的按下键（暂停前由 main 释放） */

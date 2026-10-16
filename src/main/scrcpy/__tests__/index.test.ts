@@ -9,6 +9,7 @@ import type { ScrcpyMediaStreamPacket } from '@yume-chan/scrcpy'
 import type { ScreenInput, ScreenPacketMessage, ScreenStateMessage } from '@shared/types'
 import { createScrcpyManager, MAX_UNACKED_PACKETS } from '../index'
 import type { Transport, TransportDeps } from '../transport'
+import { SafeControlMessageWriter } from '../controlWriter'
 
 class FakeSocket extends EventEmitter {
   written: Buffer[] = []
@@ -231,6 +232,200 @@ describe('ScrcpyManager（fake transport）', () => {
     })
     await manager.destroyAll()
   })
+
+  it('renderer 请求重同步：合法视图立即丢弃可回放链并重建；旧归属/伪造标志忽略，等待期间去重', async () => {
+    const { manager, transportOf } = await importManager()
+    try {
+      const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+      await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+      await flush()
+      const transport = transportOf('emulator-5554')
+      transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+      transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+      await flush()
+      const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+      const ack = await handlerFor(IPC_CHANNELS.screenAck)
+      await activate({}, { id: 'd1', viewToken: 'active' })
+      const control = transport.controlSocket as unknown as FakeSocket
+      const before = control.written.length
+      const request = { viewToken: 'active', generation: 1, throughSeq: 1, resync: true }
+      await ack({}, { ...request, viewToken: 'old' })
+      await ack({}, { ...request, generation: 0 })
+      await ack({}, { ...request, throughSeq: 1000 })
+      for (const throughSeq of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2]) {
+        await ack({}, { ...request, throughSeq })
+      }
+      await ack({}, { ...request, resync: 'yes' })
+      expect(control.written).toHaveLength(before)
+      await ack({}, request)
+      await ack({}, request)
+      await flush()
+      expect(control.written).toHaveLength(before + 1)
+      const sent = collect().packets.length
+      transport.__push({ type: 'data', pts: 33_000n, keyframe: false, data: new Uint8Array(10) })
+      await flush()
+      expect(collect().packets).toHaveLength(sent)
+      transport.__push({ type: 'configuration', data: new Uint8Array([2]) })
+      transport.__push({ type: 'data', pts: 66_000n, keyframe: true, data: new Uint8Array(10) })
+      await flush()
+      expect(collect().packets.at(-1)).toMatchObject({ generation: 2, keyframe: true })
+    } finally {
+      await manager.destroyAll()
+    }
+  })
+
+  it.each(['silent', 'write-failed'] as const)(
+    '恢复无视频包（%s）：独立重试 3 次后报错，用户重试保留活动视图',
+    async (failure) => {
+      const reset = vi.spyOn(SafeControlMessageWriter.prototype, 'resetVideo')
+      const { manager, transportOf } = await importManager()
+      const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+      try {
+        await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+        await flush()
+        const transport = transportOf('emulator-5554')
+        transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+        transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+        await flush()
+        const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+        const ack = await handlerFor(IPC_CHANNELS.screenAck)
+        const retry = await handlerFor(IPC_CHANNELS.screenRetry)
+        await activate({}, { id: 'd1', viewToken: 'active' })
+        const control = transport.controlSocket as unknown as FakeSocket
+        if (failure === 'write-failed')
+          control.write = (_chunk, callback) => {
+            callback?.(new Error('write failed'))
+            return false
+          }
+        vi.useFakeTimers()
+        await ack({}, { viewToken: 'active', generation: 1, throughSeq: 1, resync: true })
+        await vi.advanceTimersByTimeAsync(9_000)
+        expect(reset).toHaveBeenCalledTimes(3)
+        expect(collect().states.at(-1)).toMatchObject({ status: 'error', viewToken: 'active' })
+        expect(collect().states.at(-1)?.error).toMatch(/恢复|recovery/i)
+        transport.__push({ type: 'configuration', data: new Uint8Array([2]) })
+        transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+        await vi.advanceTimersByTimeAsync(0)
+        expect(collect().states.at(-1)?.status).toBe('error')
+        expect(collect().packets.at(-1)?.generation).toBe(1)
+        await vi.advanceTimersByTimeAsync(20_000)
+        expect(reset).toHaveBeenCalledTimes(3)
+        expect(vi.getTimerCount()).toBe(0)
+        vi.useRealTimers()
+        // 错误会话保留重试入口；重建仍绑定当前视图，不能等用户切走切回。
+        await retry({}, { id: 'd1', runId: 'r1' })
+        await flush()
+        const replacement = transportOf('emulator-5554')
+        expect(replacement).not.toBe(transport)
+        replacement.__push({ type: 'configuration', data: new Uint8Array([2]) })
+        replacement.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+        await flush()
+        expect(manager.activeDeviceId()).toBe('d1')
+        expect(collect().packets.at(-1)).toMatchObject({ viewToken: 'active', keyframe: true })
+      } finally {
+        reset.mockRestore()
+        vi.useRealTimers()
+        await manager.destroyAll()
+      }
+    }
+  )
+
+  it.each(['switch', 'deactivate'] as const)(
+    '重试清理期间 %s：旧会话重建不覆盖用户的新归属',
+    async (action) => {
+      const { manager, transportOf } = await importManager()
+      const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+      let finishTeardown: (() => void) | undefined
+      try {
+        await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+        await manager.ensureSession({ id: 'd2', runId: 'r2', serial: 'emulator-5556' })
+        await flush()
+        for (const serial of ['emulator-5554', 'emulator-5556']) {
+          const transport = transportOf(serial)
+          transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+          transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+        }
+        await flush()
+        const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+        const retry = await handlerFor(IPC_CHANNELS.screenRetry)
+        await activate({}, { id: 'd1', viewToken: 'old' })
+        const old = transportOf('emulator-5554')
+        const teardown = old.teardown
+        old.teardown = async () => {
+          await new Promise<void>((resolve) => {
+            finishTeardown = resolve
+          })
+          await teardown()
+        }
+        const retrying = retry({}, { id: 'd1', runId: 'r1' })
+        expect(finishTeardown).toBeDefined()
+        const nextId = action === 'switch' ? 'd2' : null
+        await activate({}, { id: nextId, viewToken: 'next' })
+        finishTeardown!()
+        await retrying
+        await flush()
+        const replacement = transportOf('emulator-5554')
+        replacement.__push({ type: 'configuration', data: new Uint8Array([2]) })
+        replacement.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+        await flush()
+        expect(manager.activeDeviceId()).toBe(nextId)
+        expect(
+          collect().packets.some((packet) => packet.deviceId === 'd1' && packet.data[0] === 2)
+        ).toBe(false)
+      } finally {
+        finishTeardown?.()
+        await manager.destroyAll()
+      }
+    }
+  )
+
+  it.each(['configuration', 'view-change', 'switch', 'destroy'] as const)(
+    '恢复计时器在 %s 后取消，不影响后续视图/会话',
+    async (stop) => {
+      const { manager, transportOf } = await importManager()
+      const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+      try {
+        await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+        await flush()
+        const transport = transportOf('emulator-5554')
+        transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+        transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+        await flush()
+        const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+        const ack = await handlerFor(IPC_CHANNELS.screenAck)
+        if (stop === 'switch') {
+          await manager.ensureSession({ id: 'd2', runId: 'r2', serial: 'emulator-5556' })
+          await flush()
+          const second = transportOf('emulator-5556')
+          second.__push({ type: 'configuration', data: new Uint8Array([1]) })
+          second.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+          await flush()
+        }
+        await activate({}, { id: 'd1', viewToken: 'old' })
+        const control = transport.controlSocket as unknown as FakeSocket
+        const before = control.written.length
+        vi.useFakeTimers()
+        await ack({}, { viewToken: 'old', generation: 1, throughSeq: 1, resync: true })
+        expect(vi.getTimerCount()).toBe(1)
+        if (stop === 'configuration') {
+          transport.__push({ type: 'configuration', data: new Uint8Array([2]) })
+          transport.__push({ type: 'data', pts: 33_000n, keyframe: true, data: new Uint8Array(10) })
+          await vi.advanceTimersByTimeAsync(0)
+        } else if (stop === 'view-change') {
+          await activate({}, { id: null, viewToken: 'old' })
+        } else if (stop === 'switch') {
+          await activate({}, { id: 'd2', viewToken: 'second' })
+        } else await manager.destroyAll()
+        expect(vi.getTimerCount()).toBe(0)
+        await vi.advanceTimersByTimeAsync(12_000)
+        expect(control.written.length).toBe(before + 1)
+        expect(collect().states.some((state) => state.status === 'error')).toBe(false)
+      } finally {
+        vi.useRealTimers()
+        await manager.destroyAll()
+      }
+    }
+  )
 
   it('输入守卫：未激活拒绝；归属过期与尺寸不符拒绝', async () => {
     const { manager } = await importManager()
@@ -466,6 +661,10 @@ describe('ScrcpyManager（fake transport）', () => {
           collect().states.some((state) => state.deviceId === id && state.status === 'ready')
         ).toBe(true)
       })
+      const transport = harness.transportOf(serial)
+      transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+      transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+      await flush()
       const activate = await handlerFor(IPC_CHANNELS.screenActivate)
       const ready = (await activate({}, { id, viewToken: `${id}-view` })) as ScreenStateMessage
       const input = await handlerFor(IPC_CHANNELS.screenInput)
@@ -752,6 +951,7 @@ describe('ScrcpyManager（fake transport）', () => {
 
 describe('息屏唤醒冻结回归（2026-10-15 真机 Wi-Fi 投屏调查）', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     mocks.windowRef.current = {
       isDestroyed: () => false,
       webContents: { send: vi.fn() }
@@ -772,6 +972,110 @@ describe('息屏唤醒冻结回归（2026-10-15 真机 Wi-Fi 投屏调查）', (
         .map(([, payload]) => payload as ScreenPacketMessage)
     }
   }
+  it.each(['packets', 'bytes'] as const)(
+    '解锁首滑超 %s 预算且无回放：立即 resetVideo，不等 3s；新配置恢复连续视频',
+    async (budget) => {
+      const { manager, transportOf } = await importManager()
+      try {
+        const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+        const ack = await handlerFor(IPC_CHANNELS.screenAck)
+        await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+        await new Promise<void>((resolve) => setImmediate(resolve))
+        await activate({}, { id: 'd1', viewToken: 'unlock' })
+        const transport = transportOf('emulator-5554')
+        const control = transport.controlSocket as unknown as FakeSocket
+        const push = transport.__push
+        const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+        push({ type: 'configuration', data: new Uint8Array([1]) })
+        push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+        await flush()
+        await ack({}, { viewToken: 'unlock', generation: 1, throughSeq: 1 })
+        const resetsBefore = control.written.length
+        const count = budget === 'packets' ? MAX_UNACKED_PACKETS + 1 : 1
+        for (let i = 0; i < count; i++) {
+          push({
+            type: 'data',
+            pts: 10_000_000n + BigInt(i * 33_000),
+            keyframe: false,
+            data: new Uint8Array(budget === 'bytes' ? 2 * 1024 * 1024 + 1 : 10)
+          })
+        }
+        await flush()
+        expect(control.written.length).toBe(resetsBefore + 1)
+
+        // 已在等新配置：迟到 ACK 与持续增量都不能引发逐包重置风暴。
+        const lastSent = collect().packets.at(-1)!
+        await ack({}, { viewToken: 'unlock', generation: 1, throughSeq: lastSent.seq })
+        const sentBefore = collect().packets.length
+        for (let i = 0; i < 30; i++) {
+          push({
+            type: 'data',
+            pts: 11_000_000n + BigInt(i * 33_000),
+            keyframe: false,
+            data: new Uint8Array(10)
+          })
+        }
+        await flush()
+        expect(collect().packets).toHaveLength(sentBefore)
+        expect(control.written.length).toBe(resetsBefore + 1)
+
+        push({ type: 'configuration', data: new Uint8Array([2]) })
+        push({ type: 'data', pts: 12_000_000n, keyframe: true, data: new Uint8Array(10) })
+        push({ type: 'data', pts: 12_033_000n, keyframe: false, data: new Uint8Array(10) })
+        await flush()
+        const recovered = collect().packets.slice(sentBefore)
+        expect(recovered.map((packet) => packet.type)).toEqual(['configuration', 'data', 'data'])
+        expect(recovered.map((packet) => packet.generation)).toEqual([2, 2, 2])
+        expect(recovered.map((packet) => packet.seq)).toEqual([
+          recovered[0].seq,
+          recovered[0].seq + 1,
+          recovered[0].seq + 2
+        ])
+      } finally {
+        await manager.destroyAll()
+      }
+    }
+  )
+
+  it('静置尾包不足 8 个 ACK 批次：长空档后的首帧触发停滞时也立即恢复', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    const { manager, transportOf } = await importManager()
+    try {
+      const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+      const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+      await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+      await flush()
+      await activate({}, { id: 'd1', viewToken: 'idle' })
+      const transport = transportOf('emulator-5554')
+      const control = transport.controlSocket as unknown as FakeSocket
+      transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+      transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+      await flush()
+      const resetsBefore = control.written.length
+      // 只有一个尾包，renderer 按 8 包批次 ACK，静态/息屏期间没有回执属正常情况。
+      clock.mockReturnValue(11_000)
+      transport.__push({
+        type: 'data',
+        pts: 10_000_000n,
+        keyframe: false,
+        data: new Uint8Array(10)
+      })
+      await flush()
+      expect(control.written.length).toBe(resetsBefore + 1)
+      transport.__push({ type: 'configuration', data: new Uint8Array([2]) })
+      transport.__push({ type: 'data', pts: 10_033_000n, keyframe: true, data: new Uint8Array(10) })
+      await flush()
+      expect(collect().packets.at(-1)).toMatchObject({
+        type: 'data',
+        keyframe: true,
+        generation: 2
+      })
+    } finally {
+      clock.mockRestore()
+      await manager.destroyAll()
+    }
+  })
+
   it('PTS 跨度清链 + 突发超预算：waitingResync 悬空后看门狗必须自救（resetVideo）', async () => {
     const { manager, transportOf } = await importManager()
     const ctl = (): number =>
@@ -846,7 +1150,7 @@ describe('息屏唤醒冻结回归（2026-10-15 真机 Wi-Fi 投屏调查）', (
     })
   }, 20_000)
 
-  it('P3-7：自救节拍在 fake timers 下确定性收敛（400ms 推帧 + 3s 看门狗两拍）', async () => {
+  it('P3-7：独立恢复节拍在 fake timers 下确定性收敛，持续推帧不重复请求', async () => {
     const { manager, transportOf } = await importManager()
     const ctl = (): number =>
       (transportOf('emulator-5554').controlSocket as unknown as FakeSocket).written.length
@@ -870,26 +1174,27 @@ describe('息屏唤醒冻结回归（2026-10-15 真机 Wi-Fi 投屏调查）', (
     })
     await ack({ sender: {} }, { viewToken: 'vt2', generation: 1, throughSeq: 4 })
 
-    // 冻结条件与上一测同构：PTS 跨度清链 + 超预算突发
-    for (let i = 0; i < 20; i++) {
-      push({
-        type: 'data',
-        pts: 10_000_000n + BigInt(33_000 * i),
-        keyframe: false,
-        data: new Uint8Array(10)
-      })
-    }
-    await vi.waitFor(() => {
-      expect(collect().packets.length).toBeGreaterThan(5)
-    })
-    await ack(
-      { sender: {} },
-      { viewToken: 'vt2', generation: 1, throughSeq: collect().packets.at(-1)!.seq }
-    )
-
-    // fake timers：自救节拍（2×ACK_STALL_MS）确定性推进，毫秒级墙钟完成
+    // 在创建恢复计时器前切到 fake clock，避免推进 fake 时间却等待真实定时器。
     vi.useFakeTimers()
     try {
+      // 冻结条件与上一测同构：PTS 跨度清链 + 超预算突发
+      for (let i = 0; i < 20; i++) {
+        push({
+          type: 'data',
+          pts: 10_000_000n + BigInt(33_000 * i),
+          keyframe: false,
+          data: new Uint8Array(10)
+        })
+      }
+      await vi.waitFor(() => {
+        expect(collect().packets.length).toBeGreaterThan(5)
+      })
+      await ack(
+        { sender: {} },
+        { viewToken: 'vt2', generation: 1, throughSeq: collect().packets.at(-1)!.seq }
+      )
+
+      // 恢复节拍由独立定时器驱动，持续视频包不额外叠加重试。
       const deadline = Date.now() + 10_000
       const ctlBefore = ctl()
       let resetSeen = false
@@ -909,6 +1214,7 @@ describe('息屏唤醒冻结回归（2026-10-15 真机 Wi-Fi 投屏调查）', (
       }
       expect(resetSeen).toBe(true)
     } finally {
+      await manager.destroyAll()
       vi.useRealTimers()
     }
   })

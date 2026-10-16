@@ -149,6 +149,7 @@ const zhCN = {
   screenNoActiveView: 'screen: 当前没有活动视图',
   screenUnregisteredWindow: 'screen: 未登记的窗口',
   screenSessionNotReady: 'screen: 活动会话未就绪',
+  screenRecoveryTimeout: '投屏恢复超时，请点击重试重新连接',
   inputControlUnavailable: 'screen:input: 控制通道不可用',
   inputSizeMismatch: 'screen:input: 画面尺寸与当前代次不符（等待旋转后的新尺寸）',
   inputStaleDuringRotation: 'screen:input: 归属过期（旋转锁定期间视图/代次已变化）',
@@ -608,6 +609,7 @@ const zhTW: ErrorsCopy = {
   screenNoActiveView: 'screen: 目前沒有活動視圖',
   screenUnregisteredWindow: 'screen: 未登記的視窗',
   screenSessionNotReady: 'screen: 活動工作階段未就緒',
+  screenRecoveryTimeout: '投影恢復逾時，請點擊重試重新連線',
   inputControlUnavailable: 'screen:input: 控制通道不可用',
   inputSizeMismatch: 'screen:input: 畫面尺寸與目前代次不符（等待旋轉後的新尺寸）',
   inputStaleDuringRotation: 'screen:input: 歸屬過期（旋轉鎖定期間視圖/代次已變化）',
@@ -1072,6 +1074,7 @@ const enUS: ErrorsCopy = {
   screenNoActiveView: 'screen: no active view',
   screenUnregisteredWindow: 'screen: window not registered',
   screenSessionNotReady: 'screen: active session not ready',
+  screenRecoveryTimeout: 'Screen recovery timed out. Retry to reconnect.',
   inputControlUnavailable: 'screen:input: control channel unavailable',
   inputSizeMismatch:
     'screen:input: screen size does not match the current generation (waiting for the post-rotation size)',

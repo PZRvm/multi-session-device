@@ -3,6 +3,7 @@ import type { ScrcpyMediaStreamPacket } from '@yume-chan/scrcpy'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import { GopCache, buildReplay, type CachedPacket } from './cache'
 import { destroySession } from './lifecycle'
+import { cancelRecovery, startRecovery } from './recovery'
 import {
   MAX_UNACKED_BYTES,
   MAX_UNACKED_PACKETS,
@@ -35,8 +36,8 @@ export const sendPacket = (
 
 /**
  * 重同步突发：配置 + 当前完整链；renderer 以配置包为同步点，之后要求 seq 连续。
- * immediate（激活/切回）：缓存没有关键帧就立刻 resetVideo——新视图正等首帧；
- * stall（渲染端已有画面）：先被动等关键帧（≤1 个关键帧间隔），连续两轮未恢复才 resetVideo。
+ * 激活/切回或实时发送已暂停时，无回放链就立刻 resetVideo，不能依赖设备定期出关键帧。
+ * 未暂停的被动同步保留两轮退让；暂停后的独立计时器负责有界重试。
  */
 export const sendResync = (
   ctx: ManagerContext,
@@ -47,18 +48,19 @@ export const sendResync = (
   if (!viewToken) return
   const replay = buildReplay(session.cache)
   if (!replay) {
-    if (immediate) {
-      void session.writer?.resetVideo().catch(() => undefined)
+    if (immediate || session.waitingResync) {
+      startRecovery(ctx, session)
       return
     }
     session.nullReplayStalls += 1
     if (session.nullReplayStalls >= 2) {
       session.nullReplayStalls = 0
-      void session.writer?.resetVideo().catch(() => undefined)
+      startRecovery(ctx, session)
     }
     return
   }
   session.nullReplayStalls = 0
+  cancelRecovery(session)
   session.outbox = []
   for (const packet of replay) sendPacket(ctx, session, packet, viewToken)
   session.waitingResync = false
@@ -77,7 +79,9 @@ export const handleMediaPacket = (
   session: StreamSession,
   packet: ScrcpyMediaStreamPacket
 ): void => {
+  if (session.state !== 'ready') return // 超时错误态保留重试入口，不再接纳迟到配置/视频
   if (packet.type === 'configuration') {
+    cancelRecovery(session)
     // encoder 配置/尺寸重建：递增 generation、清旧 GOP 与发送窗
     session.generation += 1
     session.cache = new GopCache()

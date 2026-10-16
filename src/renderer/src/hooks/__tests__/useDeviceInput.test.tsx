@@ -41,7 +41,7 @@ interface InputHarness {
   changeGeneration: () => void
 }
 
-const setup = (): InputHarness => {
+const setup = (observeGeneration = false): InputHarness => {
   const container = document.createElement('div')
   const proxy = document.createElement('input')
   container.append(proxy)
@@ -58,6 +58,13 @@ const setup = (): InputHarness => {
   const inputProxyRef = { current: proxy }
   const layoutRef = { current: layout }
   const onInputError = vi.fn()
+  let generationListener: (() => void) | undefined
+  const onGenerationChange = (listener: () => void): (() => void) => {
+    generationListener = listener
+    return () => {
+      generationListener = undefined
+    }
+  }
   const { rerender } = renderHook(
     ({ enabled }) =>
       useDeviceInput({
@@ -66,6 +73,7 @@ const setup = (): InputHarness => {
         screenRef,
         layoutRef,
         enabled,
+        ...(observeGeneration ? { onGenerationChange } : {}),
         onInputError
       }),
     { initialProps: { enabled: true } }
@@ -93,10 +101,62 @@ const setup = (): InputHarness => {
     flushFrames,
     setEnabled: (enabled: boolean) => rerender({ enabled }),
     changeGeneration: () => {
-      screenRef.current.envelope.generation += 1
+      act(() => {
+        screenRef.current.envelope.generation += 1
+        generationListener?.()
+      })
     }
   }
 }
+
+it('自动重同步释放新代次并清旧 Move/Up，恢复后只接受新 Down', () => {
+  const { pointer, flushFrames, changeGeneration } = setup(true)
+  pointer('pointerdown')
+  pointer('pointermove')
+  expect(frames.size).toBe(1)
+  changeGeneration()
+  expect(frames.size).toBe(0)
+  flushFrames()
+  pointer('pointermove')
+  pointer('pointerup')
+  expect(
+    input.mock.calls.map(([request]) =>
+      request.input.kind === 'touch' ? request.input.action : request.input.kind
+    )
+  ).toEqual(['down', 'release-all'])
+  expect(input.mock.calls[1][0].generation).toBe(2)
+  pointer('pointerdown')
+  pointer('pointerup')
+  expect(
+    input.mock.calls
+      .slice(2)
+      .map(([request]) =>
+        request.input.kind === 'touch' ? request.input.action : request.input.kind
+      )
+  ).toEqual(['down', 'up'])
+})
+
+it('自动重同步清旧按键与跨代次 IME，新按键和新组合仍可发送', () => {
+  const { proxy, changeGeneration } = setup(true)
+  fireEvent.keyDown(proxy, { key: 'Enter' })
+  fireEvent.compositionStart(proxy)
+  changeGeneration()
+  fireEvent.keyUp(proxy, { key: 'Enter' })
+  fireEvent.compositionEnd(proxy, { data: '旧组合' })
+  expect(input.mock.calls.map(([request]) => request.input.kind)).toEqual([
+    'keycode',
+    'release-all'
+  ])
+  fireEvent.keyDown(proxy, { key: 'Enter' })
+  fireEvent.keyUp(proxy, { key: 'Enter' })
+  fireEvent.compositionStart(proxy)
+  fireEvent.compositionEnd(proxy, { data: '新组合' })
+  expect(input.mock.calls.slice(2).map(([request]) => request.input)).toEqual([
+    { kind: 'keycode', key: 'enter', down: true },
+    { kind: 'keycode', key: 'enter', down: false },
+    { kind: 'text', text: '新组合', ime: true }
+  ])
+})
 
 it('禁用期间的新触摸、按键与文本不发送，恢复后不补发，仍接受新操作', () => {
   const { proxy, pointer, setEnabled, flushFrames } = setup()

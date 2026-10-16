@@ -267,17 +267,9 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
     screenRef,
     layoutRef,
     enabled: ready && !rotating && !stopping,
+    onGenerationChange,
     onInputError: showInputError
   })
-
-  // 旋转：main 先释放输入；renderer 释放本地手势并等新尺寸
-  useEffect(
-    () =>
-      onGenerationChange(() => {
-        void sendInput({ kind: 'release-all' })
-      }),
-    [onGenerationChange, sendInput]
-  )
 
   // dev 探针：CDP 真测读帧计数与状态（生产构建剔除）
   useEffect(() => {

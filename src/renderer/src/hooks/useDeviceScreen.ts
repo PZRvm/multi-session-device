@@ -18,6 +18,8 @@ export interface ScreenViewRef {
 }
 
 const ACK_INTERVAL_PACKETS = 8
+/** 首批解码启动与回放允许两个 ACK 批次，超过后显式请求新链。 */
+const MAX_DECODE_QUEUE_PACKETS = ACK_INTERVAL_PACKETS * 2
 
 /**
  * 连接目标键：${id}:${runId}。runId 缺席（真机适配器——会话代次在 main 侧持有，
@@ -58,7 +60,8 @@ export function useDeviceScreen(device: ScreenTarget | null): {
   const viewTokenRef = useRef(crypto.randomUUID())
   const paintsRef = useRef(0)
   const decoderRef = useRef<StreamDecoder | null>(null)
-  const expectedSeqRef = useRef(0)
+  // 配置包可能来自很早的缓存；null 表示等待回放首个关键帧建立序号起点。
+  const expectedSeqRef = useRef<number | null>(0)
   const resyncNeededRef = useRef(false)
   const ackCountRef = useRef(0)
   const generationRef = useRef(0)
@@ -113,6 +116,19 @@ export function useDeviceScreen(device: ScreenTarget | null): {
       }
     }
 
+    const requestResync = (message: ScreenPacketMessage): void => {
+      resyncNeededRef.current = true
+      // 不依赖下一批 ACK 或主进程超时：回放未确认时主进程可能尚未重新武装。
+      void window.api.screen
+        .ack({
+          viewToken: message.viewToken,
+          generation: message.generation,
+          throughSeq: message.seq,
+          resync: true
+        })
+        .catch(() => undefined)
+    }
+
     const onPacket = (message: ScreenPacketMessage): void => {
       if (message.viewToken !== viewToken) return
       const decoderInstance = decoderRef.current
@@ -120,8 +136,9 @@ export function useDeviceScreen(device: ScreenTarget | null): {
 
       if (message.type === 'configuration') {
         // 配置包 = 同步点：旋转/重同步都从这里重新开始
-        expectedSeqRef.current = message.seq + 1
+        expectedSeqRef.current = null
         resyncNeededRef.current = false
+        ackCountRef.current = 0
         // 归属信封随包同步：generation 变化（旋转/重配置）后输入守卫才不会误判过期
         const view = screenRef.current
         if (
@@ -133,10 +150,15 @@ export function useDeviceScreen(device: ScreenTarget | null): {
           view.envelope.streamId = message.streamId
           view.envelope.runId = message.runId
         }
+        // 同代次回放也重建解码依赖，不能把上次的积压带入新回放。
+        decoderInstance.reset()
         if (message.generation !== generationRef.current) {
+          const hadGeneration = generationRef.current !== 0
           generationRef.current = message.generation
-          decoderInstance.reset()
-          for (const listener of generationListenersRef.current) listener()
+          // 首次配置时 activate 的格式响应可能尚未到，且没有旧手势需要释放。
+          if (hadGeneration) {
+            for (const listener of generationListenersRef.current) listener()
+          }
         }
         decoderInstance.handlePacket({
           type: 'configuration',
@@ -145,14 +167,17 @@ export function useDeviceScreen(device: ScreenTarget | null): {
         })
         return
       }
-      if (resyncNeededRef.current || message.seq !== expectedSeqRef.current) {
+      if (resyncNeededRef.current) return
+      if (expectedSeqRef.current === null) {
+        if (message.keyframe !== true) return // 裸 delta 不能作为依赖链起点
+      } else if (message.seq !== expectedSeqRef.current) {
         // 依赖段出现空洞：丢弃直到下一个配置包（main 的重同步突发会带配置来）
-        resyncNeededRef.current = true
+        requestResync(message)
         return
       }
-      if (decoderInstance.decodeQueueSize > 4) {
-        // 解码拥堵：不无限积压；与空洞同策略，等重同步突发
-        resyncNeededRef.current = true
+      if (decoderInstance.decodeQueueSize > MAX_DECODE_QUEUE_PACKETS) {
+        // 解码拥堵：停止旧链，明确请求编码器重建，避免与 main 互等 ACK。
+        requestResync(message)
         return
       }
       expectedSeqRef.current = message.seq + 1

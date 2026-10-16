@@ -68,7 +68,8 @@ export class GopCache {
     const first = this.#chain[0]
     const last = this.#chain.at(-1)
     if (!first || !last || first.pts === undefined || last.pts === undefined) return 0
-    return Math.max(0, last.pts - first.pts)
+    // scrcpy PTS 保持微秒传给 WebCodecs，缓存预算在这里换算为毫秒。
+    return Math.max(0, last.pts - first.pts) / 1_000
   }
 
   clearChain(): void {
