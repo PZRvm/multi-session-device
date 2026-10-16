@@ -136,7 +136,7 @@ export async function establishTransport(deps: TransportDeps): Promise<Transport
     scid,
     audio: false,
     tunnelForward: true,
-    // autosync 开启才有剪贴板 ACK 的序列化器；设备侧剪贴板推送由读侧消费丢弃，不同步宿主
+    // autosync 开启才有剪贴板 ACK 的序列化器；设备侧推送交给主进程的当前设备同步协调器
     clipboardAutosync: true,
     // 关键帧间隔钉 1s：后台恢复/重同步的回放链不超过 1s PTS 跨度（缓存预算按此设计）
     videoCodecOptions: new ScrcpyCodecOptions({ iFrameInterval: 1 })

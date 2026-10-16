@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { app } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
+import { createSessionClipboardSync } from './clipboardBridge'
 import { SCRCPY_SERVER_VERSION } from './transport'
 import type { ManagerContext, ScrcpyManagerDeps, StreamSession } from './types'
 
@@ -10,6 +11,7 @@ export const createManagerContext = (deps: ScrcpyManagerDeps): ManagerContext =>
     deps,
     sessions: new Map<string, StreamSession>(),
     active: null,
+    clipboardSync: createSessionClipboardSync(() => ctx),
     serverPathFor: () =>
       app.isPackaged
         ? join(process.resourcesPath, `scrcpy-server-v${SCRCPY_SERVER_VERSION}`)

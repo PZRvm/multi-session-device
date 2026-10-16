@@ -530,7 +530,7 @@ export type ScreenInput =
   | { kind: 'button'; button: ScreenToolbarButton }
   | { kind: 'keycode'; key: ScreenKeycodeName; down: boolean }
   /** 普通文本（injectText 分段）；ime=true 为 IME 组合提交（走设备剪贴板+粘贴） */
-  | { kind: 'text'; text: string; ime: boolean }
+  | { kind: 'text'; text: string; ime: boolean; source?: 'paste' | 'composition' }
   | { kind: 'rotate' }
   | { kind: 'release-all' }
 

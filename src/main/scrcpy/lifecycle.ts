@@ -8,6 +8,9 @@ export const cleanupSession = async (
 ): Promise<void> => {
   // 幂等清理：撤销活动归属 → abort 循环 → 关 writer/socket → 结束 server → 删 forward
   session.abort.abort()
+  if (ctx.active?.deviceId === session.deviceId) ctx.clipboardSync.rebind(null)
+  session.clipboardQueue?.dispose()
+  session.clipboardQueue = null
   cancelRecovery(session)
   if (!preserveActive && ctx.active?.deviceId === session.deviceId) ctx.active = null
   try {
@@ -16,8 +19,6 @@ export const cleanupSession = async (
     // 已断
   }
   session.writer = null
-  for (const resolve of session.clipboardAcks.values()) resolve(false)
-  session.clipboardAcks.clear()
   try {
     await session.transport?.teardown()
   } catch {
@@ -40,6 +41,7 @@ export const destroySession = async (
 }
 
 export const destroyAll = async (ctx: ManagerContext): Promise<void> => {
+  ctx.clipboardSync.dispose()
   await Promise.allSettled(
     [...ctx.sessions.keys()].map((deviceId) => destroySession(ctx, deviceId))
   )

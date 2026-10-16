@@ -192,6 +192,26 @@ describe('validateInputRequest（renderer payload 不可信）', () => {
     input: { kind: 'touch', action: 'down', pointerId: 0, x: 0.5, y: 0.5, pressure: 1 }
   }
 
+  it('text 来源只接受 ime=true 的 paste/composition，保留无来源旧载荷', () => {
+    for (const source of ['paste', 'composition']) {
+      expect(
+        validateInputRequest({ ...base, input: { kind: 'text', text: '中', ime: true, source } })
+      ).not.toBeNull()
+      expect(
+        validateInputRequest({ ...base, input: { kind: 'text', text: '中', ime: false, source } })
+      ).toBeNull()
+    }
+    expect(
+      validateInputRequest({
+        ...base,
+        input: { kind: 'text', text: '中', ime: true, source: 'sync' }
+      })
+    ).toBeNull()
+    expect(
+      validateInputRequest({ ...base, input: { kind: 'text', text: '中', ime: true } })
+    ).not.toBeNull()
+  })
+
   it('合法 touch 通过', () => {
     expect(validateInputRequest(base)).not.toBeNull()
   })

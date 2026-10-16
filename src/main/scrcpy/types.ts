@@ -3,6 +3,8 @@ import type { BrowserWindow, WebContents } from 'electron'
 import type { ScreenFormat, ScreenStateMessage } from '@shared/types'
 import type { CachedPacket, GopCache } from './cache'
 import type { runAdb } from './proc'
+import type { ClipboardQueue } from './clipboardQueue'
+import type { ClipboardSyncDeps, createClipboardSync } from './clipboardSync'
 import type { establishTransport, Transport } from './transport'
 
 // ---- 预算（设计值，超限走重同步而非积压）----
@@ -21,6 +23,8 @@ export interface ScrcpyManagerDeps {
   establish?: typeof establishTransport
   /** 手动旋转的 adb 命令接缝 */
   runAdb?: typeof runAdb
+  /** 宿主剪贴板接缝：测试不读写系统剪贴板。 */
+  clipboard?: Pick<ClipboardSyncDeps, 'readSnapshot' | 'writeText' | 'reportError'>
 }
 
 export type SessionState = 'connecting' | 'ready' | 'error' | 'closed'
@@ -62,8 +66,7 @@ export interface StreamSession {
   /** 方向锁定与旋转期间丢弃所有新输入 */
   rotating: boolean
   clipboardSequence: number
-  clipboardWrites: number
-  clipboardAcks: Map<number, (ok: boolean) => void>
+  clipboardQueue: ClipboardQueue | null
   /** 唯一清理 Promise（幂等） */
   cleanup: Promise<void> | null
 }
@@ -82,6 +85,7 @@ export interface ManagerContext {
   sessions: Map<string, StreamSession>
   /** 当前激活视图（screenActivate 写入；cleanupSession/destroyAll 清空） */
   active: ActiveView | null
+  clipboardSync: ReturnType<typeof createClipboardSync>
   serverPathFor: () => string
   mainWindowWebContents: () => WebContents | null
   viewTokenOf: (session: StreamSession) => string

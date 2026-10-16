@@ -356,7 +356,7 @@ export function useDeviceInput(params: DeviceInputParams): void {
       if (!enabledRef.current || composingRef.current) return
       const text = event.clipboardData?.getData('text/plain')
       if (!text) return
-      send({ kind: 'text', text, ime: true })
+      send({ kind: 'text', text, ime: true, source: 'paste' })
     }
 
     const onCompositionStart = (): void => {
@@ -369,7 +369,7 @@ export function useDeviceInput(params: DeviceInputParams): void {
       composingRef.current = false
       discardCompositionRef.current = false
       if (discard || !event.data) return
-      send({ kind: 'text', text: event.data, ime: true })
+      send({ kind: 'text', text: event.data, ime: true, source: 'composition' })
     }
 
     proxy.addEventListener('keydown', onKeyDown)

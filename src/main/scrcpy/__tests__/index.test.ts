@@ -49,6 +49,9 @@ interface Harness {
   manager: ReturnType<typeof createScrcpyManager>
   transportOf: (serial: string) => PushableTransport
   adbRun: ReturnType<typeof vi.fn>
+  setHost: (text: string | null) => void
+  writeHost: ReturnType<typeof vi.fn>
+  clipboardError: ReturnType<typeof vi.fn>
 }
 
 const importManager = async (): Promise<Harness> => {
@@ -94,7 +97,17 @@ const importManager = async (): Promise<Harness> => {
   })
 
   const adbRun = vi.fn(async () => ({ code: 0, stdout: '', stderr: '' }))
+  let hostText: string | null = null
+  const writeHost = vi.fn((text: string) => {
+    hostText = text
+  })
+  const clipboardError = vi.fn()
   const manager = createScrcpyManager({
+    clipboard: {
+      readSnapshot: () => ({ text: hostText, formats: hostText === null ? [] : ['text/plain'] }),
+      writeText: writeHost,
+      reportError: clipboardError
+    },
     adbPath: () => '/adb',
     toolEnv: () => ({}),
     getMainWindow: () => mocks.windowRef.current,
@@ -106,6 +119,11 @@ const importManager = async (): Promise<Harness> => {
   return {
     manager,
     adbRun,
+    writeHost,
+    clipboardError,
+    setHost: (text) => {
+      hostText = text
+    },
     transportOf: (serial: string) => {
       const transport = transportsBySerial.get(serial)
       if (!transport) throw new Error(`无 transport：${serial}`)
@@ -416,7 +434,7 @@ describe('ScrcpyManager（fake transport）', () => {
         } else if (stop === 'switch') {
           await activate({}, { id: 'd2', viewToken: 'second' })
         } else await manager.destroyAll()
-        expect(vi.getTimerCount()).toBe(0)
+        expect(vi.getTimerCount()).toBe(stop === 'switch' ? 1 : 0) // 第二视图只有剪贴板检测
         await vi.advanceTimersByTimeAsync(12_000)
         expect(control.written.length).toBe(before + 1)
         expect(collect().states.some((state) => state.status === 'error')).toBe(false)
@@ -767,7 +785,7 @@ describe('ScrcpyManager（fake transport）', () => {
       }
     })
 
-    it('剪贴板同步与 ACK 分片/粘连正确消费，不覆盖宿主剪贴板', async () => {
+    it('剪贴板同步与 ACK 分片/粘连正确消费，设备复制自动写入宿主', async () => {
       const harness = await importManager()
       try {
         const view = await openClipboardView(harness, 'd1', 'emulator-5554')
@@ -788,6 +806,7 @@ describe('ScrcpyManager（fake transport）', () => {
         await flush()
         expect(pending.settled).toHaveBeenCalledOnce()
         expect(await pending.result).toBeUndefined()
+        expect(harness.writeHost.mock.calls).toEqual([['设备剪贴板 😀'], ['second']])
         expect(collect().states.some((state) => state.status === 'error')).toBe(false)
       } finally {
         await harness.manager.destroyAll()
@@ -909,39 +928,57 @@ describe('ScrcpyManager（fake transport）', () => {
       }
     })
 
-    it('64 次无 ACK 已派发占满库等待预算，第 65 次拒绝；迟到 ACK 释放一个位置', async () => {
+    it('无 ACK 不积压第二次写：2s 降级，5s 故障关闭并拒绝队列', async () => {
       const harness = await importManager()
       try {
         const view = await openClipboardView(harness, 'd1', 'emulator-5554')
-        let firstSequence = 0n
-        for (let index = 0; index < 64; index += 1) {
-          const pending = observe(view.paste(`unacked-${index}`))
-          await flush()
-          if (index === 0) firstSequence = view.sequence()
-          await vi.advanceTimersByTimeAsync(2000)
-          expect(await pending.result).toBeUndefined()
-          expect(pending.settled).toHaveBeenCalledOnce()
-        }
-        const writesBefore = view.socket.written.filter((message) => message[0] === 9).length
-        expect(writesBefore).toBe(64)
-        const overBudget = observe(view.paste('over-budget'))
+        const first = observe(view.paste('unacked'))
         await flush()
-        expect(overBudget.settled).toHaveBeenCalledOnce()
-        const rejection = await overBudget.result
-        expect(rejection).toBeInstanceOf(Error)
-        expect((rejection as Error).message).toContain('剪贴板确认积压')
-        expect(view.socket.written.filter((message) => message[0] === 9)).toHaveLength(writesBefore)
-
-        view.socket.emit('data', ackMessage(firstSequence))
-        await flush()
-        const resumed = observe(view.paste('resumed'))
-        await flush()
-        expect(view.socket.written.filter((message) => message[0] === 9)).toHaveLength(65)
+        const second = observe(view.paste('queued'))
+        await vi.advanceTimersByTimeAsync(2000)
+        expect(await first.result).toBeUndefined()
+        expect(view.socket.written.filter((message) => message[0] === 9)).toHaveLength(1)
+        expect(second.settled).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(3000)
+        expect(await second.result).toBeInstanceOf(Error)
+        expect(harness.manager.activeDeviceId()).toBeNull()
+        expect(vi.getTimerCount()).toBe(0)
         view.socket.emit('data', ackMessage(view.sequence()))
         await flush()
-        expect(await resumed.result).toBeUndefined()
-        expect(resumed.settled).toHaveBeenCalledOnce()
-        expect(collect().states.some((state) => state.status === 'error')).toBe(false)
+        expect(view.socket.written.filter((message) => message[0] === 9)).toHaveLength(1)
+      } finally {
+        await harness.manager.destroyAll()
+      }
+    })
+
+    it('host 300ms 同步不粘贴，IME 保持 paste=true，旧排队输入切走失效', async () => {
+      const harness = await importManager()
+      try {
+        harness.setHost('initial')
+        const first = await openClipboardView(harness, 'd1', 'emulator-5554')
+        expect(first.socket.written.filter((message) => message[0] === 9)).toHaveLength(0)
+        harness.setHost('host 中文😀')
+        await vi.advanceTimersByTimeAsync(300)
+        const packet = first.socket.written.findLast((message) => message[0] === 9)!
+        expect(packet[9]).toBe(0)
+        expect(Buffer.from(packet.subarray(14)).toString()).toBe('host 中文😀')
+        const pending = observe(first.paste('queued IME'))
+        const second = await openClipboardView(harness, 'd2', 'emulator-5556')
+        first.socket.emit('data', ackMessage(first.sequence()))
+        await flush()
+        expect(await pending.result).toBeInstanceOf(Error)
+        expect(first.socket.written.filter((message) => message[0] === 9)).toHaveLength(1)
+        first.socket.emit('data', clipboardMessage('background'))
+        await flush()
+        expect(harness.writeHost).not.toHaveBeenCalled()
+        const ime = observe(second.paste('新组合'))
+        await flush()
+        expect(second.socket.written.findLast((message) => message[0] === 9)![9]).toBe(1)
+        second.socket.emit('data', clipboardMessage('新组合'))
+        second.socket.emit('data', ackMessage(second.sequence()))
+        await flush()
+        expect(await ime.result).toBeUndefined()
+        expect(harness.writeHost).not.toHaveBeenCalled()
       } finally {
         await harness.manager.destroyAll()
       }

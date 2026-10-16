@@ -257,7 +257,7 @@ describe('外部纯文本粘贴', () => {
         expect.objectContaining({
           deviceId: 'd1',
           viewToken: 'vt',
-          input: { kind: 'text', text, ime: true }
+          input: { kind: 'text', text, ime: true, source: 'paste' }
         })
       )
       expect(view.proxy.value).toBe('')
@@ -278,7 +278,9 @@ describe('外部纯文本粘贴', () => {
     expect(view.input).not.toHaveBeenCalled()
     paste(view.proxy, '恢复后的新粘贴')
     expect(view.input).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ input: { kind: 'text', text: '恢复后的新粘贴', ime: true } })
+      expect.objectContaining({
+        input: { kind: 'text', text: '恢复后的新粘贴', ime: true, source: 'paste' }
+      })
     )
   })
 
@@ -307,7 +309,7 @@ describe('外部纯文本粘贴', () => {
     await waitFor(() => expect(view.acceptedInput).toHaveBeenCalledTimes(2))
     expect(view.input.mock.calls.map(([request]) => request.input)).toEqual([
       { kind: 'text', text: 'a', ime: false },
-      { kind: 'text', text: '中文', ime: true }
+      { kind: 'text', text: '中文', ime: true, source: 'composition' }
     ])
     expect(view.input).toHaveBeenCalledTimes(2)
   })

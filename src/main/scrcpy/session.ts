@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { ScrcpyMediaStreamPacket } from '@yume-chan/scrcpy'
 import { msg } from '../locale'
 import { GopCache } from './cache'
+import { refreshClipboardBinding } from './clipboardBridge'
 import { startControlReader, wrapWriter } from './controlChannel'
 import { destroySession } from './lifecycle'
 import { handleMediaPacket, sendResync } from './media'
@@ -48,6 +49,7 @@ export const runSession = async (ctx: ManagerContext, session: StreamSession): P
       height: transport.videoSize.height
     }
     session.state = 'ready'
+    refreshClipboardBinding(ctx)
     ctx.sendState(session)
 
     const reader = transport.mediaStream.getReader()
@@ -121,8 +123,7 @@ export const ensureSession = async (
     pressedKeys: new Set(),
     rotating: false,
     clipboardSequence: 0,
-    clipboardWrites: 0,
-    clipboardAcks: new Map(),
+    clipboardQueue: null,
     cleanup: null
   }
   ctx.sessions.set(device.id, session)

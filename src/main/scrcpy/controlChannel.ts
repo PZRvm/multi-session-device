@@ -6,6 +6,7 @@ import {
 } from '@yume-chan/stream-extra'
 import type { ScrcpyControlMessageWriter } from '@yume-chan/scrcpy'
 import { msg } from '../locale'
+import { clipboardTarget } from './clipboardBridge'
 import { SafeControlMessageWriter } from './controlWriter'
 import { destroySession } from './lifecycle'
 import type { Transport } from './transport'
@@ -31,7 +32,7 @@ export const wrapWriter = (transport: Transport): ScrcpyControlMessageWriter => 
   )
 }
 
-// ---- 控制读侧使用与 writer 同一份协议解析器；剪贴板同步只消费，不写宿主 ----
+// ---- 控制读侧使用与 writer 同一份协议解析器；剪贴板消息进入当前设备同步协调器 ----
 
 export const startControlReader = (ctx: ManagerContext, session: StreamSession): void => {
   const transport = session.transport
@@ -105,8 +106,10 @@ export const startControlReader = (ctx: ManagerContext, session: StreamSession):
   if (clipboardReader) {
     void (async () => {
       try {
-        while (!(await clipboardReader.read()).done) {
-          // 丢弃设备剪贴板内容，保持现有单向粘贴行为。
+        for (;;) {
+          const { done, value } = await clipboardReader.read()
+          if (done) break
+          ctx.clipboardSync.acceptDeviceText(clipboardTarget(ctx, session), value)
         }
       } catch {
         // 错误由控制读循环报告。

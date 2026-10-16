@@ -66,6 +66,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 ### docs/poc/
 
 - [2026-10-04-投屏链路PoC报告.md](docs/poc/2026-10-04-投屏链路PoC报告.md) — stage04 步骤 1 PoC 实测报告——Tango + scrcpy-server 3.3.3 + WebCodecs 全链路在 host GPU 下交互 59fps / 触摸延迟中位 75ms，过验收线
+- [2026-10-16-clipboard-sync-validation.md](docs/poc/2026-10-16-clipboard-sync-validation.md) — 双向剪贴板真实链路、解码与连续内存样本，用户人工验收通过；含 P2 修复前后微基准与最终验证结果
 
 ### guidelines/
 
@@ -167,6 +168,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-15-无线批-review.md](notes/issue/2026-10/2026-10-15-无线批-review.md) — 无线批（plan 2026-10-15-real-device-wireless）Phase 5 code review 发现清单——1 项 P2（connect TCP 层失败不重试，promote 穿 adbd 重启窗口假报 unreachable）+ 8 项 P3；修复批九项全部清零（P3-8 记录不修）
 - [2026-10-15-真机无线批硬件验收待执行.md](notes/issue/2026-10/2026-10-15-真机无线批硬件验收待执行.md) — 真机无线批代码完成、自动化门禁全绿（1230 测试），但需要物理设备与真实手机交互的验收条目未实测——荣耀转无线/扫描/双条目并存/断开（用户可验），小米 mDNS+配对码（暂无设备，用户批复留手动验收）
 - [2026-10-15-荣耀30Pro-USB-serial漂移.md](notes/issue/2026-10/2026-10-15-荣耀30Pro-USB-serial漂移.md) — 荣耀 30 Pro（EBG_AN00）USB serial 在会话内漂移——DSLDU20B12002637 与 DSLU20B12002637 两种形态出现，设备身份按 serial 键控会闪断重建；只记录不修
+- [2026-10-16-clipboard-sync-review-and-acceptance.md](notes/issue/2026-10/2026-10-16-clipboard-sync-review-and-acceptance.md) — 用户人工验收通过，P2 超限全文序列化与 P3 注释均已修复；新增三项回归、全量 1272 项通过，复审无新发现
 - [2026-10-16-投屏回放无ACK恢复盲点.md](notes/issue/2026-10/2026-10-16-投屏回放无ACK恢复盲点.md) — 已实窗复现并修复回放首批无 ACK 的互等：4 包解码阈值先于 8 包 ACK，渲染端停收而 main 未武装；新增显式重同步请求、阈值 16 与归属校验/去重
 - [2026-10-16-无线投屏建流失败后切回缺少重试入口.md](notes/issue/2026-10/2026-10-16-无线投屏建流失败后切回缺少重试入口.md) — USB/无线双条目两次启动分别有一侧 scrcpy video socket 超时；错误会话清理后切回，activate 返回空，界面停在连接态且没有重试入口，留后续单独修复
 - [2026-10-16-解锁投屏修复-code-review.md](notes/issue/2026-10/2026-10-16-解锁投屏修复-code-review.md) — 解锁投屏 Phase 5 的三项发现已修复并正式回归：本地手势随代次取消、零帧有界恢复与可重试错误态、ACK 安全整数校验；全量 1254 项通过
@@ -253,6 +255,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-13-自签项目签名身份专用钥匙串.md](notes/learn/2026-10/2026-10-13-自签项目签名身份专用钥匙串.md) — 本机无 Apple 证书时给项目签名的完整方案——openssl 自签 codeSigning 证书放专用钥匙串（密码本地 600 文件、签名前解锁、分区访问控制预授权 codesign），appId 换正式反域名，DR 锚定证书实现升级后 TCC 授权保留
 - [2026-10-15-息屏唤醒投屏冻结死锁.md](notes/learn/2026-10/2026-10-15-息屏唤醒投屏冻结死锁.md) — 息屏唤醒后投屏冻结但操控有效的死锁——唤醒突发同时打爆 GopCache PTS 跨度预算（清链）与未 ACK 包预算，sendResync 空手悬空丢包而 outbox 已被 ACK 清零、看门狗永不触发；修复为看门狗补悬空分支两轮空回放后 resetVideo
 - [2026-10-15-真机无线开通与排障路径.md](notes/learn/2026-10/2026-10-15-真机无线开通与排障路径.md) — 真机无线调试开通与排障路径——荣耀/华为系无官方开关只能 tcpip（先读 IP 再切换）、adbd 重启竞态要退避重试、跨网段被代理 TUN 假握手劫持而同网段免疫、荣耀息屏深睡断 Wi-Fi 充电可避、mDNS 实例名含空格按服务类型后缀匹配
+- [2026-10-16-clipboard-sync-lifecycle.md](notes/learn/2026-10/2026-10-16-clipboard-sync-lifecycle.md) — 双向剪贴板的观察基线、单飞 ACK 队列与 IME 回声必须分开；设备消息消费不能等待出站 ACK
 - [2026-10-16-投屏PTS单位与静置ACK误判.md](notes/learn/2026-10/2026-10-16-投屏PTS单位与静置ACK误判.md) — PTS 与 ACK 单位和节拍须对齐；后台回放从首关键帧起算，拥堵显式恢复须独立计时、有界失败，并同步取消本地手势；验收覆盖真实主窗后台激活
 
 ### notes/task/
@@ -267,6 +270,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261009022552-SDK共享检测与真机投屏.md](notes/think-report/20261009022552-SDK共享检测与真机投屏.md) — 设置项检测 Android Studio/SDK 并开放共享或自选路径（stage05 增强）；真机 USB/无线接入复用既有 scrcpy 投屏栈（stage06 新阶段）
 - [20261012031543-断网开关.md](notes/think-report/20261012031543-断网开关.md) — 断网开关：飞行模式总开关 + wifi/数据分 radio 开关（用户批复扩容），状态以设备读回为唯一事实源；实测模拟器单关 radio 不断网、logcat 无稳定监听锚点——轮询定案（stage05 步骤）
 - [20261013013755-真机USB无线接入与APK拖装.md](notes/think-report/20261013013755-真机USB无线接入与APK拖装.md) — stage06 真机接入按「先 USB 后 WiFi」两批复核可行性（既有批复结论对照重构后代码逐条验证 + 插拔检测选型）；新增调研 APK 拖装到真机——复用 apkInstall 域 + 真机特有失败签名
+- [20261016125001-双向剪贴板同步.md](notes/think-report/20261016125001-双向剪贴板同步.md) — 当前选中设备与电脑的纯文本双向自动同步可复用 scrcpy 与 Electron，无需新依赖；列出轮询、切换归属、输入法干扰和协议限制
 
 ### plans/
 
@@ -343,6 +347,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-13-scrcpy-module-split.md](plans/2026-10-13-scrcpy-module-split.md) — 纯机械拆分 src/main/scrcpy/index.ts（758 行 → 薄 index 装配 + 8 个域文件）；工厂闭包状态（sessions/active/deps）显式化为 ManagerContext 传参，公共契约（createScrcpyManager + 3 常量 + 2 类型）与行为零变化
 - [2026-10-13-scrcpy-split-review-fixes.md](plans/2026-10-13-scrcpy-split-review-fixes.md) — 修复 scrcpy 拆分 review 的两个存量 issue——ipc.ts 六处入参校验硬编码中文迁移 msg()（新增 5 词条 × zh-CN/zh-TW/en 三语块，zh 文本逐字保持）；项目骨架.md 删掉已落地的 scrcpy/stream.ts【规划】行并在顶部指引补模块拆分快照链接
 - [2026-10-15-real-device-wireless.md](plans/2026-10-15-real-device-wireless.md) — stage06 第二批——真机无线接入：荣耀/华为系「一键转无线」（tcpip 5555 → 读 wlan0 IP → connect，覆盖 adbd 重启竞态）为无持久化主路径；mDNS 扫描 + 配对码走小米等有官方无线调试开关的机型（验收待用户持机手动执行）；网段扫描与手动 IP:5555 为辅助入口。端口钉死 5555，不存设备记录，USB/无线双条目并存不聚合
+- [2026-10-16-bidirectional-clipboard-sync.md](plans/2026-10-16-bidirectional-clipboard-sync.md) — 当前选中设备与电脑的纯文本双向自动同步：300ms 宿主检测、scrcpy 推送、无初始覆盖与空串清空，含写入调度和验收门禁
 - [2026-10-16-unlock-stream-resync.md](plans/2026-10-16-unlock-stream-resync.md) — 解锁首滑冻结及 review 三项修复完成：校正缓存与回放、显式重同步、本地手势清理、有界恢复及 ACK 校验；全量 1254 项回归通过
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
@@ -363,4 +368,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 273 documents -->
+<!-- 278 documents -->

@@ -3,6 +3,7 @@ import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { ScreenAckMessage, ScreenStateMessage } from '@shared/types'
 import { msg } from '../locale'
 import { clipboardPaste } from './clipboard'
+import { refreshClipboardBinding } from './clipboardBridge'
 import { chunkUtf8, injectInput, validateInputRequest, type InjectContext } from './control'
 import { destroySession } from './lifecycle'
 import { sendResync } from './media'
@@ -36,10 +37,12 @@ export const registerIpc = (ctx: ManagerContext): void => {
       if (previous) cancelRecovery(previous)
       if (id === null) {
         ctx.active = null
+        refreshClipboardBinding(ctx)
         return null
       }
       const session = ctx.sessions.get(id)
       ctx.active = { deviceId: id, viewToken }
+      refreshClipboardBinding(ctx)
       if (!session || session.state !== 'ready') {
         // 未就绪也登记：状态推送随后会到，renderer 按连接态渲染
         return session ? ctx.buildState(session) : null
@@ -148,7 +151,21 @@ export const registerIpc = (ctx: ManagerContext): void => {
     if (request.input.kind === 'text') {
       if (request.input.ime) {
         // IME 组合文本：设备侧剪贴板 + 粘贴（ACK 只证明协议确认）
-        await context.clipboardPaste(request.input.text)
+        await clipboardPaste(
+          ctx,
+          session,
+          request.input.text,
+          request.input.source,
+          () =>
+            ctx.sessions.get(session.deviceId) === session &&
+            ctx.active?.deviceId === session.deviceId &&
+            ctx.active.viewToken === request.viewToken &&
+            session.runId === request.runId &&
+            session.streamId === request.streamId &&
+            session.generation === request.generation &&
+            !session.rotating &&
+            !session.abort.signal.aborted
+        )
         return
       }
       for (const chunk of chunkUtf8(request.input.text)) {

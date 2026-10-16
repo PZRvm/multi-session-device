@@ -154,7 +154,7 @@ it('自动重同步清旧按键与跨代次 IME，新按键和新组合仍可发
   expect(input.mock.calls.slice(2).map(([request]) => request.input)).toEqual([
     { kind: 'keycode', key: 'enter', down: true },
     { kind: 'keycode', key: 'enter', down: false },
-    { kind: 'text', text: '新组合', ime: true }
+    { kind: 'text', text: '新组合', ime: true, source: 'composition' }
   ])
 })
 
@@ -246,6 +246,6 @@ it.each(['before', 'during'])('跨暂停的 IME 组合不在恢复后提交，�
   fireEvent.compositionStart(proxy)
   fireEvent.compositionEnd(proxy, { data: '新输入' })
   expect(input.mock.calls.map(([request]) => request.input)).toEqual([
-    { kind: 'text', text: '新输入', ime: true }
+    { kind: 'text', text: '新输入', ime: true, source: 'composition' }
   ])
 })

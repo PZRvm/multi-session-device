@@ -1,51 +1,81 @@
 import { msg } from '../locale'
-import { CLIPBOARD_ACK_TIMEOUT_MS } from './control'
+import { createClipboardQueue } from './clipboardQueue'
+import type { ClipboardSource, ClipboardTarget } from './clipboardSync'
 import { destroySession } from './lifecycle'
 import type { ManagerContext, StreamSession } from './types'
+
+/** 所有 clipboard 写入共用实际 writer 单飞队列；显式输入的 2s 降级不释放队列。 */
+export function queueClipboard(
+  ctx: ManagerContext,
+  session: StreamSession,
+  target: ClipboardTarget,
+  text: string,
+  source: ClipboardSource,
+  valid: () => boolean
+): Promise<void> {
+  if (!session.clipboardQueue) {
+    session.clipboardQueue = createClipboardQueue({
+      error: (kind) =>
+        new Error(
+          msg(
+            kind === 'backlog'
+              ? 'clipboardBacklog'
+              : kind === 'stale'
+                ? 'inputStale'
+                : kind === 'timeout'
+                  ? 'clipboardWriteTimeout'
+                  : 'clipboardChannelClosed'
+          )
+        ),
+      write: async (job) => {
+        const writer = session.writer
+        if (!writer || session.abort.signal.aborted)
+          throw new Error(msg('controlChannelUnavailable'))
+        if (session.clipboardSequence >= Number.MAX_SAFE_INTEGER)
+          throw new Error(msg('clipboardBacklog'))
+        ctx.clipboardSync.observeLocalWrite(target, job.text, job.source)
+        const sequence = ++session.clipboardSequence
+        await writer.setClipboard({
+          content: job.text,
+          paste: job.source !== 'sync',
+          sequence: BigInt(sequence)
+        })
+        if (!session.abort.signal.aborted)
+          ctx.clipboardSync.observeLocalWrite(target, job.text, job.source)
+      },
+      onFailure: (error) => {
+        if (session.abort.signal.aborted) return
+        session.state = 'error'
+        session.error = msg('clipboardSendFailed', { message: error.message })
+        ctx.sendState(session)
+        void destroySession(ctx, session.deviceId)
+      }
+    })
+  }
+  return session.clipboardQueue.enqueue({ text, source, valid })
+}
 
 export const clipboardPaste = (
   ctx: ManagerContext,
   session: StreamSession,
-  content: string
+  content: string,
+  source: 'paste' | 'composition' = 'composition',
+  valid: () => boolean = () =>
+    !session.abort.signal.aborted &&
+    ctx.sessions.get(session.deviceId) === session &&
+    ctx.active?.deviceId === session.deviceId
 ): Promise<void> =>
-  new Promise<void>((resolve, reject) => {
-    const writer = session.writer
-    if (!writer) {
-      reject(new Error(msg('controlChannelUnavailable')))
-      return
-    }
-    // 库保留未确认序列号，超时降级后仍需限制数量，直到 ACK 或会话关闭。
-    if (session.clipboardWrites >= 64 || session.clipboardSequence >= Number.MAX_SAFE_INTEGER) {
-      reject(new Error(msg('clipboardBacklog')))
-      return
-    }
-    const sequence = ++session.clipboardSequence
-    session.clipboardWrites += 1
-    const finish = (ok: boolean, error?: unknown): void => {
-      if (!session.clipboardAcks.delete(sequence)) return
-      clearTimeout(timer)
-      if (ok) resolve()
-      else reject(error instanceof Error ? error : new Error(msg('clipboardChannelClosed')))
-    }
-    // 缺 ACK 时保留既有派发降级；确认仅代表服务端收到，不证明控件接受粘贴。
-    const timer = setTimeout(() => finish(true), CLIPBOARD_ACK_TIMEOUT_MS)
-    session.clipboardAcks.set(sequence, (ok) => finish(ok))
-    writer.setClipboard({ content, paste: true, sequence: BigInt(sequence) }).then(
-      () => {
-        session.clipboardWrites -= 1
-        finish(true)
-      },
-      (error: unknown) => {
-        session.clipboardWrites -= 1
-        finish(false, error)
-        if (!session.abort.signal.aborted) {
-          session.state = 'error'
-          session.error = msg('clipboardSendFailed', {
-            message: error instanceof Error ? error.message : String(error)
-          })
-          ctx.sendState(session)
-          void destroySession(ctx, session.deviceId)
-        }
-      }
-    )
-  })
+  queueClipboard(
+    ctx,
+    session,
+    {
+      session,
+      deviceId: session.deviceId,
+      runId: session.runId,
+      streamId: session.streamId,
+      viewToken: ctx.active?.viewToken ?? ''
+    },
+    content,
+    source,
+    valid
+  )

@@ -95,6 +95,11 @@ export function validateInputRequest(raw: unknown): ScreenInputRequest | null {
     }
     case 'text': {
       if (typeof entry['text'] !== 'string' || typeof entry['ime'] !== 'boolean') return null
+      if (
+        entry['source'] !== undefined &&
+        (!entry['ime'] || (entry['source'] !== 'paste' && entry['source'] !== 'composition'))
+      )
+        return null
       const bytes = new TextEncoder().encode(entry['text'])
       if (bytes.length === 0 || bytes.length > TEXT_MAX_BYTES) return null
       return value as unknown as ScreenInputRequest
