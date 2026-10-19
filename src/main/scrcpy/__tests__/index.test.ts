@@ -1291,4 +1291,44 @@ describe('recording source subscriptions', () => {
     ).toThrow()
     await expect(manager.requestRecordingKeyFrame(source)).rejects.toThrow()
   })
+
+  it('clipboard queue failure destroys the session and interrupts recording subscriptions', async () => {
+    vi.clearAllMocks()
+    const { manager, transportOf } = await importManager()
+    await manager.ensureSession({ id: 'r', runId: 'run', serial: 'emulator-5580' })
+    await vi.waitFor(() => expect(manager.getRecordingSource('r')).not.toBeNull())
+    const source = manager.getRecordingSource('r')!
+    const ended = vi.fn()
+    manager.subscribeRecordingSource(source, { packet: vi.fn(), ended })
+    const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+    const ready = (await activate({}, { id: 'r', viewToken: 'r-view' })) as ScreenStateMessage
+    // 控制 socket 下一次写入失败 → 剪贴板单飞队列 write 拒绝 → onFailure 销毁会话
+    const socket = transportOf('emulator-5580').controlSocket as unknown as FakeSocket
+    const originalWrite = socket.write
+    socket.write = (_chunk: Buffer, cb?: (error?: Error) => void): boolean => {
+      socket.write = originalWrite
+      cb?.(new Error('control write failed'))
+      return false
+    }
+    const input = await handlerFor(IPC_CHANNELS.screenInput)
+    await expect(
+      input(
+        {},
+        {
+          deviceId: 'r',
+          runId: 'run',
+          streamId: ready.streamId,
+          generation: ready.generation,
+          viewToken: 'r-view',
+          width: 1080,
+          height: 2400,
+          input: { kind: 'text', text: '中文', ime: true }
+        }
+      )
+    ).rejects.toBeTruthy()
+    // 会话销毁必须恰好通知录制订阅一次，且携带失败原因；源随之失效
+    await vi.waitFor(() => expect(ended).toHaveBeenCalledTimes(1))
+    expect(ended.mock.calls[0][0]).toBeTruthy()
+    await vi.waitFor(() => expect(manager.getRecordingSource('r')).toBeNull())
+  })
 })

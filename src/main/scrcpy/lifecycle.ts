@@ -43,7 +43,8 @@ export const destroySession = async (
 }
 
 export const destroyAll = async (ctx: ManagerContext): Promise<void> => {
-  ctx.clipboardSync.dispose()
+  // unbindAll 非终态：退出折返（清理失败留下）后会话重建时剪贴板随 ready 重新绑定
+  ctx.clipboardSync.unbindAll()
   await Promise.allSettled(
     [...ctx.sessions.keys()].map((deviceId) => destroySession(ctx, deviceId))
   )

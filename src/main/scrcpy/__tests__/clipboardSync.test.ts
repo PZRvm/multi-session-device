@@ -68,7 +68,7 @@ describe('剪贴板同步协调器', () => {
     h.setHost('中文 😀\n ')
     await vi.advanceTimersByTimeAsync(300)
     expect(h.send).toHaveBeenCalledTimes(2)
-    h.sync.dispose()
+    h.sync.unbindAll()
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -85,7 +85,7 @@ describe('剪贴板同步协调器', () => {
     h.sync.acceptDeviceText(h.current, 'late')
     expect(h.write).toHaveBeenCalledTimes(1)
     expect(vi.getTimerCount()).toBe(1)
-    h.sync.dispose()
+    h.sync.unbindAll()
   })
 
   it('设备事件发现宿主尚未采样变化时，宿主优先；相同文本不破坏富文本格式', () => {
@@ -97,7 +97,7 @@ describe('剪贴板同步协调器', () => {
     h.setHost('new host', ['text/plain', 'text/html'])
     h.sync.acceptDeviceText(h.current, 'new host')
     expect(h.write).not.toHaveBeenCalled()
-    h.sync.dispose()
+    h.sync.unbindAll()
   })
 
   it('本程序输入回声不回写，记录 2 秒后过期；同步 revision 与切换撤销旧队列资格', async () => {
@@ -120,7 +120,7 @@ describe('剪贴板同步协调器', () => {
     h.sync.rebind(newer)
     h.sync.acceptDeviceText(newer, '内部组合')
     expect(h.write).toHaveBeenCalledWith('内部组合')
-    h.sync.dispose()
+    h.sync.unbindAll()
   })
 
   it('大小预算按 UTF-8；读取失败退避、成功恢复；写失败仍可再收到推送', async () => {
@@ -148,7 +148,7 @@ describe('剪贴板同步协调器', () => {
     h.sync.acceptDeviceText(h.current, 'device')
     expect(h.write).toHaveBeenCalledTimes(2)
     expect(h.error.mock.calls.map(([kind]) => kind)).toEqual(['oversize', 'read', 'write'])
-    h.sync.dispose()
+    h.sync.unbindAll()
   })
 
   it('rebind(null) 后零采样，晚到写失败不报告；同绑定幂等不重新取基线', async () => {
@@ -170,7 +170,7 @@ describe('剪贴板同步协调器', () => {
     h.sync.acceptDeviceText(h.current, 'device copy')
     await vi.advanceTimersByTimeAsync(300)
     expect(h.send.mock.calls[0].slice(0, 2)).toEqual([h.current, 'another app'])
-    h.sync.dispose()
+    h.sync.unbindAll()
   })
 
   it('首次读失败恢复只建基线；自身写入后读失败不反射平台格式差异', async () => {
@@ -192,7 +192,7 @@ describe('剪贴板同步协调器', () => {
     h.setHost('device', ['public.utf8-plain-text'])
     await vi.advanceTimersByTimeAsync(3000)
     expect(h.send).not.toHaveBeenCalled()
-    h.sync.dispose()
+    h.sync.unbindAll()
   })
 
   it.each(['before-bind', 'after-bind'] as const)(
@@ -220,7 +220,7 @@ describe('剪贴板同步协调器', () => {
         await vi.advanceTimersByTimeAsync(300)
         expect(h.send.mock.calls[0].slice(0, 2)).toEqual([h.current, 'initial'])
       } finally {
-        h.sync.dispose()
+        h.sync.unbindAll()
         stringify.mockRestore()
         byteLength.mockRestore()
       }
@@ -250,6 +250,6 @@ describe('剪贴板同步协调器', () => {
     h.setHost(atLimit)
     await vi.advanceTimersByTimeAsync(300)
     expect(h.send).toHaveBeenCalledTimes(2)
-    h.sync.dispose()
+    h.sync.unbindAll()
   })
 })

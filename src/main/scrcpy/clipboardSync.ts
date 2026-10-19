@@ -44,7 +44,9 @@ export function createClipboardSync(deps: ClipboardSyncDeps): {
   rebind: (target: ClipboardTarget | null) => void
   acceptDeviceText: (target: ClipboardTarget, text: string) => void
   observeLocalWrite: (target: ClipboardTarget, text: string, source: ClipboardSource) => void
-  dispose: () => void
+  /** 解绑全部并停止轮询；非终态——destroyAll 后会话重建时仍可重新绑定
+   *  （退出折返恢复依赖这一点，勿改成带 disposed 标志的永久停用）。 */
+  unbindAll: () => void
 } {
   let active: ClipboardTarget | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -196,7 +198,7 @@ export function createClipboardSync(deps: ClipboardSyncDeps): {
         report('write', target)
       }
     },
-    dispose: () => {
+    unbindAll: () => {
       rebind(null)
       echoes = new WeakMap()
     }

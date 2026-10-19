@@ -174,6 +174,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-15-真机无线批硬件验收待执行.md](notes/issue/2026-10/2026-10-15-真机无线批硬件验收待执行.md) — 真机无线批代码完成、自动化门禁全绿（1230 测试），但需要物理设备与真实手机交互的验收条目未实测——荣耀转无线/扫描/双条目并存/断开（用户可验），小米 mDNS+配对码（暂无设备，用户批复留手动验收）
 - [2026-10-15-荣耀30Pro-USB-serial漂移.md](notes/issue/2026-10/2026-10-15-荣耀30Pro-USB-serial漂移.md) — 荣耀 30 Pro（EBG_AN00）USB serial 在会话内漂移——DSLDU20B12002637 与 DSLU20B12002637 两种形态出现，设备身份按 serial 键控会闪断重建；只记录不修
 - [2026-10-16-clipboard-sync-review-and-acceptance.md](notes/issue/2026-10/2026-10-16-clipboard-sync-review-and-acceptance.md) — 用户人工验收通过，P2 超限全文序列化与 P3 注释均已修复；新增三项回归、全量 1272 项通过，复审无新发现
+- [2026-10-16-dev-merge-clipboard-recording-review.md](notes/issue/2026-10/2026-10-16-dev-merge-clipboard-recording-review.md) — dev 合并后集成 review——剪贴板批与录屏批的接缝核查；无新增 P0/P1/P2，P3 两项已修复（dispose 改名 unbindAll 并注明非终态语义、补跨特性回归测试）
 - [2026-10-16-recording-interaction-validation.md](notes/issue/2026-10/2026-10-16-recording-interaction-validation.md) — 录屏交互性能验收缺有效数据——双流长录平均包率约 34fps，实验触控仪器录前异常、录中超时，不能据此判定通过或给录屏定责
 - [2026-10-16-recording-p0-audio-clock.md](notes/issue/2026-10/2026-10-16-recording-p0-audio-clock.md) — 录屏长录同步未达标——原始 AAC PTS 漂移，正式采样时钟双 AVD 十分钟最大 112/106ms；Android 13+ 真机音频仍待验
 - [2026-10-16-recording-phase5-review.md](notes/issue/2026-10/2026-10-16-recording-phase5-review.md) — 录屏功能 Phase 5 code review 发现清单——2 项 P2、16 项 P3，无 P0/P1；修复批已全部处置，详见文末
@@ -382,4 +383,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 292 documents -->
+<!-- 293 documents -->
