@@ -236,6 +236,7 @@ const ExternalCanvas = ({ device }: ExternalCanvasProps): React.JSX.Element => {
         {/* 完整工具条：六键 + 旋转 + 截屏组；网络组在 S4 接真实现；电源钮不传——
             真机不能「停止」，电源注入闭集未开（用户裁定不做） */}
         <DeviceToolbar
+          deviceId={device.id}
           disabled={!ready || rotating}
           onButton={(button) => {
             void sendInput({ kind: 'button', button })

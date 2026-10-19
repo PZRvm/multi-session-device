@@ -1,7 +1,12 @@
-import { app, BrowserWindow, dialog } from 'electron'
+import { app, dialog } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
-import { createMainWindow } from './window'
-import { registerIpcHandlers, shutdownStreams } from './ipc'
+import { createMainWindow, getMainWindow } from './window'
+import {
+  registerIpcHandlers,
+  shutdownStreams,
+  prepareRecordingQuit,
+  cancelRecordingQuit
+} from './ipc'
 import {
   prepareAppShutdown,
   resumeAfterShutdown,
@@ -25,7 +30,7 @@ app.whenReady().then(() => {
   registerIpcHandlers()
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (!getMainWindow()) {
       createMainWindow()
     }
   })
@@ -47,10 +52,14 @@ app.on('window-all-closed', () => {
 
 // 真正退出前先停掉本工具启动的全部实例（PRD 4.3）；有界清理失败默认留在应用内允许重试
 let quitGuard = false
+let quitPending = false
 app.on('before-quit', (event) => {
   if (quitGuard) return
   event.preventDefault()
+  if (quitPending) return
+  quitPending = true
   void (async () => {
+    if (!(await prepareRecordingQuit())) return
     const { leftovers } = await prepareAppShutdown()
     await shutdownStreams()
     if (leftovers.length === 0) {
@@ -74,10 +83,20 @@ app.on('before-quit', (event) => {
       // 用户留下：外部会话随 shutdownStreams 的 destroyAll 一并销毁——重发 connected
       // （代次自增）恢复真机投屏/网络/日志；track 连接全程未断
       resumeExternalSessions()
+      // 退出折返留下：录制在 leaving 分支保持冻结，此处恢复常态（解冻 + 恢复结果通知）
+      cancelRecordingQuit()
       return
     }
     quitGuard = true
     stopExternalTracking()
     app.exit(0)
   })()
+    .catch((error) => {
+      console.error('[quit]', error)
+      // 清理链路抛错折返留下：恢复录制常态，避免冻结/静音通知卡死到重启
+      cancelRecordingQuit()
+    })
+    .finally(() => {
+      quitPending = false
+    })
 })

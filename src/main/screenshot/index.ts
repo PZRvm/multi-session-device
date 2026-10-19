@@ -1,6 +1,7 @@
 import { access, constants, link, rm, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
+import { fileTimestamp, sanitizeFileSegment } from '../filename'
 import { app, clipboard, ipcMain, nativeImage } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { ScreenshotCaptureResult, ScreenshotSaveResult } from '@shared/types'
@@ -101,26 +102,11 @@ export interface ScreenshotDeps {
 const isDeviceIdPayload = (value: unknown): value is { id: string } =>
   typeof value === 'object' && value !== null && typeof (value as { id?: unknown }).id === 'string'
 
-/** 设备名 → 安全文件名段：保留中文，替换路径非法字符与控制符，截断 60 字符 */
-export const sanitizeFileSegment = (name: string): string => {
-  const cleaned = name
-    // eslint-disable-next-line no-control-regex -- 文件名清洗本意就是剔除控制字符
-    .replace(/[\\/:*?"<>|\x00-\x1f]/g, '_')
-    .trim()
-    .slice(0, 60)
-  return cleaned.length > 0 ? cleaned : 'device'
-}
-
-const pad = (value: number): string => String(value).padStart(2, '0')
+/** 设备名 → 安全文件名段：实现收敛在 src/main/filename.ts（与录屏发布共用） */
+export { sanitizeFileSegment } from '../filename'
 
 /** 截图时刻 → 本地时区 YYYYMMDD-HHmmss */
-export const formatShotStamp = (capturedAt: number): string => {
-  const date = new Date(capturedAt)
-  return (
-    `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}` +
-    `-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`
-  )
-}
+export const formatShotStamp = (capturedAt: number): string => fileTimestamp(new Date(capturedAt))
 
 const shotFileName = (cached: CachedShot): string =>
   `${sanitizeFileSegment(cached.deviceName)}-${formatShotStamp(cached.capturedAt)}.png`

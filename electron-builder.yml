@@ -27,6 +27,8 @@ asarUnpack:
 extraResources:
   - from: resources/scrcpy-server-v3.3.3
     to: scrcpy-server-v3.3.3
+  - from: node_modules/mediabunny/LICENSE
+    to: licenses/mediabunny-MPL-2.0.txt
 win:
   icon: build/icon.ico
   executableName: multi-session-device

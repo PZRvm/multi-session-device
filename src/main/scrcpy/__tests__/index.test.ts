@@ -1256,3 +1256,39 @@ describe('息屏唤醒冻结回归（2026-10-15 真机 Wi-Fi 投屏调查）', (
     }
   })
 })
+
+describe('recording source subscriptions', () => {
+  it('delivers raw timestamps while no view is active, isolates observers and ends exactly once', async () => {
+    vi.clearAllMocks()
+    mocks.windowRef.current = null
+    const { manager, transportOf } = await importManager()
+    await manager.ensureSession({ id: 'r', runId: 'run', serial: 'emulator-5580' })
+    await vi.waitFor(() => expect(manager.getRecordingSource('r')).not.toBeNull())
+    const source = manager.getRecordingSource('r')!
+    const packets: ScrcpyMediaStreamPacket[] = []
+    const ended = vi.fn()
+    manager.subscribeRecordingSource(source, {
+      packet: () => {
+        throw new Error('consumer failed')
+      },
+      ended: vi.fn()
+    })
+    manager.subscribeRecordingSource(source, { packet: (packet) => packets.push(packet), ended })
+    const packet = {
+      type: 'data' as const,
+      pts: 12_345_678_901n,
+      keyframe: true,
+      data: Uint8Array.of(7)
+    }
+    transportOf('emulator-5580').__push(packet)
+    await vi.waitFor(() => expect(packets).toEqual([packet]))
+    expect(manager.activeDeviceId()).toBeNull()
+    await manager.destroySession('r')
+    await manager.destroySession('r')
+    expect(ended).toHaveBeenCalledTimes(1)
+    expect(() =>
+      manager.subscribeRecordingSource(source, { packet: vi.fn(), ended: vi.fn() })
+    ).toThrow()
+    await expect(manager.requestRecordingKeyFrame(source)).rejects.toThrow()
+  })
+})

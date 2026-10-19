@@ -2,6 +2,7 @@ import { h264ParseConfiguration } from '@yume-chan/scrcpy'
 import type { ScrcpyMediaStreamPacket } from '@yume-chan/scrcpy'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import { GopCache, buildReplay, type CachedPacket } from './cache'
+import { dispatchRecordingPacket } from './recording'
 import { destroySession } from './lifecycle'
 import { cancelRecovery, startRecovery } from './recovery'
 import {
@@ -106,6 +107,7 @@ export const handleMediaPacket = (
       // 解析失败不阻塞流：输入尺寸校验用旧值，renderer 同样以帧实际尺寸绘制
     }
   }
+  dispatchRecordingPacket(session, packet)
   // Tango 的 pts 是 bigint（µs）——IPC 边界转 Number（µs 值域内安全）
   const cached: CachedPacket = {
     seq: session.seq,

@@ -6,6 +6,9 @@ import type { Device, RuntimeErrorMessage } from '@shared/types'
 import { toApiResult } from './api'
 import { useCopy } from './hooks/useCopy'
 import { useLocaleStore } from './stores/localeStore'
+import RecordingIndicator from './components/RecordingIndicator'
+import { subscribeRecordings, useRecordingStore } from './stores/recordingStore'
+import { RECORDING_COPY } from '@shared/i18n/recording'
 import BoardHead from './components/BoardHead'
 import Button from './components/Button'
 import CanvasPlaceholder from './components/CanvasPlaceholder'
@@ -84,6 +87,21 @@ const App = (): React.JSX.Element => {
   const [logDockOpen, setLogDockOpen] = useState(false)
   const [logPaneWidth, setLogPaneWidth] = useState(320)
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
+  const recordingCopy = useCopy(RECORDING_COPY)
+  const recordingError = useRecordingStore((state) => state.errors[0] ?? null)
+  const dismissRecordingError = useRecordingStore((state) => state.dismissError)
+  useEffect(subscribeRecordings, [])
+  // 失败队列逐条弹窗：关一条弹下一条，并发失败不互相覆盖
+  useEffect(() => {
+    if (!recordingError) return
+    void toApiResult(
+      window.api.dialog.show({
+        title: recordingCopy.failed,
+        message: recordingError,
+        buttons: [recordingCopy.close]
+      })
+    ).finally(() => dismissRecordingError())
+  }, [recordingError, dismissRecordingError, recordingCopy])
 
   useEffect(() => {
     const onResize = (): void => setViewportWidth(window.innerWidth)
@@ -369,6 +387,9 @@ const App = (): React.JSX.Element => {
         ? { id: selected.id, runId: selected.runId }
         : null
 
+  // 录制计时/生成反馈跟随当前选中（真机优先，同一时刻至多一个；?? 避免 || 对空串的语义分叉）
+  const indicatorDevice = externalSelected ?? selected
+
   // 画布剩余不足保底 560 时 dock 不渲染（兜底派生——正常路径由 main 侧 minWidth
   // 锁定与拉宽保证 dock 展开时不被窗口缩窄挤掉）
   const logDockFits = viewportWidth - listWidth - 5 - logPaneWidth >= LOG_CANVAS_MIN_WIDTH
@@ -520,40 +541,45 @@ const App = (): React.JSX.Element => {
         }
       />
       <main className="canvas-area">
-        {externalSelected !== null ? (
-          externalSelected.state === 'device' ? (
-            <ExternalCanvas key={externalSelected.id} device={externalSelected} />
+        <div className="canvas-content">
+          {externalSelected !== null ? (
+            externalSelected.state === 'device' ? (
+              <ExternalCanvas key={externalSelected.id} device={externalSelected} />
+            ) : (
+              <ExternalCanvasPlaceholder device={externalSelected} />
+            )
+          ) : selected && selected.status === 'running' ? (
+            <DeviceCanvas
+              key={`${selected.id}:${selected.runId}`}
+              device={selected}
+              onStop={() => handleStop(selected.id)}
+            />
           ) : (
-            <ExternalCanvasPlaceholder device={externalSelected} />
-          )
-        ) : selected && selected.status === 'running' ? (
-          <DeviceCanvas
-            key={`${selected.id}:${selected.runId}`}
-            device={selected}
-            onStop={() => handleStop(selected.id)}
-          />
-        ) : (
-          <CanvasPlaceholder
-            device={selected}
-            onCreate={openWizard}
-            onRecheck={handleRecheck}
-            rechecking={rechecking}
-            storeState={storeHealth.state}
-            createDisabled={!metaWritable}
-          />
-        )}
-        {logTarget ? (
-          <button
-            type="button"
-            className="log-toggle"
-            aria-label={copy.logcatTitle}
-            aria-pressed={dockVisible}
-            title={copy.logcatTitle}
-            onClick={handleToggleLogDock}
-          >
-            <ScrollText size={16} />
-          </button>
-        ) : null}
+            <CanvasPlaceholder
+              device={selected}
+              onCreate={openWizard}
+              onRecheck={handleRecheck}
+              rechecking={rechecking}
+              storeState={storeHealth.state}
+              createDisabled={!metaWritable}
+            />
+          )}
+        </div>
+        <div className="canvas-tools">
+          {indicatorDevice ? <RecordingIndicator deviceId={indicatorDevice.id} /> : null}
+          {logTarget ? (
+            <button
+              type="button"
+              className="log-toggle"
+              aria-label={copy.logcatTitle}
+              aria-pressed={dockVisible}
+              title={copy.logcatTitle}
+              onClick={handleToggleLogDock}
+            >
+              <ScrollText size={16} />
+            </button>
+          ) : null}
+        </div>
       </main>
       {dockVisible ? (
         <>
@@ -617,6 +643,7 @@ const Wrapper = styled.div`
 
   .canvas-area {
     flex: 1;
+    flex-direction: column;
     min-width: 0;
     display: flex;
     align-items: center;
@@ -625,15 +652,34 @@ const Wrapper = styled.div`
     position: relative;
   }
 
-  /* 日志 dock 入口（画布右上角，与设置齿轮同侧约定）；仅运行中设备出现 */
-  .log-toggle {
+  .canvas-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+    min-width: 0;
+    position: relative;
+  }
+
+  .canvas-tools {
     position: absolute;
     top: 10px;
     right: 10px;
+    max-width: calc(100% - 20px);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* 计时与日志共享工具组，正常排列，避免互相覆盖。 */
+  .log-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 30px;
+    flex: none;
     height: 30px;
     padding: 0;
     border: 1px solid var(--board-hairline);

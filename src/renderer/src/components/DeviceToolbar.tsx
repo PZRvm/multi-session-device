@@ -16,9 +16,12 @@ import type { NetworkState, NetworkTarget, ScreenToolbarButton } from '@shared/t
 import { useCopy } from '../hooks/useCopy'
 import { MAIN_COPY } from '@shared/i18n'
 import type { ScreenshotState } from '../hooks/useScreenshot'
+import RecordingControls from './RecordingControls'
 import ScreenshotPopover from './ScreenshotPopover'
+import { toolButtonCss } from './toolButtonStyle'
 
 type DeviceToolbarProps = {
+  deviceId?: string
   disabled: boolean
   /** 电源钮可选（真机画布不传——真机不能「停止」，电源注入闭集未开，plan 2026-10-13-real-device-toolbar-parity） */
   powerDisabled?: boolean
@@ -41,6 +44,7 @@ type DeviceToolbarProps = {
 
 /** 物理键工具条：返回/主页/概览/电源/音量加减 + 旋转 + 截屏 + 网络开关组；本地化可访问名 + 焦点样式 + 禁用态 */
 const DeviceToolbar = ({
+  deviceId,
   disabled,
   powerDisabled,
   onButton,
@@ -120,6 +124,7 @@ const DeviceToolbar = ({
           />
         ) : null}
       </div>
+      {deviceId ? <RecordingControls deviceId={deviceId} disabled={disabled} /> : null}
       {/* 网络开关组：断网总开关（飞行模式，真断网）+ Wi-Fi/移动数据分 radio（场景测试）；
           态以设备读回为唯一事实源，aria-pressed 承载开闭，busy/未知态禁用 */}
       <div className="net-group" role="group" aria-label={copy.networkGroupAria}>
@@ -165,6 +170,8 @@ const Wrapper = styled.div`
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
   padding: 6px 8px;
   border-radius: 8px;
   background: var(--board-bg-raised);
@@ -201,34 +208,7 @@ const Wrapper = styled.div`
     color: var(--danger);
   }
 
-  .tool-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--board-ink);
-    cursor: pointer;
-    transition: background-color 0.12s;
-  }
-
-  .tool-btn:hover:not(:disabled) {
-    background: var(--board-hover-veil);
-  }
-
-  .tool-btn:disabled {
-    opacity: 0.35;
-    cursor: default;
-  }
-
-  .tool-btn:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
+  ${toolButtonCss}
 `
 
 export default DeviceToolbar

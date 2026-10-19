@@ -6,7 +6,7 @@ description: 架构快照——带日期的文档，描述模块和数据流在�
 
 每篇快照描述系统在某个时间点的真实样子：进程、模块、数据流、部署形态。长期规则在 `guidelines/architecture.md`；本目录装今天为真的东西。
 
-当前实现见 [Android 运行与操控（阶段 4 收尾）](2026-10-08-android-runtime.md)；main 进程模块落点见 [模块拆分（2026-10-13）](2026-10-13-main-module-split.md)；[项目骨架](项目骨架.md) 保留 stage 01/02 的历史结构。
+当前实现见 [Android 运行与操控（阶段 4 收尾）](2026-10-08-android-runtime.md)；main 进程模块落点见 [模块拆分（2026-10-13）](2026-10-13-main-module-split.md)；录屏实现见 [设备录屏](2026-10-16-recording.md)；[项目骨架](项目骨架.md) 保留 stage 01/02 的历史结构。
 
 ## 约定
 

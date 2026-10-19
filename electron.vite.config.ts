@@ -1,8 +1,16 @@
 import { resolve } from 'path'
 import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+import type { Plugin } from 'vite'
 
 const sharedAlias = { '@shared': resolve('src/shared') }
+
+/** 构建期剥掉 dev HMR 专用的 CSP ws: 放行——产物只保留 'self'（recording-processor 页） */
+const stripDevOnlyCsp = (): Plugin => ({
+  name: 'strip-dev-only-csp',
+  apply: 'build',
+  transformIndexHtml: (html) => html.replace("connect-src 'self' ws:;", "connect-src 'self';")
+})
 
 export default defineConfig({
   main: { resolve: { alias: sharedAlias } },
@@ -19,7 +27,7 @@ export default defineConfig({
         ...sharedAlias
       }
     },
-    plugins: [react()],
+    plugins: [react(), stripDevOnlyCsp()],
     build: {
       rollupOptions: {
         // 六个独立入口：主窗、设备向导、设置窗、日志窗、对账详情窗、无线连接窗。
@@ -29,7 +37,8 @@ export default defineConfig({
           settings: resolve('src/renderer/settings.html'),
           logcat: resolve('src/renderer/logcat.html'),
           report: resolve('src/renderer/report.html'),
-          wireless: resolve('src/renderer/wireless.html')
+          wireless: resolve('src/renderer/wireless.html'),
+          recordingProcessor: resolve('src/renderer/recording-processor.html')
         }
       }
     }

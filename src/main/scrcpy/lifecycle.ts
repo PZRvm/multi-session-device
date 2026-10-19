@@ -1,4 +1,5 @@
 import type { ManagerContext, StreamSession } from './types'
+import { endRecordingSource } from './recording'
 import { cancelRecovery } from './recovery'
 
 export const cleanupSession = async (
@@ -7,6 +8,7 @@ export const cleanupSession = async (
   preserveActive = false
 ): Promise<void> => {
   // 幂等清理：撤销活动归属 → abort 循环 → 关 writer/socket → 结束 server → 删 forward
+  endRecordingSource(session)
   session.abort.abort()
   if (ctx.active?.deviceId === session.deviceId) ctx.clipboardSync.rebind(null)
   session.clipboardQueue?.dispose()

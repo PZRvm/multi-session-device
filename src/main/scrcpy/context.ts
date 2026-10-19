@@ -5,6 +5,12 @@ import { createSessionClipboardSync } from './clipboardBridge'
 import { SCRCPY_SERVER_VERSION } from './transport'
 import type { ManagerContext, ScrcpyManagerDeps, StreamSession } from './types'
 
+/** scrcpy server 二进制路径的唯一来源（视频会话与录制音频会话共用打包布局判断） */
+export const scrcpyServerPath = (): string =>
+  app.isPackaged
+    ? join(process.resourcesPath, `scrcpy-server-v${SCRCPY_SERVER_VERSION}`)
+    : join(app.getAppPath(), 'resources', `scrcpy-server-v${SCRCPY_SERVER_VERSION}`)
+
 /** 建 ManagerContext：sessions/active 的唯一载体 + 跨域共用的状态推送助手 */
 export const createManagerContext = (deps: ScrcpyManagerDeps): ManagerContext => {
   const ctx: ManagerContext = {
@@ -12,10 +18,7 @@ export const createManagerContext = (deps: ScrcpyManagerDeps): ManagerContext =>
     sessions: new Map<string, StreamSession>(),
     active: null,
     clipboardSync: createSessionClipboardSync(() => ctx),
-    serverPathFor: () =>
-      app.isPackaged
-        ? join(process.resourcesPath, `scrcpy-server-v${SCRCPY_SERVER_VERSION}`)
-        : join(app.getAppPath(), 'resources', `scrcpy-server-v${SCRCPY_SERVER_VERSION}`),
+    serverPathFor: () => scrcpyServerPath(),
     mainWindowWebContents: () => {
       const window = deps.getMainWindow()
       return window && !window.isDestroyed() ? window.webContents : null

@@ -46,6 +46,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 ### docs/api/
 
+- [2026-10-16-recording.md](docs/api/2026-10-16-recording.md) — 录屏 IPC 实际契约——主窗任务快照、设置窗恢复提示、原生选择/结果与隐藏处理页专属 job 通道的权限边界
 - [README.md](docs/api/README.md) — API 设计文档——接口契约在实现之前和之中写下来的地方
 
 ### docs/architecture/
@@ -53,6 +54,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-08-android-runtime.md](docs/architecture/2026-10-08-android-runtime.md) — 阶段 4 收尾时的 Android 运行快照：模块、SDK/AVD 隔离、启停与投屏输入契约、操作和排查入口及未验边界
 - [2026-10-13-main-module-split.md](docs/architecture/2026-10-13-main-module-split.md) — main 进程模块拆分快照——devices 域从 2603 行单文件拆为薄 index + 10 个域模块、emulator/index.ts 拆为装配层 + 4 个 sdkIpc 分组；分层 DAG 与状态访问器规则
 - [2026-10-13-scrcpy-module-split.md](docs/architecture/2026-10-13-scrcpy-module-split.md) — scrcpy 域拆分快照——758 行工厂 index.ts 拆为 19 行装配 + 8 个域文件；闭包状态显式化为 ManagerContext 首参传递，分层 DAG 与错误路径向下调 destroySession 的规则
+- [2026-10-16-recording.md](docs/architecture/2026-10-16-recording.md) — 录屏模块的实际落点——主进程媒体订阅/任务/临时段，独立处理页，下载目录发布与全局 UI 镜像；真机音频验收后移
 - [README.md](docs/architecture/README.md) — 架构快照——带日期的文档，描述模块和数据流在当时的真实状态
 - [项目骨架.md](docs/architecture/项目骨架.md) — 多会话模拟器的项目骨架——技术栈、三进程结构、目录职责与规划模块落点（stage 01 改造后快照）
 
@@ -61,12 +63,15 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [ADR-001-adopt-bocode.md](docs/decisions/ADR-001-adopt-bocode.md) — 本仓库运行在 BoCode 工作流上——book 驱动 code，code 回写 book，六阶段关卡守住每个功能
 - [ADR-002-adopt-bowrite.md](docs/decisions/ADR-002-adopt-bowrite.md) — 我们把 shuorenhua 加上自己的 review 模式蒸馏成 bowrite（薄写）——一个仓库内的写作 skill：写薄，写好
 - [ADR-003-intent-gates-vs-distrust-gates.md](docs/decisions/ADR-003-intent-gates-vs-distrust-gates.md) — 我们按理由给工作流关卡分类——意图关卡保持硬，不信任关卡随模型改进而软化；Phase 2 的确认制改为缺口制停车
+- [ADR-004-recording-media-pipeline.md](docs/decisions/ADR-004-recording-media-pipeline.md) — 录屏采用 Mediabunny 1.61.5 封装 MP4、独立 WebCodecs renderer 处理画布；设备音频独立采集与采样时钟，真机验收后移
 - [README.md](docs/decisions/README.md) — 这里怎么写 ADR——章节、命名、编号，以及什么决定需要一份记录
 
 ### docs/poc/
 
 - [2026-10-04-投屏链路PoC报告.md](docs/poc/2026-10-04-投屏链路PoC报告.md) — stage04 步骤 1 PoC 实测报告——Tango + scrcpy-server 3.3.3 + WebCodecs 全链路在 host GPU 下交互 59fps / 触摸延迟中位 75ms，过验收线
 - [2026-10-16-clipboard-sync-validation.md](docs/poc/2026-10-16-clipboard-sync-validation.md) — 双向剪贴板真实链路、解码与连续内存样本，用户人工验收通过；含 P2 修复前后微基准与最终验证结果
+- [2026-10-16-recording-implementation.md](docs/poc/2026-10-16-recording-implementation.md) — 录屏正式实现验证——独立 MP4、暂停旋转、后台与打包产物已跑通；1282 项测试通过，十分钟同步 112/106ms 未过，真机声音与交互性能待验
+- [2026-10-16-recording-p0.md](docs/poc/2026-10-16-recording-p0.md) — 录屏先行 P0——双 AVD、最大画布与 MP4 可行；原始 AAC PTS 漂移，修订仪器后候选 46/120ms，真机音频验收后移
 
 ### guidelines/
 
@@ -169,6 +174,10 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-15-真机无线批硬件验收待执行.md](notes/issue/2026-10/2026-10-15-真机无线批硬件验收待执行.md) — 真机无线批代码完成、自动化门禁全绿（1230 测试），但需要物理设备与真实手机交互的验收条目未实测——荣耀转无线/扫描/双条目并存/断开（用户可验），小米 mDNS+配对码（暂无设备，用户批复留手动验收）
 - [2026-10-15-荣耀30Pro-USB-serial漂移.md](notes/issue/2026-10/2026-10-15-荣耀30Pro-USB-serial漂移.md) — 荣耀 30 Pro（EBG_AN00）USB serial 在会话内漂移——DSLDU20B12002637 与 DSLU20B12002637 两种形态出现，设备身份按 serial 键控会闪断重建；只记录不修
 - [2026-10-16-clipboard-sync-review-and-acceptance.md](notes/issue/2026-10/2026-10-16-clipboard-sync-review-and-acceptance.md) — 用户人工验收通过，P2 超限全文序列化与 P3 注释均已修复；新增三项回归、全量 1272 项通过，复审无新发现
+- [2026-10-16-recording-interaction-validation.md](notes/issue/2026-10/2026-10-16-recording-interaction-validation.md) — 录屏交互性能验收缺有效数据——双流长录平均包率约 34fps，实验触控仪器录前异常、录中超时，不能据此判定通过或给录屏定责
+- [2026-10-16-recording-p0-audio-clock.md](notes/issue/2026-10/2026-10-16-recording-p0-audio-clock.md) — 录屏长录同步未达标——原始 AAC PTS 漂移，正式采样时钟双 AVD 十分钟最大 112/106ms；Android 13+ 真机音频仍待验
+- [2026-10-16-recording-phase5-review.md](notes/issue/2026-10/2026-10-16-recording-phase5-review.md) — 录屏功能 Phase 5 code review 发现清单——2 项 P2、16 项 P3，无 P0/P1；修复批已全部处置，详见文末
+- [2026-10-16-recording-result-logcat-overlap.md](notes/issue/2026-10/2026-10-16-recording-result-logcat-overlap.md) — 已修复录屏结果与 Logcat 重叠——移除顶部结果条，完成结果走原生 dialog，当前计时与日志同组排列
 - [2026-10-16-投屏回放无ACK恢复盲点.md](notes/issue/2026-10/2026-10-16-投屏回放无ACK恢复盲点.md) — 已实窗复现并修复回放首批无 ACK 的互等：4 包解码阈值先于 8 包 ACK，渲染端停收而 main 未武装；新增显式重同步请求、阈值 16 与归属校验/去重
 - [2026-10-16-无线投屏建流失败后切回缺少重试入口.md](notes/issue/2026-10/2026-10-16-无线投屏建流失败后切回缺少重试入口.md) — USB/无线双条目两次启动分别有一侧 scrcpy video socket 超时；错误会话清理后切回，activate 返回空，界面停在连接态且没有重试入口，留后续单独修复
 - [2026-10-16-解锁投屏修复-code-review.md](notes/issue/2026-10/2026-10-16-解锁投屏修复-code-review.md) — 解锁投屏 Phase 5 的三项发现已修复并正式回归：本地手势随代次取消、零帧有界恢复与可重试错误态、ACK 安全整数校验；全量 1254 项通过
@@ -256,6 +265,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-15-息屏唤醒投屏冻结死锁.md](notes/learn/2026-10/2026-10-15-息屏唤醒投屏冻结死锁.md) — 息屏唤醒后投屏冻结但操控有效的死锁——唤醒突发同时打爆 GopCache PTS 跨度预算（清链）与未 ACK 包预算，sendResync 空手悬空丢包而 outbox 已被 ACK 清零、看门狗永不触发；修复为看门狗补悬空分支两轮空回放后 resetVideo
 - [2026-10-15-真机无线开通与排障路径.md](notes/learn/2026-10/2026-10-15-真机无线开通与排障路径.md) — 真机无线调试开通与排障路径——荣耀/华为系无官方开关只能 tcpip（先读 IP 再切换）、adbd 重启竞态要退避重试、跨网段被代理 TUN 假握手劫持而同网段免疫、荣耀息屏深睡断 Wi-Fi 充电可避、mDNS 实例名含空格按服务类型后缀匹配
 - [2026-10-16-clipboard-sync-lifecycle.md](notes/learn/2026-10/2026-10-16-clipboard-sync-lifecycle.md) — 双向剪贴板的观察基线、单飞 ACK 队列与 IME 回声必须分开；设备消息消费不能等待出站 ACK
+- [2026-10-16-recording-poc-media-boundaries.md](notes/learn/2026-10/2026-10-16-recording-poc-media-boundaries.md) — 录屏 P0 的三个边界——独立 scrcpy 会话各持 jar 路径，WebCodecs decoder flush 后重新等关键帧，音画测试源按实际播放时间校准
 - [2026-10-16-投屏PTS单位与静置ACK误判.md](notes/learn/2026-10/2026-10-16-投屏PTS单位与静置ACK误判.md) — PTS 与 ACK 单位和节拍须对齐；后台回放从首关键帧起算，拥堵显式恢复须独立计时、有界失败，并同步取消本地手势；验收覆盖真实主窗后台激活
 
 ### notes/task/
@@ -270,7 +280,9 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261009022552-SDK共享检测与真机投屏.md](notes/think-report/20261009022552-SDK共享检测与真机投屏.md) — 设置项检测 Android Studio/SDK 并开放共享或自选路径（stage05 增强）；真机 USB/无线接入复用既有 scrcpy 投屏栈（stage06 新阶段）
 - [20261012031543-断网开关.md](notes/think-report/20261012031543-断网开关.md) — 断网开关：飞行模式总开关 + wifi/数据分 radio 开关（用户批复扩容），状态以设备读回为唯一事实源；实测模拟器单关 radio 不断网、logcat 无稳定监听锚点——轮询定案（stage05 步骤）
 - [20261013013755-真机USB无线接入与APK拖装.md](notes/think-report/20261013013755-真机USB无线接入与APK拖装.md) — stage06 真机接入按「先 USB 后 WiFi」两批复核可行性（既有批复结论对照重构后代码逐条验证 + 插拔检测选型）；新增调研 APK 拖装到真机——复用 apkInstall 域 + 真机特有失败签名
+- [20261016124043-模拟器录屏.md](notes/think-report/20261016124043-模拟器录屏.md) — 模拟器与真机录屏——按用户批复改为 MP4、设备声音、暂停续录和后台持续录制，跟随横竖屏且单文件，推荐独立录制解码与固定画布重编码、Mediabunny 封装，列明兼容性和验证门槛
 - [20261016125001-双向剪贴板同步.md](notes/think-report/20261016125001-双向剪贴板同步.md) — 当前选中设备与电脑的纯文本双向自动同步可复用 scrcpy 与 Electron，无需新依赖；列出轮询、切换归属、输入法干扰和协议限制
+- [20261016173327-录屏计时与提示交互.md](notes/think-report/20261016173327-录屏计时与提示交互.md) — 录屏交互方案已确认并实施——左侧状态、Logcat 左侧计时/生成反馈、原生结果 dialog、按设备条件记忆与统一恢复入口；验证见交互 plan
 
 ### plans/
 
@@ -348,6 +360,8 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-13-scrcpy-split-review-fixes.md](plans/2026-10-13-scrcpy-split-review-fixes.md) — 修复 scrcpy 拆分 review 的两个存量 issue——ipc.ts 六处入参校验硬编码中文迁移 msg()（新增 5 词条 × zh-CN/zh-TW/en 三语块，zh 文本逐字保持）；项目骨架.md 删掉已落地的 scrcpy/stream.ts【规划】行并在顶部指引补模块拆分快照链接
 - [2026-10-15-real-device-wireless.md](plans/2026-10-15-real-device-wireless.md) — stage06 第二批——真机无线接入：荣耀/华为系「一键转无线」（tcpip 5555 → 读 wlan0 IP → connect，覆盖 adbd 重启竞态）为无持久化主路径；mDNS 扫描 + 配对码走小米等有官方无线调试开关的机型（验收待用户持机手动执行）；网段扫描与手动 IP:5555 为辅助入口。端口钉死 5555，不存设备记录，USB/无线双条目并存不聚合
 - [2026-10-16-bidirectional-clipboard-sync.md](plans/2026-10-16-bidirectional-clipboard-sync.md) — 当前选中设备与电脑的纯文本双向自动同步：300ms 宿主检测、scrcpy 推送、无初始覆盖与空串清空，含写入调度和验收门禁
+- [2026-10-16-device-recording.md](plans/2026-10-16-device-recording.md) — 模拟器与真机录屏施工图——设备声音、暂停续录、各设备独立 MP4、旋转后最大画布居中、后台任务与下载目录落盘；先过媒体能力验证再接产品
+- [2026-10-16-recording-interactions.md](plans/2026-10-16-recording-interactions.md) — 已确认录屏交互实施——设备行状态、Logcat 左侧计时/生成进度、原生结果队列、按设备条件记忆与统一恢复提示
 - [2026-10-16-unlock-stream-resync.md](plans/2026-10-16-unlock-stream-resync.md) — 解锁首滑冻结及 review 三项修复完成：校正缓存与回放、显式重同步、本地手势清理、有界恢复及 ACK 校验；全量 1254 项回归通过
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
@@ -368,4 +382,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 278 documents -->
+<!-- 292 documents -->

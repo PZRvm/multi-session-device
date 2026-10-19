@@ -432,6 +432,7 @@ const DeviceCanvas = ({ device, onStop }: DeviceCanvasProps): React.JSX.Element 
       </div>
       <div className="toolbar-row">
         <DeviceToolbar
+          deviceId={device.id}
           disabled={!ready || rotating || stopping}
           powerDisabled={stopping}
           onButton={(button) => {
