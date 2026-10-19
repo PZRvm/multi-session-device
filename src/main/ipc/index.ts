@@ -1,3 +1,9 @@
+import { settingsOwns } from '../window/settings'
+import {
+  registerRecording,
+  confirmRecordingQuit,
+  cancelRecordingQuit as restoreRecordingQuit
+} from '../recording'
 import { registerDialogIpc } from '../dialog'
 import {
   assertEditorTarget,
@@ -38,6 +44,13 @@ let streamShutdown: (() => Promise<void>) | null = null
 export async function shutdownStreams(): Promise<void> {
   if (streamShutdown) await streamShutdown()
 }
+
+let recordingQuit: (() => Promise<boolean>) | null = null
+let recordingQuitRestore: (() => void) | null = null
+export const prepareRecordingQuit = (): Promise<boolean> =>
+  recordingQuit?.() ?? Promise.resolve(true)
+/** 录制退出流程被外层中断（清理失败/用户反悔留下）后恢复录制常态 */
+export const cancelRecordingQuit = (): void => recordingQuitRestore?.()
 
 export function registerIpcHandlers(): void {
   registerDialogIpc()
@@ -96,6 +109,18 @@ export function registerIpcHandlers(): void {
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
   })
   scrcpy.registerIpc()
+  const recording = registerRecording({
+    adbPath: adbBinaryPath,
+    toolEnv: androidToolEnv,
+    scrcpy,
+    device: deviceRefOfId,
+    getMainWindow,
+    isSettingsSender: settingsOwns,
+    isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id,
+    pushTarget: () => getMainWindow()?.webContents ?? null
+  })
+  recordingQuit = () => confirmRecordingQuit(recording)
+  recordingQuitRestore = () => restoreRecordingQuit(recording)
 
   // 日志域：运行视图合并（S5）——AVD 视图 + 已连接真机（订阅惰性建会与独立窗下拉共用）
   const logcat = createLogcatManager({
@@ -122,15 +147,17 @@ export function registerIpcHandlers(): void {
     stopped: (id) => {
       clearScreenshotCache(id)
       network.clearWatch(id)
+      void recording.stopDevice(id)
       void scrcpy.destroySession(id)
       void logcat.destroySession(id)
     },
     beforeKill: (id) => {
       clearScreenshotCache(id)
       network.clearWatch(id)
-      return Promise.all([scrcpy.destroySession(id), logcat.destroySession(id)]).then(
-        () => undefined
-      )
+      return recording
+        .stopDevice(id)
+        .then(() => Promise.all([scrcpy.destroySession(id), logcat.destroySession(id)]))
+        .then(() => undefined)
     }
   })
 
@@ -159,6 +186,7 @@ export function registerIpcHandlers(): void {
           serial: event.device.serial
         })
       } else {
+        void recording.stopDevice(event.id)
         void scrcpy.destroySession(event.id).catch(() => undefined)
         network.clearWatch(event.id)
         logcat.destroySession(event.id)

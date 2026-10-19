@@ -1,3 +1,4 @@
+import { recordingApi, recordingProcessorApi } from './recording'
 import { dialogApi } from './dialog'
 import { devicesApi } from './devices'
 import { sdkApi } from './sdk'
@@ -14,6 +15,8 @@ import { reportApi } from './report'
 
 export const api = {
   platform: process.platform,
+  recording: recordingApi,
+  recordingProcessor: recordingProcessorApi,
   dialog: dialogApi,
   devices: devicesApi,
   sdk: sdkApi,

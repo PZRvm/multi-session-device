@@ -5,6 +5,7 @@ import { MAIN_COPY, format } from '@shared/i18n'
 import type { Device, DeviceAvailability, DeviceStatus } from '@shared/types'
 import { useCopy } from '../hooks/useCopy'
 import Input from './Input'
+import RecordingStatus from './RecordingStatus'
 
 /** 健康原因行：优先展示阻断原因；warning（如镜像身份不同）也提示 */
 const availabilityReason = (
@@ -194,6 +195,7 @@ const DeviceRow = ({
             ) : null}
           </span>
           <span className="subtitle">{subtitle}</span>
+          <RecordingStatus deviceId={device.id} />
           {healthLine !== null ? (
             <span className="health-line" title={healthLine}>
               {healthLine}

@@ -1,5 +1,16 @@
 /** IPC 通道名单源——三进程唯一引用点，禁止在别处手写通道字符串 */
 export const IPC_CHANNELS = {
+  recordingStart: 'recording:start',
+  recordingResetPrompts: 'recording:reset-prompts',
+  recordingCommand: 'recording:command',
+  recordingGet: 'recording:get',
+  recordingChanged: 'recording:changed',
+  recordingProcessorSize: 'recording:processor-size',
+  recordingProcessorReady: 'recording:processor-ready',
+  recordingProcessorPull: 'recording:processor-pull',
+  recordingProcessorPush: 'recording:processor-push',
+  recordingProcessorComplete: 'recording:processor-complete',
+  recordingProcessorFailed: 'recording:processor-failed',
   dialogShow: 'dialog:show',
   themeSetMode: 'theme:set-mode',
   /** 主题初值同步下发（preload sendSync 首帧取值；sync 通道走 on + returnValue） */

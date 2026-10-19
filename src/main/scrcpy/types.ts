@@ -1,6 +1,7 @@
 import type { AndroidKeyCode, ScrcpyControlMessageWriter } from '@yume-chan/scrcpy'
 import type { BrowserWindow, WebContents } from 'electron'
 import type { ScreenFormat, ScreenStateMessage } from '@shared/types'
+import type { RecordingSource, RecordingIdentity, RecordingObserver } from './recording'
 import type { CachedPacket, GopCache } from './cache'
 import type { runAdb } from './proc'
 import type { establishTransport, Transport } from './transport'
@@ -90,6 +91,9 @@ export interface ManagerContext {
 }
 
 export interface ScrcpyManager {
+  getRecordingSource: (id: string) => RecordingSource | null
+  subscribeRecordingSource: (identity: RecordingIdentity, observer: RecordingObserver) => () => void
+  requestRecordingKeyFrame: (identity: RecordingIdentity) => Promise<void>
   ensureSession: (device: { id: string; runId: string; serial: string }) => Promise<void>
   destroySession: (deviceId: string) => Promise<void>
   destroyAll: () => Promise<void>

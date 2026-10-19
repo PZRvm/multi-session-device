@@ -12,6 +12,7 @@ import { toApiResult } from '../api'
 import { useCopy } from '../hooks/useCopy'
 import { spinKeyframes } from '../styles/animations'
 import DeviceRow from './DeviceRow'
+import RecordingStatus from './RecordingStatus'
 import { wirelessConnectFailureText } from './wirelessOutcome'
 import { splitByOriginView, originOf, type SourceBucket } from './originView'
 
@@ -198,6 +199,7 @@ const ExternalRow = ({
         <span className={`state-dot ${device.state}`} aria-hidden="true" />
         {meta}
       </span>
+      <RecordingStatus deviceId={device.id} />
       {device.state === 'unauthorized' ? (
         <span className="row-hint">{copy.realDeviceUnauthorizedHint}</span>
       ) : device.state === 'offline' ? (

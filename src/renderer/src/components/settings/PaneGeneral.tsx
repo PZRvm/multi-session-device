@@ -4,6 +4,7 @@ import { LANGUAGE_OPTIONS, type SettingsLocale } from '@shared/i18n'
 import { THEME_SYSTEM_IDS, THEME_SYSTEMS } from '@shared/themeSystems'
 import AppearanceModePicker from '../AppearanceModePicker'
 import SettingsParts, { type SettingsPaneProps } from './SettingsParts'
+import RecordingPromptReset from './RecordingPromptReset'
 
 const PaneGeneral = ({ model, copy }: SettingsPaneProps): React.JSX.Element => (
   <SettingsParts title={copy.general} lead={copy.generalLead}>
@@ -61,6 +62,7 @@ const PaneGeneral = ({ model, copy }: SettingsPaneProps): React.JSX.Element => (
         </select>
       </div>
     </div>
+    <RecordingPromptReset locale={model.locale} />
   </SettingsParts>
 )
 export default PaneGeneral

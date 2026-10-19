@@ -8,6 +8,7 @@ import {
   SETTINGS_COPY,
   SETTINGS_LOCALES
 } from '@shared/i18n'
+import { RECORDING_COPY } from '@shared/i18n/recording'
 import { normalizeAdvancedSettings } from '@shared/settings-contract'
 import type { WizardCapabilities } from '@shared/types'
 
@@ -51,6 +52,29 @@ describe('i18n 字典键齐性（每域三语同键闭集）', () => {
       expect(Object.keys(ERRORS_COPY[locale]).sort()).toEqual(base)
       expect(Object.values(ERRORS_COPY[locale]).every((text) => text.trim().length > 0)).toBe(true)
     }
+  })
+
+  it('recording 域三语键全等且无空文案', () => {
+    const base = Object.keys(RECORDING_COPY['zh-CN']).sort()
+    expect(base.length).toBeGreaterThan(0)
+    for (const locale of SETTINGS_LOCALES) {
+      expect(Object.keys(RECORDING_COPY[locale]).sort()).toEqual(base)
+      expect(Object.values(RECORDING_COPY[locale]).every((text) => text.trim().length > 0)).toBe(
+        true
+      )
+    }
+  })
+
+  it('recording 域占位符三语一致', () => {
+    const tokens = (text: string): string =>
+      [...text.matchAll(/\{(\w+)\}/g)]
+        .map((match) => match[1])
+        .sort()
+        .join(',')
+    const base = RECORDING_COPY['zh-CN']
+    for (const locale of SETTINGS_LOCALES)
+      for (const key of Object.keys(base))
+        expect(tokens(RECORDING_COPY[locale][key as keyof typeof base])).toBe(tokens(base[key]))
   })
 })
 
