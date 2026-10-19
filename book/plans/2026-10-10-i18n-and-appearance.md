@@ -9,7 +9,7 @@ completed: 2026-10-10
 
 > 单 plan 四批串行：批 1–3 为 i18n，批 4 为外观接通。原两份独立 plan（appearance-controls-live / i18n-full-app）于 2026-10-10 应用户要求合并为本文件；执行顺序由用户拍板 **i18n 先行、外观殿后**（设计阶段的推荐为外观先行，理由与影响已随批 4 说明）。每批独立走完实现—测试—验收，批间可停。本 plan 当前只含 workflow Step 0–2 产出；Phase 3 开工后逐批补实施结果。
 
-依据：[PRD](../docs/PRD.md) §1 第 8 条、§2.3 E/G 与 AC「语言切换覆盖主窗口、设备向导、设置窗口与主进程对话框文案」、[stage05](../stage/05-功能完善.md) 设置窗 [suggested] 步骤、[静态前端 plan](./2026-10-09-settings-frontend.md)（控件已画、禁用；「字典统一提升至 `src/shared/i18n/`，不得保留两份运行期事实源」的边界）、[主题持久化 plan](./2026-10-06-theme-persistence.md)（持久化 + 广播先例，写链路已落地并真机验收）。
+依据：[PRD](../docs/PRD.md) §1 第 8 条、§2.3 E/G 与 AC「语言切换覆盖主窗口、设备向导、设置窗口与主进程对话框文案」、[stage05](../notes/summary/2026-10/2026-10-16-功能完善.md) 设置窗 [suggested] 步骤、[静态前端 plan](./2026-10-09-settings-frontend.md)（控件已画、禁用；「字典统一提升至 `src/shared/i18n/`，不得保留两份运行期事实源」的边界）、[主题持久化 plan](./2026-10-06-theme-persistence.md)（持久化 + 广播先例，写链路已落地并真机验收）。
 
 ## Requirements brief — Step 0
 

@@ -30,7 +30,7 @@ description: multi-session-device 的长期架构规则——边界不变量、�
 | `main/emulator/`  | 安卓实例生命周期：SDK 检测引导（sdk）、AVD 增删克隆（avd）、模拟器子进程池与崩溃重启（runner） |
 | `main/simulator/` | iOS 实例生命周期：simctl 管理、ScreenCaptureKit 画面采集、idb 触控注入（仅 macOS）             |
 | `main/scrcpy/`    | 安卓画面流：ADB 连接池与 scrcpy server 生命周期                                                |
-| `main/recording/` | 按设备身份采集/分段/封装/保存录屏，编解码委派独立 renderer |
+| `main/recording/` | 按设备身份采集/分段/封装/保存录屏，编解码委派独立 renderer                                     |
 | `main/store.ts`   | 实例元数据落盘唯一写入口（单文件原子写）                                                       |
 | `preload/`        | `window.api` 白名单桥——刻意不暴露原始 ipcRenderer                                              |
 | `renderer/`       | 纯 UI：会话栏、Tab 条、DeviceCanvas 画面嵌入端；零 Node/Electron 直访、零落盘                  |

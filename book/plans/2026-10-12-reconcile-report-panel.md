@@ -6,7 +6,7 @@ created: 2026-10-12
 
 # 对账报告完整查看面板 — plan
 
-[stage05](../stage/05-功能完善.md) 打磨批 / 用户方案 A 批复（2026-10-12）：超长对账明细此前由原生弹窗承载——无滚动、撑爆屏幕、按钮出屏（已加 40 行截断防线保可用性），完整性受损。本 plan 把**完整报告查看**改为应用内滚动面板，原生弹窗只留摘要提示；同时沉淀主窗第一个自绘弹层原语（BaseModal），供危险区确认词输入等后续家族复用。**关闭 [issue 2026-10-12-reconcile-report-full-view](../notes/issue/2026-10/2026-10-12-reconcile-report-full-view.md)。**
+[stage05](../notes/summary/2026-10/2026-10-16-功能完善.md) 打磨批 / 用户方案 A 批复（2026-10-12）：超长对账明细此前由原生弹窗承载——无滚动、撑爆屏幕、按钮出屏（已加 40 行截断防线保可用性），完整性受损。本 plan 把**完整报告查看**改为应用内滚动面板，原生弹窗只留摘要提示；同时沉淀主窗第一个自绘弹层原语（BaseModal），供危险区确认词输入等后续家族复用。**关闭 [issue 2026-10-12-reconcile-report-full-view](../notes/issue/2026-10/2026-10-12-reconcile-report-full-view.md)。**
 
 依据：[DESIGN.md](../../DESIGN.md)（直角、tokens、非模态倾向——本件为内容浏览型模态，Esc/遮罩可关）；[对账设计](../plans/2026-10-05-avd-reconciliation.md)（报告字段与汇总条契约）。
 

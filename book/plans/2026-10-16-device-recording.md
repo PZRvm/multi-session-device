@@ -8,7 +8,7 @@ created: 2026-10-16
 
 已完成 [workflow](../guidelines/workflow.md) 的 **Step 0、Phase 1、Phase 2、Phase 3 实现**。2026-10-16 用户授权在当前 worktree 开发，并批准依据模拟器证据继续正式实现、将 Android 13+ 真机音频验收后移到交付前，功能范围与同步目标不变。[P0 报告](../docs/poc/2026-10-16-recording-p0.md) 与 [正式实现验证](../docs/poc/2026-10-16-recording-implementation.md) 分别记录先行探针和产品管线结果。1282 项测试通过，但十分钟同步最大 112/106ms 超过 100ms，真实设备音频与交互性能待验；Phase 4 未过，plan 保持 in_progress。
 
-依据：[调研与逐轮确认](../notes/think-report/20261016124043-模拟器录屏.md)、[stage05 录屏半步](../stage/05-功能完善.md)、[stage06 真机来源](../stage/06-真机接入与投屏.md)、[PRD D 组](../docs/PRD.md)。
+依据：[调研与逐轮确认](../notes/think-report/20261016124043-模拟器录屏.md)、[stage05 录屏半步](../notes/summary/2026-10/2026-10-16-功能完善.md)、[stage06 真机来源](../notes/summary/2026-10/2026-10-16-真机接入与投屏.md)、[PRD D 组](../docs/PRD.md)。
 
 ## Requirements brief — Step 0
 

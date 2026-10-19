@@ -7,7 +7,7 @@ updated: 2026-10-08
 
 # 持久化对账 — plan
 
-代码基线：`dev` 的 `a32374e`（2026-10-08）。[stage04](../stage/04-模拟器对接.md) 五个正式步骤已完成。**2026-10-08 实现完成**：按用户指令在 `feat/avd-reconciliation` 分支落地本设计（typed store 读取、只读 AVD/镜像核验、首载/重查合并、runner beforeStart、IPC/UI/汇总提示），全量 502 项通过、typecheck/lint/build 通过；实现轮自查记录见 [issue](../notes/issue/2026-10/2026-10-08-avd-reconciliation-implementation-review.md)、测试经验见 [learn](../notes/learn/2026-10/2026-10-08-avd-reconciliation-implementation-notes.md)。当前运行契约见 [Android 运行快照](../docs/architecture/2026-10-08-android-runtime.md)。
+代码基线：`dev` 的 `a32374e`（2026-10-08）。[stage04](../notes/summary/2026-10/2026-10-09-模拟器对接.md) 五个正式步骤已完成。**2026-10-08 实现完成**：按用户指令在 `feat/avd-reconciliation` 分支落地本设计（typed store 读取、只读 AVD/镜像核验、首载/重查合并、runner beforeStart、IPC/UI/汇总提示），全量 502 项通过、typecheck/lint/build 通过；实现轮自查记录见 [issue](../notes/issue/2026-10/2026-10-08-avd-reconciliation-implementation-review.md)、测试经验见 [learn](../notes/learn/2026-10/2026-10-08-avd-reconciliation-implementation-notes.md)。当前运行契约见 [Android 运行快照](../docs/architecture/2026-10-08-android-runtime.md)。
 
 ## Requirements brief（Step 0）
 

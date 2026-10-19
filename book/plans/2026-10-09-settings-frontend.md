@@ -10,7 +10,7 @@ completed: 2026-10-10
 
 静态前端子批已完成。用户选择「先做静态布局，交互后续细化」「沿用现有设计系统直接实现」，并于 2026-10-09 认可界面布局；布局示意保留 ASCII 线框。Phase 3 实现与 Phase 4 验证已完成，Phase 5 发现一项 P2 并按 workflow 登记，review 结论为 fix。设置窗完整功能步骤保持未完成。
 
-依据：[PRD](../docs/PRD.md) §2.3 E/G、§1 第 8 条、[stage05](../stage/05-功能完善.md)、[SDK 来源调研](../notes/think-report/20261009022552-SDK共享检测与真机投屏.md) §2/5、[DESIGN.md](../../DESIGN.md)。
+依据：[PRD](../docs/PRD.md) §2.3 E/G、§1 第 8 条、[stage05](../notes/summary/2026-10/2026-10-16-功能完善.md)、[SDK 来源调研](../notes/think-report/20261009022552-SDK共享检测与真机投屏.md) §2/5、[DESIGN.md](../../DESIGN.md)。
 
 ## Requirements brief — Step 0
 

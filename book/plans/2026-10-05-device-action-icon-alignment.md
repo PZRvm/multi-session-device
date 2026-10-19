@@ -8,7 +8,7 @@ created: 2026-10-05
 
 > 实现记录（2026-10-05，worktree `feature/device-action-icon-alignment`，基 `feature/stage04-emulator-integration`）：按 Design 落地——`Actions` 显式 `align-items: center`；新增 `BusySlot` 24×24 非交互 inline-flex 槽位承载 `role="img"` 与可访问名，内部 14px SVG 转 `aria-hidden` + `display: block`，旋转动画仅作用于 SVG 并补 `prefers-reduced-motion` 降级；`IconButton` 补 `flex: none`。验收：DeviceRow 14 测试全绿（补槽位语义断言：role 落在 span、SVG aria-hidden）；离屏 Electron harness 渲染三主题系统 × 亮暗 × 9 场景共 54 行，页内几何测量各图标 SVG 中心极差 0.00px、槽位精确 24×24、12 帧动画中心漂移 0.00px，capturePage 序列帧经视觉模型复核亮暗/选中可见性与行高稳定（learn：2026-10-05-offscreen-electron-pixel-acceptance）；typecheck、prettier 过。发现未修：stage04 基线 lint 存量 10E/7W（issue：2026-10-05-baseline-lint-errors-stage04-files）。stage04 无对应步骤，未动 stage 文件。
 
-> 用户要求先创建计划。本轮完成 Step 0、Phase 1、Phase 2，未实施。关联 [stage04](../stage/04-模拟器对接.md) 启停验收；不改阶段概述或步骤。
+> 用户要求先创建计划。本轮完成 Step 0、Phase 1、Phase 2，未实施。关联 [stage04](../notes/summary/2026-10/2026-10-09-模拟器对接.md) 启停验收；不改阶段概述或步骤。
 
 ## Requirements brief
 

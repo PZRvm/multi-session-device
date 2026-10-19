@@ -8,7 +8,7 @@ created: 2026-10-12
 
 设计阶段（Step 0 / Phase 1 / Phase 2）完成并经用户批复（2026-10-12 审阅草案后指示「执行该计划」，五轴按推荐项落地）。来源：用户报障「切到共享 Studio SDK 后左侧列表不变，点启动才失败」（2026-10-12 讨论）。讨论结论：设备列表不变是设计如此（avd-home 恒不迁移），缺口是切换后没有主动告知哪些设备不可用；本 plan 补三块——出身标注、切换重查、指路文案。
 
-依据：[stage05](../stage/05-功能完善.md) 步骤「SDK 来源设置」（[plan 2026-10-11-sdk-source-switching](2026-10-11-sdk-source-switching.md)，共享切换/保留根语义已实现）、共享态向导收窄批（创建侧已只列可用镜像，本 plan 补存量侧）。
+依据：[stage05](../notes/summary/2026-10/2026-10-16-功能完善.md) 步骤「SDK 来源设置」（[plan 2026-10-11-sdk-source-switching](2026-10-11-sdk-source-switching.md)，共享切换/保留根语义已实现）、共享态向导收窄批（创建侧已只列可用镜像，本 plan 补存量侧）。
 
 ## Requirements brief — Step 0
 

@@ -4,7 +4,7 @@ description: 所有 book 文档的说人话书写标准——忠实契约优先�
 
 # 书写风格——说人话
 
-`book/` 下的一切（stage、learn、issue、task、plans、guidelines、docs）都用同一种写法：像一个具体的人在具体场景里说话——不像一个模型在表演写作。专业可以；模板化不行。
+`book/` 下的一切（summary、learn、issue、task、plans、guidelines、docs）都用同一种写法：像一个具体的人在具体场景里说话——不像一个模型在表演写作。专业可以；模板化不行。
 
 三层承载这个标准：**`bowrite` skill**（薄写——写薄写好）是给 agent 的可执行形态，蒸馏自 [shuorenhua](https://github.com/MrGeDiao/shuorenhua)（源头，MIT，作者 MrGeDiao），加上本项目自己 review 中攒下的表达模式；上游 shuorenhua skill 对中文钻得最深，有条件值得装；本文件是两者都没装时的项目内文字兜底。
 

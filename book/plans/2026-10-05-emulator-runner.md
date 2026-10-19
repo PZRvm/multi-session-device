@@ -12,7 +12,7 @@ created: 2026-10-05
 
 ### Background
 
-[stage04](../stage/04-模拟器对接.md) 前三步已完成，应用能创建隔离 AVD，但 `devices:set-running` 仍只改内存。需要把列表操作接到真实 emulator，并使长时间启动、取消、停止和异常退出都有可见结果。依据为 [PRD](../docs/PRD.md) A、F、4.1–4.3；PoC 已验证无头启动及进程组停止。
+[stage04](../notes/summary/2026-10/2026-10-09-模拟器对接.md) 前三步已完成，应用能创建隔离 AVD，但 `devices:set-running` 仍只改内存。需要把列表操作接到真实 emulator，并使长时间启动、取消、停止和异常退出都有可见结果。依据为 [PRD](../docs/PRD.md) A、F、4.1–4.3；PoC 已验证无头启动及进程组停止。
 
 ### Scope
 

@@ -5,7 +5,7 @@ created: 2026-10-08
 
 # Android 运行与操控
 
-源码依据为 feature/stage04-emulator-integration 的 `3c3ea2a`，本次 squash 合入 dev。基础链路在 macOS Apple Silicon + arm64 镜像验收；[阶段 4](../../stage/04-模拟器对接.md) 五个正式步骤完成。向导扩展的完整验收继续按 [原 plan](../../plans/2026-10-05-emulator-wizard.md) 跟踪，阶段收尾不代替其未完成的判据。
+源码依据为 feature/stage04-emulator-integration 的 `3c3ea2a`，本次 squash 合入 dev。基础链路在 macOS Apple Silicon + arm64 镜像验收；[阶段 4](../../notes/summary/2026-10/2026-10-09-模拟器对接.md) 五个正式步骤完成。向导扩展的完整验收继续按 [原 plan](../../plans/2026-10-05-emulator-wizard.md) 跟踪，阶段收尾不代替其未完成的判据。
 
 ## 模块与数据流
 
@@ -70,4 +70,4 @@ stateDiagram-v2
 
 Quick Boot 连续/双机稳定性门槛未过，选择器保持禁用；Android 摄像头取景、签名版权限、能力时延六次测量、解压瞬间取消和六类完整验收仍按 [验收 plan](../../plans/2026-10-06-real-machine-verification.md) 跟踪。[向导遗留](../../notes/issue/2026-10/2026-10-06-wizard-plan-remaining-acceptance.md) 已更新当前状态；直连镜像 package.xml 的 P1 仍见 [验收发现](../../notes/issue/2026-10/2026-10-06-real-machine-acceptance-findings.md)。
 
-日志、截屏/录屏、APK 安装、宿主与设备剪贴板、断网、设置窗和资源防线归 [阶段 5](../../stage/05-功能完善.md)。iOS、跨架构和 Windows/Linux 不属于当前已验平台。
+日志、截屏/录屏、APK 安装、宿主与设备剪贴板、断网、设置窗和资源防线归 [阶段 5](../../notes/summary/2026-10/2026-10-16-功能完善.md)。iOS、跨架构和 Windows/Linux 不属于当前已验平台。

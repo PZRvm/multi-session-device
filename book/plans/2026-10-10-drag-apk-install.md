@@ -9,7 +9,7 @@ completed: 2026-10-10
 
 设计阶段（Step 0 / Phase 1 / Phase 2）已完成，实现未开始。覆盖 stage 步骤「拖拽 APK 进画面即安装并显示结果 + 宿主↔设备剪贴板共享」中的 APK 半边；双向剪贴板共享仍未开工，步骤在本批完成后仍不勾选。
 
-依据：[stage05](../stage/05-功能完善.md)、[workflow](../guidelines/workflow.md) 前三阶段。
+依据：[stage05](../notes/summary/2026-10/2026-10-16-功能完善.md)、[workflow](../guidelines/workflow.md) 前三阶段。
 
 ## Requirements brief — Step 0
 

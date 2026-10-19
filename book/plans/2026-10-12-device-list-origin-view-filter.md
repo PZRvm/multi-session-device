@@ -10,7 +10,7 @@ created: 2026-10-12
 
 **前置依赖**：[plan 2026-10-12-device-list-source-aware](2026-10-12-device-list-source-aware.md)（出身标注 + 切来源重查 + 指路文案）已实现于 worktree 分支 `feature/device-list-source-aware`，**须先合入 dev**——本 plan 的过滤谓词、折叠区标注、汇总条口径全部建在 `imageSourceOrigin` 与重查链路之上。
 
-依据：[stage05](../stage/05-功能完善.md) 步骤「SDK 来源设置」后续交互批、共享态向导收窄批（创建侧已按来源收窄，本 plan 补列表侧视图）。
+依据：[stage05](../notes/summary/2026-10/2026-10-16-功能完善.md) 步骤「SDK 来源设置」后续交互批、共享态向导收窄批（创建侧已按来源收窄，本 plan 补列表侧视图）。
 
 ## Requirements brief — Step 0
 

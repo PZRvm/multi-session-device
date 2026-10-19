@@ -6,7 +6,7 @@ created: 2026-10-05
 
 # 投屏工作台与设备外框 — plan
 
-> 用户要求先创建计划。本轮完成 Step 0、Phase 1、Phase 2，未实施。关联 [stage04](../stage/04-模拟器对接.md) 投屏验收；不改变阶段步骤。
+> 用户要求先创建计划。本轮完成 Step 0、Phase 1、Phase 2，未实施。关联 [stage04](../notes/summary/2026-10/2026-10-09-模拟器对接.md) 投屏验收；不改变阶段步骤。
 
 ## Requirements brief
 

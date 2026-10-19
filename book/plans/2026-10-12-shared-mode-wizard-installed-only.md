@@ -6,7 +6,7 @@ created: 2026-10-12
 
 # 共享模式向导只显示已装镜像 — plan
 
-覆盖 [stage05](../stage/05-功能完善.md)「SDK 来源设置」步骤的共享模式向导收尾批：**仅当 SDK 来源 = 共享 Android Studio SDK 时**——①新建设备的画像列表只显示「有已装镜像可用」的设备画像；②API 版本页只显示已安装的 API，去掉服务筛选 combobox、完整列表 / Preview / 不支持项三开关与下载 / 卸载按钮。托管 / 自选模式向导完全不变。**本 plan 承接并关闭 [issue 2026-10-11 问题一](../notes/issue/2026-10/2026-10-11-sdk-source-shared-wizard-guide-and-journal-corruption.md)（共享向导缺包引导 UI）。**
+覆盖 [stage05](../notes/summary/2026-10/2026-10-16-功能完善.md)「SDK 来源设置」步骤的共享模式向导收尾批：**仅当 SDK 来源 = 共享 Android Studio SDK 时**——①新建设备的画像列表只显示「有已装镜像可用」的设备画像；②API 版本页只显示已安装的 API，去掉服务筛选 combobox、完整列表 / Preview / 不支持项三开关与下载 / 卸载按钮。托管 / 自选模式向导完全不变。**本 plan 承接并关闭 [issue 2026-10-11 问题一](../notes/issue/2026-10/2026-10-11-sdk-source-shared-wizard-guide-and-journal-corruption.md)（共享向导缺包引导 UI）。**
 
 依据：[SDK 来源 plan](./2026-10-11-sdk-source-switching.md)（共享只读语义与守卫已落地）、[调研 think-report 20261009022552](../notes/think-report/20261009022552-SDK共享检测与真机投屏.md) 假设 3（向导只用已装镜像，缺包引导回 Studio）、[PRD](../docs/PRD.md) §2.3 C/D（本批需修订镜像选择 AC 的共享例外）。
 

@@ -54,7 +54,7 @@ export default DeviceList
 - `styled(其他组件)`（如 `styled(Input)`、`styled(Loader2)`）也算第二个 styled，被包装方支持 className 时改传 `className`。例外：`Button`、`Input`、`Divider` 这类叶子基础组件，唯一的 styled 定义就是组件本体，合规
 - Wrapper 自身的动态 prop 用 `$` 前缀（transient props），禁止非 `$` 的 prop 流进 DOM；内部元素是原生标签，动态样式走上面三条
 - 图标一律 lucide-react，禁止 emoji 当图标
-- 主题系统（stage 02）落地前，`color-scheme` 锁 `light`，颜色允许临时硬编码；落地后一律走 tokens
+- 主题系统（[设计系统批](../notes/summary/2026-10/2026-10-04-设计系统.md)）已落地：颜色一律走 tokens，不允许临时硬编码
 
 ## IPC 纪律
 

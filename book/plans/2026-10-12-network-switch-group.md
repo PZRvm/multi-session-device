@@ -8,7 +8,7 @@ created: 2026-10-12
 
 设计阶段（Step 0 / Phase 1 / Phase 2）完成，实现未开始。调研与两轮真机实测见 [think-report 20261012031543](../notes/think-report/20261012031543-断网开关.md)；用户 2026-10-12 批复：①开关放工具条 ②轮询定案、间隔 1s ③分 radio（Wi-Fi/数据）纳入本功能 ④三开关并排工具条形态。PRD 80 行实现批补一句分 radio 口径。
 
-依据：[stage05](../stage/05-功能完善.md) 步骤「断网开关」、[workflow](../guidelines/workflow.md) 前三阶段。
+依据：[stage05](../notes/summary/2026-10/2026-10-16-功能完善.md) 步骤「断网开关」、[workflow](../guidelines/workflow.md) 前三阶段。
 
 ## Requirements brief — Step 0
 

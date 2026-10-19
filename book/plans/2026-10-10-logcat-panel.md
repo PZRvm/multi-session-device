@@ -9,7 +9,7 @@ completed: 2026-10-10
 
 设计（Step 0 / Phase 1 / Phase 2）与实现（Phase 3–6）均已完成。位置与形态沿用 2026-10-10 与用户定下的方向：主窗右侧可拖宽 dock，可切换为独立日志窗；日志会话与环形缓冲归主进程持有，任意窗口按设备订阅。实现细节与设计的出入见文末「实施结果」。
 
-依据：[stage05](../stage/05-功能完善.md) 步骤「日志面板」、[workflow](../guidelines/workflow.md) 前三阶段、[PRD](../docs/PRD.md) 一期成功标准。
+依据：[stage05](../notes/summary/2026-10/2026-10-16-功能完善.md) 步骤「日志面板」、[workflow](../guidelines/workflow.md) 前三阶段、[PRD](../docs/PRD.md) 一期成功标准。
 
 ## Requirements brief — Step 0
 

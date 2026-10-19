@@ -13,8 +13,8 @@
  *
  * 引入自 BoCode（github.com/Focus695/BoCode）code/tools/gen-book-index.mjs，
  * 按本仓库适配：book/ 在仓库根（本仓库没有 code/ 目录）；目录用途表换成
- * stage/、think-report/ 等本仓库实际分类（summary 与 changelogs 未启用，
- * 已移除）；输出与报错文案改中文；新增 --check 模式供发版检查用。
+ * summary/、think-report/ 等本仓库实际分类（changelogs 未启用，已移除）；
+ * 输出与报错文案改中文；新增 --check 模式供发版检查用。
  * 零依赖，Node 自带模块即可运行。
  */
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- 零依赖 .mjs 脚本要能被 node 直接运行，写不了 TS 返回类型标注 */
@@ -42,8 +42,8 @@ const NAME = projectName()
 // 新增 book 目录时在这里补一行用途；没登记的目录在索引里会显示空白用途
 const DIR_PURPOSE = {
   guidelines: '规则书：人和 agent 永远怎么工作，长期稳定',
-  stage:
-    '开发阶段：项目接下来走哪、每步做完没；人定阶段和步骤，勾选附一行结果（替代原 summary 机制）',
+  'notes/summary':
+    '功能报告：一个功能一份写给人看的总结——背景/做了什么/为什么这么选/结果/后续，按月份归档',
   notes: '过程笔记：开发中发生了什么，只增不改',
   'notes/learn': '经验与教训，写码前后按 tags 检索，按月份归档',
   'notes/task': '任务跟踪与拆解的检查清单',
@@ -141,7 +141,7 @@ out += '## 怎么用这本 book\n\n'
 out +=
   '- **AI agent**：先读本文件拿全书地图，再顺着链接去要去的目录。动笔写 book 文档前，先读 `guidelines/writing-style.md`。\n'
 out +=
-  '- **人**：按下面的目录表浏览。规则在 `guidelines/`，进度在 `stage/`，施工图在 `plans/`，经验在 `notes/learn/`，决策在 `docs/decisions/`。\n'
+  '- **人**：按下面的目录表浏览。规则在 `guidelines/`，功能总结在 `notes/summary/`，施工图在 `plans/`，经验在 `notes/learn/`，决策在 `docs/decisions/`。\n'
 out +=
   '- **按时间**：`notes/{learn,issue}/` 按 `YYYY-MM/` 归档——月份只是物理分组，别按功能嵌套更深。变更记录不设 changelog，看 git log。\n'
 out +=

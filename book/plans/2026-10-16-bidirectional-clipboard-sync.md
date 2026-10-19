@@ -6,7 +6,7 @@ created: 2026-10-16
 
 # 双向剪贴板同步 — plan
 
-依据：[已确认调研](../notes/think-report/20261016125001-双向剪贴板同步.md)、[stage05](../stage/05-功能完善.md) APK/剪贴板组合步骤、[工作流](../guidelines/workflow.md)。
+依据：[已确认调研](../notes/think-report/20261016125001-双向剪贴板同步.md)、[stage05](../notes/summary/2026-10/2026-10-16-功能完善.md) APK/剪贴板组合步骤、[工作流](../guidelines/workflow.md)。
 
 2026-10-16 用户确认调研方案，并要求执行 workflow 前三条、编写计划。先完成 **Step 0、Phase 1、Phase 2**；用户后续下令在本工作区实施并确认人工验收通过，review 发现的 P2/P3 亦获批修复并复审关闭，现已 completed。历史实施与审查记录保留如下。
 

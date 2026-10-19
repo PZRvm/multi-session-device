@@ -34,7 +34,7 @@ created: 2026-10-09
 | B4   | `src/main/emulator/skins.ts`、`skinSource.ts`、`skinPresentation.ts`，新增共用 `skinImageLimits.ts` | `skins.test.ts`、`skinSource.test.ts`，新增像素预算及 presentation 回归                 |
 | B5   | `src/main/scrcpy/index.ts`；只有传输问题被证实时才改 `transport.ts`                                 | `src/main/scrcpy/__tests__/index.test.ts`，协议分包回归与隔离真实设备诊断               |
 
-涉及 [stage 04](../stage/04-模拟器对接.md) 的创建与投屏步骤，以及 [stage 05](../stage/05-功能完善.md) 的剪贴板前置能力。计划编写不改变 stage 步骤；实现完成后只补对应结果，不将 suggested 项转正。
+涉及 [stage 04](../notes/summary/2026-10/2026-10-09-模拟器对接.md) 的创建与投屏步骤，以及 [stage 05](../notes/summary/2026-10/2026-10-16-功能完善.md) 的剪贴板前置能力。计划编写不改变 stage 步骤；实现完成后只补对应结果，不将 suggested 项转正。
 
 ## Design
 

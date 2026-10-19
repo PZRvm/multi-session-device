@@ -10,7 +10,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 ## 怎么用这本 book
 
 - **AI agent**：先读本文件拿全书地图，再顺着链接去要去的目录。动笔写 book 文档前，先读 `guidelines/writing-style.md`。
-- **人**：按下面的目录表浏览。规则在 `guidelines/`，进度在 `stage/`，施工图在 `plans/`，经验在 `notes/learn/`，决策在 `docs/decisions/`。
+- **人**：按下面的目录表浏览。规则在 `guidelines/`，功能总结在 `notes/summary/`，施工图在 `plans/`，经验在 `notes/learn/`，决策在 `docs/decisions/`。
 - **按时间**：`notes/{learn,issue}/` 按 `YYYY-MM/` 归档——月份只是物理分组，别按功能嵌套更深。变更记录不设 changelog，看 git log。
 - **按功能**：在本索引里搜功能名、关键词或 frontmatter 摘要；`notes/learn/` 的条目还能按 `tags` 搜。
 - **Obsidian**：把 `book/` 直接当 vault 打开。链接都是普通相对 Markdown；挪了文件就重跑索引。
@@ -31,10 +31,10 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 | `notes/learn/` | 经验与教训，写码前后按 tags 检索，按月份归档 |
 | `notes/learn/2026-09/` | 归档于 notes/learn/，按月份分组 |
 | `notes/learn/2026-10/` | 归档于 notes/learn/，按月份分组 |
+| `notes/summary/2026-10/` | 归档于 notes/summary/，按月份分组 |
 | `notes/task/` | 任务跟踪与拆解的检查清单 |
 | `notes/think-report/` | 功能可行性调研：配置能力、候选方案、落地路径与待确认边界 |
 | `plans/` | 施工图：一个功能一篇，Phase 2 设计确认后落盘，agent 照着施工 |
-| `stage/` | 开发阶段：项目接下来走哪、每步做完没；人定阶段和步骤，勾选附一行结果（替代原 summary 机制） |
 | `think-report/` | 可行性调研报告：立项前的调研结论（本仓库自定义分类） |
 
 ## 全部文件
@@ -79,8 +79,8 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [architecture.md](guidelines/architecture.md) — multi-session-device 的长期架构规则——边界不变量、模块地图、技术基线、数据归属
 - [coding-style.md](guidelines/coding-style.md) — 编码基线——目录与组件结构、命名、样式与图标、IPC 纪律、错误处理、依赖政策
 - [git-workflow.md](guidelines/git-workflow.md) — Clean Commit 提交信息格式与 Clean Flow 分支、PR、合并规则（单人及团队开发）
-- [review-checklist.md](guidelines/review-checklist.md) — 每个改动必须通过的八项 code review 检查——发现只记录，绝不顺手修
-- [workflow.md](guidelines/workflow.md) — 六阶段关卡工作流、八条 code↔book 交互规则与文档路由表
+- [review-checklist.md](guidelines/review-checklist.md) — 每次改动都必须通过的八项代码评审检查——发现的问题只记录，绝不顺手修
+- [workflow.md](guidelines/workflow.md) — 六阶段门禁工作流，附八条 code↔book 交互规则和文档去向表
 - [writing-style.md](guidelines/writing-style.md) — 所有 book 文档的说人话书写标准——忠实契约优先，然后是极简风格规则、强度分级与回读检查
 
 ### notes/
@@ -269,6 +269,15 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-recording-poc-media-boundaries.md](notes/learn/2026-10/2026-10-16-recording-poc-media-boundaries.md) — 录屏 P0 的三个边界——独立 scrcpy 会话各持 jar 路径，WebCodecs decoder flush 后重新等关键帧，音画测试源按实际播放时间校准
 - [2026-10-16-投屏PTS单位与静置ACK误判.md](notes/learn/2026-10/2026-10-16-投屏PTS单位与静置ACK误判.md) — PTS 与 ACK 单位和节拍须对齐；后台回放从首关键帧起算，拥堵显式恢复须独立计时、有界失败，并同步取消本地手势；验收覆盖真实主窗后台激活
 
+### notes/summary/2026-10/
+
+- [2026-10-03-项目骨架与规范.md](notes/summary/2026-10/2026-10-03-项目骨架与规范.md) — 交付可开发的骨架：目录/组件书写规范成文，styled-components + zustand + lucide-react 就位，原生对话框通道打通，骨架文档同步
+- [2026-10-04-会话管理壳.md](notes/summary/2026-10/2026-10-04-会话管理壳.md) — 交付纯前端会话管理壳：左右分栏 + 模拟器列表全量交互（新建/删除/重命名/状态/启停按钮），数据假、不接 Android
+- [2026-10-04-设计系统.md](notes/summary/2026-10/2026-10-04-设计系统.md) — 交付「发信板」设计系统：impeccable 从 multi-session-browser 反推 DESIGN.md，tokens 平移到本仓库可用
+- [2026-10-09-模拟器对接.md](notes/summary/2026-10/2026-10-09-模拟器对接.md) — 交付真模拟器全链路：SDK bootstrap 全量、PoC 过验收线（≥30fps/≤150ms）、向导接真 avdmanager、启停状态机、投屏触控物理键
+- [2026-10-16-功能完善.md](notes/summary/2026-10/2026-10-16-功能完善.md) — 交付一期收尾：日志面板、截屏/录屏/拖拽安装/剪贴板/断网、设置窗、并行与内存水位防线
+- [2026-10-16-真机接入与投屏.md](notes/summary/2026-10/2026-10-16-真机接入与投屏.md) — 真机接入——USB 与无线调试（扫描/配对/连接）接入现有设备列表与投屏，复用内置 scrcpy 栈，不引入 QtScrcpy
+
 ### notes/task/
 
 - [2026-10-09-剩余缺口验收后代码审查.md](notes/task/2026-10-09-剩余缺口验收后代码审查.md) — 剩余缺口和官方皮肤网络修复验收后的代码审查：未发现新增明确缺陷，148 项相关回归与类型检查通过
@@ -366,16 +375,6 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-unlock-stream-resync.md](plans/2026-10-16-unlock-stream-resync.md) — 解锁首滑冻结及 review 三项修复完成：校正缓存与回放、显式重同步、本地手势清理、有界恢复及 ACK 校验；全量 1254 项回归通过
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
-### stage/
-
-- [01-项目骨架与规范.md](stage/01-项目骨架与规范.md) — 交付可开发的骨架：目录/组件书写规范成文，styled-components + zustand + lucide-react 就位，原生对话框通道打通，骨架文档同步
-- [02-设计系统.md](stage/02-设计系统.md) — 交付「发信板」设计系统：impeccable 从 multi-session-browser 反推 DESIGN.md，tokens 平移到本仓库可用
-- [03-会话管理壳.md](stage/03-会话管理壳.md) — 交付纯前端会话管理壳：左右分栏 + 模拟器列表全量交互（新建/删除/重命名/状态/启停按钮），数据假、不接 Android
-- [04-模拟器对接.md](stage/04-模拟器对接.md) — 交付真模拟器全链路：SDK bootstrap 全量、PoC 过验收线（≥30fps/≤150ms）、向导接真 avdmanager、启停状态机、投屏触控物理键
-- [05-功能完善.md](stage/05-功能完善.md) — 交付一期收尾：日志面板、截屏/录屏/拖拽安装/剪贴板/断网、设置窗、并行与内存水位防线
-- [06-真机接入与投屏.md](stage/06-真机接入与投屏.md) — 真机接入——USB 与无线调试（扫描/配对/连接）接入现有设备列表与投屏，复用内置 scrcpy 栈，不引入 QtScrcpy
-- [README.md](stage/README.md) — stage 目录用法——项目开发阶段的里程碑跟踪：人定阶段，勾选带结果，agent 可勾选和建议
-
 ### think-report/
 
 - [20260929011713-安卓与iOS多实例模拟器工具.md](think-report/20260929011713-安卓与iOS多实例模拟器工具.md) — 多模拟器桌面工具可行性结论：安卓走 AVD+scrcpy 嵌入画面，iOS 走 Simulator+idb，官方并发上限与许可证均已核实可行
@@ -383,4 +382,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 293 documents -->
+<!-- 292 documents -->

@@ -8,7 +8,7 @@ created: 2026-10-05
 
 > 实现记录（2026-10-05）：按 Build order 完成。`useCatalogResource` hook 每资源独立 `idle/loading/ready/error` 状态机，首载与重试共用 reload，请求代次 + 组件存活双守卫只接纳当前代次；选择核验改为渲染期派生（从最新清单按 id/packageName 取选中条目，被移除/翻转自动失效，顺带消掉旧对象 installed 标记过期的隐患）。首载无数据时列表区居中 spinner（`--loading` 信号色，prefers-reduced-motion 下停转保文字）+ role=status 文字 + 区域 aria-busy；有数据刷新保留列表、顶部紧凑刷新行；每资源错误中文 + 对应重试，下载失败独立「重试下载」；推进/创建由当前步骤资源 ready + 选择有效 + 既有防连击共同门控。测试 22 过（原 10 回归全绿 + 新 12 覆盖慢请求/部分失败/重试/代次交错/卸载迟到/下载刷新）；typecheck、lint（回基线零新增）、prettier 全绿。真机 CDP 冒烟（worktree 6177 + 调试口 9333）：首开真数据画像/镜像、三步流、命名默认名、Esc 关闭全通过；失败/重试路径按本 plan 约束不人为制造，以单测覆盖（截图未能捕获 loading 首帧——清单来得快，属证据局限非缺陷）。遗留（记录不修，issue 在案）：下载错误仅第二步可见（与下载进度同域，视为口径内）；lint 基线存量 17 项未清（涉 DeviceCanvas 等，需单独一轮）。review 修复轮（2026-10-05）：download() 补 `downloadingRef` 同步守卫，同 tick 连点只触发一次下载（issue 已修，回归测试在案）。
 
-> 用户要求先创建计划。本轮完成 Step 0、Phase 1、Phase 2，未实施。关联 [stage04](../stage/04-模拟器对接.md) 新建向导验收；不改变已有步骤。
+> 用户要求先创建计划。本轮完成 Step 0、Phase 1、Phase 2，未实施。关联 [stage04](../notes/summary/2026-10/2026-10-09-模拟器对接.md) 新建向导验收；不改变已有步骤。
 
 ## Requirements brief
 

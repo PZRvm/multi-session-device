@@ -8,7 +8,7 @@ created: 2026-10-10
 
 设计阶段（Step 0 / Phase 1 / Phase 2）已完成，实现未开始。用户 2026-10-10 定下流程：截图先落入系统剪贴板（立即可粘贴使用），需要留存时点「保存」按钮，文件写入系统下载目录。
 
-依据：[stage05](../stage/05-功能完善.md) 步骤「截屏一键保存 + 录屏」、[workflow](../guidelines/workflow.md) 前三阶段。
+依据：[stage05](../notes/summary/2026-10/2026-10-16-功能完善.md) 步骤「截屏一键保存 + 录屏」、[workflow](../guidelines/workflow.md) 前三阶段。
 
 ## Requirements brief — Step 0
 
