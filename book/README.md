@@ -36,6 +36,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 | `notes/think-report/` | 功能可行性调研：配置能力、候选方案、落地路径与待确认边界 |
 | `plans/` | 施工图：一个功能一篇，Phase 2 设计确认后落盘，agent 照着施工 |
 | `think-report/` | 可行性调研报告：立项前的调研结论（本仓库自定义分类） |
+| `todos/` | 待办清单：跨计划/跨功能的执行清单与状态跟踪，勾完即档 |
 
 ## 全部文件
 
@@ -293,6 +294,8 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261016124043-模拟器录屏.md](notes/think-report/20261016124043-模拟器录屏.md) — 模拟器与真机录屏——按用户批复改为 MP4、设备声音、暂停续录和后台持续录制，跟随横竖屏且单文件，推荐独立录制解码与固定画布重编码、Mediabunny 封装，列明兼容性和验证门槛
 - [20261016125001-双向剪贴板同步.md](notes/think-report/20261016125001-双向剪贴板同步.md) — 当前选中设备与电脑的纯文本双向自动同步可复用 scrcpy 与 Electron，无需新依赖；列出轮询、切换归属、输入法干扰和协议限制
 - [20261016173327-录屏计时与提示交互.md](notes/think-report/20261016173327-录屏计时与提示交互.md) — 录屏交互方案已确认并实施——左侧状态、Logcat 左侧计时/生成反馈、原生结果 dialog、按设备条件记忆与统一恢复入口；验证见交互 plan
+- [20261022110137-Windows兼容问题解决方案调研.md](notes/think-report/20261022110137-Windows兼容问题解决方案调研.md) — Windows 兼容 16 项外围问题（进程/文件系统/打包/模拟器环境/UI）的线上方案选型，已全部批复
+- [20261022125639-Windows适配主体工程调研.md](notes/think-report/20261022125639-Windows适配主体工程调研.md) — Windows 适配主体工程（SDK 引导平台化/解压选型 tar.exe/Studio 检测链零注册表）的方案选型，已全部批复
 
 ### plans/
 
@@ -373,6 +376,9 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-device-recording.md](plans/2026-10-16-device-recording.md) — 模拟器与真机录屏施工图——设备声音、暂停续录、各设备独立 MP4、旋转后最大画布居中、后台任务与下载目录落盘；先过媒体能力验证再接产品
 - [2026-10-16-recording-interactions.md](plans/2026-10-16-recording-interactions.md) — 已确认录屏交互实施——设备行状态、Logcat 左侧计时/生成进度、原生结果队列、按设备条件记忆与统一恢复提示
 - [2026-10-16-unlock-stream-resync.md](plans/2026-10-16-unlock-stream-resync.md) — 解锁首滑冻结及 review 三项修复完成：校正缓存与回放、显式重同步、本地手势清理、有界恢复及 ACK 校验；全量 1254 项回归通过
+- [2026-10-22-windows-process-mgmt.md](plans/2026-10-22-windows-process-mgmt.md) — 进程管理 Windows 化——runner 树杀 taskkill /T、detached 平台化与 windowsHide、before-quit 关窗确认弹窗（有设备在跑先确认再退出）；Win P3，依赖外围调研与用户批复
+- [2026-10-22-windows-sdk-bootstrap.md](plans/2026-10-22-windows-sdk-bootstrap.md) — SDK 引导 Windows 平台化——下载源按平台查表、sdkPaths 补 .exe/.bat、platformExec 执行器（cmd.exe /c + windowsHide）、解压改 Windows 自带 tar.exe；Win P1，依赖主体工程调研
+- [2026-10-22-windows-studio-detect.md](plans/2026-10-22-windows-studio-detect.md) — Studio/SDK 检测链 Windows 分支——studioDetect 四条候选链平台化（零注册表）、adb 系统候选补 Windows 路径、路径比较大小写规范化；Win P2，依赖主体工程调研
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### think-report/
@@ -382,4 +388,8 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 292 documents -->
+### todos/
+
+- [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
+
+<!-- 298 documents -->
