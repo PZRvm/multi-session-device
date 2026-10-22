@@ -28,6 +28,16 @@ export class CancelledError extends Error {
   }
 }
 
+/** 镜像 zip 解压命令（平台分支，导出供单测钉形态）：mac 用 unzip，win32 用自带 tar.exe */
+export const extractZipCommand = (
+  platform: NodeJS.Platform,
+  zipPath: string,
+  targetDir: string
+): { command: string; args: string[] } =>
+  platform === 'win32'
+    ? { command: 'tar.exe', args: ['-xf', zipPath, '-C', targetDir] }
+    : { command: 'unzip', args: ['-q', zipPath, '-d', targetDir] }
+
 export interface DownloaderDeps {
   /** 拉起下载流；默认 fetch（挂 signal，中断即时）。totalBytes 优先 Content-Length，缺省回退 manifest size */
   openUrl?: (
@@ -92,11 +102,13 @@ export const defaultDeps: Required<DownloaderDeps> = {
   extractZip: (zipPath, targetDir, signal) =>
     new Promise<void>((resolve, reject) => {
       // 镜像 zip 的 system.img 解压后常 ≥2GB——adm-zip 会整条目分配 Buffer 撞
-      // 2^31 上限（真机实测 android-21 即 2147483648 字节）；系统 unzip 原生
-      // 支持 zip64 与大条目（macOS/Linux 自带；与皮肤下载的系统 tar 同策略）。
-      // 异步 execFile + signal：取消时 kill 子进程立即返回（execFileSync 阻塞
-      // main 且不可中断——取消 plan 顺带退役）
-      execFile('unzip', ['-q', zipPath, '-d', targetDir], { signal }, (error) => {
+      // 2^31 上限（真机实测 android-21 即 2147483648 字节）；系统解压器原生
+      // 支持 zip64 与大条目。平台分支（plan 2026-10-22-windows-sdk-bootstrap）：
+      // macOS 用自带 unzip；win32 用自带 tar.exe（bsdtar，官方支持解 zip，
+      // Expand-Archive 有 2GB 上限不可用）。异步 execFile + signal：取消时
+      // kill 子进程立即返回（execFileSync 阻塞 main 且不可中断——取消 plan 顺带退役）
+      const { command, args } = extractZipCommand(process.platform, zipPath, targetDir)
+      execFile(command, args, { signal, windowsHide: true }, (error) => {
         if (signal?.aborted) reject(new CancelledError())
         else if (error === null) resolve()
         else reject(new Error(msg('dlUnzipFailed', { message: error.message })))

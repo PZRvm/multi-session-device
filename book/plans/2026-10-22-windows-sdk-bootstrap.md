@@ -1,10 +1,12 @@
 ---
 description: SDK 引导 Windows 平台化——下载源按平台查表、sdkPaths 补 .exe/.bat、platformExec 执行器（cmd.exe /c + windowsHide）、解压改 Windows 自带 tar.exe；Win P1，依赖主体工程调研
-status: pending
+status: completed
 created: 2026-10-22
 ---
 
 # Windows SDK 引导平台化 — plan
+
+> 实现记录（2026-10-22，feature/windows-sdk-bootstrap，基 c77fbe4）：新增 `platformExec.ts`（resolveCommand/spawnCommand/tarBinFor——win32 `.bat` 经 `cmd.exe /c`、统一 `windowsHide`；deps.platform 接缝）；`sdk.ts` 钉版源改平台查表（win32 四值 `TODO-windows` 占位 + bootstrapSdk 入口占位守卫抛 `sdkWindowsSourcePending`，禁止带占位值真跑）、`sdkPaths(root, platform)` 五路径后缀与 jreHome 布局分支（darwin 快照钉住零回归）、JRE 归位 win32 整目录 rename（无 Contents 层）、defaultRunner/uninstall/defaultUnpacker 换 spawnCommand；`downloader.ts` extractZip 平台分支（win32 `tar.exe -xf -C`，mac 维持 unzip，导出 `extractZipCommand` 供测）；`avd.ts` avdmanager/JAVA_HOME 切 sdkPaths 单源；`cameras.ts` 探针路径走 emulatorBin + windowsHide。i18n 三语补 `sdkWindowsSourcePending`。新增单测 14 例（platformExec 6 / sdk win32 6 / downloader 2），全套 1330 过、既有用例零改动、typecheck/lint 0 错。Win32 哈希真值与真实 bootstrap 属统一真机集成阶段（todos 备注），此处不做。经验落 learn 2026-10-22-windows-spawn-bat-tar-exe。
 
 > 依据：[主体工程调研](../notes/think-report/20261022125639-Windows适配主体工程调研.md) 单元 F（§2）与 G（§3），假设已全部批复（只做 x64、mac 零改动、哈希真机阶段填）。任务清单见 [todos](../todos/windows-support.md) P1。
 > 边界声明：本 plan 落到「win32 分支单测级可走通」为止；Windows 下载源哈希真值、真实 bootstrap 全流程归六份计划后的真机集成验证阶段（在 Windows 笔记本上做），不在本 plan 门禁内。

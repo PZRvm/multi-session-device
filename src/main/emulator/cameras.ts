@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process'
-import { join } from 'node:path'
 import { systemPreferences } from 'electron'
 import type { CameraSnapshot, HostWebcam } from '@shared/types'
 import { msg } from '../locale'
+import { sdkPaths } from './sdk'
 
 /** 所装 emulator 的摄像头探针；macOS 权限由宿主应用身份与取流责任链共同决定。 */
 export type WebcamEntry = HostWebcam
@@ -16,7 +16,11 @@ const WEBCAM_LIST_TIMEOUT_MS = 10_000
 
 const defaultRunner = (emulatorPath: string, args: string[]): Promise<string> =>
   new Promise((resolve, reject) => {
-    const child = spawn(emulatorPath, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    // windowsHide：win32 上 GUI 进程拉 console 子进程不闪黑框（posix 无副作用）
+    const child = spawn(emulatorPath, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true
+    })
     const out: Buffer[] = []
     const err: Buffer[] = []
     child.stdout?.on('data', (chunk: Buffer) => out.push(chunk))
@@ -102,7 +106,8 @@ export const listWebcams = async (
   sdkRoot: string,
   deps: WebcamDeps = {}
 ): Promise<WebcamEntry[]> => {
-  const emulatorPath = join(sdkRoot, 'emulator', 'emulator')
+  // emulatorBin 随平台带 .exe 后缀（sdkPaths 单源）
+  const emulatorPath = sdkPaths(sdkRoot).emulatorBin
   const run = deps.runner ?? defaultRunner
   const output = await run(emulatorPath, ['-avd', '__webcam_probe__', '-webcam-list'])
   const entries = parseWebcamList(output)

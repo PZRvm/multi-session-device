@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -6,8 +5,11 @@ import type { SdkComponentName, SdkProgress, SdkSnapshot } from '@shared/types'
 import { msg } from '../locale'
 import { androidUserHomeFor } from './androidUserHome'
 import { netFetch } from './netFetch'
+import { spawnCommand, tarBinFor } from './platformExec'
 
 // ---- 钉版下载源（升级 = 显式改这里 + 重跑真机集成）----
+// 按平台查表（plan 2026-10-22-windows-sdk-bootstrap 设计 2）：win32 的 url/校验值
+// 待 Windows 真机实测后填入——占位期间 bootstrapSdk 走到即抛错，禁止带占位值真跑。
 
 const TEMURIN_JRE_URL =
   'https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_aarch64_mac_hotspot_21.0.12.1_1.tar.gz'
@@ -15,6 +17,28 @@ const TEMURIN_JRE_SHA256 = 'dec50fc6f9fcd4fe3ae8cabf5a5fa68f6afc48841f7698e468e9
 const CMDLINE_TOOLS_URL =
   'https://dl.google.com/android/repository/commandlinetools-mac_arm64-16111833_latest.zip'
 const CMDLINE_TOOLS_SHA1 = 'ad03dc49bfacfd52c110b14104ea548b8a07e830'
+
+const WINDOWS_SOURCE_PLACEHOLDER = 'TODO-windows'
+const DARWIN_SOURCES: BootstrapSources = {
+  jreUrl: TEMURIN_JRE_URL,
+  jreSha256: TEMURIN_JRE_SHA256,
+  cmdlineToolsUrl: CMDLINE_TOOLS_URL,
+  cmdlineToolsSha1: CMDLINE_TOOLS_SHA1
+}
+/** 按平台查表；未登记平台回退 darwin 源（现状行为） */
+const PINNED_SOURCES: Partial<Record<NodeJS.Platform, BootstrapSources>> = {
+  darwin: DARWIN_SOURCES,
+  win32: {
+    jreUrl: WINDOWS_SOURCE_PLACEHOLDER,
+    jreSha256: WINDOWS_SOURCE_PLACEHOLDER,
+    cmdlineToolsUrl: WINDOWS_SOURCE_PLACEHOLDER,
+    cmdlineToolsSha1: WINDOWS_SOURCE_PLACEHOLDER
+  }
+}
+const sourcesFor = (platform: NodeJS.Platform): BootstrapSources =>
+  PINNED_SOURCES[platform] ?? DARWIN_SOURCES
+const isPinnedSourcePending = (sources: BootstrapSources): boolean =>
+  Object.values(sources).some((value) => value === WINDOWS_SOURCE_PLACEHOLDER)
 
 /** sdkmanager --licenses 的等效哈希（CI 惯例）；preview 授权 beta 镜像，一并写入 */
 export const ANDROID_SDK_LICENSE_HASHES = [
@@ -30,8 +54,13 @@ const LICENSE_FILES: Record<string, string> = {
 /** bootstrap 交付的包（镜像不在此列——向导内按需下载） */
 export const SDK_PACKAGES = ['platform-tools', 'emulator'] as const
 
+/**
+ * SDK 内特征路径（平台分支：win32 二进制带 .exe/.bat 后缀、JRE 无 macOS 的
+ * Contents/Home 层——Temurin win zip 顶层即 jre 根；darwin 返回值与历史逐字节一致）
+ */
 export const sdkPaths = (
-  root: string
+  root: string,
+  platform: NodeJS.Platform = process.platform
 ): {
   root: string
   jreHome: string
@@ -42,17 +71,22 @@ export const sdkPaths = (
   adbBin: string
   emulatorBin: string
   licensesDir: string
-} => ({
-  root,
-  jreHome: join(root, 'jre', 'Contents', 'Home'),
-  javaBin: join(root, 'jre', 'Contents', 'Home', 'bin', 'java'),
-  cmdlineToolsMarker: join(root, 'cmdline-tools', 'latest', 'bin', 'sdkmanager'),
-  sdkmanagerBin: join(root, 'cmdline-tools', 'latest', 'bin', 'sdkmanager'),
-  avdmanagerBin: join(root, 'cmdline-tools', 'latest', 'bin', 'avdmanager'),
-  adbBin: join(root, 'platform-tools', 'adb'),
-  emulatorBin: join(root, 'emulator', 'emulator'),
-  licensesDir: join(root, 'licenses')
-})
+} => {
+  const win = platform === 'win32'
+  const jreHome = win ? join(root, 'jre') : join(root, 'jre', 'Contents', 'Home')
+  const toolsBin = join(root, 'cmdline-tools', 'latest', 'bin')
+  return {
+    root,
+    jreHome,
+    javaBin: join(jreHome, 'bin', win ? 'java.exe' : 'java'),
+    cmdlineToolsMarker: join(toolsBin, win ? 'sdkmanager.bat' : 'sdkmanager'),
+    sdkmanagerBin: join(toolsBin, win ? 'sdkmanager.bat' : 'sdkmanager'),
+    avdmanagerBin: join(toolsBin, win ? 'avdmanager.bat' : 'avdmanager'),
+    adbBin: join(root, 'platform-tools', win ? 'adb.exe' : 'adb'),
+    emulatorBin: join(root, 'emulator', win ? 'emulator.exe' : 'emulator'),
+    licensesDir: join(root, 'licenses')
+  }
+}
 
 /** 解析 source.properties 的 Pkg.Revision */
 const readPkgRevision = async (sourcePropertiesPath: string): Promise<string | undefined> => {
@@ -87,8 +121,11 @@ const dirExists = async (path: string): Promise<boolean> => {
   }
 }
 
-export async function detectSdk(root: string): Promise<SdkSnapshot> {
-  const paths = sdkPaths(root)
+export async function detectSdk(
+  root: string,
+  platform: NodeJS.Platform = process.platform
+): Promise<SdkSnapshot> {
+  const paths = sdkPaths(root, platform)
   const [jrePresent, cmdlineToolsPresent, adbPresent, emulatorPresent] = await Promise.all([
     exists(paths.javaBin),
     exists(paths.cmdlineToolsMarker),
@@ -152,15 +189,10 @@ export interface BootstrapSources {
   cmdlineToolsSha1: string
 }
 
-const PINNED_SOURCES: BootstrapSources = {
-  jreUrl: TEMURIN_JRE_URL,
-  jreSha256: TEMURIN_JRE_SHA256,
-  cmdlineToolsUrl: CMDLINE_TOOLS_URL,
-  cmdlineToolsSha1: CMDLINE_TOOLS_SHA1
-}
-
 export interface BootstrapDeps {
-  /** 钉版下载源（默认内置常量；测试注入假源） */
+  /** 平台接缝（默认 process.platform；单测注入 win32 走 Windows 分支） */
+  platform?: NodeJS.Platform
+  /** 钉版下载源（默认按平台查内置表；测试注入假源） */
   sources?: BootstrapSources
   /** 下载器接缝：默认全局 fetch */
   fetcher?: (url: string) => Promise<Buffer>
@@ -196,7 +228,7 @@ const defaultUnpacker = async (archive: Buffer, dest: string): Promise<void> => 
   await writeFile(archivePath, archive)
   try {
     await new Promise<void>((resolve, reject) => {
-      const child = spawn('tar', ['-xf', archivePath, '-C', dest], {
+      const child = spawnCommand({}, tarBinFor(), ['-xf', archivePath, '-C', dest], {
         stdio: ['ignore', 'ignore', 'pipe']
       })
       const stderr: Buffer[] = []
@@ -260,7 +292,7 @@ export async function uninstallSdkManagerPackage(
     deps.runner ??
     ((bin: string, args: string[], env: NodeJS.ProcessEnv): Promise<void> =>
       new Promise((resolve, reject) => {
-        const child = spawn(bin, args, { env, stdio: ['ignore', 'pipe', 'pipe'] })
+        const child = spawnCommand({}, bin, args, { env, stdio: ['ignore', 'pipe', 'pipe'] })
         // stdout 也收：sdkmanager 偶尔把错误写 stdout（review P3）
         const output: Buffer[] = []
         child.stdout?.on('data', (chunk: Buffer) => output.push(chunk))
@@ -322,7 +354,7 @@ const defaultRunner = async (
 ): Promise<void> => {
   const paths = sdkPaths(root)
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(paths.sdkmanagerBin, ['--sdk_root', root, ...packages], {
+    const child = spawnCommand({}, paths.sdkmanagerBin, ['--sdk_root', root, ...packages], {
       env: sdkManagerEnv(root),
       stdio: ['ignore', 'pipe', 'pipe']
     })
@@ -377,9 +409,14 @@ export async function bootstrapSdk(
   const fetcher = deps.fetcher ?? defaultFetcher
   const unpacker = deps.unpacker ?? defaultUnpacker
   const runner = deps.runner ?? defaultRunner
-  const sources = deps.sources ?? PINNED_SOURCES
+  const platform = deps.platform ?? process.platform
+  const sources = deps.sources ?? sourcesFor(platform)
+  // win32 钉版值待真机实测（见文件头注释）——占位期间显式拒绝，防止带占位值真跑
+  if (isPinnedSourcePending(sources)) {
+    throw new Error(msg('sdkWindowsSourcePending'))
+  }
 
-  const snapshot = await detectSdk(root)
+  const snapshot = await detectSdk(root, platform)
   const steps = planBootstrap(snapshot)
   if (steps.length === 0) {
     onProgress({ stage: 'done', percent: 100, message: msg('sdkAlreadyReady') })
@@ -404,13 +441,18 @@ export async function bootstrapSdk(
     try {
       onProgress({ stage: 'jre', message: msg('sdkStepExtractJre') })
       await unpacker(archive, tmp)
-      // Temurin tar 解出 <version>-jre/Contents/...——把 Contents 归位到 <root>/jre/Contents
+      // Temurin 布局随平台：mac tar 解出 <version>-jre/Contents/…（归位 Contents 到
+      // <root>/jre/Contents）；win zip 顶层 <version>-jre/ 即 jre 根（无 Contents 层）
       const children = await readdir(tmp)
       const top = children.find((name) => !name.startsWith('.'))
       if (!top) throw new Error(msg('jreArchiveNoTopDir'))
       await rm(join(root, 'jre'), { recursive: true, force: true })
-      await mkdir(join(root, 'jre'), { recursive: true })
-      await rename(join(tmp, top, 'Contents'), join(root, 'jre', 'Contents'))
+      if (platform === 'win32') {
+        await rename(join(tmp, top), join(root, 'jre'))
+      } else {
+        await mkdir(join(root, 'jre'), { recursive: true })
+        await rename(join(tmp, top, 'Contents'), join(root, 'jre', 'Contents'))
+      }
     } finally {
       await rm(tmp, { recursive: true, force: true })
     }
@@ -459,7 +501,7 @@ export async function bootstrapSdk(
     })
   }
 
-  const done = await detectSdk(root)
+  const done = await detectSdk(root, platform)
   onProgress({ stage: 'done', percent: 100, message: msg('sdkStepDone') })
   return done
 }

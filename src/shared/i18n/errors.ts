@@ -253,6 +253,8 @@ const zhCN = {
   checksumMismatch: '校验和不匹配（{algorithm}）：期望 {expected}…，实际 {actual}…',
   sdkExtractFailed: '解压失败（exit {code}）：{tail}',
   downloadHttpFailed: '下载失败：HTTP {status}（{url}）',
+  sdkWindowsSourcePending:
+    'Windows 引导源尚未钉版（下载地址与校验值待真机实测填入），本功能等待 Windows 集成验证阶段',
   sdkUninstallTimeout: 'sdkmanager --uninstall {pkg} 超时（{seconds} 秒）',
   sdkUninstallTimeoutKilled: 'sdkmanager --uninstall {pkg} 超时（{seconds} 秒），进程已终止',
   sdkUninstallFailed: 'sdkmanager --uninstall {pkg} 失败（exit {code}）：{tail}',
@@ -717,6 +719,8 @@ const zhTW: ErrorsCopy = {
   checksumMismatch: '校驗和不匹配（{algorithm}）：期望 {expected}…，實際 {actual}…',
   sdkExtractFailed: '解壓失敗（exit {code}）：{tail}',
   downloadHttpFailed: '下載失敗：HTTP {status}（{url}）',
+  sdkWindowsSourcePending:
+    'Windows 引導源尚未釘版（下載位址與校驗值待真機實測填入），本功能等待 Windows 整合驗證階段',
   sdkUninstallTimeout: 'sdkmanager --uninstall {pkg} 逾時（{seconds} 秒）',
   sdkUninstallTimeoutKilled: 'sdkmanager --uninstall {pkg} 逾時（{seconds} 秒），處理程序已終止',
   sdkUninstallFailed: 'sdkmanager --uninstall {pkg} 失敗（exit {code}）：{tail}',
@@ -1196,6 +1200,8 @@ const enUS: ErrorsCopy = {
   checksumMismatch: 'Checksum mismatch ({algorithm}): expected {expected}…, got {actual}…',
   sdkExtractFailed: 'Extraction failed (exit {code}): {tail}',
   downloadHttpFailed: 'Download failed: HTTP {status} ({url})',
+  sdkWindowsSourcePending:
+    'Windows bootstrap sources are not pinned yet (URLs and checksums pending real-device verification); waiting for the Windows integration phase',
   sdkUninstallTimeout: 'sdkmanager --uninstall {pkg} timed out ({seconds} s)',
   sdkUninstallTimeoutKilled:
     'sdkmanager --uninstall {pkg} timed out ({seconds} s); the process was terminated',

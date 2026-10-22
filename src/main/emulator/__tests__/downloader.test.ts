@@ -6,6 +6,7 @@ import {
   buildPackageXml,
   downloadImagePackage,
   downloadImageZip,
+  extractZipCommand,
   installImageZip,
   verifyPackageInstall,
   CancelledError
@@ -496,5 +497,21 @@ describe('downloadImagePackage 取消（plan 2026-10-06-download-cancel）', () 
     const outcome = await downloadImagePackage('/sdk', TARGET, () => {}, deps2, controller.signal)
     expect(outcome).toBe('canceled')
     expect(state.moved).toHaveLength(0) // 未进入落位
+  })
+})
+
+describe('extractZipCommand（平台分支）', () => {
+  it('darwin 维持系统 unzip（-q/-d 形态零回归）', () => {
+    expect(extractZipCommand('darwin', '/tmp/a.zip', '/tmp/out')).toEqual({
+      command: 'unzip',
+      args: ['-q', '/tmp/a.zip', '-d', '/tmp/out']
+    })
+  })
+
+  it('win32 用系统自带 tar.exe（-xf/-C），zip64/大条目由 bsdtar 原生支持', () => {
+    expect(extractZipCommand('win32', 'C:\\dl\\a.zip', 'C:\\sdk\\out')).toEqual({
+      command: 'tar.exe',
+      args: ['-xf', 'C:\\dl\\a.zip', '-C', 'C:\\sdk\\out']
+    })
   })
 })
