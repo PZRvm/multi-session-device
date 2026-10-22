@@ -4,13 +4,13 @@ import {
   mkdir,
   readdir,
   readFile,
-  rename,
   rm,
   stat,
   statfs,
   writeFile
 } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
+import { makeResilientRename } from './fsWin'
 import type {
   SdkMigrationEntry,
   SdkMigrationJournalFile,
@@ -67,7 +67,7 @@ const defaultDeps = (userDataDir: () => string): MigrationDeps => ({
     return { isDir: info.isDirectory(), size: info.size, dev: Number(info.dev) }
   },
   mkdirP: (path) => mkdir(path, { recursive: true }).then(() => undefined),
-  renameEntry: (from, to) => rename(from, to),
+  renameEntry: makeResilientRename(process.platform),
   rmTree: (path) => rm(path, { recursive: true, force: true }),
   copyFileTo: (from, to) => copyFile(from, to),
   freeSpaceOf: async (path) => {

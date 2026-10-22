@@ -1,10 +1,12 @@
 ---
 description: 文件链路 Windows 健壮性——rename/move 占用锁退避重试与 EXDEV 跨卷回退小工具（替换四个文件的裸调用点）、sha1 校验并入下载流省一次 2GB 读盘；Win P4，依赖外围调研 B1 与 P1 合并后代码现状
-status: pending
+status: completed
 created: 2026-10-22
 ---
 
 # Windows 文件链路健壮性 — plan
+
+> 实现记录（2026-10-22，feature/windows-file-resilience，基 feat/windows-branch 66ebb1c）：按 Build order 全部完成，零实现偏差（Impact range 与实落地一致：fsWin 新增、downloader/sdk/sdkMigration 三文件替换、sdkSourceSwitch 零改动核实）。fsWin 10 用例（三码重试/耗尽抛原错/非重试码直抛/EXDEV 回退三分支/posix 直通）；sha1 流式化以 `createHasher` 接缝替换 `sha1Of`——校验块位置/文案/清理路径不变，钉旧接缝的用例改注入方式、断言不动，另补「无 zipSha1 不建哈希器」「默认哈希器真 sha1 已知值」两用例。全套 1370 测试过、typecheck/lint 0 错；替换步骤完成时全量回归零行为变化（既有用例零改动全绿）。**自查记录（P3 级）**：流式化后哈希反映流字节而非盘上字节——原 sha1Of 的整文件回读顺带承担「落盘内容二次确认」，极端场景（写路径静默丢数据）改由后续解压与三件套核验兜底，如实接受。另：施工中一次全量跑出现 1 例未复现失败（连续两轮全绿、未能定位到用例，external 域计时敏感测试嫌疑最大，与 P4 文件面无关）——如再现则记 issue。真机项（Defender 锁真实触发、跨盘迁移、第三方杀软错误码采样）归统一集成阶段。
 
 > 依据：[外围调研](../notes/think-report/20261022110137-Windows兼容问题解决方案调研.md) §3（单元 B：B1 重试+回退选型；B1 补充事实——Node fs.rm 对 EBUSY/EMFILE/ENOTEMPTY/EPERM 已内建重试，工具只需覆盖 rename/move）与 §4.3/§4.5（sha1 流式化的挂靠口径：计划内工作、mac 同受益）；任务清单见 [todos](../todos/windows-support.md) P4。
 > 与 P1 的依赖：[P1 SDK 引导平台化](2026-10-22-windows-sdk-bootstrap.md)已合并进 feat/windows-branch（[主体工程调研](../notes/think-report/20261022125639-Windows适配主体工程调研.md) 的落地）——downloader 落了 `makeExtractZip` 解压工厂、sdk.ts 落了 win32 归位分支，调研报告里的旧行号已漂移；本 plan 的 Impact range 按合并后现状逐行核对（2026-10-22，基 b513ea8）。P2（检测链，含 B2 大小写规范化）、P3（进程管理）亦已合并，与本 plan 无代码交叠。

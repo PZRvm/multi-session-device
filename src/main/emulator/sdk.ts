@@ -1,11 +1,15 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { SdkComponentName, SdkProgress, SdkSnapshot } from '@shared/types'
 import { msg } from '../locale'
 import { androidUserHomeFor } from './androidUserHome'
+import { makeResilientRename } from './fsWin'
 import { netFetch } from './netFetch'
 import { spawnCommand, tarBinFor } from './platformExec'
+
+// 归位用容错 rename（fsWin）：win32 撞杀软句柄退避重试 + EXDEV 兜底；mac 恒为裸 rename
+const renameResilient = makeResilientRename(process.platform)
 
 // ---- 钉版下载源（升级 = 显式改这里 + 重跑真机集成）----
 // 按平台查表（plan 2026-10-22-windows-sdk-bootstrap 设计 2）：win32 的 url/校验值
@@ -449,10 +453,10 @@ export async function bootstrapSdk(
       if (!top) throw new Error(msg('jreArchiveNoTopDir'))
       await rm(join(root, 'jre'), { recursive: true, force: true })
       if (platform === 'win32') {
-        await rename(join(tmp, top), join(root, 'jre'))
+        await renameResilient(join(tmp, top), join(root, 'jre'))
       } else {
         await mkdir(join(root, 'jre'), { recursive: true })
-        await rename(join(tmp, top, 'Contents'), join(root, 'jre', 'Contents'))
+        await renameResilient(join(tmp, top, 'Contents'), join(root, 'jre', 'Contents'))
       }
     } finally {
       await rm(tmp, { recursive: true, force: true })
@@ -474,9 +478,9 @@ export async function bootstrapSdk(
       if (children.includes('cmdline-tools')) {
         // 官方 zip 自带顶层 cmdline-tools/——归位为 cmdline-tools/latest
         await mkdir(join(root, 'cmdline-tools'), { recursive: true })
-        await rename(join(tmp, 'cmdline-tools'), join(root, 'cmdline-tools', 'latest'))
+        await renameResilient(join(tmp, 'cmdline-tools'), join(root, 'cmdline-tools', 'latest'))
       } else {
-        await rename(tmp, join(root, 'cmdline-tools', 'latest'))
+        await renameResilient(tmp, join(root, 'cmdline-tools', 'latest'))
       }
     } finally {
       await rm(tmp, { recursive: true, force: true })

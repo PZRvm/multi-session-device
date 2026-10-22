@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { XMLParser } from 'fast-xml-parser'
 import {
   buildPackageXml,
+  defaultDeps,
   downloadImagePackage,
   downloadImageZip,
   extractZipCommand,
@@ -140,7 +141,10 @@ const makeEnv = (
       let t = 0
       return () => (t += 1000) // 每次读时都过 500ms 节流窗
     })(),
-    sha1Of: async () => overrides.sha1 ?? TARGET.zipSha1,
+    createHasher: () => ({
+      update: () => {},
+      digest: () => overrides.sha1 ?? TARGET.zipSha1
+    }),
     extractZip: async (_zip: string, dir: string) => {
       state.dirs.add(dir)
       // 真机实证（android-21 zip）：首层即 <abi>/，不带 platform/tag 层
@@ -394,20 +398,43 @@ describe('downloadImagePackage 取消（plan 2026-10-06-download-cancel）', () 
     expect(outcome).toBe('canceled')
   })
 
-  it('校验阶段取消（sha1 前检查点）：不进入落位，zip 清理', async () => {
+  it('校验阶段取消（digest 时 abort，原 sha1 检查点等位）：不进入落位，zip 清理', async () => {
     const { deps, state } = makeEnv()
     const controller = new AbortController()
     const deps2 = {
       ...deps,
-      sha1Of: async (path: string): Promise<string> => {
-        controller.abort() // sha1 检查点在哈希计算前
-        void path
-        return TARGET.zipSha1 ?? 'a'.repeat(40)
-      }
+      createHasher: () => ({
+        update: () => {},
+        digest: (): string => {
+          controller.abort() // 哈希算完即校验点：abort 落在返回 zipPath 之前
+          return TARGET.zipSha1
+        }
+      })
     }
     const outcome = await downloadImagePackage('/sdk', TARGET, () => {}, deps2, controller.signal)
     expect(outcome).toBe('canceled')
     expect(state.removed.some((path) => path.includes('.downloading.zip'))).toBe(true)
+  })
+
+  it('无 zipSha1 的包不建哈希器（manifest 缺校验值时零开销直通）', async () => {
+    const { deps } = makeEnv()
+    let created = 0
+    const deps2 = {
+      ...deps,
+      createHasher: () => {
+        created += 1
+        return { update: () => {}, digest: () => 'x'.repeat(40) }
+      }
+    }
+    await downloadImageZip('/sdk', { ...TARGET, zipSha1: null }, () => {}, deps2)
+    expect(created).toBe(0)
+  })
+
+  it('默认哈希器是真 sha1：分段喂入与一次性哈希一致（sha1("abc") 已知值）', () => {
+    const hasher = defaultDeps.createHasher()
+    hasher.update(new TextEncoder().encode('a'))
+    hasher.update(new TextEncoder().encode('bc'))
+    expect(hasher.digest()).toBe('a9993e364706816aba3e25717850c26c9cd0d89d')
   })
 
   it('解压中取消（signal kill 解压进程）：清理解压目录，返回 canceled', async () => {
