@@ -22,3 +22,9 @@ description: P3 进程管理 Windows 化代码评审发现——无 P1；P2 两�
 ## 结论
 
 无 P1（阻断级）问题；posix 路径逐字节未动、无安全面新增（taskkill 参数为数字化 pid，无注入面）。P2-1 建议与 issue 2026-10-22-windows-quit-stay-no-window（second-instance 唤回）同批进 P3 修复轮，两者都在 Windows 真机验收前完成即可。
+
+## 修复记录（2026-10-22 修复轮）
+
+- **P2-1 已修**：`makeRunner` 基线钉 `platform: 'darwin'`，套件平台无关。
+- **P2-2 已修（防御性）**：`browser-window-created` 统一挂钩 BaseWindow 级 win32 专属事件 `query-session-end`/`session-end` → `markSessionEnding()`；`confirmQuitIfNeeded` 会话结束时恒放行不弹窗（`sessionEnding` 接缝可测）。保留真机验证项：关机/注销时「会话结束先于 before-quit」的行为随 Windows 版本而异，开始菜单关机剧本仍需真机裁决。
+- **P3-1～P3-4 未修**（按纪律顺延；修复轮范围仅 P2）。

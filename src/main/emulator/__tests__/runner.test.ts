@@ -86,6 +86,9 @@ const makeRunner = (
       children.push(child)
       return child as unknown as ChildProcess
     }) as RunnerDeps['spawnEmulator'],
+    // 平台钉 darwin：套件平台无关——Windows 真机跑 npm test 时既有用例仍走 posix
+    // 分支（win32 行为由显式注入 platform 的用例覆盖）——review P2-1
+    platform: 'darwin',
     sleep: abortableSleep,
     now: () => Date.now(),
     confirmedPortConflict: async () => false,

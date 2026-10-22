@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   showMessageBox: vi.fn<
@@ -13,7 +13,13 @@ vi.mock('../locale', () => ({
     params === undefined ? key : `${key}:${JSON.stringify(params)}`
 }))
 
-import { confirmQuitIfNeeded } from '../quit-confirm'
+import { confirmQuitIfNeeded, markSessionEnding, resetSessionEndingForTest } from '../quit-confirm'
+
+beforeEach(() => {
+  resetSessionEndingForTest()
+  mocks.showMessageBox.mockReset()
+  mocks.showMessageBox.mockResolvedValue({ response: 0, checkboxChecked: false })
+})
 
 describe('Windows 关窗确认（quit-confirm）', () => {
   it('win32 且有设备在跑：弹原生确认，选「退出」放行', async () => {
@@ -60,5 +66,20 @@ describe('Windows 关窗确认（quit-confirm）', () => {
     expect(ask).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'quitConfirmTitle', cancelId: 0 })
     )
+  })
+
+  it('会话结束旁路（注入）：win32 且有设备在跑也不弹窗，直接放行——系统关机不能被模态框挂住', async () => {
+    await expect(
+      confirmQuitIfNeeded({ platform: 'win32', runningCount: () => 2, sessionEnding: true })
+    ).resolves.toBe(true)
+    expect(mocks.showMessageBox).not.toHaveBeenCalled()
+  })
+
+  it('会话结束旁路（模块标记）：markSessionEnding 后同样放行', async () => {
+    markSessionEnding()
+    await expect(confirmQuitIfNeeded({ platform: 'win32', runningCount: () => 1 })).resolves.toBe(
+      true
+    )
+    expect(mocks.showMessageBox).not.toHaveBeenCalled()
   })
 })
