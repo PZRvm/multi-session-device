@@ -269,6 +269,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-clipboard-sync-lifecycle.md](notes/learn/2026-10/2026-10-16-clipboard-sync-lifecycle.md) — 双向剪贴板的观察基线、单飞 ACK 队列与 IME 回声必须分开；设备消息消费不能等待出站 ACK
 - [2026-10-16-recording-poc-media-boundaries.md](notes/learn/2026-10/2026-10-16-recording-poc-media-boundaries.md) — 录屏 P0 的三个边界——独立 scrcpy 会话各持 jar 路径，WebCodecs decoder flush 后重新等关键帧，音画测试源按实际播放时间校准
 - [2026-10-16-投屏PTS单位与静置ACK误判.md](notes/learn/2026-10/2026-10-16-投屏PTS单位与静置ACK误判.md) — PTS 与 ACK 单位和节拍须对齐；后台回放从首关键帧起算，拥堵显式恢复须独立计时、有界失败，并同步取消本地手势；验收覆盖真实主窗后台激活
+- [2026-10-22-vitest-esm-namespace-spy.md](notes/learn/2026-10/2026-10-22-vitest-esm-namespace-spy.md) — vitest 里 vi.spyOn 打不通 node 内置模块的 ESM 命名空间——要么整模块 vi.mock，要么给被测函数留接缝参数
 
 ### notes/summary/2026-10/
 
@@ -278,6 +279,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-模拟器对接.md](notes/summary/2026-10/2026-10-09-模拟器对接.md) — 交付真模拟器全链路：SDK bootstrap 全量、PoC 过验收线（≥30fps/≤150ms）、向导接真 avdmanager、启停状态机、投屏触控物理键
 - [2026-10-16-功能完善.md](notes/summary/2026-10/2026-10-16-功能完善.md) — 交付一期收尾：日志面板、截屏/录屏/拖拽安装/剪贴板/断网、设置窗、并行与内存水位防线
 - [2026-10-16-真机接入与投屏.md](notes/summary/2026-10/2026-10-16-真机接入与投屏.md) — 真机接入——USB 与无线调试（扫描/配对/连接）接入现有设备列表与投屏，复用内置 scrcpy 栈，不引入 QtScrcpy
+- [2026-10-22-windows-process-mgmt.md](notes/summary/2026-10/2026-10-22-windows-process-mgmt.md) — Windows 进程管理落地——runner 树杀 taskkill /T、win32 不 detached、关窗确认弹窗；win32-only 分支 mac 零回归
 
 ### notes/task/
 
@@ -392,4 +394,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 298 documents -->
+<!-- 300 documents -->

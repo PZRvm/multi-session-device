@@ -11,8 +11,10 @@ import {
   prepareAppShutdown,
   resumeAfterShutdown,
   resumeExternalSessions,
+  runningDeviceCount,
   stopExternalTracking
 } from './devices'
+import { confirmQuitIfNeeded } from './quit-confirm'
 import { restoreTheme } from './theme'
 import { restoreLocale } from './locale'
 import { restoreSdkSource } from './emulator/sdkSource'
@@ -59,6 +61,9 @@ app.on('before-quit', (event) => {
   if (quitPending) return
   quitPending = true
   void (async () => {
+    // Windows 关窗确认（plan 2026-10-22-windows-process-mgmt）：win32 且有本工具启动的
+    // 设备在跑时先仲裁；留在应用直接折返——录制/设备清理均未启动，finally 复位 quitPending
+    if (!(await confirmQuitIfNeeded({ runningCount: runningDeviceCount }))) return
     if (!(await prepareRecordingQuit())) return
     const { leftovers } = await prepareAppShutdown()
     await shutdownStreams()
