@@ -386,6 +386,8 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-device-recording.md](plans/2026-10-16-device-recording.md) — 模拟器与真机录屏施工图——设备声音、暂停续录、各设备独立 MP4、旋转后最大画布居中、后台任务与下载目录落盘；先过媒体能力验证再接产品
 - [2026-10-16-recording-interactions.md](plans/2026-10-16-recording-interactions.md) — 已确认录屏交互实施——设备行状态、Logcat 左侧计时/生成进度、原生结果队列、按设备条件记忆与统一恢复提示
 - [2026-10-16-unlock-stream-resync.md](plans/2026-10-16-unlock-stream-resync.md) — 解锁首滑冻结及 review 三项修复完成：校正缓存与回放、显式重同步、本地手势清理、有界恢复及 ACK 校验；全量 1254 项回归通过
+- [2026-10-22-windows-emulator-env.md](plans/2026-10-22-windows-emulator-env.md) — 模拟器环境适配——镜像目录按宿主架构过滤 x86_64、WHPX 缺失的失败识别与深链引导、摄像头空列表的系统隐私设置入口；Win P5，依赖外围调研 D1-D3
+- [2026-10-22-windows-file-resilience.md](plans/2026-10-22-windows-file-resilience.md) — 文件链路 Windows 健壮性——rename/move 占用锁退避重试与 EXDEV 跨卷回退小工具（替换四个文件的裸调用点）、sha1 校验并入下载流省一次 2GB 读盘；Win P4，依赖外围调研 B1 与 P1 合并后代码现状
 - [2026-10-22-windows-process-mgmt.md](plans/2026-10-22-windows-process-mgmt.md) — 进程管理 Windows 化——runner 树杀 taskkill /T、detached 平台化与 windowsHide、before-quit 关窗确认弹窗（有设备在跑先确认再退出）；Win P3，依赖外围调研与用户批复
 - [2026-10-22-windows-sdk-bootstrap.md](plans/2026-10-22-windows-sdk-bootstrap.md) — SDK 引导 Windows 平台化——下载源按平台查表、sdkPaths 补 .exe/.bat、platformExec 执行器（cmd.exe /c + windowsHide）、解压改 Windows 自带 tar.exe；Win P1，依赖主体工程调研
 - [2026-10-22-windows-studio-detect.md](plans/2026-10-22-windows-studio-detect.md) — Studio/SDK 检测链 Windows 分支——studioDetect 四条候选链平台化（零注册表）、adb 系统候选补 Windows 路径、路径比较大小写规范化；Win P2，依赖主体工程调研
@@ -402,4 +404,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 308 documents -->
+<!-- 310 documents -->
