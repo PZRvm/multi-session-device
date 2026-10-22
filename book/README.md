@@ -183,6 +183,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-投屏回放无ACK恢复盲点.md](notes/issue/2026-10/2026-10-16-投屏回放无ACK恢复盲点.md) — 已实窗复现并修复回放首批无 ACK 的互等：4 包解码阈值先于 8 包 ACK，渲染端停收而 main 未武装；新增显式重同步请求、阈值 16 与归属校验/去重
 - [2026-10-16-无线投屏建流失败后切回缺少重试入口.md](notes/issue/2026-10/2026-10-16-无线投屏建流失败后切回缺少重试入口.md) — USB/无线双条目两次启动分别有一侧 scrcpy video socket 超时；错误会话清理后切回，activate 返回空，界面停在连接态且没有重试入口，留后续单独修复
 - [2026-10-16-解锁投屏修复-code-review.md](notes/issue/2026-10/2026-10-16-解锁投屏修复-code-review.md) — 解锁投屏 Phase 5 的三项发现已修复并正式回归：本地手势随代次取消、零帧有界恢复与可重试错误态、ACK 安全整数校验；全量 1254 项通过
+- [2026-10-22-windows-sdk-bootstrap-review.md](notes/issue/2026-10/2026-10-22-windows-sdk-bootstrap-review.md) — Windows P1 SDK 引导平台化 code review——0 项 P1、1 项 P2（cmd.exe 含空格路径待真机验证）、4 项 P3；本轮只记录未修
 
 ### notes/learn/
 
@@ -393,4 +394,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 299 documents -->
+<!-- 300 documents -->
