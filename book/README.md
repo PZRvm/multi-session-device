@@ -184,6 +184,8 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-无线投屏建流失败后切回缺少重试入口.md](notes/issue/2026-10/2026-10-16-无线投屏建流失败后切回缺少重试入口.md) — USB/无线双条目两次启动分别有一侧 scrcpy video socket 超时；错误会话清理后切回，activate 返回空，界面停在连接态且没有重试入口，留后续单独修复
 - [2026-10-16-解锁投屏修复-code-review.md](notes/issue/2026-10/2026-10-16-解锁投屏修复-code-review.md) — 解锁投屏 Phase 5 的三项发现已修复并正式回归：本地手势随代次取消、零帧有界恢复与可重试错误态、ACK 安全整数校验；全量 1254 项通过
 - [2026-10-22-sdk-migration-adb-probe-win32.md](notes/issue/2026-10/2026-10-22-sdk-migration-adb-probe-win32.md) — sdkMigration 的 SDK 根核验探测写死无后缀 adb 路径——win32 下恒假阴性，迁移/切换根验证会误判
+- [2026-10-22-windows-process-mgmt-review.md](notes/issue/2026-10/2026-10-22-windows-process-mgmt-review.md) — P3 进程管理 Windows 化代码评审发现——无 P1；P2 两条（测试平台假设钉住、会话结束弹窗暴露面）+ P3 四条；只记录不修
+- [2026-10-22-windows-quit-stay-no-window.md](notes/issue/2026-10/2026-10-22-windows-quit-stay-no-window.md) — Windows 关窗确认选「留在应用」后 app 无窗口且无唤回入口——需 second-instance 处理，真机验收前修复
 - [2026-10-22-windows-sdk-bootstrap-review.md](notes/issue/2026-10/2026-10-22-windows-sdk-bootstrap-review.md) — Windows P1 SDK 引导平台化 code review——0 项 P1、1 项 P2（cmd.exe 含空格路径待真机验证）、4 项 P3（同日修复批已全部处置）
 - [2026-10-22-windows-studio-detect-review.md](notes/issue/2026-10/2026-10-22-windows-studio-detect-review.md) — P2 Windows 检测链（4dc8d46）代码评审发现——4 项 P3：平台传参风格、APPDATA 未优先读 env、win 用例 runner 可携带性、isStudioSdk 遗留未用声明；只记录未修
 
@@ -272,6 +274,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-clipboard-sync-lifecycle.md](notes/learn/2026-10/2026-10-16-clipboard-sync-lifecycle.md) — 双向剪贴板的观察基线、单飞 ACK 队列与 IME 回声必须分开；设备消息消费不能等待出站 ACK
 - [2026-10-16-recording-poc-media-boundaries.md](notes/learn/2026-10/2026-10-16-recording-poc-media-boundaries.md) — 录屏 P0 的三个边界——独立 scrcpy 会话各持 jar 路径，WebCodecs decoder flush 后重新等关键帧，音画测试源按实际播放时间校准
 - [2026-10-16-投屏PTS单位与静置ACK误判.md](notes/learn/2026-10/2026-10-16-投屏PTS单位与静置ACK误判.md) — PTS 与 ACK 单位和节拍须对齐；后台回放从首关键帧起算，拥堵显式恢复须独立计时、有界失败，并同步取消本地手势；验收覆盖真实主窗后台激活
+- [2026-10-22-vitest-esm-namespace-spy.md](notes/learn/2026-10/2026-10-22-vitest-esm-namespace-spy.md) — vitest 里 vi.spyOn 打不通 node 内置模块的 ESM 命名空间——要么整模块 vi.mock，要么给被测函数留接缝参数
 - [2026-10-22-windows-spawn-bat-tar-exe.md](notes/learn/2026-10/2026-10-22-windows-spawn-bat-tar-exe.md) — win32 下 spawn .bat/.cmd 必须 cmd.exe /c 包装（Node 安全修复后直接抛 EINVAL）；GUI 进程拉子进程要带 windowsHide 防闪黑框；Windows 解 zip 用系统自带 tar.exe（bsdtar 原生 zip64），PowerShell Expand-Archive 有 2GB 单文件上限不可用
 - [2026-10-22-接缝存在不等于接缝生效.md](notes/learn/2026-10/2026-10-22-接缝存在不等于接缝生效.md) — 测试接缝的可注入性要靠「默认实现也走注入」锁定——defaultAdbOnPath 收了 fileExists 接缝却写死 defaultFileExists，接缝自始未生效
 
@@ -283,6 +286,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-模拟器对接.md](notes/summary/2026-10/2026-10-09-模拟器对接.md) — 交付真模拟器全链路：SDK bootstrap 全量、PoC 过验收线（≥30fps/≤150ms）、向导接真 avdmanager、启停状态机、投屏触控物理键
 - [2026-10-16-功能完善.md](notes/summary/2026-10/2026-10-16-功能完善.md) — 交付一期收尾：日志面板、截屏/录屏/拖拽安装/剪贴板/断网、设置窗、并行与内存水位防线
 - [2026-10-16-真机接入与投屏.md](notes/summary/2026-10/2026-10-16-真机接入与投屏.md) — 真机接入——USB 与无线调试（扫描/配对/连接）接入现有设备列表与投屏，复用内置 scrcpy 栈，不引入 QtScrcpy
+- [2026-10-22-windows-process-mgmt.md](notes/summary/2026-10/2026-10-22-windows-process-mgmt.md) — Windows 进程管理落地——runner 树杀 taskkill /T、win32 不 detached、关窗确认弹窗；win32-only 分支 mac 零回归
 - [2026-10-22-windows-studio-detect.md](notes/summary/2026-10/2026-10-22-windows-studio-detect.md) — Windows 检测链分支——studioDetect 四条候选链与 adb 候选平台化、零注册表固定目录探测、路径大小写规范化；mac 行为零变化
 
 ### notes/task/
@@ -398,4 +402,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 304 documents -->
+<!-- 308 documents -->

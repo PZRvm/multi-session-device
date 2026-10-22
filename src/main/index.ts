@@ -11,8 +11,10 @@ import {
   prepareAppShutdown,
   resumeAfterShutdown,
   resumeExternalSessions,
+  runningDeviceCount,
   stopExternalTracking
 } from './devices'
+import { confirmQuitIfNeeded, markSessionEnding } from './quit-confirm'
 import { restoreTheme } from './theme'
 import { restoreLocale } from './locale'
 import { restoreSdkSource } from './emulator/sdkSource'
@@ -25,6 +27,10 @@ app.whenReady().then(() => {
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
+    // Windows 会话结束（关机/注销）经窗口事件先知会（BaseWindow 级、win32 专属）：
+    // 标记后 before-quit 跳过关窗确认弹窗，不让模态框挂住系统关机；其他平台空挂无副作用
+    window.on('query-session-end', markSessionEnding)
+    window.on('session-end', markSessionEnding)
   })
 
   registerIpcHandlers()
@@ -59,6 +65,9 @@ app.on('before-quit', (event) => {
   if (quitPending) return
   quitPending = true
   void (async () => {
+    // Windows 关窗确认（plan 2026-10-22-windows-process-mgmt）：win32 且有本工具启动的
+    // 设备在跑时先仲裁；留在应用直接折返——录制/设备清理均未启动，finally 复位 quitPending
+    if (!(await confirmQuitIfNeeded({ runningCount: runningDeviceCount }))) return
     if (!(await prepareRecordingQuit())) return
     const { leftovers } = await prepareAppShutdown()
     await shutdownStreams()

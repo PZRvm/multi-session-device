@@ -10,6 +10,7 @@ import {
   KILL_GRACE_MS,
   StartCancelledError,
   TERM_GRACE_MS,
+  defaultKillTree,
   stderrTailText,
   type RunnerDeps
 } from '../runner'
@@ -85,6 +86,9 @@ const makeRunner = (
       children.push(child)
       return child as unknown as ChildProcess
     }) as RunnerDeps['spawnEmulator'],
+    // 平台钉 darwin：套件平台无关——Windows 真机跑 npm test 时既有用例仍走 posix
+    // 分支（win32 行为由显式注入 platform 的用例覆盖）——review P2-1
+    platform: 'darwin',
     sleep: abortableSleep,
     now: () => Date.now(),
     confirmedPortConflict: async () => false,
@@ -468,6 +472,108 @@ describe('EmulatorRunner 停止', () => {
       stdoutTail: ''
     })
     expect(runner.phaseOf('d1')).toBeNull()
+  })
+})
+
+describe('Windows 树杀（plan 2026-10-22-windows-process-mgmt）', () => {
+  const startRunning = async (harness: Harness): Promise<string> => {
+    const { runner } = harness
+    const { runId } = await runner.start('d1')
+    await tick()
+    return runId
+  }
+
+  it('win32 spawn：不 detached、windowsHide，env 等其余参数不变', async () => {
+    const harness = makeRunner({ bootProbe: async () => true, platform: 'win32' })
+    await startRunning(harness)
+    const options = harness.children[0].options
+    expect(options?.detached).toBe(false)
+    expect(options?.windowsHide).toBe(true)
+    expect((options?.env as Record<string, string>)['ANDROID_AVD_HOME']).toBe('/avd')
+  })
+
+  it('win32 停止：taskkill 树杀后收口；不走信号，登记/端口释放', async () => {
+    const killTree = vi.fn(async () => {})
+    const harness = makeRunner({ bootProbe: async () => true, platform: 'win32', killTree })
+    await startRunning(harness)
+    const { runner, children, events } = harness
+    const stopping = runner.stop('d1')
+    await tick(1) // 微任务冲刷：killTree 已调用并 resolve
+    expect(killTree).toHaveBeenCalledWith(children[0].pid)
+    children[0].close(null, 'SIGKILL') // 树杀生效：进程收口
+    await tick(1)
+    await expect(stopping).resolves.toBeUndefined()
+    expect(events.beforeKill).toHaveBeenCalledTimes(1)
+    expect(children[0].kills).toHaveLength(0) // win32 不走信号路径
+    expect(runner.phaseOf('d1')).toBeNull()
+  })
+
+  it('killTree 非零但子进程宽限内自退（竞态）→ 视为成功，只杀一次', async () => {
+    const killTree = vi.fn(async () => {
+      throw new Error('taskkill: 1')
+    })
+    const harness = makeRunner({ bootProbe: async () => true, platform: 'win32', killTree })
+    await startRunning(harness)
+    const { runner, children } = harness
+    const stopping = runner.stop('d1')
+    await tick(1)
+    children[0].close(null, 'SIGKILL') // taskkill 报非零多半是子进程刚自退
+    await tick(TERM_GRACE_MS)
+    await expect(stopping).resolves.toBeUndefined()
+    expect(killTree).toHaveBeenCalledTimes(1)
+  })
+
+  it('两次树杀均失败且子进程不退 → 停止失败抛错；entry 保留可重试', async () => {
+    const killTree = vi.fn(async (): Promise<void> => {
+      throw new Error('taskkill: 1')
+    })
+    const harness = makeRunner({ bootProbe: async () => true, platform: 'win32', killTree })
+    await startRunning(harness)
+    const { runner, children } = harness
+    const stopping = runner.stop('d1')
+    const assertion = expect(stopping).rejects.toThrow('停止超时')
+    await tick(TERM_GRACE_MS * 3 + 1_000)
+    await assertion
+    expect(killTree).toHaveBeenCalledTimes(2)
+    expect(runner.phaseOf('d1')).toBe('stopping')
+    // 重试：cleanup 已清空，树杀成功即收口
+    killTree.mockImplementation(async () => {})
+    const retry = runner.stop('d1')
+    await tick(1)
+    children[0].close(null, 'SIGKILL')
+    await tick(1)
+    await expect(retry).resolves.toBeUndefined()
+    expect(runner.phaseOf('d1')).toBeNull()
+  })
+
+  it('posix 停止不碰 killTree（回归：win32 接缝不影响信号梯子）', async () => {
+    const killTree = vi.fn(async () => {})
+    const harness = makeRunner({ bootProbe: async () => true, killTree })
+    await startRunning(harness)
+    const stopping = harness.runner.stop('d1')
+    await tick(1)
+    await expect(stopping).resolves.toBeUndefined()
+    expect(killTree).not.toHaveBeenCalled()
+    expect(harness.children[0].kills).toContain('SIGTERM')
+  })
+
+  it('defaultKillTree：taskkill /PID <pid> /T /F + windowsHide；零退出 resolve、非零 reject', async () => {
+    const fake = new FakeChild()
+    let captured: unknown
+    const pending = defaultKillTree(4321, (cmd, args, options) => {
+      captured = { cmd, args, options }
+      return fake as unknown as ChildProcess
+    })
+    expect(captured).toMatchObject({
+      cmd: 'taskkill.exe',
+      args: ['/PID', '4321', '/T', '/F'],
+      options: { windowsHide: true }
+    })
+    fake.emit('close', 0)
+    await expect(pending).resolves.toBeUndefined()
+    const rejected = defaultKillTree(99, () => fake as unknown as ChildProcess)
+    fake.emit('close', 128)
+    await expect(rejected).rejects.toThrow('taskkill')
   })
 })
 
