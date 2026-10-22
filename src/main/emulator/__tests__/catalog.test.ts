@@ -341,3 +341,54 @@ describe('fetchImageCatalog localOnly（共享只读态，plan 2026-10-12）', (
     expect(result.images[0].installed).toBe(true)
   })
 })
+
+describe('win32 目录过滤（plan 2026-10-22-windows-emulator-env）', () => {
+  // 两 ABI 并存的本地扫描桩：system-images/android-34/google_apis/{arm64-v8a,x86_64}
+  const dirs = new Map<string, string[]>([
+    ['/sdk/system-images', ['android-34']],
+    ['/sdk/system-images/android-34', ['google_apis']],
+    ['/sdk/system-images/android-34/google_apis', ['arm64-v8a', 'x86_64']]
+  ])
+  const readFile = async (path: string): Promise<string> => {
+    if (!path.endsWith('package.xml')) throw new Error('no file')
+    const abi = path.includes('x86_64') ? 'x86_64' : 'arm64-v8a'
+    return `<repository><localPackage path="system-images;android-34;google_apis;${abi}"><display-name>Android 34 (Google APIs)</display-name><type-details><api-level>34</api-level><tag><id>google_apis</id></tag></type-details></localPackage></repository>`
+  }
+  const scanDeps = {
+    readdir: async (path: string) => {
+      const names = dirs.get(path)
+      if (names === undefined) throw new Error('no dir')
+      return names
+    },
+    readFile,
+    exists: async (path: string) =>
+      path.endsWith('system.img') || path.endsWith('source.properties')
+  }
+
+  it('win32 localOnly：合并结果只留 x86_64（本地扫描两 ABI 并存）', async () => {
+    const result = await fetchImageCatalog(
+      '/sdk',
+      { ...scanDeps, platform: 'win32' },
+      { localOnly: true }
+    )
+    expect(result.images).toHaveLength(1)
+    expect(result.images[0].abi).toBe('x86_64')
+  })
+
+  it('win32 全量路径（源失败保留本地）：同样过滤——远端 manifest 不可达不改变政策', async () => {
+    const result = await fetchImageCatalog('/sdk', {
+      ...scanDeps,
+      platform: 'win32',
+      fetcher: async () => {
+        throw new Error('network down')
+      }
+    })
+    expect(result.images).toHaveLength(1)
+    expect(result.images[0].abi).toBe('x86_64')
+  })
+
+  it('缺省平台（mac 现状回归）：两 ABI 全量列出，不过滤', async () => {
+    const result = await fetchImageCatalog('/sdk', scanDeps, { localOnly: true })
+    expect(result.images.map((entry) => entry.abi).sort()).toEqual(['arm64-v8a', 'x86_64'])
+  })
+})

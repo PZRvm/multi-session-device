@@ -4,7 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { DeviceSkinSummary, SdkSkinProgress } from '@shared/types'
 import { readSkinPresentation } from './skinPresentation'
-import { readCameraSnapshot, requestCameraPermission } from './cameras'
+import { cameraSettingsUrlFor, readCameraSnapshot, requestCameraPermission } from './cameras'
 import { importSkinArchive, scanImportedSkins, scanSdkSkins, type SkinRecord } from './skins'
 import { downloadSkin, officialSkinName, SKIN_SOURCE_URL } from './skinSource'
 import { getMainWindow } from '../window'
@@ -72,10 +72,9 @@ export function registerSdkSkinsIpc(deps: SdkIpcDeps): void {
   })
   ipcMain.handle(IPC_CHANNELS.sdkCameraSettings, async (event) => {
     requireWizardSender(IPC_CHANNELS.sdkCameraSettings, event)
-    if (process.platform === 'darwin')
-      await shell.openExternal(
-        'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera'
-      )
+    // 深链平台单源（cameras.ts）：darwin 原串不变，win32 → Windows 隐私设置，其余 no-op
+    const url = cameraSettingsUrlFor(process.platform)
+    if (url !== null) await shell.openExternal(url)
   })
 
   ipcMain.handle(IPC_CHANNELS.sdkDeviceSkins, async (): Promise<DeviceSkinSummary[]> => {

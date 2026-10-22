@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach } from 'vitest'
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { Device } from '@shared/types'
 import DeviceRow from '../DeviceRow'
@@ -535,5 +536,39 @@ describe('DeviceRow（review 修复轮）', () => {
     cleanup()
     setup()
     expect(screen.queryByLabelText(copy.deviceOriginStudio)).toBeNull()
+  })
+})
+
+describe('WHPX 缺失引导按钮（plan 2026-10-22-windows-emulator-env）', () => {
+  const openWindowsFeatures = vi.fn(async () => undefined)
+
+  beforeEach(() => {
+    openWindowsFeatures.mockClear()
+    ;(window as unknown as { api: unknown }).api = {
+      platform: 'win32',
+      dialog: { openWindowsFeatures }
+    }
+  })
+
+  it('lastError 为 whpx-missing：渲染「去开启」按钮，点击走受控深链通道', () => {
+    setup({
+      device: {
+        ...baseDevice,
+        lastError: { code: 'whpx-missing', message: '启动失败：Windows 虚拟化（WHPX）未开启' }
+      }
+    })
+    const button = screen.getByRole('button', { name: copy.openWindowsFeatures })
+    fireEvent.click(button)
+    expect(openWindowsFeatures).toHaveBeenCalledTimes(1)
+  })
+
+  it('其他 lastError code：不渲染引导按钮（该入口仅随 whpx-missing 出现）', () => {
+    setup({
+      device: {
+        ...baseDevice,
+        lastError: { code: 'unexpected-exit', message: '模拟器意外退出：PANIC' }
+      }
+    })
+    expect(screen.queryByRole('button', { name: copy.openWindowsFeatures })).toBeNull()
   })
 })

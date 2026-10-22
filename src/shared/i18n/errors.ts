@@ -103,6 +103,8 @@ const zhCN = {
   saveVerifyFailed: '保存前核验未通过：{message}',
   saveCameraVerifyFailed: '保存前无法核验摄像头：{message}',
   unexpectedExit: '模拟器意外退出：{detail}',
+  whpxMissing:
+    '启动失败：Windows 虚拟化（WHPX）未开启——请在「启用或关闭 Windows 功能」中勾选「Windows 虚拟机监控程序平台」并重启电脑后重试（{detail}）',
   stopFailedError: '停止失败：{message}',
   createVerifyFailed: '创建后核验失败（{message}）',
   createFailedRollbackFailed:
@@ -287,6 +289,8 @@ const zhCN = {
   cameraFormatUnrecognized: '摄像头输出格式无法识别，请检查 emulator 版本',
   cameraPermissionNotGranted: '摄像头权限未开放，请在系统设置中允许访问并重启应用',
   cameraNoneFound: '未枚举到摄像头；请检查连接及本应用的系统权限，刷新后重试',
+  cameraNoneFoundWindows:
+    '未枚举到摄像头；Windows 可能已对桌面应用关闭相机——请在系统「设置 > 隐私和安全性 > 相机」中开启后刷新重试',
   cameraPermissionRequired: '需要允许本应用访问摄像头',
   cameraListTimeout: '摄像头枚举超时（{seconds} 秒），进程已终止',
   cameraListFailed: '摄像头枚举失败（exit {code}）：{tail}',
@@ -438,7 +442,7 @@ const zhCN = {
   slotRear: '后置摄像头',
   cameraOccupiedNotice: '{slot}被设备「{holder}」占用，本次以模拟画面运行',
   cameraUnavailableNotice: '{slot}（{deviceId}）已不可用，本次以模拟画面运行',
-  compatCrossArch: '跨架构镜像（{abi}）在 macOS Apple Silicon 本期不支持',
+  compatCrossArch: '跨架构镜像（{abi}）不支持——macOS（Apple Silicon）需 arm64，Windows 需 x86_64',
   compatPreview: 'Preview/canary 镜像（{codename}），本期不开放创建',
   compatNotCreatable: '该画像无法通过 avdmanager 创建（元数据未关联）',
   compatUnknownForm: '画像形态未知，兼容性无法判定',
@@ -578,6 +582,8 @@ const zhTW: ErrorsCopy = {
   saveVerifyFailed: '儲存前核驗未通過：{message}',
   saveCameraVerifyFailed: '儲存前無法核驗鏡頭：{message}',
   unexpectedExit: '模擬器意外退出：{detail}',
+  whpxMissing:
+    '啟動失敗：Windows 虛擬化（WHPX）未開啟——請在「開啟或關閉 Windows 功能」中勾選「Windows 虛擬機器監控平台」並重新啟動電腦後重試（{detail}）',
   stopFailedError: '停止失敗：{message}',
   createVerifyFailed: '建立後核驗失敗（{message}）',
   createFailedRollbackFailed:
@@ -753,6 +759,8 @@ const zhTW: ErrorsCopy = {
   cameraFormatUnrecognized: '鏡頭輸出格式無法識別，請檢查 emulator 版本',
   cameraPermissionNotGranted: '鏡頭權限未開放，請在系統設定中允許存取並重新啟動應用程式',
   cameraNoneFound: '未列舉到鏡頭；請檢查連接及本應用程式的系統權限，重新整理後重試',
+  cameraNoneFoundWindows:
+    '未列舉到鏡頭；Windows 可能已對桌面應用程式關閉相機——請在系統「設定 > 隱私權與安全性 > 相機」中開啟後重新整理重試',
   cameraPermissionRequired: '需要允許本應用程式存取鏡頭',
   cameraListTimeout: '鏡頭列舉逾時（{seconds} 秒），處理程序已終止',
   cameraListFailed: '鏡頭列舉失敗（exit {code}）：{tail}',
@@ -898,7 +906,7 @@ const zhTW: ErrorsCopy = {
   slotRear: '後置鏡頭',
   cameraOccupiedNotice: '{slot}被裝置「{holder}」占用，本次以模擬畫面執行',
   cameraUnavailableNotice: '{slot}（{deviceId}）已不可用，本次以模擬畫面執行',
-  compatCrossArch: '跨架構映像（{abi}）在 macOS Apple Silicon 本期不支援',
+  compatCrossArch: '跨架構映像（{abi}）不支援——macOS（Apple Silicon）需 arm64，Windows 需 x86_64',
   compatPreview: 'Preview/canary 映像（{codename}），本期不開放建立',
   compatNotCreatable: '該畫像無法透過 avdmanager 建立（中繼資料未關聯）',
   compatUnknownForm: '畫像形態未知，相容性無法判定',
@@ -1046,6 +1054,8 @@ const enUS: ErrorsCopy = {
   saveVerifyFailed: 'Pre-save verification failed: {message}',
   saveCameraVerifyFailed: 'Cannot verify cameras before saving: {message}',
   unexpectedExit: 'The emulator exited unexpectedly: {detail}',
+  whpxMissing:
+    'Startup failed: Windows virtualization (WHPX) is not enabled—turn on "Windows Hypervisor Platform" in "Turn Windows features on or off", reboot, then retry ({detail})',
   stopFailedError: 'Stop failed: {message}',
   createVerifyFailed: 'Post-create verification failed ({message})',
   createFailedRollbackFailed:
@@ -1245,6 +1255,8 @@ const enUS: ErrorsCopy = {
     'Camera permission is not granted; allow access in System Settings and restart the app',
   cameraNoneFound:
     'No cameras enumerated; check connections and this app\u2019s system permissions, then refresh and retry',
+  cameraNoneFoundWindows:
+    'No cameras enumerated; Windows may have camera access disabled for desktop apps—enable it in Settings > Privacy & security > Camera, then refresh and retry',
   cameraPermissionRequired: 'Camera access needs to be allowed for this app',
   cameraListTimeout: 'Camera enumeration timed out ({seconds} s); the process was terminated',
   cameraListFailed: 'Camera enumeration failed (exit {code}): {tail}',
@@ -1407,7 +1419,7 @@ const enUS: ErrorsCopy = {
   cameraUnavailableNotice:
     'The {slot} ({deviceId}) is no longer available; running with the emulated camera this time',
   compatCrossArch:
-    'Cross-architecture images ({abi}) are unsupported on macOS Apple Silicon this phase',
+    'Cross-architecture images ({abi}) are unsupported—macOS (Apple Silicon) needs arm64, Windows needs x86_64',
   compatPreview: 'Preview/canary image ({codename}); creation is not open this phase',
   compatNotCreatable: 'This profile cannot be created via avdmanager (metadata not linked)',
   compatUnknownForm: 'Unknown profile form factor; compatibility cannot be determined',

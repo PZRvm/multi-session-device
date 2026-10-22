@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
+import { cameraListEmptyMessage, cameraSettingsUrlFor } from '../cameras'
 import {
   listWebcams,
   parseWebcamList,
@@ -78,5 +79,23 @@ describe('摄像头权限与诊断', () => {
     permissionMocks.ask.mockClear()
     await Promise.all([requestCameraPermission(), requestCameraPermission()])
     expect(permissionMocks.ask).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('摄像头深链与空列表文案单源（plan 2026-10-22-windows-emulator-env）', () => {
+  it('cameraSettingsUrlFor：darwin 原串逐字节不变；win32 → ms-settings；其余 null', () => {
+    expect(cameraSettingsUrlFor('darwin')).toBe(
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera'
+    )
+    expect(cameraSettingsUrlFor('win32')).toBe('ms-settings:privacy-webcam')
+    expect(cameraSettingsUrlFor('linux')).toBeNull()
+  })
+
+  it('cameraListEmptyMessage：win32 恒指向 Windows 隐私设置；其余平台维持原三分支', () => {
+    expect(cameraListEmptyMessage('granted', 'win32')).toContain('Windows')
+    expect(cameraListEmptyMessage('denied', 'win32')).toContain('Windows')
+    expect(cameraListEmptyMessage('granted', 'darwin')).not.toContain('Windows')
+    expect(cameraListEmptyMessage('not-determined', 'darwin')).not.toContain('Windows')
+    expect(cameraListEmptyMessage('denied', 'darwin')).not.toContain('Windows')
   })
 })

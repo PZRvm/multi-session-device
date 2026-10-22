@@ -10,6 +10,7 @@ import type {
   ImageRevision,
   ImageService
 } from '@shared/types'
+import { hostImageAbi } from '@shared/compatibility'
 import { msg } from '../locale'
 
 /**
@@ -542,7 +543,15 @@ const localRecordToEntry = (record: LocalImageRecord): ImageEntry => {
 
 export interface ImageCatalogDeps extends LocalScanDeps {
   fetcher?: (url: string) => Promise<string>
+  /** 平台接缝（默认 process.platform）：win32 下目录按宿主 ABI 过滤（plan 2026-10-22-windows-emulator-env 设计 1） */
+  platform?: NodeJS.Platform
 }
+
+/** win32 目录过滤：合并结果只留宿主 ABI 镜像（x86_64）；其余平台原样返回。
+ *  过滤在 mergeCatalog 之后单点做——同时覆盖远端 manifest 与本地扫描两个来源；
+ *  scanLocalImages 本体不过滤（磁盘事实扫描器），政策留在目录装配与创建守卫两道口。 */
+const filterByHostAbi = (images: ImageEntry[], platform: NodeJS.Platform): ImageEntry[] =>
+  platform === 'win32' ? images.filter((entry) => entry.abi === hostImageAbi(platform)) : images
 
 /** 合并远端与本地：同包身份只保留一条，安装状态取本地核验，本地独有条目补齐 */
 export const mergeCatalog = (
@@ -580,7 +589,7 @@ export async function fetchImageCatalog(
   if (options.localOnly === true) {
     const local = await scanLocalImages(sdkRoot, deps)
     return {
-      images: mergeCatalog([], local),
+      images: filterByHostAbi(mergeCatalog([], local), deps.platform ?? process.platform),
       sourceWarnings: [],
       offline: false,
       fetchedAt: Date.now(),
@@ -622,7 +631,7 @@ export async function fetchImageCatalog(
   }
 
   const local = await scanLocalImages(sdkRoot, deps)
-  const merged = mergeCatalog(images, local)
+  const merged = filterByHostAbi(mergeCatalog(images, local), deps.platform ?? process.platform)
 
   return {
     images: merged,
