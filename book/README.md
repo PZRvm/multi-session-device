@@ -184,6 +184,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-无线投屏建流失败后切回缺少重试入口.md](notes/issue/2026-10/2026-10-16-无线投屏建流失败后切回缺少重试入口.md) — USB/无线双条目两次启动分别有一侧 scrcpy video socket 超时；错误会话清理后切回，activate 返回空，界面停在连接态且没有重试入口，留后续单独修复
 - [2026-10-16-解锁投屏修复-code-review.md](notes/issue/2026-10/2026-10-16-解锁投屏修复-code-review.md) — 解锁投屏 Phase 5 的三项发现已修复并正式回归：本地手势随代次取消、零帧有界恢复与可重试错误态、ACK 安全整数校验；全量 1254 项通过
 - [2026-10-22-sdk-migration-adb-probe-win32.md](notes/issue/2026-10/2026-10-22-sdk-migration-adb-probe-win32.md) — sdkMigration 的 SDK 根核验探测写死无后缀 adb 路径——win32 下恒假阴性，迁移/切换根验证会误判
+- [2026-10-22-windows-studio-detect-review.md](notes/issue/2026-10/2026-10-22-windows-studio-detect-review.md) — P2 Windows 检测链（4dc8d46）代码评审发现——4 项 P3：平台传参风格、APPDATA 未优先读 env、win 用例 runner 可携带性、isStudioSdk 遗留未用声明；只记录未修
 
 ### notes/learn/
 
@@ -395,4 +396,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 301 documents -->
+<!-- 302 documents -->
