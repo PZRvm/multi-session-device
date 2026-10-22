@@ -279,6 +279,11 @@ describe('bootstrapSdk（win32 分支）', () => {
     await expect(bootstrapSdk(root, { platform: 'win32' })).rejects.toThrow('尚未钉版')
   })
 
+  it('未登记平台（linux）同样被占位守卫拒绝，不静默回退 darwin 源', async () => {
+    const root = await makeTmp()
+    await expect(bootstrapSdk(root, { platform: 'linux' })).rejects.toThrow('尚未钉版')
+  })
+
   it('win32 全流程（假源）：JRE zip 顶层即 jre 根，产物按 win32 布局落位', async () => {
     const root = await makeTmp()
     const result = await bootstrapSdk(root, {

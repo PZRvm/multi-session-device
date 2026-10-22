@@ -61,10 +61,10 @@ export async function createAvd(
     throw new Error(msg('avdExists', { ini: avdPaths(avdName, dirs).ini }))
   }
 
-  const avdmanagerBin = sdkPaths(dirs.sdkRoot).avdmanagerBin
+  const { avdmanagerBin, jreHome } = sdkPaths(dirs.sdkRoot)
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    JAVA_HOME: dirs.javaHome ?? sdkPaths(dirs.sdkRoot).jreHome,
+    JAVA_HOME: dirs.javaHome ?? jreHome,
     ANDROID_SDK_ROOT: dirs.sdkRoot,
     ANDROID_HOME: dirs.sdkRoot,
     ANDROID_AVD_HOME: dirs.avdHome,

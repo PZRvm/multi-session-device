@@ -26,7 +26,7 @@ export const resolveCommand = (
     ? { command: 'cmd.exe', args: ['/c', bin, ...args] }
     : { command: bin, args: [...args] }
 
-/** spawn 统一入口：resolveCommand + windowsHide（posix 无副作用） */
+/** spawn 统一入口：resolveCommand + windowsHide 默认注入（调用方可显式覆盖） */
 export const spawnCommand = (
   deps: PlatformExecDeps,
   bin: string,
@@ -35,8 +35,8 @@ export const spawnCommand = (
 ): ChildProcess => {
   const resolved = resolveCommand(deps.platform ?? process.platform, bin, args)
   return (deps.spawnFn ?? spawn)(resolved.command, resolved.args, {
-    ...options,
-    windowsHide: true
+    windowsHide: true,
+    ...options
   })
 }
 

@@ -1,5 +1,5 @@
 ---
-description: Windows P1 SDK 引导平台化 code review——0 项 P1、1 项 P2（cmd.exe 含空格路径待真机验证）、4 项 P3；本轮只记录未修
+description: Windows P1 SDK 引导平台化 code review——0 项 P1、1 项 P2（cmd.exe 含空格路径待真机验证）、4 项 P3（同日修复批已全部处置）
 created: 2026-10-22
 status: open
 ---
@@ -9,6 +9,8 @@ status: open
 基线：`feature/windows-sdk-bootstrap` 的 `1bdb2f3`（基 `c77fbe4`，src 约 +369/−46）。方法：本人对提交 diff 全量复读（platformExec / sdk / downloader / avd / cameras / i18n / 三测试文件），逐条核对外部调用方影响面（`detectSdk`/`sdkPaths` 签名变化的全部调用点、循环依赖、占位守卫时序）。本轮只记录，未修任何一条。
 
 严重度口径沿 issue 2026-10-10：P1=数据丢失/安全/主流程破坏；P2=特定条件可触发的状态破坏或核心交互失效；P3=一致性/小问题/测试缺口。门禁实测：vitest 1330 全过（既有用例零改动）、typecheck/lint 0 错。
+
+> **修复批（2026-10-22，同分支）**：P3-1/P3-2/P3-3/P3-4 已全部处置——linux 改落占位源由守卫拒绝（补 linux 拒绝用例）、`extractZip` 抽 `makeExtractZip(platform)` 工厂（补 win32 ENOENT 与 darwin 真解压两用例）、`spawnCommand` 改「默认 true 可覆盖」（补覆盖用例）、`createAvd` 解构单次 `sdkPaths`。修复后全套 1334 过、typecheck/lint 0 错。**P2-1 保持 open**——需含空格用户名的 Windows 真机验证，归统一集成阶段。
 
 ## 结论
 

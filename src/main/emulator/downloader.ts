@@ -74,6 +74,27 @@ export interface ChunkSink {
   waitDrain: () => Promise<void>
 }
 
+/**
+ * 平台化解压器工厂（review P3-2 接缝）：默认实现按 process.platform 选命令，
+ * 平台可注入——win32 分支在 mac 上可测（以 ENOENT 证实解析到 tar.exe）。
+ * 镜像 zip 的 system.img 解压后常 ≥2GB——adm-zip 会整条目分配 Buffer 撞 2^31
+ * 上限（真机实测 android-21 即 2147483648 字节）；系统解压器原生支持 zip64 与
+ * 大条目：macOS 用自带 unzip，win32 用自带 tar.exe（bsdtar，官方支持解 zip；
+ * Expand-Archive 有 2GB 上限不可用）。异步 execFile + signal：取消时 kill
+ * 子进程立即返回（execFileSync 阻塞 main 且不可中断——取消 plan 顺带退役）
+ */
+export const makeExtractZip =
+  (platform: NodeJS.Platform): NonNullable<DownloaderDeps['extractZip']> =>
+  (zipPath, targetDir, signal) =>
+    new Promise<void>((resolve, reject) => {
+      const { command, args } = extractZipCommand(platform, zipPath, targetDir)
+      execFile(command, args, { signal, windowsHide: true }, (error) => {
+        if (signal?.aborted) reject(new CancelledError())
+        else if (error === null) resolve()
+        else reject(new Error(msg('dlUnzipFailed', { message: error.message })))
+      })
+    })
+
 /** 默认依赖集合（导出供 default extractZip 等真实子进程行为做单测） */
 export const defaultDeps: Required<DownloaderDeps> = {
   openUrl: async (url, signal) => {
@@ -99,21 +120,7 @@ export const defaultDeps: Required<DownloaderDeps> = {
         .on('error', reject)
         .on('end', () => resolve(hash.digest('hex')))
     }),
-  extractZip: (zipPath, targetDir, signal) =>
-    new Promise<void>((resolve, reject) => {
-      // 镜像 zip 的 system.img 解压后常 ≥2GB——adm-zip 会整条目分配 Buffer 撞
-      // 2^31 上限（真机实测 android-21 即 2147483648 字节）；系统解压器原生
-      // 支持 zip64 与大条目。平台分支（plan 2026-10-22-windows-sdk-bootstrap）：
-      // macOS 用自带 unzip；win32 用自带 tar.exe（bsdtar，官方支持解 zip，
-      // Expand-Archive 有 2GB 上限不可用）。异步 execFile + signal：取消时
-      // kill 子进程立即返回（execFileSync 阻塞 main 且不可中断——取消 plan 顺带退役）
-      const { command, args } = extractZipCommand(process.platform, zipPath, targetDir)
-      execFile(command, args, { signal, windowsHide: true }, (error) => {
-        if (signal?.aborted) reject(new CancelledError())
-        else if (error === null) resolve()
-        else reject(new Error(msg('dlUnzipFailed', { message: error.message })))
-      })
-    }),
+  extractZip: makeExtractZip(process.platform),
   pathExists: async (path) => {
     try {
       await stat(path)

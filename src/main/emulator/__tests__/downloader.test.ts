@@ -1,5 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
+import { execFile } from 'node:child_process'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { XMLParser } from 'fast-xml-parser'
 import {
@@ -8,6 +11,7 @@ import {
   downloadImageZip,
   extractZipCommand,
   installImageZip,
+  makeExtractZip,
   verifyPackageInstall,
   CancelledError
 } from '../downloader'
@@ -513,5 +517,35 @@ describe('extractZipCommand（平台分支）', () => {
       command: 'tar.exe',
       args: ['-xf', 'C:\\dl\\a.zip', '-C', 'C:\\sdk\\out']
     })
+  })
+})
+
+describe('makeExtractZip（平台接缝）', () => {
+  it('win32 形态真实 execFile 解析到 tar.exe（mac 上以 ENOENT 证实命令名）', async () => {
+    await expect(makeExtractZip('win32')('/nonexistent.zip', '/tmp/nowhere')).rejects.toThrow(
+      /tar\.exe/
+    )
+  })
+
+  it('darwin 形态解析到 unzip（真实解小 zip 冒烟）', async () => {
+    const staging = await mkdtemp(join(tmpdir(), 'mst-extract-'))
+    try {
+      // 用系统 zip 打包（macOS 自带）构造真实压缩包
+      const srcDir = join(staging, 'src')
+      await mkdir(srcDir, { recursive: true })
+      await writeFile(join(srcDir, 'hello.txt'), 'hi', 'utf8')
+      const zipPath = join(staging, 'small.zip')
+      await new Promise<void>((resolve, reject) =>
+        execFile('zip', ['-q', '-j', zipPath, join(srcDir, 'hello.txt')], (error) =>
+          error ? reject(error) : resolve()
+        )
+      )
+      const outDir = join(staging, 'out')
+      await mkdir(outDir, { recursive: true })
+      await makeExtractZip('darwin')(zipPath, outDir)
+      await expect(readFile(join(outDir, 'hello.txt'), 'utf8')).resolves.toBe('hi')
+    } finally {
+      await rm(staging, { recursive: true, force: true })
+    }
   })
 })

@@ -58,6 +58,17 @@ describe('spawnCommand', () => {
     )
     expect(spawnFn).toHaveBeenCalledWith('/tools/tar', ['-xf', 'a'], { windowsHide: true })
   })
+
+  it('调用方可显式覆盖 windowsHide（默认 true 可推翻）', () => {
+    const spawnFn = vi.fn(() => ({ pid: 1 }))
+    spawnCommand(
+      { platform: 'darwin', spawnFn: spawnFn as unknown as typeof spawn },
+      '/tools/x',
+      [],
+      { windowsHide: false }
+    )
+    expect(spawnFn).toHaveBeenCalledWith('/tools/x', [], { windowsHide: false })
+  })
 })
 
 describe('tarBinFor', () => {

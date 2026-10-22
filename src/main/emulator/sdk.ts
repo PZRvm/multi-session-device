@@ -25,18 +25,19 @@ const DARWIN_SOURCES: BootstrapSources = {
   cmdlineToolsUrl: CMDLINE_TOOLS_URL,
   cmdlineToolsSha1: CMDLINE_TOOLS_SHA1
 }
-/** 按平台查表；未登记平台回退 darwin 源（现状行为） */
+const PENDING_SOURCES: BootstrapSources = {
+  jreUrl: WINDOWS_SOURCE_PLACEHOLDER,
+  jreSha256: WINDOWS_SOURCE_PLACEHOLDER,
+  cmdlineToolsUrl: WINDOWS_SOURCE_PLACEHOLDER,
+  cmdlineToolsSha1: WINDOWS_SOURCE_PLACEHOLDER
+}
+/** 按平台查表；未登记平台（如 linux）同样落到占位源——由 bootstrap 入口守卫显式拒绝，不静默回退 darwin（装错平台的二进制比显式失败更糟） */
 const PINNED_SOURCES: Partial<Record<NodeJS.Platform, BootstrapSources>> = {
   darwin: DARWIN_SOURCES,
-  win32: {
-    jreUrl: WINDOWS_SOURCE_PLACEHOLDER,
-    jreSha256: WINDOWS_SOURCE_PLACEHOLDER,
-    cmdlineToolsUrl: WINDOWS_SOURCE_PLACEHOLDER,
-    cmdlineToolsSha1: WINDOWS_SOURCE_PLACEHOLDER
-  }
+  win32: PENDING_SOURCES
 }
 const sourcesFor = (platform: NodeJS.Platform): BootstrapSources =>
-  PINNED_SOURCES[platform] ?? DARWIN_SOURCES
+  PINNED_SOURCES[platform] ?? PENDING_SOURCES
 const isPinnedSourcePending = (sources: BootstrapSources): boolean =>
   Object.values(sources).some((value) => value === WINDOWS_SOURCE_PLACEHOLDER)
 
