@@ -160,9 +160,10 @@ export async function detectStudioAndSdk(deps: StudioDetectDeps = {}): Promise<S
   const fileExists = deps.fileExists ?? defaultFileExists
   const home = (deps.homedir ?? homedir)()
   const env = deps.env ?? process.env
-  const isWin = (deps.platform ?? process.platform) === 'win32'
+  const platform = deps.platform ?? process.platform
+  const isWin = platform === 'win32'
   const defaultSdkPath = isWin
-    ? join(home, 'AppData', 'Local', 'Android', 'Sdk')
+    ? join(env.LOCALAPPDATA ?? join(home, 'AppData', 'Local'), 'Android', 'Sdk')
     : join(home, 'Library', 'Android', 'sdk')
 
   // ---- Studio 本体：win32 固定目录探测；darwin 目录扫描 → mdfind 兜底 ----
@@ -204,7 +205,7 @@ export async function detectStudioAndSdk(deps: StudioDetectDeps = {}): Promise<S
   let sdkCandidate = null as string | null
   let candidateSource: SdkCandidateSource | null = null
   const configRoot = isWin
-    ? join(home, 'AppData', 'Roaming', 'Google')
+    ? join(env.APPDATA ?? join(home, 'AppData', 'Roaming'), 'Google')
     : join(home, 'Library', 'Application Support', 'Google')
   const configDirs = (await listDir(configRoot)).filter((name) => /^AndroidStudio/.test(name))
   for (const dirName of newestConfigFirst(configDirs)) {
@@ -250,9 +251,7 @@ export async function detectStudioAndSdk(deps: StudioDetectDeps = {}): Promise<S
 
   // 4) PATH 上 adb 反推（adb 路径上溯两级 = SDK 根）
   if (sdkCandidate === null) {
-    const adbOnPath =
-      deps.adbOnPath ??
-      (() => defaultAdbOnPath({ env, fileExists, platform: isWin ? 'win32' : undefined }))
+    const adbOnPath = deps.adbOnPath ?? (() => defaultAdbOnPath({ env, fileExists, platform }))
     let adbPath: string | null = null
     try {
       adbPath = await adbOnPath()

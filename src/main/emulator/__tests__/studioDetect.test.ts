@@ -314,6 +314,41 @@ describe('detectStudioAndSdk（win32 分支——plan 2026-10-22-windows-studio-
     expect(result.sdkCandidate).toBe('C:/sdkroot')
     expect(result.candidateSource).toBe('path-adb')
   })
+
+  it('P3-2 修复：APPDATA 重定向时配置目录跟走（企业漫游/OneDrive 场景）', async () => {
+    const redirectedRoot = join('D:\\Roamed', 'Google')
+    const optsDir = join(redirectedRoot, 'AndroidStudio2025.1', 'options')
+    const result = await detectStudioAndSdk(
+      winDeps(
+        {
+          dirs: { [redirectedRoot]: ['AndroidStudio2025.1'], [optsDir]: ['other.xml'] },
+          files: {
+            [join(optsDir, 'other.xml')]: '<option name="sdkPath" value="C:/sdks/android" />'
+          },
+          exists: [join('C:/sdks/android', 'platform-tools', 'adb.exe')]
+        },
+        { env: { APPDATA: 'D:\\Roamed' } }
+      )
+    )
+    expect(result.sdkCandidate).toBe('C:/sdks/android')
+    expect(result.candidateSource).toBe('studio-config')
+  })
+
+  it('P3-2 修复：LOCALAPPDATA 重定向时默认 SDK 目录跟走；缺省仍按 homedir 推', async () => {
+    const redirectedSdk = join('D:\\LocalAppData', 'Android', 'Sdk')
+    const redirected = await detectStudioAndSdk(
+      winDeps(
+        { exists: [join(redirectedSdk, 'platform-tools', 'adb.exe')] },
+        { env: { LOCALAPPDATA: 'D:\\LocalAppData' } }
+      )
+    )
+    expect(redirected.defaultSdkPath).toBe(redirectedSdk)
+    expect(redirected.sdkCandidate).toBe(redirectedSdk)
+    expect(redirected.candidateSource).toBe('default-dir')
+    // env 未给（fsDeps 的 env 是空对象）→ 回退 homedir 推导，win 用例其余各条已覆盖此形态
+    const fallback = await detectStudioAndSdk(winDeps({}))
+    expect(fallback.defaultSdkPath).toBe(WSDK)
+  })
 })
 
 describe('isStudioSdk（win32 大小写规范化）', () => {

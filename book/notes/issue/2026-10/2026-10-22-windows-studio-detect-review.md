@@ -22,9 +22,13 @@ tags: [review, windows, studio-detect, p3]
 
 `detectStudioAndSdk` 分支 4 传 `platform: isWin ? 'win32' : undefined` 给 `defaultAdbOnPath`，而后者只判 `deps.platform === 'win32'`——直传 `deps.platform` 语义等价且更净（非 win32 平台值也能正确落到 posix 分隔符行为）。一行修。
 
+处置（2026-10-22 修复批）：已修——平台值提升为 `platform` 局部变量（`deps.platform ?? process.platform`），分支 4 直传。
+
 ### P3-2 configRoot / defaultSdkPath 未优先读 env，与 adb.ts 口径不一致
 
 win32 的 configRoot（`AppData\Roaming`）与 defaultSdkPath（`AppData\Local`）都从 homedir 推导；而 `adb.ts` 的标准候选**读了** `env.LOCALAPPDATA`。企业漫游配置/OneDrive 重定向 AppData 的机器上，本模块会漏分支 1 与分支 3 的最优候选（下游 env/PATH 分支兜底，属降级不破坏）。修法：两处构造先读 `env.APPDATA` / `env.LOCALAPPDATA`，缺省再按 homedir 推——与 adb.ts 对齐。
+
+处置（2026-10-22 修复批）：已修——两处均改 `env.APPDATA ?? join(home,'AppData','Roaming')`、`env.LOCALAPPDATA ?? join(home,'AppData','Local')`；补 APPDATA/LOCALAPPDATA 重定向与缺省回退两条用例。
 
 ### P3-3 两条 win 用例的断言依赖 posix runner 行为
 
