@@ -7,12 +7,16 @@ const mocks = vi.hoisted(() => ({
   construct: vi.fn(),
   handle: vi.fn(),
   main: { webContents: { id: 1 } },
-  dev: true
+  dev: true,
+  app: { getVersion: vi.fn(() => '1.0.0'), getPath: vi.fn(() => '/tmp/user-data') },
+  shell: { openPath: vi.fn(async () => '') }
 }))
 vi.mock('electron', () => ({
   BrowserWindow: function (options: unknown) {
     return mocks.construct(options)
   },
+  app: mocks.app,
+  shell: mocks.shell,
   ipcMain: { handle: mocks.handle }
 }))
 vi.mock('@electron-toolkit/utils', () => ({
@@ -178,14 +182,72 @@ describe('设置窗口边界', () => {
     }
   })
 
-  it('只登记主窗开窗桥，窗口控制回归系统原生不经 renderer', async () => {
+  it('登记主窗开窗桥与关于页两通道，窗口控制回归系统原生不经 renderer', async () => {
     module!.registerSettingsIpc()
-    expect(mocks.handle.mock.calls.map(([name]) => name)).toEqual([IPC_CHANNELS.settingsOpen])
+    expect(mocks.handle.mock.calls.map(([name]) => name)).toEqual([
+      IPC_CHANNELS.settingsOpen,
+      IPC_CHANNELS.aboutGet,
+      IPC_CHANNELS.aboutOpenDataDirectory
+    ])
     const open = handlerOf(IPC_CHANNELS.settingsOpen)
     expect(() => open({ sender: { id: 99 } })).toThrow('仅主窗')
     const pending = open({ sender: mocks.main.webContents })
     expect(() => open({ sender: windows[0].webContents })).toThrow('仅主窗')
     windows[0].emit('ready-to-show')
     await pending
+  })
+
+  it('关于页通道：真值快照与受控打开目录仅设置窗可调', async () => {
+    const pending = module!.openSettingsWindow()
+    windows[0].emit('ready-to-show')
+    await pending
+    module!.registerSettingsIpc()
+    const get = handlerOf(IPC_CHANNELS.aboutGet)
+    expect(() => get({ sender: { id: 99 } })).toThrow('非设置窗调用')
+    // 版本值就地 stub process.versions（vitest node 宿主无 electron 键），断言走精确
+    // 相等；@types/node 标只读但运行时可写，经 Record 视图赋值
+    const versions = process.versions as Record<string, string | undefined>
+    const originalVersions = { electron: versions.electron, chrome: versions.chrome }
+    versions.electron = '37.2.0'
+    versions.chrome = '138.0.7204.97'
+    try {
+      expect(get({ sender: windows[0].webContents })).toEqual({
+        appVersion: '1.0.0',
+        electronVersion: '37.2.0',
+        chromiumVersion: '138.0.7204.97',
+        dataDirectory: '/tmp/user-data'
+      })
+    } finally {
+      versions.electron = originalVersions.electron
+      versions.chrome = originalVersions.chrome
+    }
+    const openDir = handlerOf(IPC_CHANNELS.aboutOpenDataDirectory)
+    expect(() => openDir({ sender: { id: 99 } })).toThrow('非设置窗调用')
+    openDir({ sender: windows[0].webContents })
+    expect(mocks.shell.openPath).toHaveBeenCalledWith('/tmp/user-data')
+  })
+
+  it('打开目录两种失败形态都只控制台留痕，链上不产生未接住的拒绝', async () => {
+    const pending = module!.openSettingsWindow()
+    windows[0].emit('ready-to-show')
+    await pending
+    module!.registerSettingsIpc()
+    const openDir = handlerOf(IPC_CHANNELS.aboutOpenDataDirectory)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      mocks.shell.openPath.mockResolvedValueOnce('permission denied')
+      openDir({ sender: windows[0].webContents })
+      await vi.waitFor(() => {
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('permission denied'))
+      })
+      warn.mockClear()
+      mocks.shell.openPath.mockRejectedValueOnce(new Error('boom'))
+      openDir({ sender: windows[0].webContents })
+      await vi.waitFor(() => {
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('boom'))
+      })
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

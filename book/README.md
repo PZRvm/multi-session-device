@@ -183,6 +183,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-投屏回放无ACK恢复盲点.md](notes/issue/2026-10/2026-10-16-投屏回放无ACK恢复盲点.md) — 已实窗复现并修复回放首批无 ACK 的互等：4 包解码阈值先于 8 包 ACK，渲染端停收而 main 未武装；新增显式重同步请求、阈值 16 与归属校验/去重
 - [2026-10-16-无线投屏建流失败后切回缺少重试入口.md](notes/issue/2026-10/2026-10-16-无线投屏建流失败后切回缺少重试入口.md) — USB/无线双条目两次启动分别有一侧 scrcpy video socket 超时；错误会话清理后切回，activate 返回空，界面停在连接态且没有重试入口，留后续单独修复
 - [2026-10-16-解锁投屏修复-code-review.md](notes/issue/2026-10/2026-10-16-解锁投屏修复-code-review.md) — 解锁投屏 Phase 5 的三项发现已修复并正式回归：本地手势随代次取消、零帧有界恢复与可重试错误态、ACK 安全整数校验；全量 1254 项通过
+- [2026-10-23-关于页真值对接-review.md](notes/issue/2026-10/2026-10-23-关于页真值对接-review.md) — 关于页真值对接（about:get / about:open-data-directory）阶段 5 评审——无 P1/P2，P3 三条（openPath 无 catch、错误路径测试缺口、可选链层级不一致）；同日修复批全量处置
 
 ### notes/learn/
 
@@ -269,6 +270,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-clipboard-sync-lifecycle.md](notes/learn/2026-10/2026-10-16-clipboard-sync-lifecycle.md) — 双向剪贴板的观察基线、单飞 ACK 队列与 IME 回声必须分开；设备消息消费不能等待出站 ACK
 - [2026-10-16-recording-poc-media-boundaries.md](notes/learn/2026-10/2026-10-16-recording-poc-media-boundaries.md) — 录屏 P0 的三个边界——独立 scrcpy 会话各持 jar 路径，WebCodecs decoder flush 后重新等关键帧，音画测试源按实际播放时间校准
 - [2026-10-16-投屏PTS单位与静置ACK误判.md](notes/learn/2026-10/2026-10-16-投屏PTS单位与静置ACK误判.md) — PTS 与 ACK 单位和节拍须对齐；后台回放从首关键帧起算，拥堵显式恢复须独立计时、有界失败，并同步取消本地手势；验收覆盖真实主窗后台激活
+- [2026-10-23-可选链部分mock抛错.md](notes/learn/2026-10/2026-10-23-可选链部分mock抛错.md) — 可选链只护到链上最后一个 ?.——访问 window.api 下更深的域时，测试部分 mock 缺中间键会让 useEffect 同步抛错
 
 ### notes/summary/2026-10/
 
@@ -278,6 +280,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-模拟器对接.md](notes/summary/2026-10/2026-10-09-模拟器对接.md) — 交付真模拟器全链路：SDK bootstrap 全量、PoC 过验收线（≥30fps/≤150ms）、向导接真 avdmanager、启停状态机、投屏触控物理键
 - [2026-10-16-功能完善.md](notes/summary/2026-10/2026-10-16-功能完善.md) — 交付一期收尾：日志面板、截屏/录屏/拖拽安装/剪贴板/断网、设置窗、并行与内存水位防线
 - [2026-10-16-真机接入与投屏.md](notes/summary/2026-10/2026-10-16-真机接入与投屏.md) — 真机接入——USB 与无线调试（扫描/配对/连接）接入现有设备列表与投屏，复用内置 scrcpy 栈，不引入 QtScrcpy
+- [2026-10-23-关于页真值对接.md](notes/summary/2026-10/2026-10-23-关于页真值对接.md) — 设置窗关于页接通真值：应用/Electron/Chromium 版本与数据目录经 about:get 拉取，打开目录按钮接通并贴行右缘
 
 ### notes/task/
 
@@ -392,4 +395,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 298 documents -->
+<!-- 301 documents -->

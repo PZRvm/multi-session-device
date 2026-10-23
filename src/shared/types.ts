@@ -1006,3 +1006,11 @@ export interface DeviceRuntimeView {
    *  runId 省略）；缺省 = AVD（devices.onChanged 派生视图不带本字段） */
   origin?: 'external'
 }
+
+/** 关于页运行环境快照（about:get 返回；版本与数据目录真值，仅设置窗可拉） */
+export interface AboutInfo {
+  appVersion: string
+  electronVersion: string | null
+  chromiumVersion: string | null
+  dataDirectory: string
+}

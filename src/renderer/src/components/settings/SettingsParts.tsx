@@ -173,6 +173,16 @@ const Wrapper = styled.section`
     gap: 8px;
     margin-top: 4px;
   }
+  /* 关于页数据目录行：路径占满剩余宽，「打开目录」贴行右缘 */
+  .directory-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .directory-line .path {
+    flex: 1;
+    min-width: 0;
+  }
   input[type='radio'] {
     flex: none;
     margin: 4px 0 0;

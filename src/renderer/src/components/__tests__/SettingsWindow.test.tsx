@@ -166,6 +166,56 @@ describe('设置窗静态边界与语言切换', () => {
     delete (window as unknown as { api?: unknown }).api
   })
 
+  it('关于页接通数据面：版本三件套渲染真值，打开目录直达受控桥', async () => {
+    const openDataDirectory = vi.fn(async () => undefined)
+    const directory = '/Users/t/Library/Application Support/multi-session-device'
+    ;(window as unknown as { api: unknown }).api = {
+      settings: {
+        about: {
+          get: vi.fn(async () => ({
+            appVersion: '1.2.3',
+            electronVersion: '37.2.0',
+            chromiumVersion: '138.0.7204.96',
+            dataDirectory: directory
+          })),
+          openDataDirectory
+        }
+      }
+    }
+    render(<SettingsWindow model={previewModel()} platform="darwin" />)
+    fireEvent.click(screen.getByRole('button', { name: '关于' }))
+    await waitFor(() => {
+      expect(screen.getByText('1.2.3')).toBeTruthy()
+    })
+    expect(screen.getByText('37.2.0')).toBeTruthy()
+    expect(screen.getByText('138.0.7204.96')).toBeTruthy()
+    expect(screen.getByText(directory)).toBeTruthy()
+    const button = screen.getByRole('button', { name: '打开目录' })
+    expect(button.matches(':disabled')).toBe(false)
+    fireEvent.click(button)
+    expect(openDataDirectory).toHaveBeenCalledTimes(1)
+    delete (window as unknown as { api?: unknown }).api
+  })
+
+  it('关于页取数失败保留占位：版本/目录回退文案，按钮禁用不弹错误', async () => {
+    const get = vi.fn(async () => {
+      throw new Error('boom')
+    })
+    ;(window as unknown as { api: unknown }).api = {
+      settings: { about: { get } }
+    }
+    render(<SettingsWindow model={previewModel()} platform="darwin" />)
+    fireEvent.click(screen.getByRole('button', { name: '关于' }))
+    await waitFor(() => {
+      expect(get).toHaveBeenCalledTimes(1)
+    })
+    expect(screen.getByText('版本信息暂不可用')).toBeTruthy()
+    expect(screen.getAllByText('暂不可用')).toHaveLength(2)
+    expect(screen.getByText('目录信息暂不可用')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '打开目录' }).matches(':disabled')).toBe(true)
+    delete (window as unknown as { api?: unknown }).api
+  })
+
   it('窗口控制归系统原生：renderer 不自绘控件，darwin 才有拖拽带；占位保留', () => {
     const { container, unmount } = render(
       <SettingsWindow model={previewModel()} platform="darwin" />

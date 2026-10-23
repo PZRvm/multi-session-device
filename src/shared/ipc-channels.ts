@@ -77,6 +77,11 @@ export const IPC_CHANNELS = {
   wizardOpen: 'wizard:open',
   wizardClose: 'wizard:close',
   settingsOpen: 'settings:open',
+  // ---- 关于页域（关于页真值对接；仅设置窗）----
+  /** 关于页快照：应用/Electron/Chromium 版本与应用数据目录 */
+  aboutGet: 'about:get',
+  /** 在系统文件管理器打开应用数据目录（路径由 main 单源，无载荷） */
+  aboutOpenDataDirectory: 'about:open-data-directory',
   // ---- 设备配置编辑域（plan 2026-10-08-device-config-edit）----
   /** 主窗调：为指定设备开/聚焦编辑窗（上下文创建时固定，不静默切换已有窗） */
   wizardOpenEditor: 'wizard:open-editor',

@@ -1,7 +1,8 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, app, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
+import type { AboutInfo } from '@shared/types'
 import { appIcon } from '../app-icon'
 import { themeWindowBackground } from '../theme'
 import { getMainWindow } from './index'
@@ -144,5 +145,35 @@ export function registerSettingsIpc(): void {
       throw new Error(`${IPC_CHANNELS.settingsOpen}: ${msg('settingsMainOnlySuffix')}`)
     }
     return openSettingsWindow()
+  })
+
+  // 关于页真值（版本三件套 + 数据目录）：静态快照，拉一次即够；仅设置窗可调
+  ipcMain.handle(IPC_CHANNELS.aboutGet, (event): AboutInfo => {
+    if (!settingsOwns(event.sender)) {
+      throw new Error(`${IPC_CHANNELS.aboutGet}${msg('settingsCallerNotAllowed')}`)
+    }
+    return {
+      appVersion: app.getVersion(),
+      electronVersion: process.versions.electron ?? null,
+      chromiumVersion: process.versions.chrome ?? null,
+      dataDirectory: app.getPath('userData')
+    }
+  })
+
+  // 打开数据目录：路径由 main 单源（userData），无载荷可伪造；openPath 失败是
+  // 用户可重试的轻操作，不回传 renderer，两种失败形态（resolve 错误串 / reject）
+  // 都控制台留痕；两参 then 让链上任何一环都不产生 unhandled rejection
+  ipcMain.handle(IPC_CHANNELS.aboutOpenDataDirectory, (event): void => {
+    if (!settingsOwns(event.sender)) {
+      throw new Error(`${IPC_CHANNELS.aboutOpenDataDirectory}${msg('settingsCallerNotAllowed')}`)
+    }
+    void shell.openPath(app.getPath('userData')).then(
+      (failure) => {
+        if (failure) console.warn(`[settings] openPath(userData): ${failure}`)
+      },
+      (error: unknown) => {
+        console.warn(`[settings] openPath(userData): ${String(error)}`)
+      }
+    )
   })
 }

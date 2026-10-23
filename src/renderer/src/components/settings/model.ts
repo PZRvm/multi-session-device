@@ -26,17 +26,16 @@ export interface SettingsViewModel {
   }
   readonly about: {
     readonly appName: string
-    readonly appVersion: string | null
-    readonly dataDirectory: string | null
   }
 }
 
 export type SettingsPaneId = 'general' | 'emulator' | 'shortcuts' | 'about' | 'danger'
 
 // 静态展示模型：外观与语言已接真实数据源，由 SettingsApp 注入；SDK 来源版面经
-// useSdkSource 直连主进程快照（plan 2026-10-11 交互化）；阈值未接数据源，不伪造
+// useSdkSource 直连主进程快照（plan 2026-10-11 交互化）；阈值未接数据源，不伪造。
+// 关于页版本/数据目录同走 useAboutInfo 直连（about:get 真值），模型只留产品名。
 export const SETTINGS_PREVIEW: Omit<SettingsViewModel, 'appearance' | 'locale' | 'onLocaleChange'> =
   {
     resources: { maxInstances: 2, memoryThresholdLabel: null },
-    about: { appName: '多会话设备', appVersion: null, dataDirectory: null }
+    about: { appName: '多会话设备' }
   }
