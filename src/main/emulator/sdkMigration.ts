@@ -1,14 +1,5 @@
 import { spawn } from 'node:child_process'
-import {
-  copyFile,
-  mkdir,
-  readdir,
-  readFile,
-  rm,
-  stat,
-  statfs,
-  writeFile
-} from 'node:fs/promises'
+import { copyFile, mkdir, readdir, readFile, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
 import { makeResilientRename } from './fsWin'
 import type {

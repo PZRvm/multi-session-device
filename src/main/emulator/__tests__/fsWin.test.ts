@@ -94,7 +94,9 @@ describe('fsWin.makeResilientRename（win32 锁重试 + EXDEV 回退）', () => 
   it('EXDEV 跨卷：回退 copyDir(from,to) → removePath(from)，顺序固定，不重试', async () => {
     const rename = renameFailingWith([errno('EXDEV')])
     const env = makeDeps(rename.fn)
-    await expect(makeResilientRename('win32', env.deps)('/c/src', '/d/dest')).resolves.toBeUndefined()
+    await expect(
+      makeResilientRename('win32', env.deps)('/c/src', '/d/dest')
+    ).resolves.toBeUndefined()
     expect(rename.calls).toHaveLength(1)
     expect(env.sleeps).toHaveLength(0)
     expect(env.copies).toEqual([['/c/src', '/d/dest']])
@@ -108,7 +110,9 @@ describe('fsWin.makeResilientRename（win32 锁重试 + EXDEV 回退）', () => 
     env.deps!.copyDir = async () => {
       throw copyError
     }
-    await expect(makeResilientRename('win32', env.deps)('/c/src', '/d/dest')).rejects.toBe(copyError)
+    await expect(makeResilientRename('win32', env.deps)('/c/src', '/d/dest')).rejects.toBe(
+      copyError
+    )
     expect(env.removes).toHaveLength(0)
   })
 
@@ -119,7 +123,9 @@ describe('fsWin.makeResilientRename（win32 锁重试 + EXDEV 回退）', () => 
     env.deps!.removePath = async () => {
       throw removeError
     }
-    await expect(makeResilientRename('win32', env.deps)('/c/src', '/d/dest')).rejects.toBe(removeError)
+    await expect(makeResilientRename('win32', env.deps)('/c/src', '/d/dest')).rejects.toBe(
+      removeError
+    )
     expect(env.copies).toHaveLength(1)
   })
 

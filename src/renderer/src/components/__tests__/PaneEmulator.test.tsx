@@ -223,6 +223,28 @@ describe('PaneEmulator（SDK 来源交互化）', () => {
     expect(screen.queryByRole('group', { name: '迁移 SDK' })).toBeNull()
   })
 
+  it('托管模式切回自选、选的是上次记住的路径：不再被静默吞掉，照走判定矩阵', async () => {
+    api = installApi(snapshotOf({ source: 'managed', customPath: '/vol/sdk' }))
+    await openPane(api)
+    api.chooseCustomRoot.mockResolvedValueOnce('/vol/sdk')
+    fireEvent.click(screen.getByRole('radio', { name: '自选 SDK 路径' }))
+    await waitFor(() => {
+      expect(api.sourceSet).toHaveBeenCalledWith('custom', '/vol/sdk')
+    })
+  })
+
+  it('已在自选模式时重选同路径：仍是无操作（不触发判定）', async () => {
+    api = installApi(snapshotOf({ source: 'custom', customPath: '/vol/sdk' }))
+    await openPane(api)
+    api.chooseCustomRoot.mockResolvedValueOnce('/vol/sdk')
+    // 重选入口是选中行里的「更换路径…」（单选钮本身在已选中时会被 currentMode 守卫拦下）
+    fireEvent.click(screen.getByRole('button', { name: '更换路径…' }))
+    await waitFor(() => {
+      expect(api.chooseCustomRoot).toHaveBeenCalled()
+    })
+    expect(api.sourceSet).not.toHaveBeenCalled()
+  })
+
   it('rejected：词条映射到错误行（运行会话示例）', async () => {
     api = installApi(snapshotOf())
     api.sourceSet.mockResolvedValueOnce({

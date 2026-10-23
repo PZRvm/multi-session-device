@@ -125,7 +125,9 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
     await runAction(async () => {
       const picked = await sdk.chooseCustomRoot()
       if (picked === null) return
-      if (target === 'custom' && picked === snapshot?.customPath) return
+      // 同路径重选的无操作仅限「已在自选模式」；从托管/共享切回自选时，即便选的是
+      // 上次记住的路径也要走判定矩阵（否则静默吞掉切换：不弹窗也不换——2026-10-22 实测）
+      if (target === 'custom' && currentMode === 'custom' && picked === snapshot?.customPath) return
       await applySwitch(target, picked)
     })
   }

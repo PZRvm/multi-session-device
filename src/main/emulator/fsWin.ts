@@ -35,7 +35,8 @@ export const makeResilientRename =
     if (platform !== 'win32') return renameFn(from, to)
 
     const copyDir =
-      deps.copyDir ?? ((src: string, dest: string) => cp(src, dest, { recursive: true, force: true }))
+      deps.copyDir ??
+      ((src: string, dest: string) => cp(src, dest, { recursive: true, force: true }))
     const removePath =
       deps.removePath ?? ((path: string) => rm(path, { recursive: true, force: true }))
     const sleep = deps.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)))
