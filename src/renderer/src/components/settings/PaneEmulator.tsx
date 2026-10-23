@@ -46,33 +46,9 @@ const rejectedText = (
   }
 }
 
-interface MigrateCard {
-  kind: 'migrate'
-  target: SdkSourceMode
-  customPath: string | undefined
-  fromRoot: string
-  toRoot: string
-  bytes: number
-  boundDevices: number
-}
-
-interface ChoiceCard {
-  kind: 'choice'
-  target: SdkSourceMode
-  customPath: string | undefined
-  targetRoot: string
-  targetBytes: number
-  loserRoot: string
-  loserBytes: number
-  loserBoundDevices: number
-}
-
-type PendingCard = MigrateCard | ChoiceCard
-
 const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => {
   const sdk = useSdkSource()
   const { appOwnedDeviceCount } = sdk
-  const [card, setCard] = useState<PendingCard | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const snapshot = sdk.snapshot
@@ -108,25 +84,40 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
         return
       }
       if (evaluation.action === 'direct') return
-      setCard({
-        kind: evaluation.action === 'needs-migration' ? 'migrate' : 'choice',
-        target,
-        customPath,
-        ...(evaluation.action === 'needs-migration'
-          ? {
-              fromRoot: evaluation.fromRoot,
-              toRoot: evaluation.toRoot,
-              bytes: evaluation.bytes,
-              boundDevices: evaluation.boundDevices
-            }
-          : {
-              targetRoot: evaluation.targetRoot,
-              targetBytes: evaluation.targetBytes,
-              loserRoot: evaluation.loserRoot,
-              loserBytes: evaluation.loserBytes,
-              loserBoundDevices: evaluation.loserBoundDevices
-            })
-      } as PendingCard)
+      // 评估确认一步到位原生弹窗（2026-10-22 用户指示：弃窗内底部卡片，避免两连确认）
+      if (evaluation.action === 'needs-migration') {
+        const ok = await confirmDialog({
+          title: copy.migrateConfirmTitle,
+          message: `${evaluation.fromRoot} → ${evaluation.toRoot}（${formatBytes(
+            evaluation.bytes
+          )}）`,
+          detail:
+            copy.migrateConfirmDetail +
+            (evaluation.boundDevices > 0
+              ? `${evaluation.boundDevices}${copy.boundDevicesSuffix}`
+              : ''),
+          confirm: copy.migrateStart
+        })
+        if (ok) await sdk.startMigration(target, customPath, false)
+        return
+      }
+      // needs-choice：三按钮弹窗（替换迁移 / 直接使用 / 取消），①②方案说明并入 detail
+      const result = await window.api.dialog.show({
+        title: copy.choiceCardTitle,
+        message: `${evaluation.targetRoot}（${formatBytes(evaluation.targetBytes)}）`,
+        detail:
+          `① ${copy.choiceReplaceDetail}：${evaluation.loserRoot}（${formatBytes(
+            evaluation.loserBytes
+          )}）` +
+          (evaluation.loserBoundDevices > 0
+            ? `${evaluation.loserBoundDevices}${copy.boundDevicesSuffix}`
+            : '') +
+          `\n② ${copy.choiceUseDetail}`,
+        buttons: [copy.choiceReplace, copy.choiceUse, copy.cancelAction],
+        cancelId: 2
+      })
+      if (result.response === 0) await sdk.startMigration(target, customPath, true)
+      else if (result.response === 1) await sdk.adopt(target, customPath)
     })
   }
 
@@ -164,34 +155,6 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
       cancelId: 1
     })
     return result.response === 0
-  }
-
-  const startMigration = async (input: MigrateCard, replace: boolean): Promise<void> => {
-    const ok = await confirmDialog({
-      title: replace ? copy.replaceConfirmTitle : copy.migrateConfirmTitle,
-      message: `${input.fromRoot} → ${input.toRoot}（${formatBytes(input.bytes)}）`,
-      detail:
-        copy.migrateConfirmDetail +
-        (input.boundDevices > 0 ? `${input.boundDevices}${copy.boundDevicesSuffix}` : ''),
-      confirm: copy.migrateStart
-    })
-    setCard(null)
-    if (!ok) return
-    await runAction(() => sdk.startMigration(input.target, input.customPath, replace))
-  }
-
-  const adoptTarget = async (input: ChoiceCard): Promise<void> => {
-    const ok = await confirmDialog({
-      title: copy.useConfirmTitle,
-      message: `${input.targetRoot}（${formatBytes(input.targetBytes)}）`,
-      detail:
-        `${copy.choiceUseDetail}：${input.loserRoot}（${formatBytes(input.loserBytes)}）` +
-        (input.loserBoundDevices > 0 ? `${input.loserBoundDevices}${copy.boundDevicesSuffix}` : ''),
-      confirm: copy.choiceUse
-    })
-    setCard(null)
-    if (!ok) return
-    await runAction(() => sdk.adopt(input.target, input.customPath))
   }
 
   const clearRetained = async (root: string, bytes: number): Promise<void> => {
@@ -304,102 +267,6 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
       <p className="hint block-divider">{copy.avdHint}</p>
 
       {error !== null ? <p className="error-line">{error}</p> : null}
-
-      {card?.kind === 'migrate' ? (
-        <div className="action-card" role="group" aria-label={copy.migrateCardTitle}>
-          <p className="card-title">{copy.migrateCardTitle}</p>
-          <p className="card-line">
-            {copy.migrateCardFrom}：<span className="path">{card.fromRoot}</span>
-          </p>
-          <p className="card-line">
-            {copy.migrateCardTo}：<span className="path">{card.toRoot}</span>（
-            {formatBytes(card.bytes)}）
-          </p>
-          {card.boundDevices > 0 ? (
-            <p className="card-line">
-              {copy.migrateCardBound}：{card.boundDevices}
-              {copy.boundDevicesSuffix}
-            </p>
-          ) : null}
-          <div className="card-actions">
-            <button
-              type="button"
-              onClick={() => {
-                setCard(null)
-                setError(null)
-              }}
-            >
-              {copy.cancelAction}
-            </button>
-            <button
-              type="button"
-              disabled={sdk.acting}
-              onClick={() => {
-                void startMigration(card, false)
-              }}
-            >
-              {copy.migrateStart}
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {card?.kind === 'choice' ? (
-        <div className="action-card" role="group" aria-label={copy.choiceCardTitle}>
-          <p className="card-title">{copy.choiceCardTitle}</p>
-          <p className="card-line">
-            <span className="path">{card.targetRoot}</span>（{formatBytes(card.targetBytes)}）
-          </p>
-          <p className="card-line">① {copy.choiceReplaceDetail}</p>
-          <p className="card-line">② {copy.choiceUseDetail}</p>
-          {card.loserBoundDevices > 0 ? (
-            <p className="card-line">
-              {copy.migrateCardBound}：{card.loserBoundDevices}
-              {copy.boundDevicesSuffix}
-            </p>
-          ) : null}
-          <div className="card-actions">
-            <button
-              type="button"
-              onClick={() => {
-                setCard(null)
-                setError(null)
-              }}
-            >
-              {copy.cancelAction}
-            </button>
-            <button
-              type="button"
-              disabled={sdk.acting}
-              onClick={() => {
-                void startMigration(
-                  {
-                    kind: 'migrate',
-                    target: card.target,
-                    customPath: card.customPath,
-                    fromRoot: card.loserRoot,
-                    toRoot: card.targetRoot,
-                    bytes: card.loserBytes,
-                    boundDevices: card.loserBoundDevices
-                  },
-                  true
-                )
-              }}
-            >
-              {copy.choiceReplace}
-            </button>
-            <button
-              type="button"
-              disabled={sdk.acting}
-              onClick={() => {
-                void adoptTarget(card)
-              }}
-            >
-              {copy.choiceUse}
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       {snapshot?.migration != null && !progressActive ? (
         <div className="action-card warn" role="alert">

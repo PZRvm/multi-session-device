@@ -119,17 +119,17 @@ describe('PaneEmulator（SDK 来源交互化）', () => {
     expect(api.sourceSet).not.toHaveBeenCalled()
   })
 
-  it('点共享（Studio 在场）：sourceSet 走矩阵判定；direct 即完成不弹卡', async () => {
+  it('点共享（Studio 在场）：sourceSet 走矩阵判定；direct 即完成不弹窗', async () => {
     api = installApi(snapshotOf())
     await openPane(api)
     fireEvent.click(screen.getByRole('radio', { name: '共享 Android Studio SDK' }))
     await waitFor(() => {
       expect(api.sourceSet).toHaveBeenCalledWith('shared-studio', undefined)
     })
-    expect(screen.queryByRole('group', { name: '迁移 SDK' })).toBeNull()
+    expect(api.dialogShow).not.toHaveBeenCalled()
   })
 
-  it('needs-migration：确认卡展示体量与影响设备 → 原生确认 → sourceMigrate', async () => {
+  it('needs-migration：评估并入单个原生确认弹窗 → 确认后 sourceMigrate', async () => {
     api = installApi(snapshotOf())
     api.sourceSet.mockResolvedValueOnce({
       action: 'needs-migration',
@@ -142,20 +142,21 @@ describe('PaneEmulator（SDK 来源交互化）', () => {
     api.chooseCustomRoot.mockResolvedValueOnce('/vol/sdk')
     fireEvent.click(screen.getByRole('radio', { name: '自选 SDK 路径' }))
     await waitFor(() => {
-      expect(api.sourceSet).toHaveBeenCalledWith('custom', '/vol/sdk')
-    })
-    const card = await screen.findByRole('group', { name: '迁移 SDK' })
-    expect(card.textContent).toContain('/data/AndroidSDK')
-    expect(card.textContent).toContain('6.1 GB')
-    expect(card.textContent).toContain('3 台设备')
-    fireEvent.click(screen.getByRole('button', { name: '开始迁移…' }))
-    await waitFor(() => {
       expect(api.dialogShow).toHaveBeenCalledTimes(1)
+    })
+    const options = api.dialogShow.mock.calls[0]![0] as Record<string, unknown>
+    expect(options['title']).toBe('确认迁移 SDK')
+    expect(options['message']).toContain('/data/AndroidSDK → /vol/sdk')
+    expect(options['message']).toContain('6.1 GB')
+    expect(options['detail'] as string).toContain('3 台设备')
+    expect(options['buttons']).toEqual(['开始迁移…', '取消'])
+    expect(options['cancelId']).toBe(1)
+    await waitFor(() => {
       expect(api.sourceMigrate).toHaveBeenCalledWith('custom', '/vol/sdk', false)
     })
   })
 
-  it('needs-choice：迁移替换与直接使用都经原生确认后才提交', async () => {
+  it('needs-choice：三按钮弹窗，替换迁移与直接使用各走各的提交', async () => {
     api = installApi(snapshotOf())
     api.sourceSet.mockResolvedValueOnce({
       action: 'needs-choice',
@@ -168,15 +169,24 @@ describe('PaneEmulator（SDK 来源交互化）', () => {
     await openPane(api)
     api.chooseCustomRoot.mockResolvedValueOnce('/vol/sdk')
     fireEvent.click(screen.getByRole('radio', { name: '自选 SDK 路径' }))
-    const card = await screen.findByRole('group', { name: '目标路径已有 SDK' })
-    expect(card.textContent).toContain('目标路径的 SDK')
-
-    fireEvent.click(screen.getByRole('button', { name: '迁移替换…' }))
+    await waitFor(() => {
+      expect(api.dialogShow).toHaveBeenCalledTimes(1)
+    })
+    const options = api.dialogShow.mock.calls[0]![0] as Record<string, unknown>
+    expect(options['title']).toBe('目标路径已有 SDK')
+    expect(options['message']).toContain('/vol/sdk')
+    expect(options['detail'] as string).toContain('① ')
+    expect(options['detail'] as string).toContain('② ')
+    expect(options['detail'] as string).toContain('/data/AndroidSDK')
+    expect(options['detail'] as string).toContain('2 台设备')
+    expect(options['buttons']).toEqual(['迁移替换…', '直接使用…', '取消'])
+    expect(options['cancelId']).toBe(2)
+    // 默认 mock response 0 = 迁移替换
     await waitFor(() => {
       expect(api.sourceMigrate).toHaveBeenCalledWith('custom', '/vol/sdk', true)
     })
 
-    // 直接使用分支：重开二选一卡再走
+    // 直接使用分支：response 1
     api.sourceSet.mockResolvedValueOnce({
       action: 'needs-choice',
       targetRoot: '/vol/sdk',
@@ -185,16 +195,15 @@ describe('PaneEmulator（SDK 来源交互化）', () => {
       loserBytes: 6_200_000_000,
       loserBoundDevices: 0
     } as SdkSourceSwitchEvaluation)
+    api.dialogShow.mockResolvedValueOnce({ response: 1, checkboxChecked: false })
     api.chooseCustomRoot.mockResolvedValueOnce('/vol/sdk')
     fireEvent.click(screen.getByRole('radio', { name: '自选 SDK 路径' }))
-    await screen.findByRole('group', { name: '目标路径已有 SDK' })
-    fireEvent.click(screen.getByRole('button', { name: '直接使用…' }))
     await waitFor(() => {
       expect(api.sourceAdopt).toHaveBeenCalledWith('custom', '/vol/sdk')
     })
   })
 
-  it('确认框取消：不提交动作、卡片收起', async () => {
+  it('弹窗取消：不提交动作，窗口无残留', async () => {
     api = installApi(snapshotOf())
     api.sourceSet.mockResolvedValueOnce({
       action: 'needs-migration',
@@ -203,12 +212,10 @@ describe('PaneEmulator（SDK 来源交互化）', () => {
       bytes: 1000,
       boundDevices: 0
     } as SdkSourceSwitchEvaluation)
+    api.dialogShow.mockResolvedValueOnce({ response: 1, checkboxChecked: false })
     await openPane(api)
     api.chooseCustomRoot.mockResolvedValueOnce('/vol/sdk')
     fireEvent.click(screen.getByRole('radio', { name: '自选 SDK 路径' }))
-    await screen.findByRole('group', { name: '迁移 SDK' })
-    api.dialogShow.mockResolvedValueOnce({ response: 1, checkboxChecked: false })
-    fireEvent.click(screen.getByRole('button', { name: '开始迁移…' }))
     await waitFor(() => {
       expect(api.dialogShow).toHaveBeenCalledTimes(1)
     })
