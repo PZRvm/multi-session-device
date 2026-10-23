@@ -1,11 +1,12 @@
 ---
 description: 设置页 Windows 收尾——杀软白名单性能建议卡片（确切路径清单 + Defender 受控深链）、SDK 根路径过长检测提示（260 预算，只提示不拦截）、非 mac 板头去标题消除双标题；Win P6，依赖外围调研 C2/B3/E1
-status: draft
+status: completed
 created: 2026-10-23
 ---
 
 # Windows 设置页收尾 — plan
 
+> 实现记录（2026-10-23，feature/windows-settings-finish，基 feat/windows-branch fedc1a0）：按 Build order 四批全部完成。windowsPath 预算单源（260 − 1 − 100 = 159）+ 快照 avdHome（`avdHomePath()` 单源，零新 IPC）+ Defender 受控深链（`shell:open-windows-defender`，P5 通道同款）+ PaneEmulator 卡片与警示（`activeRootOf` 抽取，单选行路径展示复用；卡片内路径行局部放开 `user-select: text`）+ BoardHead 非 mac 去标题（`.title` 样式随删）。**声明的三处必要触碰全部兑现**：PaneEmulator.test 夹具补 `avdHome` 行、api 桩补 `platform: 'darwin'`（learn 2026-10-22-window-api-default-stub-injected-tests 先例）、BoardHead 非 mac 用例按新规格改写为「不渲染」；另有一处助手级触碰——dialog 测试的 `withPlatform` 从 P5 describe 内提升到模块级供两深链通道共用（P5 断言零改动）。1403 测试过（新增 10：windowsPath 3 / dialog 2 / sdkSource 1 / PaneEmulator 4）、typecheck/lint 0 错；mac 侧除上述声明触碰外既有断言零改动。真机项（深链真实拉起、排除生效提速体感、超长根实测核数）归统一集成验证。
 > 依据：[外围调研](../notes/think-report/20261022110137-Windows兼容问题解决方案调研.md) §4（C2 Defender 排除引导）、§3（B3 长路径一期「检测 + 提示」）、§6（E1 双标题保守去重）。任务清单见 [todos](../todos/windows-support.md) P6。
 > 依赖现状：P1–P5 已全部合并进 feat/windows-branch，可直接复用的先例：固定 URI 受控深链通道（`shellOpenWindowsFeatures`，`src/main/dialog/index.ts:76-81`）、渲染层平台读取（`window.api.platform`，P5 在 SettingsForm 的先例）、avdHome 叶子单源（`avdHomePath()`，`src/main/emulator/avdHomePath.ts:8`，零依赖任何层可引）。
 
