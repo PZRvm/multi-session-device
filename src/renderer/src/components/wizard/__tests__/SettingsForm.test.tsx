@@ -8,7 +8,9 @@ const copy = WIZARD_COPY['zh-CN']
 
 afterEach(cleanup)
 
-const camera = (mode: DeviceAdvancedSettings['frontCamera']['mode'] = 'emulated'): {
+const camera = (
+  mode: DeviceAdvancedSettings['frontCamera']['mode'] = 'emulated'
+): {
   mode: DeviceAdvancedSettings['frontCamera']['mode']
   deviceId: string | null
 } => ({ mode, deviceId: null })
