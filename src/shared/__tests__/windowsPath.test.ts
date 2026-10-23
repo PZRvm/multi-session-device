@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  WINDOWS_MAX_PATH,
-  WINDOWS_SDK_SUBTREE_BUDGET,
-  windowsSdkRootTooLong
-} from '../windowsPath'
+import { WINDOWS_MAX_PATH, WINDOWS_SDK_SUBTREE_BUDGET, windowsSdkRootTooLong } from '../windowsPath'
 
 const WARN_LINE = WINDOWS_MAX_PATH - 1 - WINDOWS_SDK_SUBTREE_BUDGET
 

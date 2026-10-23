@@ -25,6 +25,7 @@ vi.mock('../studioDetect', () => ({
 }))
 
 import {
+  getSdkSourceSnapshot,
   getSdkSourceState,
   isSharedReadOnly,
   javaBinFor,
@@ -230,5 +231,27 @@ describe('sdkSource store（sdk.json）', () => {
       })
     )
     expect(resolveSdkRoot()).toBe('/Users/t/Library/Android/sdk')
+  })
+})
+
+describe('getSdkSourceSnapshot（plan 2026-10-23-windows-settings-finish）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    studioMocks.get.mockReturnValue(null)
+    resetSdkSourceStateForTest()
+  })
+
+  it('托管缺省快照：avdHome 为 avdHomePath 单源值，journal 缺席', async () => {
+    // journal 读取（唯一一次 IO）：ENOENT → absent，migration null / journalCorrupt false
+    mocks.readFile.mockImplementationOnce(() =>
+      Promise.reject(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+    )
+    const snapshot = await getSdkSourceSnapshot()
+    expect(snapshot.avdHome).toBe('/userdata/avd-home')
+    expect(snapshot.source).toBe('managed')
+    expect(snapshot.managedRoot).toBe('/userdata/AndroidSDK')
+    expect(snapshot.migration).toBeNull()
+    expect(snapshot.journalCorrupt).toBe(false)
+    expect(snapshot.retainedRoots).toEqual([])
   })
 })

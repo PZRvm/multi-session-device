@@ -3,6 +3,7 @@ import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { SdkRetainedRoot, SdkSourceMode, SdkSourceSnapshot } from '@shared/types'
 import { getStudioDetection, runStudioDetection } from './studioDetect'
+import { avdHomePath } from './avdHomePath'
 import {
   classifyRoot,
   readMigrationJournalState,
@@ -154,6 +155,7 @@ export async function getSdkSourceSnapshot(): Promise<SdkSourceSnapshot> {
     managedRoot: managedSdkRoot(),
     customPath: state.customPath,
     sharedPath: state.sharedPath,
+    avdHome: avdHomePath(),
     detection: getStudioDetection(),
     migration: journal === null ? null : toSdkMigrationView(journal),
     journalCorrupt: journalState.status === 'corrupt',

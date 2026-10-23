@@ -37,6 +37,7 @@ const snapshotOf = (over: Partial<SdkSourceSnapshot> = {}): SdkSourceSnapshot =>
   managedRoot: '/data/AndroidSDK',
   customPath: null,
   sharedPath: null,
+  avdHome: '/data/avd-home',
   detection: detectionOf(),
   migration: null,
   journalCorrupt: false,
@@ -86,7 +87,10 @@ const installApi = (snapshot: SdkSourceSnapshot): SdkApiMock => {
     dialogShow: vi.fn(async () => ({ response: 0, checkboxChecked: false })),
     listeners
   }
+  // platform 默认 darwin（mac 现状）；win32 用例在 installApi 后自行覆写 window.api
+  // （learn 2026-10-22-window-api-default-stub-injected-tests：组件读 platform 缺桩必崩）
   ;(window as unknown as { api: unknown }).api = {
+    platform: 'darwin',
     dialog: { show: mock.dialogShow },
     sdk: mock
   }
