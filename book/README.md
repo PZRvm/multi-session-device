@@ -185,6 +185,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-解锁投屏修复-code-review.md](notes/issue/2026-10/2026-10-16-解锁投屏修复-code-review.md) — 解锁投屏 Phase 5 的三项发现已修复并正式回归：本地手势随代次取消、零帧有界恢复与可重试错误态、ACK 安全整数校验；全量 1254 项通过
 - [2026-10-22-sdk-migration-adb-probe-win32.md](notes/issue/2026-10/2026-10-22-sdk-migration-adb-probe-win32.md) — sdkMigration 的 SDK 根核验探测写死无后缀 adb 路径——win32 下恒假阴性，迁移/切换根验证会误判
 - [2026-10-22-windows-file-resilience-review.md](notes/issue/2026-10/2026-10-22-windows-file-resilience-review.md) — P4 分支（fsWin/sha1 流式化 + SDK 切换弹窗化 + 同路径守卫修复）代码评审发现——无 P1；流程 P2 一条（lint 门禁口径）+ P3 两条；只记录不修
+- [2026-10-22-windows-merge-integration-review.md](notes/issue/2026-10/2026-10-22-windows-merge-integration-review.md) — feat/windows-branch 三批合并集成 review——P1 引导/P2 检测链/P3 进程管理的接缝核查；无 P1，P2 一条（profiles.ts avdmanager 调用链 win32 必挂）+ P3 一条（四处 spawn 缺 windowsHide）；只记录不修
 - [2026-10-22-windows-process-mgmt-review.md](notes/issue/2026-10/2026-10-22-windows-process-mgmt-review.md) — P3 进程管理 Windows 化代码评审发现——无 P1；P2 两条（测试平台假设钉住、会话结束弹窗暴露面）+ P3 四条；只记录不修
 - [2026-10-22-windows-quit-stay-no-window.md](notes/issue/2026-10/2026-10-22-windows-quit-stay-no-window.md) — Windows 关窗确认选「留在应用」后 app 无窗口且无唤回入口——需 second-instance 处理，真机验收前修复
 - [2026-10-22-windows-sdk-bootstrap-review.md](notes/issue/2026-10/2026-10-22-windows-sdk-bootstrap-review.md) — Windows P1 SDK 引导平台化 code review——0 项 P1、1 项 P2（cmd.exe 含空格路径待真机验证）、4 项 P3（同日修复批已全部处置）
@@ -406,4 +407,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 312 documents -->
+<!-- 313 documents -->
