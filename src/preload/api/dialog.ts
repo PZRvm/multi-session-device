@@ -7,5 +7,8 @@ export const dialogApi = {
     ipcRenderer.invoke(IPC_CHANNELS.dialogShow, options),
   /** 在 Finder 中显示孤立组文件（路径白名单校验在 main） */
   showItemInFolder: (path: string): Promise<void> =>
-    ipcRenderer.invoke(IPC_CHANNELS.shellShowItemInFolder, { path })
+    ipcRenderer.invoke(IPC_CHANNELS.shellShowItemInFolder, { path }),
+  /** 打开「启用或关闭 Windows 功能」（WHPX 缺失引导；固定 URI，仅 win32，校验在 main） */
+  openWindowsFeatures: (): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.shellOpenWindowsFeatures)
 }

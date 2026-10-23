@@ -202,9 +202,21 @@ const DeviceRow = ({
             </span>
           ) : null}
           {device.lastError ? (
-            <span className="error-line" title={device.lastError.message}>
-              {device.lastError.message}
-            </span>
+            <>
+              <span className="error-line" title={device.lastError.message}>
+                {device.lastError.message}
+              </span>
+              {device.lastError.code === 'whpx-missing' ? (
+                <button
+                  type="button"
+                  className="error-action"
+                  aria-label={copy.openWindowsFeatures}
+                  onClick={() => void window.api.dialog.openWindowsFeatures()}
+                >
+                  {copy.openWindowsFeatures}
+                </button>
+              ) : null}
+            </>
           ) : null}
           {device.cameraNotice ? (
             <span className="notice-line" title={device.cameraNotice}>
@@ -475,6 +487,28 @@ const Wrapper = styled.div`
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* WHPX 引导动作（plan 2026-10-22-windows-emulator-env）：仅随 whpx-missing code 出现 */
+  .error-action {
+    font-size: 11px;
+    line-height: 1.4;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--board-tile-ink);
+    text-decoration: underline;
+    cursor: pointer;
+    flex: none;
+
+    &:hover {
+      opacity: 0.8;
+    }
+
+    &:focus-visible {
+      outline: 1px solid currentColor;
+      outline-offset: 2px;
+    }
   }
 
   &[aria-current] .error-line {

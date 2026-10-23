@@ -162,6 +162,8 @@ export const IPC_CHANNELS = {
   reportWindowOpen: 'report-window:open',
   /** 在 Finder 中显示文件（孤立组处置入口；路径白名单校验在 main） */
   shellShowItemInFolder: 'shell:show-item-in-folder',
+  /** 打开「启用或关闭 Windows 功能」（WHPX 缺失引导；固定 URI，仅 win32，无 renderer 入参） */
+  shellOpenWindowsFeatures: 'shell:open-windows-features',
   /** 窗口退订单设备（关窗由 main 侧 destroyed 钩子统一清理） */
   logcatUnsubscribe: 'logcat:unsubscribe',
   /** main → 各窗：批量日志行（250ms 或 200 行触发 flush；dropped 为流控丢弃计数） */

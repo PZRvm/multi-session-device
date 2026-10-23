@@ -275,7 +275,12 @@ const SettingsForm = ({
                 {copy.requestCamera}
               </button>
             ) : null}
-            {['denied', 'restricted'].includes(capabilities.cameraSnapshot?.permission ?? '') ? (
+            {/* win32 恒 granted（无应用级权限可查），深链入口改由「空列表」驱动
+                （plan 2026-10-22-windows-emulator-env 设计 5）；mac 维持 denied/restricted 条件 */}
+            {['denied', 'restricted'].includes(capabilities.cameraSnapshot?.permission ?? '') ||
+            (window.api.platform === 'win32' &&
+              capabilities.cameraSnapshot !== undefined &&
+              capabilities.cameraSnapshot.devices.length === 0) ? (
               <button
                 disabled={cameraBusy}
                 type="button"

@@ -14,6 +14,7 @@ import { ensureSharedServer } from '../emulator/adb'
 import { createRunner } from '../emulator/runner'
 import { getMainWindow } from '../window'
 import { listWebcams } from '../emulator/cameras'
+import { looksLikeWhpxMissing } from '../emulator/whpx'
 import {
   arbitrateCameras,
   type ArbitrationCamera,
@@ -68,8 +69,16 @@ const handleUnexpectedExit = (
     info.stdoutTail.length > 0 ? `stdout：${info.stdoutTail}` : null
   ].filter((part): part is string => part !== null)
   const detail = parts.length > 0 ? parts.join('\n') : `exit ${info.code}`
+  // Windows 虚拟化（WHPX）未开启的专用收口（plan 2026-10-22-windows-emulator-env 设计 3）：
+  // 高信号句式命中即换可操作指引；未命中走既有 unexpected-exit。分类只挂 devices 层
+  //（错误语义词表在此），runner 保持纯进程事实——win32 之外分类器永不执行
+  const whpxMissing = process.platform === 'win32' && looksLikeWhpxMissing(info)
+  const errorCode = whpxMissing ? 'whpx-missing' : 'unexpected-exit'
   device.status = 'stopped'
-  device.lastError = { code: 'unexpected-exit', message: msg('unexpectedExit', { detail }) }
+  device.lastError = {
+    code: errorCode,
+    message: msg(whpxMissing ? 'whpxMissing' : 'unexpectedExit', { detail })
+  }
   device.cameraNotice = undefined
   cameraOverridesByDevice.delete(id)
   device.serial = undefined
@@ -80,7 +89,7 @@ const handleUnexpectedExit = (
     eventId: randomUUID(),
     deviceId: id,
     runId,
-    code: 'unexpected-exit',
+    code: errorCode,
     message: device.lastError.message
   })
 }

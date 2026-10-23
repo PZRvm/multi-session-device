@@ -3,6 +3,7 @@ import { stat } from 'node:fs/promises'
 import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { SdkImageProgress, SdkUninstallState } from '@shared/types'
+import { hostImageAbi } from '@shared/compatibility'
 import { uninstallSdkManagerPackage } from './sdk'
 import { splitPackageName, listImagesWithState } from './catalog'
 import { downloadImagePackage } from './downloader'
@@ -110,7 +111,7 @@ export function registerSdkImagesIpc(deps: SdkIpcDeps): void {
         `${IPC_CHANNELS.sdkDownloadImage}: ${msg('packageNotTrusted', { packageName })}`
       )
     }
-    if (entry.abi !== 'arm64-v8a') {
+    if (entry.abi !== hostImageAbi(process.platform)) {
       throw new Error(
         `${IPC_CHANNELS.sdkDownloadImage}: ${msg('crossArchDownloadUnsupported', { abi: entry.abi })}`
       )

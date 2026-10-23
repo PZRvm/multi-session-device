@@ -1,10 +1,13 @@
 ---
 description: 模拟器环境适配——镜像目录按宿主架构过滤 x86_64、WHPX 缺失的失败识别与深链引导、摄像头空列表的系统隐私设置入口；Win P5，依赖外围调研 D1-D3
-status: pending
+status: completed
 created: 2026-10-22
 ---
 
 # Windows 模拟器环境适配 — plan
+
+> 实现记录（2026-10-22，feature/windows-emulator-env，基 feat/windows-branch 66ebb1c）：按 Build order 三批全部完成。ABI 单源（`hostImageAbi` + `hostAbi` 可选参数，缺省即现状）+ catalog 双路径过滤（`platform` 接缝）+ 三处 arm64 硬编码 gate 全部改走单源；`whpx.ts` 匹配器（官方致命句式 + 组合特征，宽匹配明确排除）+ devices 层 `whpx-missing` 收口 + 受控深链通道与 DeviceRow 按钮；摄像头深链/空列表文案单源 + SettingsForm 按钮条件扩展。**两处实现偏差**：① `SettingsForm` 新建 `wizard/__tests__/` 独立测试目录直测纯展示组件（此前无测试先例）；② `DeviceWizard.test` 补 beforeEach 默认 `{ platform: 'darwin' }` 桩——组件新增 `window.api.platform` 读取后注入式用例缺 api 桩必崩（learn 2026-10-22-window-api-default-stub-injected-tests），既有断言零改动。调试副产物：lifecycle 用例的 win32 平台覆写初期罩住了创建步骤，arm64 设备被 ABI 守卫正确拦截——恰是过滤链生效的实证，覆写改为只罩收口时刻。1379 测试过（新增 21）、typecheck/lint 0 错、mac 侧既有断言零改动。风险 ② 已按承诺记 issue（2026-10-22-win32-hidden-non-x86-images）；真机项（WHPX 真实样本采样回填、深链拉起、x86_64 全链）归统一集成验证阶段。
+review 修复轮（2026-10-22，发现见 issue 2026-10-22-windows-emulator-env-review）：P2-1 已修——whpxMissing 繁中功能显示名改为系统实际文案「Windows Hypervisor 平台」（简中/英文本就正确）；P3-1～P3-3 顺延（前两条裁决点在真机集成验证）。1379 测试全绿、typecheck/lint 0 错。
 
 > 依据：[外围调研](../notes/think-report/20261022110137-Windows兼容问题解决方案调研.md) §5（调研单元 D：D1 WHPX / D2 ABI 过滤 / D3 摄像头深链）与 §8 假设批复（Win10 1809+ / x86_64）。任务清单见 [todos](../todos/windows-support.md) P5。
 > 依赖现状：P1/P2/P3 已合并进 feat/windows-branch——runner 现状已含平台接缝（`RunnerDeps.platform`/`killTree`，`runner.ts:70-73`），catalog/skins/cameras 的 spawn 已统一 `windowsHide`（P1/P3）。本 plan 不动 runner 本体，只消费它的失败收口产物。

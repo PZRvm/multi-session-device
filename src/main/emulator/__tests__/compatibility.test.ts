@@ -1,6 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { assessImageCompatibility, profileHasSupportedImage } from '@shared/compatibility'
+import {
+  assessImageCompatibility,
+  hostImageAbi,
+  profileHasSupportedImage
+} from '@shared/compatibility'
 
 /** 画像/镜像的最小可判定形状（assessImageCompatibility 的 Pick 签名） */
 type ProfileArg = Parameters<typeof assessImageCompatibility>[0]
@@ -183,5 +187,39 @@ describe('profileHasSupportedImage（共享态画像可用性，plan 2026-10-12�
 
   it('镜像数组为空 → false（共享根无镜像时空态分支）', () => {
     expect(profileHasSupportedImage(profile(), [])).toBe(false)
+  })
+})
+
+describe('宿主 ABI 单源（plan 2026-10-22-windows-emulator-env）', () => {
+  it('hostImageAbi：win32 → x86_64；darwin/linux → arm64-v8a', () => {
+    expect(hostImageAbi('win32')).toBe('x86_64')
+    expect(hostImageAbi('darwin')).toBe('arm64-v8a')
+    expect(hostImageAbi('linux')).toBe('arm64-v8a')
+  })
+
+  it('hostAbi=x86_64（win32）：x86_64 镜像 supported，arm64 镜像 unsupported 且理由含新文案', () => {
+    const verdict = assessImageCompatibility(profile(), image({ abi: 'x86_64' }), 'zh-CN', 'x86_64')
+    expect(verdict.status).toBe('supported')
+    const cross = assessImageCompatibility(profile(), image(), 'zh-CN', 'x86_64')
+    expect(cross.status).toBe('unsupported')
+    expect(cross.reasons[0]).toContain('arm64-v8a')
+    expect(cross.reasons[0]).toContain('x86_64')
+  })
+
+  it('缺省 hostAbi（mac 现状回归）：arm64 supported、x86_64 unsupported', () => {
+    expect(assessImageCompatibility(profile(), image()).status).toBe('supported')
+    expect(assessImageCompatibility(profile(), image({ abi: 'x86_64' })).status).toBe('unsupported')
+  })
+
+  it('profileHasSupportedImage 按宿主 ABI 收窄：win32 下只有 x86_64 已装可用', () => {
+    const installed = (abi: string): Parameters<typeof profileHasSupportedImage>[1][number] => ({
+      ...image({ abi }),
+      installed: true
+    })
+    const x86 = installed('x86_64')
+    const arm = installed('arm64-v8a')
+    expect(profileHasSupportedImage(profile(), [arm, x86], 'zh-CN', 'x86_64')).toBe(true)
+    expect(profileHasSupportedImage(profile(), [arm], 'zh-CN', 'x86_64')).toBe(false)
+    expect(profileHasSupportedImage(profile(), [arm])).toBe(true)
   })
 })

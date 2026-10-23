@@ -11,7 +11,11 @@ import type {
   SdkSourceMode
 } from '@shared/types'
 import { WIZARD_COPY, format } from '@shared/i18n'
-import { assessImageCompatibility, profileHasSupportedImage } from '@shared/compatibility'
+import {
+  assessImageCompatibility,
+  hostImageAbi,
+  profileHasSupportedImage
+} from '@shared/compatibility'
 import { normalizeAdvancedSettings } from '@shared/settings-contract'
 import Button from './Button'
 import Input from './Input'
@@ -485,12 +489,14 @@ const DeviceWizard = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 依赖收敛到 id/packageName：整对象入依赖会在清单刷新时把未变化的选择误判重拉
   }, [selectedProfile?.id, selectedImage?.packageName, onWizardCapabilities])
 
-  // 逐镜像兼容性（画像未选时不判——verdict 显示为空）。创建守卫在 main，此处仅展示
+  // 逐镜像兼容性（画像未选时不判——verdict 显示为空）。创建守卫在 main，此处仅展示；
+  // 宿主 ABI 单源（sandbox 渲染层读不到 process.platform，经 preload 的 platform 注入）
   const verdicts = useMemo(() => {
     const map = new Map<string, ReturnType<typeof assessImageCompatibility>>()
     if (selectedProfile === null) return map
+    const hostAbi = hostImageAbi(window.api.platform)
     for (const entry of images.data) {
-      map.set(entry.packageName, assessImageCompatibility(selectedProfile, entry, locale))
+      map.set(entry.packageName, assessImageCompatibility(selectedProfile, entry, locale, hostAbi))
     }
     return map
   }, [selectedProfile, images.data, locale])
@@ -504,7 +510,9 @@ const DeviceWizard = ({
   const eligibleProfiles = useMemo(
     () =>
       sharedMode && profilesReady
-        ? profiles.data.filter((entry) => profileHasSupportedImage(entry, images.data, locale))
+        ? profiles.data.filter((entry) =>
+            profileHasSupportedImage(entry, images.data, locale, hostImageAbi(window.api.platform))
+          )
         : profiles.data,
     [sharedMode, profilesReady, profiles.data, images.data, locale]
   )

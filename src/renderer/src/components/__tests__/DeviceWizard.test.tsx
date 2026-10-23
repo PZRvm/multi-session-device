@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { WIZARD_COPY, format } from '@shared/i18n'
 import type {
   DeviceProfile,
@@ -25,6 +25,11 @@ const cancelDownloadAria = (api: string): RegExp =>
 
 // vitest 未开 globals，RTL 的自动 cleanup 不注册——显式清理防多次 render 堆叠
 afterEach(cleanup)
+// 组件现读 window.api.platform（宿主 ABI 单源注入，plan 2026-10-22-windows-emulator-env）——
+// 注入用例没有完整 api 桩，统一默认平台桩（darwin = mac 现状）；自挂完整桩的用例覆盖之
+beforeEach(() => {
+  ;(window as { api?: unknown }).api = { platform: 'darwin' }
+})
 // 非注入用例挂的 window.api 桩同理：测后拆掉，不渗进注入用例
 afterEach(() => {
   delete (window as { api?: unknown }).api

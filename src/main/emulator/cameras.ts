@@ -80,18 +80,35 @@ export const requestCameraPermission = async (): Promise<boolean> => {
     permissionRequest = null
   }
 }
+/** 摄像头系统设置深链（平台单源，plan 2026-10-22-windows-emulator-env 设计 4）：
+ *  mac 系统偏好（原串逐字节不变）、Windows 隐私设置、其余平台无入口（null = no-op）。 */
+export const cameraSettingsUrlFor = (platform: NodeJS.Platform): string | null =>
+  platform === 'darwin'
+    ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera'
+    : platform === 'win32'
+      ? 'ms-settings:privacy-webcam'
+      : null
+
+/** 空列表错误文案：win32 指向系统隐私设置（Windows 对桌面应用只有全局相机开关、
+ *  无 Electron 可查的 API，permission 恒 granted——空列表即事实）；其余平台
+ *  维持原 permission 三分支，darwin 原文逐字节不变。 */
+export const cameraListEmptyMessage = (
+  permission: CameraSnapshot['permission'],
+  platform: NodeJS.Platform
+): string => {
+  if (platform === 'win32') return msg('cameraNoneFoundWindows')
+  if (permission === 'not-determined') return msg('cameraPermissionRequired')
+  if (permission === 'denied' || permission === 'restricted') {
+    return msg('cameraPermissionNotGranted')
+  }
+  return msg('cameraNoneFound')
+}
+
 export const readCameraSnapshot = async (sdkRoot: string): Promise<CameraSnapshot> => {
   const permission = cameraPermission()
   try {
     const devices = await listWebcams(sdkRoot)
-    const error =
-      devices.length > 0
-        ? null
-        : permission === 'not-determined'
-          ? msg('cameraPermissionRequired')
-          : permission === 'denied' || permission === 'restricted'
-            ? msg('cameraPermissionNotGranted')
-            : msg('cameraNoneFound')
+    const error = devices.length > 0 ? null : cameraListEmptyMessage(permission, process.platform)
     return { permission, devices, error }
   } catch (error) {
     return {
