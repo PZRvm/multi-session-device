@@ -398,6 +398,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-22-windows-process-mgmt.md](plans/2026-10-22-windows-process-mgmt.md) — 进程管理 Windows 化——runner 树杀 taskkill /T、detached 平台化与 windowsHide、before-quit 关窗确认弹窗（有设备在跑先确认再退出）；Win P3，依赖外围调研与用户批复
 - [2026-10-22-windows-sdk-bootstrap.md](plans/2026-10-22-windows-sdk-bootstrap.md) — SDK 引导 Windows 平台化——下载源按平台查表、sdkPaths 补 .exe/.bat、platformExec 执行器（cmd.exe /c + windowsHide）、解压改 Windows 自带 tar.exe；Win P1，依赖主体工程调研
 - [2026-10-22-windows-studio-detect.md](plans/2026-10-22-windows-studio-detect.md) — Studio/SDK 检测链 Windows 分支——studioDetect 四条候选链平台化（零注册表）、adb 系统候选补 Windows 路径、路径比较大小写规范化；Win P2，依赖主体工程调研
+- [2026-10-23-windows-settings-finish.md](plans/2026-10-23-windows-settings-finish.md) — 设置页 Windows 收尾——杀软白名单性能建议卡片（确切路径清单 + Defender 受控深链）、SDK 根路径过长检测提示（260 预算，只提示不拦截）、非 mac 板头去标题消除双标题；Win P6，依赖外围调研 C2/B3/E1
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### think-report/
@@ -411,4 +412,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 317 documents -->
+<!-- 318 documents -->
