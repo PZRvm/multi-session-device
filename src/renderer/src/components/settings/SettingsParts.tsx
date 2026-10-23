@@ -322,6 +322,17 @@ const Wrapper = styled.section`
     padding: 2px 10px;
     font-size: 12px;
   }
+  /* 杀软白名单卡片（plan 2026-10-23-windows-settings-finish）：路径行可选中誊抄
+     ——版面全局 user-select: none 的局部例外 */
+  .defender-card .defender-pair {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .defender-card .path {
+    user-select: text;
+  }
   .progress-track {
     height: 6px;
     margin: 8px 0;

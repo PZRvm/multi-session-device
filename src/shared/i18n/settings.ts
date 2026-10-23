@@ -37,6 +37,16 @@ const zhCN = {
   detect: '重新检测',
   defaultPathHint: '默认路径示例：~/Library/Android/sdk',
   avdHint: 'AVD 始终独立存放在应用数据目录，不占用 Studio 的设备目录。',
+  defenderTitle: '性能建议：杀软白名单',
+  defenderHint:
+    '杀毒软件实时扫描会拖慢镜像下载、解压与模拟器冷启动。建议把以下目录加入 Windows 安全中心的排除项（不要关闭实时保护）：',
+  defenderSdkRoot: 'SDK 根目录',
+  defenderAvdHome: 'AVD 数据目录',
+  defenderOpen: '打开 Windows 安全中心',
+  defenderThirdParty: '使用第三方杀毒软件（如火绒、360）时，请在它的设置里添加相同的目录排除。',
+  pathTooLongTitle: 'SDK 路径过长',
+  pathTooLongHint:
+    '当前 SDK 路径 {length} 字符，已超出 Windows 260 字符路径的安全预算——深层文件可能写入失败。建议换更短的 SDK 根（自选模式可更换路径）。',
   pathNotChosen: '未选择路径',
   detectingStudio: '正在检测 Android Studio…',
   studioMissing: '未检测到 Android Studio——安装后可用共享 SDK',
@@ -151,6 +161,16 @@ const zhTW: SettingsCopy = {
   detect: '重新偵測',
   defaultPathHint: '預設路徑範例：~/Library/Android/sdk',
   avdHint: 'AVD 一律獨立存放在應用程式資料目錄，不占用 Studio 的裝置目錄。',
+  defenderTitle: '效能建議：防毒白名單',
+  defenderHint:
+    '防毒軟體即時掃描會拖慢映像檔下載、解壓縮與模擬器冷啟動。建議把以下目錄加入 Windows 安全中心的排除項目（不要關閉即時防護）：',
+  defenderSdkRoot: 'SDK 根目錄',
+  defenderAvdHome: 'AVD 資料目錄',
+  defenderOpen: '開啟 Windows 安全中心',
+  defenderThirdParty: '使用第三方防毒軟體（如火絨、360）時，請在它的設定裡加入相同的目錄排除。',
+  pathTooLongTitle: 'SDK 路徑過長',
+  pathTooLongHint:
+    '目前 SDK 路徑 {length} 字元，已超出 Windows 260 字元路徑的安全預算——深層檔案可能寫入失敗。建議改用更短的 SDK 根目錄（自選模式可更換路徑）。',
   pathNotChosen: '未選擇路徑',
   detectingStudio: '正在偵測 Android Studio…',
   studioMissing: '未偵測到 Android Studio——安裝後可用共享 SDK',
@@ -263,6 +283,17 @@ const enUS: SettingsCopy = {
   detect: 'Check again',
   defaultPathHint: 'Default path example: ~/Library/Android/sdk',
   avdHint: 'AVDs stay in the app data directory, separate from Studio devices.',
+  defenderTitle: 'Performance tip: antivirus exclusions',
+  defenderHint:
+    'Real-time antivirus scanning slows image downloads, extraction, and emulator cold starts. Add the directories below as exclusions in Windows Security (do not turn off real-time protection):',
+  defenderSdkRoot: 'SDK root directory',
+  defenderAvdHome: 'AVD data directory',
+  defenderOpen: 'Open Windows Security',
+  defenderThirdParty:
+    'If you use a third-party antivirus (e.g. Huorong, 360), add the same directory exclusions in its settings.',
+  pathTooLongTitle: 'SDK path is too long',
+  pathTooLongHint:
+    'The current SDK path is {length} characters, beyond the safe budget for the Windows 260-character path limit — deep files may fail to write. Consider a shorter SDK root (custom mode can change the path).',
   pathNotChosen: 'No path chosen',
   detectingStudio: 'Detecting Android Studio…',
   studioMissing: 'Android Studio not found — install it to share its SDK',

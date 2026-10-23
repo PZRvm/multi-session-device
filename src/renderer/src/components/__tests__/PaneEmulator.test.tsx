@@ -437,3 +437,59 @@ describe('PaneEmulator（SDK 来源交互化）', () => {
     expect(screen.queryByText('保留的 SDK（仅共享模式）')).toBeNull()
   })
 })
+
+describe('win32 性能建议卡片与路径过长警示（plan 2026-10-23-windows-settings-finish）', () => {
+  const copy = SETTINGS_COPY['zh-CN']
+
+  /** installApi 之上覆写 win32 平台与深链桩（默认桩是 darwin） */
+  const installWin32Api = (
+    snapshot: SdkSourceSnapshot
+  ): { api: SdkApiMock; openDefender: ReturnType<typeof vi.fn> } => {
+    const api = installApi(snapshot)
+    const openDefender = vi.fn(async () => undefined)
+    ;(window as unknown as { api: unknown }).api = {
+      platform: 'win32',
+      dialog: { show: api.dialogShow, openWindowsDefender: openDefender },
+      sdk: api
+    }
+    return { api, openDefender }
+  }
+
+  it('win32 + 托管快照：卡片出现，路径行为托管根与 avdHome，按钮调深链，短根不警', async () => {
+    const { api, openDefender } = installWin32Api(snapshotOf())
+    await openPane(api)
+    expect(screen.getByText(copy.defenderTitle)).toBeTruthy()
+    expect(screen.getByText('/data/avd-home')).toBeTruthy()
+    // 托管根同时出现在单选行与卡片 → 至少两处
+    expect(screen.getAllByText('/data/AndroidSDK').length).toBeGreaterThanOrEqual(2)
+    fireEvent.click(screen.getByRole('button', { name: copy.defenderOpen }))
+    expect(openDefender).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(copy.pathTooLongTitle)).toBeNull()
+  })
+
+  it('darwin：卡片与警示均不渲染（mac 零回归）', async () => {
+    const api = installApi(snapshotOf())
+    await openPane(api)
+    expect(screen.queryByText(copy.defenderTitle)).toBeNull()
+    expect(screen.queryByText(copy.pathTooLongTitle)).toBeNull()
+  })
+
+  it('win32 + 共享快照：卡片活动根跟随 sharedPath', async () => {
+    const { api } = installWin32Api(
+      snapshotOf({ source: 'shared-studio', sharedPath: 'D:/Android/Sdk' })
+    )
+    await openPane(api)
+    expect(screen.getAllByText('D:/Android/Sdk').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('win32 + 160 字符自选根：警示出现含长度数字，卡片活动根跟随自选路径', async () => {
+    const longRoot = `C:\\${'a'.repeat(157)}` // 3 + 157 = 160 字符
+    const { api } = installWin32Api(
+      snapshotOf({ source: 'custom', customPath: longRoot, managedRoot: '/data/AndroidSDK' })
+    )
+    await openPane(api)
+    expect(screen.getByText(copy.pathTooLongTitle)).toBeTruthy()
+    expect(screen.getByText(copy.pathTooLongHint.replace('{length}', '160'))).toBeTruthy()
+    expect(screen.getAllByText(longRoot).length).toBeGreaterThanOrEqual(2)
+  })
+})

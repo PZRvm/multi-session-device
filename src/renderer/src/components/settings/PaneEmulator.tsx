@@ -1,6 +1,12 @@
 import { useState } from 'react'
-import type { SdkMigrationProgress, SdkSourceMode, SdkSourceSwitchEvaluation } from '@shared/types'
+import type {
+  SdkMigrationProgress,
+  SdkSourceMode,
+  SdkSourceSnapshot,
+  SdkSourceSwitchEvaluation
+} from '@shared/types'
 import { format } from '@shared/i18n'
+import { windowsSdkRootTooLong } from '@shared/windowsPath'
 import SettingsParts, { type SettingsPaneProps } from './SettingsParts'
 import { useSdkSource } from './useSdkSource'
 
@@ -46,6 +52,17 @@ const rejectedText = (
   }
 }
 
+/** 活动根的原始值（plan 2026-10-23-windows-settings-finish）：单选行的路径展示与
+ *  杀软白名单卡片 / 长路径警示共用的选择逻辑；null = 该模式当前未定位到路径。 */
+const activeRootOf = (mode: SdkSourceMode, snapshot: SdkSourceSnapshot | null): string | null => {
+  if (snapshot === null) return null
+  if (mode === 'managed') return snapshot.managedRoot
+  if (mode === 'shared-studio') {
+    return snapshot.sharedPath ?? snapshot.detection?.sdkCandidate ?? null
+  }
+  return snapshot.customPath
+}
+
 const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => {
   const sdk = useSdkSource()
   const { appOwnedDeviceCount } = sdk
@@ -62,6 +79,10 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
     progressActive ||
     ((snapshot?.migration != null || snapshot?.journalCorrupt === true) && !progressActive)
   const currentMode: SdkSourceMode = snapshot?.source ?? 'managed'
+  // win32 专属卡片与警示（mac 恒不渲染；窗口平台走 preload 单源 window.api.platform）
+  const isWin32 = window.api.platform === 'win32'
+  const activeRoot = activeRootOf(currentMode, snapshot)
+  const rootTooLong = isWin32 && activeRoot !== null && windowsSdkRootTooLong(activeRoot)
   // 共享选项可用性只由 studioFound 驱动（plan §5）；检测中先行禁用
   const sharedDisabled = sdk.detecting || detection === null || !detection.studioFound
 
@@ -188,18 +209,17 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
           const selected = currentMode === mode
           // 原「SDK 目录」板块并入（2026-10-12 用户指示删除重复板块）：选中态在
           // 选项行内展示路径与入口——托管显路径；共享显路径 + 重新检测；自选显路径 + 更换路径
+          const selectedRoot = selected ? activeRootOf(mode, snapshot) : null
+          // 选中行路径 = 活动根原始值；未定位到路径时退各模式的占位文案
           const activePath =
-            mode === 'managed'
-              ? selected
-                ? (snapshot?.managedRoot ?? copy.managedDirectory)
-                : null
-              : mode === 'shared-studio'
-                ? selected
-                  ? (snapshot?.sharedPath ?? detection?.sdkCandidate ?? copy.notDetected)
-                  : null
-                : selected
-                  ? (snapshot?.customPath ?? copy.pathNotChosen)
-                  : null
+            selectedRoot ??
+            (selected
+              ? mode === 'managed'
+                ? copy.managedDirectory
+                : mode === 'shared-studio'
+                  ? copy.notDetected
+                  : copy.pathNotChosen
+              : null)
           return (
             <div className="sdk-option" key={mode}>
               <input
@@ -267,6 +287,41 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
         })}
       </fieldset>
       <p className="hint block-divider">{copy.avdHint}</p>
+
+      {isWin32 && snapshot !== null ? (
+        <div className="action-card defender-card">
+          <p className="card-title">{copy.defenderTitle}</p>
+          <p className="card-line">{copy.defenderHint}</p>
+          <p className="card-line defender-pair">
+            <span>{copy.defenderSdkRoot}</span>
+            <span className="path">{activeRoot ?? copy.notDetected}</span>
+          </p>
+          <p className="card-line defender-pair">
+            <span>{copy.defenderAvdHome}</span>
+            <span className="path">{snapshot.avdHome}</span>
+          </p>
+          <div className="card-actions">
+            <button
+              type="button"
+              onClick={() => {
+                void window.api.dialog.openWindowsDefender()
+              }}
+            >
+              {copy.defenderOpen}
+            </button>
+          </div>
+          <p className="card-line">{copy.defenderThirdParty}</p>
+        </div>
+      ) : null}
+
+      {rootTooLong ? (
+        <div className="action-card warn">
+          <p className="card-title">{copy.pathTooLongTitle}</p>
+          <p className="card-line">
+            {format(copy.pathTooLongHint, { length: activeRoot?.length ?? 0 })}
+          </p>
+        </div>
+      ) : null}
 
       {error !== null ? <p className="error-line">{error}</p> : null}
 
