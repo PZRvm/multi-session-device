@@ -583,7 +583,9 @@ const zhTW: ErrorsCopy = {
   saveCameraVerifyFailed: '儲存前無法核驗鏡頭：{message}',
   unexpectedExit: '模擬器意外退出：{detail}',
   whpxMissing:
-    '啟動失敗：Windows 虛擬化（WHPX）未開啟——請在「開啟或關閉 Windows 功能」中勾選「Windows 虛擬機器監控平台」並重新啟動電腦後重試（{detail}）',
+    // 功能顯示名照抄繁中系統實際文案「Windows Hypervisor 平台」（review P2-1 實測校對）——
+    // 直譯「虛擬機器監控平台」會讓使用者在功能清單裡搜不到對應項
+    '啟動失敗：Windows 虛擬化（WHPX）未開啟——請在「開啟或關閉 Windows 功能」中勾選「Windows Hypervisor 平台」並重新啟動電腦後重試（{detail}）',
   stopFailedError: '停止失敗：{message}',
   createVerifyFailed: '建立後核驗失敗（{message}）',
   createFailedRollbackFailed:

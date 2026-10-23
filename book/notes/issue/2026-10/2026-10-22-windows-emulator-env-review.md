@@ -20,3 +20,8 @@ description: P5 模拟器环境适配代码评审发现——1 条 P2（繁中�
 ## 结论
 
 无 P1。核对过的安全点：renderer 运行时错误消费端只按 message 展示、无 code 分支（`App.tsx:175-179`），新 code `whpx-missing` 不影响既有通知链；`DeviceWizard` 两处 `useMemo` 未把 `window.api.platform` 入依赖（运行期常量，eslint 无告警）；darwin 摄像头深链原串逐字节不变、`hostAbi` 缺省值构造性等价于原硬编码；深链通道无 renderer 入参面、win32 外拒绝。P2-1 建议随 P4 合并后的下一批一起修（一处文案改词 + 三语字典），真机项（样本采样、深链拉起）归统一集成验证阶段。
+
+## 修复记录（2026-10-22 修复轮）
+
+- **P2-1 已修**：`errors.ts` zh-TW 的 `whpxMissing` 功能显示名改为系统实际文案「Windows Hypervisor 平台」（附改词理由注释）；zh-CN/en 本就正确未动。1379 测试全绿、typecheck/lint 0 错。
+- **P3-1～P3-3 未修**（按纪律顺延；P3-1/P3-2 的裁决点在真机集成验证，P3-3 补测随下一批）。
