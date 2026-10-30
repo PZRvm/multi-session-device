@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process'
 import { constants } from 'node:fs'
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -10,6 +9,8 @@ import {
   readJarProfileMetas,
   sdklibJarPathFor
 } from './profileMetadata'
+import { spawnCommand } from './platformExec'
+import { sdkPaths } from './sdk'
 import { msg } from '../locale'
 
 /**
@@ -40,8 +41,10 @@ const defaultRunner = async (
   javaHomeOverride?: string,
   userHomeOverride?: string
 ): Promise<string> => {
-  const javaHome = javaHomeOverride ?? join(sdkRoot, 'jre', 'Contents', 'Home')
-  const javaBin = join(javaHome, 'bin', 'java')
+  // JRE 布局与二进制后缀走 sdkPaths 单源（win32：jre/bin/java.exe；darwin 与历史逐字节一致）
+  const win = process.platform === 'win32'
+  const javaHome = javaHomeOverride ?? sdkPaths(sdkRoot).jreHome
+  const javaBin = join(javaHome, 'bin', win ? 'java.exe' : 'java')
   const androidUserHome = userHomeOverride ?? join(sdkRoot, 'android-user')
   const repairHint = msg('profilesQueryFailed', { javaBin })
   try {
@@ -52,7 +55,8 @@ const defaultRunner = async (
     })
   }
   return new Promise((resolve, reject) => {
-    const child = spawn(avdmanagerPath, ['list', 'device'], {
+    // spawnCommand：win32 下 avdmanager.bat 经 cmd.exe /c 执行并默认 windowsHide
+    const child = spawnCommand({}, avdmanagerPath, ['list', 'device'], {
       env: {
         ...process.env,
         JAVA_HOME: javaHome,
@@ -107,8 +111,11 @@ export const parseAvdDeviceEntries = (output: string): AvdDeviceEntry[] => {
   return entries
 }
 
-export const avdmanagerPathFor = (sdkRoot: string): string =>
-  join(sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager')
+// sdkPaths 单源（win32 补 .bat 后缀）；platform 接缝供单测注入——与本文件 defaultRunner 同口径
+export const avdmanagerPathFor = (
+  sdkRoot: string,
+  platform: NodeJS.Platform = process.platform
+): string => sdkPaths(sdkRoot, platform).avdmanagerBin
 
 export async function listDeviceProfiles(deps: ProfileListDeps): Promise<DeviceProfile[]> {
   const output = deps.runner
