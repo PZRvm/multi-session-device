@@ -33,6 +33,7 @@ tags: [windows, code-review, merge, integration, p1-sdk-bootstrap, p2-studio-det
    - `defaultRunner` 的 `javaHome`/`javaBin` 默认值（:43-44）写死 darwin 布局 `jre/Contents/Home/bin/java`，win32 的 sdkPaths 布局是 `jre/bin/java.exe`——前置的 X_OK 检查必失败，报 `profilesQueryFailed`。
    - 影响调用方：`sdkIpcShared.ts:81`（向导画像列表）、`devices/create.ts:100`、`devices/edit.ts:307`——Windows 上新建/编辑设备的画像列表必失败。
    - 根因：主体调研只识别了 `avd.ts:63-66` 的同款模式，profiles.ts 是漏网的兄弟调用点；P1 plan 影响范围未圈它。修法：`avdmanagerPathFor` 改走 `sdkPaths().avdmanagerBin`、javaHome/javaBin 默认值切 sdkPaths、spawn 换 `spawnCommand`；归 P4 前的独立小改批次。
+   - **修复批（2026-10-30，Windows 真机，feature/windows-settings-finish）**：P2-1 已按上述修法落地——`avdmanagerPathFor(sdkRoot, platform?)` 切 `sdkPaths` 单源（win32 补 `.bat`）、defaultRunner 的 javaHome/javaBin 缺省切 sdkPaths 布局（win32 `jre/bin/java.exe`；darwin 返回值逐字节不变）、spawn 换 `spawnCommand`（cmd.exe /c + windowsHide）。profiles.test 夹具平台化：win32 分支写 `avdmanager.bat` 剧本 + `java.exe` 占位过 X_OK，`PATH 无 Java` 剧本的 PATH 只留 System32（libuv 找裸命令只搜 cwd 与 PATH，不留会连 cmd.exe 一起 ENOENT——System32 内无 java，语义不变）；not-executable 为 POSIX 执行位形态，win32 `skipIf`。Windows 真机上 profiles 套件全绿。
 
 ### P3（可顺延，记录在案）
 
