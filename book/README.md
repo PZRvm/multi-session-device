@@ -283,6 +283,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-22-window-api-default-stub-injected-tests.md](notes/learn/2026-10/2026-10-22-window-api-default-stub-injected-tests.md) — 组件新增 window.api 读取时，注入式测试用例会因缺 api 桩 TypeError——beforeEach 挂默认桩（含 platform），自挂完整桩的用例自然覆盖
 - [2026-10-22-windows-spawn-bat-tar-exe.md](notes/learn/2026-10/2026-10-22-windows-spawn-bat-tar-exe.md) — win32 下 spawn .bat/.cmd 必须 cmd.exe /c 包装（Node 安全修复后直接抛 EINVAL）；GUI 进程拉子进程要带 windowsHide 防闪黑框；Windows 解 zip 用系统自带 tar.exe（bsdtar 原生 zip64），PowerShell Expand-Archive 有 2GB 单文件上限不可用
 - [2026-10-22-接缝存在不等于接缝生效.md](notes/learn/2026-10/2026-10-22-接缝存在不等于接缝生效.md) — 测试接缝的可注入性要靠「默认实现也走注入」锁定——defaultAdbOnPath 收了 fileExists 接缝却写死 defaultFileExists，接缝自始未生效
+- [2026-10-30-book-index-win32-path-separator.md](notes/learn/2026-10/2026-10-30-book-index-win32-path-separator.md) — 零依赖 Node 脚本里凡是要产出「跨平台一致的文本」（索引、清单、模板），path.relative/join 的结果必须先归一为正斜杠——win32 的反斜杠会击穿按 'a/b' 写死的键匹配与 split('/')
 
 ### notes/summary/2026-10/
 
@@ -413,4 +414,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 319 documents -->
+<!-- 320 documents -->
