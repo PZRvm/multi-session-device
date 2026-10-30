@@ -66,3 +66,29 @@ export const confirmQuitIfNeeded = async (deps: QuitConfirmDeps): Promise<boolea
   })
   return response !== 0
 }
+
+/** second-instance 唤回所需的主窗最小面（结构性类型——单测不引 Electron 类型） */
+export interface RevivableMainWindow {
+  isMinimized(): boolean
+  restore(): void
+  focus(): void
+}
+
+/**
+ * 「留在应用」折返后的唤回入口（issue 2026-10-22-windows-quit-stay-no-window）：
+ * win32 关最后一个窗选「留在应用」后主窗已销毁、无托盘无 dock——app 无任何
+ * 唤回入口。单实例锁下二次启动经 second-instance 到达这里：主窗在则聚焦
+ * （还原最小化），不在则重建。mac 恒有 dock activate 兜底，此链无 mac 场景。
+ */
+export const reviveMainWindow = (deps: {
+  getMainWindow: () => RevivableMainWindow | null
+  createMainWindow: () => unknown
+}): void => {
+  const win = deps.getMainWindow()
+  if (win) {
+    if (win.isMinimized()) win.restore()
+    win.focus()
+  } else {
+    deps.createMainWindow()
+  }
+}

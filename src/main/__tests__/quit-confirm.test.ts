@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   showMessageBox: vi.fn<
@@ -13,7 +13,12 @@ vi.mock('../locale', () => ({
     params === undefined ? key : `${key}:${JSON.stringify(params)}`
 }))
 
-import { confirmQuitIfNeeded, markSessionEnding, resetSessionEndingForTest } from '../quit-confirm'
+import {
+  confirmQuitIfNeeded,
+  markSessionEnding,
+  resetSessionEndingForTest,
+  reviveMainWindow
+} from '../quit-confirm'
 
 beforeEach(() => {
   resetSessionEndingForTest()
@@ -81,5 +86,37 @@ describe('Windows 关窗确认（quit-confirm）', () => {
       true
     )
     expect(mocks.showMessageBox).not.toHaveBeenCalled()
+  })
+})
+
+describe('second-instance 唤回（reviveMainWindow）', () => {
+  const makeWindow = (
+    minimized: boolean
+  ): { isMinimized: Mock<() => boolean>; restore: Mock<() => void>; focus: Mock<() => void> } => ({
+    isMinimized: vi.fn(() => minimized),
+    restore: vi.fn(),
+    focus: vi.fn()
+  })
+
+  it('主窗在场且最小化：还原后聚焦，不重建', () => {
+    const win = makeWindow(true)
+    const createMainWindow = vi.fn()
+    reviveMainWindow({ getMainWindow: () => win, createMainWindow })
+    expect(win.restore).toHaveBeenCalledTimes(1)
+    expect(win.focus).toHaveBeenCalledTimes(1)
+    expect(createMainWindow).not.toHaveBeenCalled()
+  })
+
+  it('主窗在场未最小化：只聚焦，不还原', () => {
+    const win = makeWindow(false)
+    reviveMainWindow({ getMainWindow: () => win, createMainWindow: vi.fn() })
+    expect(win.restore).not.toHaveBeenCalled()
+    expect(win.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('主窗不在（关窗折返「留在应用」后已销毁）：重建主窗', () => {
+    const createMainWindow = vi.fn()
+    reviveMainWindow({ getMainWindow: () => null, createMainWindow })
+    expect(createMainWindow).toHaveBeenCalledTimes(1)
   })
 })

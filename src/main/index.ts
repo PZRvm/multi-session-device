@@ -14,14 +14,26 @@ import {
   runningDeviceCount,
   stopExternalTracking
 } from './devices'
-import { confirmQuitIfNeeded, markSessionEnding } from './quit-confirm'
+import { confirmQuitIfNeeded, markSessionEnding, reviveMainWindow } from './quit-confirm'
 import { restoreTheme } from './theme'
 import { restoreLocale } from './locale'
 import { restoreSdkSource } from './emulator/sdkSource'
 import { appIcon } from './app-icon'
 import { msg } from './locale'
 
+// 单实例锁（issue 2026-10-22-windows-quit-stay-no-window）：win32「留在应用」折返后主窗
+// 已销毁、无托盘无 dock——二次启动经 second-instance 唤回/聚焦主窗；被拒的第二实例直接退出
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    reviveMainWindow({ getMainWindow, createMainWindow })
+  })
+}
+
 app.whenReady().then(() => {
+  if (!gotSingleInstanceLock) return
   electronApp.setAppUserModelId('com.foreunit.multi-session-device')
   if (process.platform === 'darwin') app.dock?.setIcon(appIcon)
 
@@ -60,7 +72,8 @@ app.on('window-all-closed', () => {
 let quitGuard = false
 let quitPending = false
 app.on('before-quit', (event) => {
-  if (quitGuard) return
+  // 无单实例锁的进程是被拒的第二实例：让默认退出直行，不走清理链
+  if (quitGuard || !gotSingleInstanceLock) return
   event.preventDefault()
   if (quitPending) return
   quitPending = true
