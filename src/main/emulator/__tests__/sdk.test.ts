@@ -274,9 +274,17 @@ describe('detectSdk（win32 布局）', () => {
 })
 
 describe('bootstrapSdk（win32 分支）', () => {
-  it('占位钉版源：默认源走到即抛错（禁止带占位值真跑）', async () => {
+  it('win32 钉版源已填真值（2026-10-30 真机实测）：占位守卫放行，流程推进到下载', async () => {
     const root = await makeTmp()
-    await expect(bootstrapSdk(root, { platform: 'win32' })).rejects.toThrow('尚未钉版')
+    // 默认源不再被「尚未钉版」拦截——注入即刻抛错的 fetcher 证明已走到下载步
+    await expect(
+      bootstrapSdk(root, {
+        platform: 'win32',
+        fetcher: async () => {
+          throw new Error('fetch-reached')
+        }
+      })
+    ).rejects.toThrow('fetch-reached')
   })
 
   it('未登记平台（linux）同样被占位守卫拒绝，不静默回退 darwin 源', async () => {

@@ -12,8 +12,9 @@ import { spawnCommand, tarBinFor } from './platformExec'
 const renameResilient = makeResilientRename(process.platform)
 
 // ---- 钉版下载源（升级 = 显式改这里 + 重跑真机集成）----
-// 按平台查表（plan 2026-10-22-windows-sdk-bootstrap 设计 2）：win32 的 url/校验值
-// 待 Windows 真机实测后填入——占位期间 bootstrapSdk 走到即抛错，禁止带占位值真跑。
+// 按平台查表（plan 2026-10-22-windows-sdk-bootstrap 设计 2）：win32 真值已于
+// 2026-10-30 Windows 真机实测填入（本地下载实算校验值，不抄网页）；占位源仅剩
+// 未登记平台（如 linux）落入——bootstrapSdk 走到即抛错，禁止带占位值真跑。
 
 const TEMURIN_JRE_URL =
   'https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_aarch64_mac_hotspot_21.0.12.1_1.tar.gz'
@@ -29,16 +30,26 @@ const DARWIN_SOURCES: BootstrapSources = {
   cmdlineToolsUrl: CMDLINE_TOOLS_URL,
   cmdlineToolsSha1: CMDLINE_TOOLS_SHA1
 }
+// 与 darwin 同版本对齐（Temurin 21.0.12.1+1、cmdline-tools build 16111833）；实测 win JRE
+// zip 顶层为 jdk-21.0.12.1+1-jre/（bin 在内，无 Contents 层），归位按顶层唯一目录通用处理
+const WINDOWS_SOURCES: BootstrapSources = {
+  jreUrl:
+    'https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_windows_hotspot_21.0.12.1_1.zip',
+  jreSha256: 'd35f31e712f0fcf6ac5a093edc90204fbff22f720ba3950bd09d331d5e621636',
+  cmdlineToolsUrl:
+    'https://dl.google.com/android/repository/commandlinetools-win-16111833_latest.zip',
+  cmdlineToolsSha1: '57d04f2d75eb8e8fffc5000a987e5de4b5a63e9d'
+}
 const PENDING_SOURCES: BootstrapSources = {
   jreUrl: WINDOWS_SOURCE_PLACEHOLDER,
   jreSha256: WINDOWS_SOURCE_PLACEHOLDER,
   cmdlineToolsUrl: WINDOWS_SOURCE_PLACEHOLDER,
   cmdlineToolsSha1: WINDOWS_SOURCE_PLACEHOLDER
 }
-/** 按平台查表；未登记平台（如 linux）同样落到占位源——由 bootstrap 入口守卫显式拒绝，不静默回退 darwin（装错平台的二进制比显式失败更糟） */
+/** 按平台查表；未登记平台（如 linux）落到占位源——由入口守卫显式拒绝，不静默回退 darwin（装错平台的二进制比显式失败更糟） */
 const PINNED_SOURCES: Partial<Record<NodeJS.Platform, BootstrapSources>> = {
   darwin: DARWIN_SOURCES,
-  win32: PENDING_SOURCES
+  win32: WINDOWS_SOURCES
 }
 const sourcesFor = (platform: NodeJS.Platform): BootstrapSources =>
   PINNED_SOURCES[platform] ?? PENDING_SOURCES
@@ -416,7 +427,7 @@ export async function bootstrapSdk(
   const runner = deps.runner ?? defaultRunner
   const platform = deps.platform ?? process.platform
   const sources = deps.sources ?? sourcesFor(platform)
-  // win32 钉版值待真机实测（见文件头注释）——占位期间显式拒绝，防止带占位值真跑
+  // 占位源仅剩未登记平台（见文件头注释）——显式拒绝，防止带占位值真跑或静默回退已登记平台的源
   if (isPinnedSourcePending(sources)) {
     throw new Error(msg('sdkWindowsSourcePending'))
   }
