@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 
 const mocks = vi.hoisted(() => ({
   readFile: vi.fn(),
@@ -29,6 +30,7 @@ import {
   getSdkSourceState,
   isSharedReadOnly,
   javaBinFor,
+  javaHomeFor,
   managedSdkRoot,
   persistSdkSourceState,
   resetSdkSourceStateForTest,
@@ -199,6 +201,12 @@ describe('sdkSource store（sdk.json）', () => {
     // （共享根下不存在 → 就绪门正确报缺件）
     studioMocks.get.mockReturnValue(null)
     expect(javaBinFor()).toBe('/Users/t/Library/Android/sdk/jre/Contents/Home/bin/java')
+  })
+
+  it('win32：内置布局无 Contents 层、二进制名 java.exe——就绪门不再 darwin 写死假阴性', () => {
+    expect(javaHomeFor('C:/sdk', 'win32')).toBe(join('C:/sdk', 'jre'))
+    expect(javaBinFor('C:/sdk', 'win32')).toBe(join('C:/sdk', 'jre', 'bin', 'java.exe'))
+    // （darwin 回归由上一条用例的缺省断言锚定，字面量在此不写——join 分隔符随宿主）
   })
 
   it('boot 恢复为共享态时自动补跑一次检测；非共享态不跑', async () => {

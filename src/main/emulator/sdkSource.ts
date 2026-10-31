@@ -1,7 +1,8 @@
 import { app } from 'electron'
 import { readFile, rename, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type { SdkRetainedRoot, SdkSourceMode, SdkSourceSnapshot } from '@shared/types'
+import { sdkPaths } from './sdk'
 import { getStudioDetection, runStudioDetection } from './studioDetect'
 import { avdHomePath } from './avdHomePath'
 import {
@@ -113,22 +114,31 @@ export function isSharedReadOnly(): boolean {
  * Java 家目录（avdmanager/sdkmanager 子进程 JAVA_HOME）：托管/自选用 SDK 内置
  * JRE 布局；共享模式用 Studio JBR（检测缓存附带），未检得时回落内置布局——
  * 消费方按缺件路径报可操作错误（不在这里抛，保持纯函数）。
+ * 内置布局走 sdkPaths 单源（win32 无 Contents 层）；darwin 与历史逐字节一致。
  */
-export function javaHomeFor(root: string = resolveSdkRoot()): string {
+export function javaHomeFor(
+  root: string = resolveSdkRoot(),
+  platform: NodeJS.Platform = process.platform
+): string {
   if (state.source === 'shared-studio') {
     const jbr = getStudioDetection()?.jbrHome
     if (jbr) return jbr
   }
-  return join(root, 'jre', 'Contents', 'Home')
+  return sdkPaths(root, platform).jreHome
 }
 
 /**
  * 实际运行将用的 java 可执行文件路径——就绪门（requireSdkReady）与执行链
  * （avdmanager JAVA_HOME）共用单源。managed/custom = SDK 内置 JRE；shared =
  * Studio JBR（检测缓存附带，未检得回落内置布局，由就绪门报缺件）。
+ * 二进制名也取自 sdkPaths（win32 java.exe）——就绪门在 win32 曾因写死
+ * `bin/java` 恒假阴性（引导成功后仍报「尚未就绪」，向导按钮随之消失）。
  */
-export function javaBinFor(root: string = resolveSdkRoot()): string {
-  return join(javaHomeFor(root), 'bin', 'java')
+export function javaBinFor(
+  root: string = resolveSdkRoot(),
+  platform: NodeJS.Platform = process.platform
+): string {
+  return join(javaHomeFor(root, platform), 'bin', basename(sdkPaths(root, platform).javaBin))
 }
 
 /** sdk:source-get 快照（检测读缓存不触发扫描；附迁移视图与共享态保留根清单） */
