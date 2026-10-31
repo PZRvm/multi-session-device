@@ -422,6 +422,15 @@ export async function adoptSourceSwitch(
 }
 
 /** sdk:source-clear-retained：仅共享模式可清（不变量：非共享态无保留根） */
+/** 清保留根前置：停掉可能从待删根内跑着的共享 adb server（win32 运行中 exe 不可删，
+ *  issue 2026-10-31-orphan-emulator 第四幕——切共享是直接切换不走迁移链，前两辑的
+ *  预检盖不到这里）。挡删除的 adb 恰跑在待删根里，其二进制必然在场——用它发
+ *  kill-server 按端口生效；跟踪器随后从当前活动根重生（不同目录，不再挡删除）。
+ *  best-effort：失败不阻断，留给 rmTree 报真错 */
+const stopAdbServerInRoot = async (root: string): Promise<void> => {
+  await runAdb(sdkPaths(root).adbBin, ['kill-server'], { timeoutMs: 10_000 }).catch(() => undefined)
+}
+
 export async function clearRetainedRoot(
   input: { root: string },
   deps: SwitchDeps = createSwitchDeps()
@@ -434,6 +443,8 @@ export async function clearRetainedRoot(
     .map((root) => resolve(root))
   if (!allowed.includes(resolve(input.root))) throw new Error('not a retained root')
   try {
+    await stopAdbServerInRoot(resolve(input.root))
+    await deps.migration.stopSharedAdbServer?.()
     await deps.migration.rmTree(resolve(input.root))
   } catch (error) {
     // review P3-8：rmTree 中途失败可能留下半删目录——指明可重试清除收尾，
