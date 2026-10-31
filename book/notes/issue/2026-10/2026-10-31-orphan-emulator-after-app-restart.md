@@ -40,3 +40,9 @@ tags: [windows, process, migration, acceptance]
 - 半截回滚两次后状态分叉：托管侧 platform-tools 完整（15 文件/17548054 字节与 journal 一致），Desktop 侧与 `.migrating` 各剩 3 文件残本。**手工修复**（2026-10-31）：杀 adb（重生不碍余下条目——新 adb 跑在托管侧 platform-tools，不属剩余回滚条目）→ 删两处残本 → journal 摘除 platform-tools 条目（其回滚实质已完成）→ 应用内续点回滚收尾其余 7 条目。
 
 修法方向补充：迁移/回滚预检应先 `adb kill-server`（应用自管的 adb）并暂停外部跟踪重连，或迁移期间将 adb server 纳入生命周期管理；否则 win32 上任何删源操作都可能撞活体 adb。
+
+## 第三幕（同日）：反复重试致 platform-tools 部分文件丢失与状态分叉
+
+回滚收尾后用户另选新路径 `Desktop\sdk1` 重跑正向迁移（成功，sdk.json 翻 custom），再迁回托管时又于 platform-tools 失败并多次重试。终态盘点：7 个小组件已回托管；system-images（34 文件/8.2G）完好滞留 sdk1；**platform-tools 两侧各剩同一组 3 文件**（adb.exe + 两个 AdbWin dll），其余 12 个工具文件在失败的 rmTree 半途中被删——复制分支「先保目标再删源」的顺序在 rename(staging→to) 撞已存在目标失败时也会留下双残本。**手工修复（2026-10-31）**：关应用→杀 adb→清两处残本与空骨架→同盘 rename 把 system-images 移回托管→删 sdk1→sdk.json 回 managed→清 journal→`sdkmanager --install platform-tools`（r37.0.1，15 文件全量补回）。AVD config 为相对路径（`image.sysdir.1=system-images\...`）无需 relink。另证：**与 C 盘管理员权限无关**（AppData 为用户目录；全部失败均为进程占用/状态分叉）。
+
+处置结论：来源切换在 win32 的故障路径已充分实证（矩阵失真已修、占用三连发已记档），UI 侧迁移/回滚在「adb 预检 + 起动收养」修复批落地前**不再重试**；验收第 7 项按「已验证到故障路径、修复归下一批」口径关闭。
