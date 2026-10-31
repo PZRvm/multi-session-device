@@ -877,6 +877,10 @@ const DeviceWizard = ({
 /* 共享态补装指引（分步图文）：与错误块同列的浅底卡——board 令牌配色，
    深浅主题随 CSS 变量自适应；图标用产品 accent 色（tile-ink） */
 const SharedSdkGuide = styled.ol`
+  /* 独占一行：error-block 是 flex 行（错误文案+重试按钮），basis 100% 把整卡
+     换到下一行全宽展示（用户 2026-10-31 验收反馈：不与上方内容同行） */
+  flex-basis: 100%;
+  min-width: 0;
   margin: 8px 0 0;
   padding: 10px 12px;
   list-style: none;
@@ -896,12 +900,27 @@ const SharedSdkGuide = styled.ol`
   }
 
   .guide-step {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 8px;
   }
 
+  /* 步序贯穿线（时间轴）：从当前徽章下缘跨过行距接到下一枚徽章中心；
+     徽章带底色置上层，线从珠后穿过（末步不画） */
+  .guide-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 7.5px;
+    top: 17px;
+    bottom: -15px;
+    width: 1px;
+    background: var(--board-hairline);
+  }
+
   .guide-index {
+    position: relative;
+    z-index: 1;
     flex: none;
     display: inline-flex;
     align-items: center;
@@ -910,6 +929,7 @@ const SharedSdkGuide = styled.ol`
     height: 16px;
     border: 1px solid var(--board-hairline);
     border-radius: 50%;
+    background: var(--board-bg-raised);
     font-size: 10px;
     color: var(--board-ink-dim);
   }
@@ -1029,6 +1049,7 @@ const Wrapper = styled.div`
 
   .error-block {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     margin: 8px 16px;
