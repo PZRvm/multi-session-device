@@ -30,3 +30,13 @@ tags: [windows, process, migration, acceptance]
 ## 验收期 workaround
 
 迁移报 EPERM 时：任务管理器（或 `tasklist`）查 `qemu-system-*`，`taskkill /PID <pid> /T /F` 清树后回设置页重试迁移——journal 自动续跑，仅失败条目重试。本次实测：杀掉 PID 22040 树后无残留。
+
+## 后续（同日第二幕）：adb 服务进程卡死回滚
+
+清掉 qemu 后用户点「回滚」，回滚自身两处 EPERM：unlink `Desktopndroidsdk\platform-toolsdb.exe`（**正在运行的 exe 不可删除**——Windows 专属，POSIX 允许删除打开中的文件，故 mac 无此形态）与 rename `.migrating\platform-tools` → 源侧（两次半截回滚后目标已存在）。根因扩展：
+
+- **adb 服务进程是第二个同族占用者**：外部设备跟踪器持续重连 adb server（控制台 `[external] track socket` 即其心跳），杀掉后秒级重生（实测 PID 23672 → 4972）——它跑着的 `adb.exe` 恰在待删目录里。
+- **回滚恒走复制分支**：rollbackMigration 调 moveEntry 不传 `sameVolume`（缺省 false）→ copy+verify+rename+**rmTree(源)**——删除源与运行中二进制冲突；正向迁移（同卷 rename）反而安全（实测搬走运行中 adb 所在目录成功——Windows 允许改名运行中的 exe/其父目录）。
+- 半截回滚两次后状态分叉：托管侧 platform-tools 完整（15 文件/17548054 字节与 journal 一致），Desktop 侧与 `.migrating` 各剩 3 文件残本。**手工修复**（2026-10-31）：杀 adb（重生不碍余下条目——新 adb 跑在托管侧 platform-tools，不属剩余回滚条目）→ 删两处残本 → journal 摘除 platform-tools 条目（其回滚实质已完成）→ 应用内续点回滚收尾其余 7 条目。
+
+修法方向补充：迁移/回滚预检应先 `adb kill-server`（应用自管的 adb）并暂停外部跟踪重连，或迁移期间将 adb server 纳入生命周期管理；否则 win32 上任何删源操作都可能撞活体 adb。
