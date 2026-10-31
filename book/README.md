@@ -194,6 +194,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-22-windows-studio-detect-review.md](notes/issue/2026-10/2026-10-22-windows-studio-detect-review.md) — P2 Windows 检测链（4dc8d46）代码评审发现——4 项 P3：平台传参风格、APPDATA 未优先读 env、win 用例 runner 可携带性、isStudioSdk 遗留未用声明；只记录未修
 - [2026-10-30-windows-test-suite-platform-assumptions.md](notes/issue/2026-10/2026-10-30-windows-test-suite-platform-assumptions.md) — Windows 真机 npm test 全套 153 失败（基线 160）——测试夹具的 mac 平台假设经 process.platform 泄漏，产品代码 Windows 分支行为正确；裁决不修，mac 全绿为门禁口径
 - [2026-10-31-orphan-emulator-after-app-restart.md](notes/issue/2026-10/2026-10-31-orphan-emulator-after-app-restart.md) — 应用重启后上代 headless 模拟器进程存活成孤儿——runningCount 预检看不见，迁移与活体模拟器抢镜像文件（EPERM）；P3「孤儿进程」验收项的真机实证变体
+- [2026-10-31-shared-mode-bootstrap-button-misleading.md](notes/issue/2026-10/2026-10-31-shared-mode-bootstrap-button-misleading.md) — 共享模式缺 cmdline-tools 时向导仍出「完成 SDK 引导」按钮——点击必被共享只读守卫拒绝；应显示「去 SDK Manager 补装」指引（sdkSharedNotReady 文案已备而未接）
 - [2026-10-31-windows-sdk-source-switch-matrix.md](notes/issue/2026-10/2026-10-31-windows-sdk-source-switch-matrix.md) — SDK 来源切换矩阵在 win32 整体失真——classifyRoot 三个 SDK 标记全是 darwin 路径，切出零迁移不弹评估、回切被 target-junk 拒绝；真机验收实证（2026-10-22 记录的 sdkMigration adb 探测假阴性实为三处全中）
 
 ### notes/learn/
@@ -417,4 +418,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 323 documents -->
+<!-- 324 documents -->
