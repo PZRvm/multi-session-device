@@ -284,6 +284,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-22-windows-spawn-bat-tar-exe.md](notes/learn/2026-10/2026-10-22-windows-spawn-bat-tar-exe.md) — win32 下 spawn .bat/.cmd 必须 cmd.exe /c 包装（Node 安全修复后直接抛 EINVAL）；GUI 进程拉子进程要带 windowsHide 防闪黑框；Windows 解 zip 用系统自带 tar.exe（bsdtar 原生 zip64），PowerShell Expand-Archive 有 2GB 单文件上限不可用
 - [2026-10-22-接缝存在不等于接缝生效.md](notes/learn/2026-10/2026-10-22-接缝存在不等于接缝生效.md) — 测试接缝的可注入性要靠「默认实现也走注入」锁定——defaultAdbOnPath 收了 fileExists 接缝却写死 defaultFileExists，接缝自始未生效
 - [2026-10-30-book-index-win32-path-separator.md](notes/learn/2026-10/2026-10-30-book-index-win32-path-separator.md) — 零依赖 Node 脚本里凡是要产出「跨平台一致的文本」（索引、清单、模板），path.relative/join 的结果必须先归一为正斜杠——win32 的反斜杠会击穿按 'a/b' 写死的键匹配与 split('/')
+- [2026-10-30-windows-darwin-path-duplicates.md](notes/learn/2026-10/2026-10-30-windows-darwin-path-duplicates.md) — Windows 真机验收连爆三处 darwin 路径硬编码（sdkMigration adb 探测、profiles avdmanager 链、javaBinFor/javaHomeFor）——同一根因：P1 平台化只改了 sdkPaths 单源及其直接消费方，自行 join 布局的"第二路径真源"全数漏网；两判定源口径分叉会让 UI 逻辑死锁
 
 ### notes/summary/2026-10/
 
@@ -414,4 +415,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 320 documents -->
+<!-- 321 documents -->
