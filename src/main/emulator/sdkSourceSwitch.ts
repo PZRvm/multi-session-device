@@ -2,14 +2,17 @@ import { BrowserWindow, app } from 'electron'
 import { join, resolve } from 'node:path'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { SdkSourceMode, SdkSourceSnapshot, SdkSourceSwitchEvaluation } from '@shared/types'
+import { runAdb } from './adb'
 import {
   getSdkSourceState,
   getSdkSourceSnapshot,
   isSharedReadOnly,
   managedSdkRoot,
   persistSdkSourceState,
+  resolveSdkRoot,
   setSdkSourceState
 } from './sdkSource'
+import { sdkPaths } from './sdk'
 import { getStudioDetection, isStudioSdk, runStudioDetection } from './studioDetect'
 import {
   MigrationCancelledError,
@@ -72,7 +75,16 @@ export const onSdkSourceChanged = (listener: () => void): (() => void) => {
 }
 
 export const createSwitchDeps = (): SwitchDeps => ({
-  migration: createMigrationDeps(() => app.getPath('userData')),
+  migration: {
+    ...createMigrationDeps(() => app.getPath('userData')),
+    // win32：迁移/回滚的删源步骤会撞运行中的 adb.exe（issue 2026-10-31-orphan-
+    // emulator-after-app-restart）——引擎在 journal 置位后回调停共享 server。
+    // best-effort：adb 缺席或 kill 失败不阻断迁移（非 win 平台同样无害）
+    stopSharedAdbServer: async () => {
+      const adbBin = sdkPaths(resolveSdkRoot()).adbBin
+      await runAdb(adbBin, ['kill-server'], { timeoutMs: 10_000 }).catch(() => undefined)
+    }
+  },
   runningCount: () => runningDeviceCount(),
   avdHome: () => join(app.getPath('userData'), 'avd-home'),
   broadcast: (channel, payload) => {

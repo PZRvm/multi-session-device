@@ -587,3 +587,56 @@ describe('journal 三态与损坏接管（issue 2026-10-11 问题二处置）', 
     expect(fs.read(`${AVD_HOME}/device1.avd/config.ini`)).toContain(`image.sys.src.dir=${FROM}/`)
   })
 })
+
+// 本 describe 钉 darwin：引擎内 resolve()/join() 的宿主分隔符与 FakeFs 的正斜杠
+// 键位只在 posix 一致（win 宿主属既有 15 例宿主旧账，不在此扩）；钩子的 win32 真值
+// 由真机迁移链验证（issue 2026-10-31 修复批第二辑）
+describe.skipIf(process.platform !== 'darwin')(
+  'stopSharedAdbServer 钩子（win32 adb 预检，issue 2026-10-31）',
+  () => {
+    it('正向：journal 置位后、条目移动前调用；回滚：装载后、移回前调用', async () => {
+      const fs = new FakeFs()
+      seedSource(fs)
+      seedAvdHome(fs)
+      fs.mkdirP(TO)
+      const calls: string[] = []
+      const deps: MigrationDeps = {
+        ...makeDeps(fs),
+        platform: 'darwin',
+        stopSharedAdbServer: async () => {
+          calls.push(
+            `fwd from:${fs.exists(`${FROM}/platform-tools/adb`)} to:${fs.exists(`${TO}/platform-tools/adb`)}`
+          )
+        }
+      }
+      const plan = await planMigration(
+        {
+          fromRoot: FROM,
+          toRoot: TO,
+          targetSource: 'custom',
+          replaceTarget: false,
+          runningCount: 0
+        },
+        deps
+      )
+      if (!plan.ok) throw new Error(`plan failed: ${plan.code}`)
+      expect(calls).toHaveLength(0)
+      await startMigration(plan.plan, { avdHome: AVD_HOME }, deps)
+      expect(calls).toEqual(['fwd from:true to:false'])
+      expect(fs.exists(`${TO}/platform-tools/adb`)).toBe(true)
+
+      const rollbackDeps: MigrationDeps = {
+        ...makeDeps(fs),
+        platform: 'darwin',
+        stopSharedAdbServer: async () => {
+          calls.push(
+            `back from:${fs.exists(`${FROM}/platform-tools/adb`)} to:${fs.exists(`${TO}/platform-tools/adb`)}`
+          )
+        }
+      }
+      await rollbackMigration({ avdHome: AVD_HOME }, rollbackDeps)
+      expect(calls[1]).toBe('back from:false to:true')
+      expect(fs.exists(`${FROM}/platform-tools/adb`)).toBe(true)
+    })
+  }
+)

@@ -23,6 +23,7 @@ import {
   tcpConnect
 } from '../emulator/adb'
 import { requireAdb } from './environment'
+import { isMigrationActive } from '../emulator/sdkMigration'
 
 // 真机域（plan 2026-10-13-real-device-usb-and-apk-install；stage06 第一批）：
 // host:track-devices-l 长连接跟踪外部物理设备——server 推全量列表（smart-socket 帧：
@@ -53,6 +54,8 @@ export interface ExternalDeps {
   connect?: typeof tcpConnect
   /** server 存续接缝（测试替身；默认 requireAdb + ensureSharedServer） */
   ensureServer?: () => Promise<unknown>
+  /** 迁移在途判定接缝（测试替身；默认 emulator/sdkMigration 的 isMigrationActive） */
+  migrationActive?: () => boolean
   /** 无线域接缝组（测试替身注入；缺省用本文件 wirelessDefaults） */
   wireless?: Partial<WirelessDeps>
   /** 无线连接窗 sender 判定（五个无线通道同时接受主窗与连接窗——连接窗是原生弹窗
@@ -319,6 +322,13 @@ const ensureServerDefault = async (): Promise<unknown> => {
 const openSocket = async (): Promise<void> => {
   const current = deps
   if (!current || socket || reconnectTimer) return
+  // 迁移在途不 ensure（会 start-server 重生 adb，挡住 win32 删源——issue
+  // 2026-10-31-orphan-emulator-after-app-restart）：只按退避续排，journal 清除后
+  // 的下一次重连自然恢复（最长一个退避节拍，上限 MAX_BACKOFF_MS）
+  if ((current.migrationActive ?? isMigrationActive)()) {
+    scheduleReconnect()
+    return
+  }
   try {
     await (current.ensureServer ?? ensureServerDefault)()
   } catch {

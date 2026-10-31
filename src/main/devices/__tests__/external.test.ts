@@ -211,6 +211,19 @@ describe('track 客户端', () => {
     expect(new Set(channels).size).toBe(6)
   })
 
+  it('迁移在途不 ensure server：openSocket 只退避续排，journal 清除后自行恢复', async () => {
+    const mod = await fresh()
+    let migrating = true
+    const { deps, ensureServer } = makeDeps({ migrationActive: () => migrating })
+    mod.registerExternalIpc(deps)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(ensureServer).not.toHaveBeenCalled()
+    migrating = false
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(ensureServer).toHaveBeenCalled()
+    mod.stopExternalTracking()
+  })
+
   it('list 通道：未登记 sender 抛错；已登记返回缓存', async () => {
     const mod = await fresh()
     const bags = makeDeps({ isMainSender: () => false })

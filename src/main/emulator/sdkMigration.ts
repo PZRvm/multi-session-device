@@ -49,6 +49,11 @@ export interface MigrationDeps {
   journalDir: () => string
   /** 平台接缝（缺省 process.platform）：SDK 标记路径按平台取后缀（win32 adb.exe 等） */
   platform?: NodeJS.Platform
+  /** 迁移/回滚前置钩子：停共享 adb server——win32 上运行中的 adb.exe 挡删源
+   *  （issue 2026-10-31-orphan-emulator-after-app-restart）。引擎保证在 journal
+   *  置位后、任何条目移动前调用；external 跟踪器在 isMigrationActive 期间不重生
+   *  server，迁移结束后按退避自行恢复。best-effort 语义由注入方负责 */
+  stopSharedAdbServer?: () => Promise<void>
 }
 
 const DISKUTIL_TIMEOUT_MS = 5_000
@@ -491,6 +496,8 @@ export async function rollbackMigration(
 ): Promise<'done'> {
   const journal = await loadMigrationJournal(deps)
   if (journal === null) throw new Error('migration journal missing')
+  // 回滚同样删源侧文件（journal 在场 = isMigrationActive 已 true，跟踪器已让位）
+  await deps.stopSharedAdbServer?.()
   for (const entry of [...journal.entries].reverse().filter((entry) => entry.done)) {
     await moveEntry(
       { fromRoot: journal.toRoot, toRoot: journal.fromRoot, name: entry.name },
@@ -549,6 +556,9 @@ async function runJournal(
 
     journal.phase = 'moving'
     await saveMigrationJournal(journal, deps)
+    // journal 置位（isMigrationActive=true，跟踪器已让位）后再停 adb——先杀后置位
+    // 会被重连环在窗口期拉回（issue 2026-10-31）
+    await deps.stopSharedAdbServer?.()
     for (let i = 0; i < journal.entries.length; i += 1) {
       const entry = journal.entries[i]
       if (entry.done) continue
