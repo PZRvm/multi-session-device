@@ -594,7 +594,8 @@ describe('journal 三态与损坏接管（issue 2026-10-11 问题二处置）', 
 describe.skipIf(process.platform !== 'darwin')(
   'stopSharedAdbServer 钩子（win32 adb 预检，issue 2026-10-31）',
   () => {
-    it('正向：journal 置位后、条目移动前调用；回滚：装载后、移回前调用', async () => {
+    it('正向：journal 置位后、条目移动前调用（清场段与 moving 段各一次）；回滚：装载后、移回前调用', async () => {
+      resetMigrationFlagForTest()
       const fs = new FakeFs()
       seedSource(fs)
       seedAvdHome(fs)
@@ -604,8 +605,9 @@ describe.skipIf(process.platform !== 'darwin')(
         ...makeDeps(fs),
         platform: 'darwin',
         stopSharedAdbServer: async () => {
+          // 「先置位再杀」顺序契约（review 建议）：钩子观察到的一定是迁移激活态
           calls.push(
-            `fwd from:${fs.exists(`${FROM}/platform-tools/adb`)} to:${fs.exists(`${TO}/platform-tools/adb`)}`
+            `fwd active:${isMigrationActive()} from:${fs.exists(`${FROM}/platform-tools/adb`)} to:${fs.exists(`${TO}/platform-tools/adb`)}`
           )
         }
       }
@@ -622,7 +624,11 @@ describe.skipIf(process.platform !== 'darwin')(
       if (!plan.ok) throw new Error(`plan failed: ${plan.code}`)
       expect(calls).toHaveLength(0)
       await startMigration(plan.plan, { avdHome: AVD_HOME }, deps)
-      expect(calls).toEqual(['fwd from:true to:false'])
+      // 两次调用：startMigration 落 journal 后（盖 replaceTarget 清场）+ runJournal moving 落盘后
+      expect(calls).toEqual([
+        'fwd active:true from:true to:false',
+        'fwd active:true from:true to:false'
+      ])
       expect(fs.exists(`${TO}/platform-tools/adb`)).toBe(true)
 
       const rollbackDeps: MigrationDeps = {
@@ -630,12 +636,36 @@ describe.skipIf(process.platform !== 'darwin')(
         platform: 'darwin',
         stopSharedAdbServer: async () => {
           calls.push(
-            `back from:${fs.exists(`${FROM}/platform-tools/adb`)} to:${fs.exists(`${TO}/platform-tools/adb`)}`
+            `back active:${isMigrationActive()} from:${fs.exists(`${FROM}/platform-tools/adb`)} to:${fs.exists(`${TO}/platform-tools/adb`)}`
           )
         }
       }
       await rollbackMigration({ avdHome: AVD_HOME }, rollbackDeps)
-      expect(calls[1]).toBe('back from:false to:true')
+      expect(calls[2]).toBe('back active:true from:false to:true')
+      expect(fs.exists(`${FROM}/platform-tools/adb`)).toBe(true)
+    })
+
+    it('corrupt 回滚同样前置停 adb（review P3-3）', async () => {
+      const fs = new FakeFs()
+      fs.write(`${TO}/platform-tools/adb`, 'bin')
+      fs.mkdirP(AVD_HOME)
+      const calls: string[] = []
+      const deps: MigrationDeps = {
+        ...makeDeps(fs),
+        platform: 'darwin',
+        stopSharedAdbServer: async () => {
+          calls.push(
+            `corrupt active:${isMigrationActive()} moved:${fs.exists(`${TO}/platform-tools/adb`)}`
+          )
+        }
+      }
+      await rollbackCorruptMigration(
+        { movedRoot: TO, originalRoot: FROM, avdHome: AVD_HOME },
+        { avdHome: AVD_HOME },
+        deps
+      )
+      // corrupt 路径无 journal 可载（这正是 corrupt）——active 可能 false，前置调用本身是契约
+      expect(calls).toEqual(['corrupt active:false moved:true'])
       expect(fs.exists(`${FROM}/platform-tools/adb`)).toBe(true)
     })
   }

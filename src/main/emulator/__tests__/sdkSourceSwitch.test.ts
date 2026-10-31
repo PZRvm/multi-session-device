@@ -255,6 +255,35 @@ describe('adoptSourceSwitch（直接使用）', () => {
   })
 })
 
+describe('残留模拟器进程守卫（orphan issue 候选 A 最小版）', () => {
+  it('startSourceMigration：探测命中即拒绝（fresh 与 resume 共用入口）', async () => {
+    const fs = new FakeFs()
+    await expect(
+      startSourceMigration(
+        { target: 'managed', replace: false },
+        buildDeps(fs, { emulatorProcessAlive: async () => true })
+      )
+    ).rejects.toThrow('残留')
+  })
+
+  it('clearRetainedRoot：合法保留根上探测命中即拒绝（删源之前）', async () => {
+    const fs = new FakeFs()
+    resetSdkSourceStateForTest()
+    setSdkSourceState({
+      version: 1,
+      source: 'shared-studio',
+      customPath: null,
+      sharedPath: STUDIO_SDK
+    })
+    await expect(
+      clearRetainedRoot(
+        { root: MANAGED },
+        buildDeps(fs, { emulatorProcessAlive: async () => true })
+      )
+    ).rejects.toThrow('残留')
+  })
+})
+
 describe('clearRetainedRoot（仅共享模式）', () => {
   let fs: FakeFs
   beforeEach(() => {

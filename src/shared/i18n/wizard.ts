@@ -14,6 +14,8 @@ const zhCN = {
   sdkBootstrapFailed: 'SDK 引导失败：{message}',
   sdkSharedGuideTitle: '共享 SDK 只读，应用无法代装——请按以下步骤在 Android Studio 中补装：',
   sdkSharedGuideStep1: '打开 Android Studio 设置：菜单 File > Settings（快捷键 Ctrl+Alt+S）',
+  sdkSharedGuideStep1Mac:
+    '打开 Android Studio 设置：菜单栏 Android Studio > Preferences（快捷键 Cmd+,）',
   sdkSharedGuideStep2: '左侧进入 Languages & Frameworks > Android SDK，切到 SDK Tools 页',
   sdkSharedGuideStep3: '勾选「Android SDK Command-line Tools (latest)」',
   sdkSharedGuideStep4: '点 Apply / OK 开始安装（约几十 MB）',
@@ -217,6 +219,8 @@ const zhTW: WizardCopy = {
   sdkBootstrapFailed: 'SDK 引導失敗：{message}',
   sdkSharedGuideTitle: '共享 SDK 唯讀，應用無法代裝——請按以下步驟在 Android Studio 中補裝：',
   sdkSharedGuideStep1: '打開 Android Studio 設定：選單 File > Settings（快捷鍵 Ctrl+Alt+S）',
+  sdkSharedGuideStep1Mac:
+    '打開 Android Studio 設定：選單列 Android Studio > Preferences（快捷鍵 Cmd+,）',
   sdkSharedGuideStep2: '左側進入 Languages & Frameworks > Android SDK，切到 SDK Tools 頁',
   sdkSharedGuideStep3: '勾選「Android SDK Command-line Tools (latest)」',
   sdkSharedGuideStep4: '點 Apply / OK 開始安裝（約幾十 MB）',
@@ -412,6 +416,7 @@ const enUS: WizardCopy = {
   sdkSharedGuideTitle:
     'The shared SDK is read-only, so the app cannot install it for you — add it in Android Studio:',
   sdkSharedGuideStep1: 'Open Android Studio settings: File > Settings (Ctrl+Alt+S)',
+  sdkSharedGuideStep1Mac: 'Open Android Studio settings: Android Studio > Preferences (Cmd+,)',
   sdkSharedGuideStep2: 'Go to Languages & Frameworks > Android SDK, open the SDK Tools tab',
   sdkSharedGuideStep3: 'Check "Android SDK Command-line Tools (latest)"',
   sdkSharedGuideStep4: 'Click Apply / OK to install (a few tens of MB)',

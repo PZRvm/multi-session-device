@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { sdkPaths } from '../emulator/sdk'
 import { randomUUID } from 'node:crypto'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type {
@@ -270,7 +270,7 @@ export const runner = createRunner({
   sdkRoot,
   avdHome,
   userHome: androidUserHomeFor,
-  emulatorPath: () => join(sdkRoot(), 'emulator', 'emulator'),
+  emulatorPath: () => sdkPaths(sdkRoot()).emulatorBin,
   adbPath: adbBinaryPath,
   ports,
   ensureAdbServer: async () => {

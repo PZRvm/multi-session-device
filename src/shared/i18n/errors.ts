@@ -180,6 +180,8 @@ const zhCN = {
   sdkSharedReadOnly:
     '共享 Android Studio SDK 只读：不安装/不升级/不卸载 SDK 包，缺包请回 Android Studio 安装或切换来源',
   sdkMigrationBusy: 'SDK 迁移进行中，此操作暂不可用——请到设置的 SDK 来源页继续或回滚',
+  sdkEmulatorProcessAlive:
+    '检测到仍在运行的模拟器进程（可能是应用重启遗留的残留实例）——请先在任务管理器结束 qemu-system 开头的进程后重试',
   dialogDetailTruncated: '……（报告过长，已省略后 {omitted} 行）',
   shellPathRejected: '路径不在应用数据目录内，已拒绝',
   wizardCallerNotFound: '无法定位调用方窗口',
@@ -656,6 +658,8 @@ const zhTW: ErrorsCopy = {
   sdkSharedReadOnly:
     '共享 Android Studio SDK 唯讀：不安裝/不升級/不解除安裝 SDK 套件，缺套件請回 Android Studio 安裝或切換來源',
   sdkMigrationBusy: 'SDK 遷移進行中，此操作暫不可用——請到設定的 SDK 來源頁繼續或回復',
+  sdkEmulatorProcessAlive:
+    '偵測到仍在執行的模擬器處理程序（可能是應用重啟遺留的殘留實例）——請先在工作管理員結束 qemu-system 開頭的處理程序後重試',
   dialogDetailTruncated: '……（報告過長，已省略後 {omitted} 行）',
   shellPathRejected: '路徑不在應用程式資料目錄內，已拒絕',
   wizardCallerNotFound: '無法定位呼叫方視窗',
@@ -1139,6 +1143,8 @@ const enUS: ErrorsCopy = {
     'The shared Android Studio SDK is read-only: packages cannot be installed, upgraded or uninstalled here. Install missing packages in Android Studio or switch the SDK source',
   sdkMigrationBusy:
     'An SDK migration is in progress and this operation is unavailable. Continue or roll it back on the SDK source page in Settings',
+  sdkEmulatorProcessAlive:
+    'Emulator processes are still running (possibly left over from an app restart) — end the qemu-system processes in Task Manager and retry',
   dialogDetailTruncated: '…(report truncated, {omitted} more lines omitted)',
   shellPathRejected: 'The path is outside the app data directory and was rejected',
   chooseSdkRootTitle: 'Choose the SDK root folder',

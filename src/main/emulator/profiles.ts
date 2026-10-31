@@ -1,6 +1,6 @@
 import { constants } from 'node:fs'
 import { access } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type { DeviceProfile } from '@shared/types'
 import {
   type AvdDeviceEntry,
@@ -42,9 +42,8 @@ const defaultRunner = async (
   userHomeOverride?: string
 ): Promise<string> => {
   // JRE 布局与二进制后缀走 sdkPaths 单源（win32：jre/bin/java.exe；darwin 与历史逐字节一致）
-  const win = process.platform === 'win32'
   const javaHome = javaHomeOverride ?? sdkPaths(sdkRoot).jreHome
-  const javaBin = join(javaHome, 'bin', win ? 'java.exe' : 'java')
+  const javaBin = join(javaHome, 'bin', basename(sdkPaths(sdkRoot).javaBin))
   const androidUserHome = userHomeOverride ?? join(sdkRoot, 'android-user')
   const repairHint = msg('profilesQueryFailed', { javaBin })
   try {

@@ -3,6 +3,8 @@ import { join, resolve } from 'node:path'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { SdkSourceMode, SdkSourceSnapshot, SdkSourceSwitchEvaluation } from '@shared/types'
 import { runAdb } from './adb'
+import { liveEmulatorProcessPresent } from './emulatorProcessProbe'
+import { msg } from '../locale'
 import {
   getSdkSourceState,
   getSdkSourceSnapshot,
@@ -43,6 +45,8 @@ import { runningDeviceCount } from '../devices'
  */
 
 export interface SwitchDeps {
+  /** 残留模拟器进程探测接缝（默认 emulatorProcessProbe；单测注入 true 触发守卫） */
+  emulatorProcessAlive?: () => Promise<boolean>
   migration: MigrationDeps
   runningCount: () => number
   avdHome: () => string
@@ -75,6 +79,7 @@ export const onSdkSourceChanged = (listener: () => void): (() => void) => {
 }
 
 export const createSwitchDeps = (): SwitchDeps => ({
+  emulatorProcessAlive: () => liveEmulatorProcessPresent(),
   migration: {
     ...createMigrationDeps(() => app.getPath('userData')),
     // win32：迁移/回滚的删源步骤会撞运行中的 adb.exe（issue 2026-10-31-orphan-
@@ -252,6 +257,7 @@ export async function startSourceMigration(
   deps: SwitchDeps = createSwitchDeps()
 ): Promise<'started'> {
   if (activeRun !== null) throw new Error('migration already running')
+  await assertNoLiveEmulator(deps)
   const journal = await loadMigrationJournal(deps.migration)
   if (journal !== null) {
     await runMigrationToCompletion(
@@ -377,6 +383,7 @@ export async function cancelSourceMigration(
     deps.broadcast(IPC_CHANNELS.sdkSourceChanged, {})
     return 'done'
   }
+  await assertNoLiveEmulator(deps)
   await rollbackMigration(
     { avdHome: deps.avdHome(), onProgress: progressWiring(deps) },
     deps.migration
@@ -404,6 +411,7 @@ export async function adoptSourceSwitch(
     throw new Error('target has no recognizable sdk')
   }
   await assertNotStudioRoot(toRoot, deps)
+  await assertNoLiveEmulator(deps)
   const losers = await appOwnedLosers(toRoot, deps)
   const loserRoot = losers[0]
   const state = getSdkSourceState()
@@ -413,6 +421,10 @@ export async function adoptSourceSwitch(
     customPath: input.target === 'custom' ? toRoot : state.customPath
   })
   if (loserRoot !== undefined) {
+    // 删落选根前停 adb（review P2-1，与 clearRetainedRoot 同款）：win32 上活体
+    // adb.exe 挡 rmTree；此前失败会落在 setSdkSourceState 与 persist 之间留状态分叉
+    await stopAdbServerInRoot(loserRoot)
+    await deps.migration.stopSharedAdbServer?.()
     await relinkAvdConfigs({ avdHome: deps.avdHome(), fromRoot: loserRoot, toRoot }, deps.migration)
     await deps.migration.rmTree(loserRoot)
   }
@@ -422,6 +434,13 @@ export async function adoptSourceSwitch(
 }
 
 /** sdk:source-clear-retained：仅共享模式可清（不变量：非共享态无保留根） */
+/** 删源操作前置：残留模拟器进程守卫（orphan issue 候选 A 最小版）——
+ *  上代 headless qemu 锁镜像文件，删源步骤撞它必 EPERM；提示用户先清进程 */
+const assertNoLiveEmulator = async (deps: SwitchDeps): Promise<void> => {
+  const alive = deps.emulatorProcessAlive ?? (() => Promise.resolve(false))
+  if (await alive()) throw new Error(msg('sdkEmulatorProcessAlive'))
+}
+
 /** 清保留根前置：停掉可能从待删根内跑着的共享 adb server（win32 运行中 exe 不可删，
  *  issue 2026-10-31-orphan-emulator 第四幕——切共享是直接切换不走迁移链，前两辑的
  *  预检盖不到这里）。挡删除的 adb 恰跑在待删根里，其二进制必然在场——用它发
@@ -442,6 +461,7 @@ export async function clearRetainedRoot(
     .filter((root): root is string => root !== null)
     .map((root) => resolve(root))
   if (!allowed.includes(resolve(input.root))) throw new Error('not a retained root')
+  await assertNoLiveEmulator(deps)
   try {
     await stopAdbServerInRoot(resolve(input.root))
     await deps.migration.stopSharedAdbServer?.()

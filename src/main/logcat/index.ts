@@ -193,7 +193,8 @@ export function createLogcatManager(deps: LogcatManagerDeps): LogcatManager {
     try {
       child = spawn(deps.adbPath(), ['-s', device.serial, 'logcat'], {
         env: deps.toolEnv(),
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true
       })
     } catch (error) {
       // spawn 同步失败（如 adb 缺失）：会话壳保留运行位，订阅时显式报错（不静默空态）

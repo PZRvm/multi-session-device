@@ -58,6 +58,34 @@ export interface MigrationDeps {
 
 const DISKUTIL_TIMEOUT_MS = 5_000
 
+/** win32 卷文件系统探测：盘符 → Get-Volume FileSystemType；UNC/无盘符/任何失败 → null */
+const windowsFsTypeOf = (path: string): Promise<string | null> =>
+  new Promise((resolveTo) => {
+    const letter = /^([A-Za-z]):[\\/]/.exec(path)?.[1]
+    if (letter === undefined) {
+      resolveTo(null)
+      return
+    }
+    const child = spawn(
+      'powershell.exe',
+      ['-NoProfile', '-Command', `(Get-Volume -DriveLetter ${letter}).FileSystemType`],
+      { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }
+    )
+    const out: Buffer[] = []
+    const timer = setTimeout(() => child.kill('SIGKILL'), DISKUTIL_TIMEOUT_MS)
+    child.stdout?.on('data', (chunk: Buffer) => out.push(chunk))
+    const finish = (): void => {
+      clearTimeout(timer)
+      const value = Buffer.concat(out).toString('utf8').trim()
+      resolveTo(value.length > 0 ? value : null)
+    }
+    child.on('error', () => {
+      clearTimeout(timer)
+      resolveTo(null)
+    })
+    child.on('close', finish)
+  })
+
 const defaultDeps = (userDataDir: () => string): MigrationDeps => ({
   listDir: (path) => readdir(path),
   statEntry: async (path) => {
@@ -77,24 +105,28 @@ const defaultDeps = (userDataDir: () => string): MigrationDeps => ({
     }
   },
   fsTypeOf: (path) =>
-    new Promise((resolveTo) => {
-      const child = spawn('diskutil', ['info', path], { stdio: ['ignore', 'pipe', 'ignore'] })
-      const out: Buffer[] = []
-      const timer = setTimeout(() => child.kill('SIGKILL'), DISKUTIL_TIMEOUT_MS)
-      child.stdout?.on('data', (chunk: Buffer) => out.push(chunk))
-      const finish = (): void => {
-        clearTimeout(timer)
-        const match = Buffer.concat(out)
-          .toString('utf8')
-          .match(/File System Personality:\s*(.+)/)
-        resolveTo(match ? match[1].trim() : null)
-      }
-      child.on('error', () => {
-        clearTimeout(timer)
-        resolveTo(null)
-      })
-      child.on('close', finish)
-    }),
+    // win32 无 diskutil：Get-Volume 查卷文件系统（FAT/exFAT 预检在 win 重新生效，
+    // matrix issue 遗留备注收口）；任何失败回 null = 未知不拦（与 mac 口径一致）
+    process.platform === 'win32'
+      ? windowsFsTypeOf(path)
+      : new Promise((resolveTo) => {
+          const child = spawn('diskutil', ['info', path], { stdio: ['ignore', 'pipe', 'ignore'] })
+          const out: Buffer[] = []
+          const timer = setTimeout(() => child.kill('SIGKILL'), DISKUTIL_TIMEOUT_MS)
+          child.stdout?.on('data', (chunk: Buffer) => out.push(chunk))
+          const finish = (): void => {
+            clearTimeout(timer)
+            const match = Buffer.concat(out)
+              .toString('utf8')
+              .match(/File System Personality:\s*(.+)/)
+            resolveTo(match ? match[1].trim() : null)
+          }
+          child.on('error', () => {
+            clearTimeout(timer)
+            resolveTo(null)
+          })
+          child.on('close', finish)
+        }),
   pathExists: async (path) => {
     try {
       await stat(path)
@@ -197,6 +229,11 @@ export async function primeMigrationJournalFlag(deps: MigrationDeps): Promise<vo
 /** 测试用：重置内存标志 */
 export function resetMigrationFlagForTest(): void {
   journalPresent = false
+}
+
+/** 测试用：显式置位（外部域门控用例——迁移在途拒绝 adb 拉起/无线操作） */
+export function setMigrationFlagForTest(value: boolean): void {
+  journalPresent = value
 }
 
 /** journal 文件在场（含 done 待清的瞬时窗口）——异步盘面真值（评估入口用） */
@@ -454,6 +491,10 @@ export async function startMigration(
     totalBytes: plan.totalBytes
   }
   await saveMigrationJournal(journal, deps)
+  // journal 置位即停 adb（review P2-2）：盖住 runJournal 的 replaceTarget 目标清场段
+  // ——该段也是删源操作，原先钩子在 moving 落盘后才调，清场撞活体 adb 不受保护；
+  // resume 路径不经此处，由 runJournal moving 处的既有调用兜住
+  await deps.stopSharedAdbServer?.()
   return runJournal(journal, plan, options, deps)
 }
 
@@ -731,6 +772,9 @@ export async function rollbackCorruptMigration(
   options: MigrationRunOptions,
   deps: MigrationDeps
 ): Promise<'done'> {
+  // 移回链含 rmTree(from)——与 runJournal/rollbackMigration 同款前置停 adb（review P3-3；
+  // 此时 journal 损坏但 journalPresent 在场（boot prime 或进程内置位），跟踪器已让位）
+  await deps.stopSharedAdbServer?.()
   const names = await deps.listDir(input.movedRoot).catch(() => [] as string[])
   for (const name of names) {
     if (name === STAGING) continue

@@ -180,8 +180,9 @@ const DeviceWizard = ({
     if (profiles.error === null || sdkBootstrapable || bootstrapping || bootstrapPending) return
     // 共享模式不引导：sdkBootstrap 入口被共享只读守卫拒绝（必败），指引已在
     // profiles.error 的 sdkSharedNotReady 文案里——补装走 Android Studio SDK Manager
-    // （issue 2026-10-31-shared-mode-bootstrap-button-misleading）
-    if (sdkSource === 'shared-studio') return
+    // （issue 2026-10-31-shared-mode-bootstrap-button-misleading）。模式未知（null，
+    // 随镜像清单异步到达）同样等待（review P3-6）——清单整体失败时错误块+重试已在场
+    if (sdkSource === null || sdkSource === 'shared-studio') return
     let alive = true
     void (async () => {
       try {
@@ -697,15 +698,22 @@ const DeviceWizard = ({
         sdkSource === 'shared-studio' ? (
           <SharedSdkGuide>
             <p className="guide-title">{copy.sdkSharedGuideTitle}</p>
-            {SHARED_GUIDE_STEPS.map(({ icon: Icon, textKey }, index) => (
-              <li className="guide-step" key={textKey}>
-                <span className="guide-index">{index + 1}</span>
-                <Icon size={14} aria-hidden="true" className="guide-icon" />
-                <span className="guide-text">{copy[textKey]}</span>
-              </li>
-            ))}
+            <ol className="guide-steps">
+              {SHARED_GUIDE_STEPS.map(({ icon: Icon, textKey }, index) => (
+                <li className="guide-step" key={textKey}>
+                  <span className="guide-index">{index + 1}</span>
+                  <Icon size={14} aria-hidden="true" className="guide-icon" />
+                  <span className="guide-text">
+                    {/* 第一步的入口随平台（mac 是 Preferences/Cmd+,，review P3-8） */}
+                    {textKey === 'sdkSharedGuideStep1' && window.api.platform === 'darwin'
+                      ? copy.sdkSharedGuideStep1Mac
+                      : copy[textKey]}
+                  </span>
+                </li>
+              ))}
+            </ol>
           </SharedSdkGuide>
-        ) : sdkBootstrapable ? (
+        ) : sdkBootstrapable && sdkSource !== null ? (
           <>
             <Button
               onClick={() => void runSdkBootstrap()}
@@ -876,17 +884,14 @@ const DeviceWizard = ({
 
 /* 共享态补装指引（分步图文）：与错误块同列的浅底卡——board 令牌配色，
    深浅主题随 CSS 变量自适应；图标用产品 accent 色（tile-ink） */
-const SharedSdkGuide = styled.ol`
+const SharedSdkGuide = styled.div`
   /* 独占一行：error-block 是 flex 行（错误文案+重试按钮），basis 100% 把整卡
-     换到下一行全宽展示（用户 2026-10-31 验收反馈：不与上方内容同行） */
+     换到下一行全宽展示（用户 2026-10-31 验收反馈：不与上方内容同行）。根是 div：
+     标题 p 与步骤 ol 分离（ol 内容模型只许 li——review P3-7） */
   flex-basis: 100%;
   min-width: 0;
   margin: 8px 0 0;
   padding: 10px 12px;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
   background: var(--board-bg-raised);
   border: 1px solid var(--board-hairline);
   border-radius: 4px;
@@ -897,6 +902,15 @@ const SharedSdkGuide = styled.ol`
     margin: 0 0 2px;
     font-weight: 600;
     color: var(--board-ink);
+  }
+
+  .guide-steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
   }
 
   .guide-step {

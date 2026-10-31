@@ -4,6 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ipcMain } from 'electron'
 import type { ExternalDeps, TrackDeviceEntry } from '../external'
 
+const migrationFlag = vi.hoisted(() => ({ active: false }))
+vi.mock('../../emulator/sdkMigration', () => ({
+  isMigrationActive: () => migrationFlag.active,
+  setMigrationFlagForTest: (value: boolean) => {
+    migrationFlag.active = value
+  }
+}))
+
 vi.mock('electron', () => ({ ipcMain: { handle: vi.fn() } }))
 
 // 真机域测试（plan 2026-10-13-real-device-usb-and-apk-install）：纯解析函数 +
@@ -209,6 +217,21 @@ describe('track 客户端', () => {
       .sort()
     expect(channels).toHaveLength(6)
     expect(new Set(channels).size).toBe(6)
+  })
+
+  it('迁移在途无线四入口统一拒绝（adb 客户端会拉起 server，review P3-5）', async () => {
+    const mod = await fresh()
+    migrationFlag.active = true
+    try {
+      await expect(mod.connectWirelessDevice({ host: '1.2.3.4' })).rejects.toThrow('迁移')
+      await expect(mod.scanWireless()).rejects.toThrow('迁移')
+      await expect(mod.promoteToWireless({ serial: 'abc:5555' })).rejects.toThrow('迁移')
+      await expect(
+        mod.pairWirelessDevice({ host: '1.2.3.4', port: 5555, code: '123456' })
+      ).rejects.toThrow('迁移')
+    } finally {
+      migrationFlag.active = false
+    }
   })
 
   it('迁移在途不 ensure server：openSocket 只退避续排，journal 清除后自行恢复', async () => {

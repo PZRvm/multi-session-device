@@ -302,7 +302,11 @@ const scheduleReconnect = (): void => {
 }
 
 const ensureServerDefault = async (): Promise<unknown> => {
+  // 二检（TOCTOU 收窄，review P3-4）：openSocket 的门检查与这里的 spawn 之间 journal
+  // 可能置位——置位则放弃本次 ensure，openSocket 的 catch 会转退避续排（下一拍被门拦下）
+  if (isMigrationActive()) throw new Error('migration active')
   const exec = await requireAdb()
+  if (isMigrationActive()) throw new Error('migration active')
   try {
     const descriptor = await ensureSharedServer(exec)
     if (!descriptor.reused) {
@@ -689,10 +693,17 @@ const transportStateOf = async (
   return parseTrackDevices(body).find((entry) => entry.serial === serial)?.state ?? null
 }
 
+/** 无线域 adb 客户端命令会自动拉起共享 server——迁移在途时等价绕过跟踪器门
+ *  （review P3-5）：入口统一拒绝，journal 清除后自然恢复 */
+const assertWirelessOpen = (): void => {
+  if (isMigrationActive()) throw new Error(msg('sdkMigrationBusy'))
+}
+
 export const connectWirelessDevice = async (
   input: WirelessConnectInput,
   overrides?: Partial<WirelessDeps>
 ): Promise<WirelessConnectOutcome> => {
+  assertWirelessOpen()
   const { runCmd, delay, localSubnets } = resolveWirelessDeps(overrides)
   const host = input.host.trim()
   const port = input.port ?? WIRELESS_PORT
@@ -725,6 +736,7 @@ export const promoteToWireless = async (
   input: WirelessPromoteInput,
   overrides?: Partial<WirelessDeps>
 ): Promise<WirelessConnectOutcome> => {
+  assertWirelessOpen()
   const { runCmd } = resolveWirelessDeps(overrides)
   // 在线校验走 track 缓存（真值）：非 device 态转无线只会得到竞态噪音
   const present = cache.find((device) => device.serial === input.serial)
@@ -742,6 +754,7 @@ export const promoteToWireless = async (
 export const scanWireless = async (
   overrides?: Partial<WirelessDeps>
 ): Promise<WirelessCandidate[]> => {
+  assertWirelessOpen()
   const { runCmd, probeAdb, localSubnets } = resolveWirelessDeps(overrides)
   // mdns daemon 不在/不可用 → 该源静默空（手动输入是一等入口，不是降级）
   const mdns = await runCmd(['mdns', 'services'], 8_000)
@@ -782,6 +795,7 @@ export const pairWirelessDevice = async (
   input: WirelessPairInput,
   overrides?: Partial<WirelessDeps>
 ): Promise<WirelessPairOutcome> => {
+  assertWirelessOpen()
   const { runCmd } = resolveWirelessDeps(overrides)
   const result = await runCmd(
     ['pair', `${input.host.trim()}:${input.port}`, input.code.trim()],

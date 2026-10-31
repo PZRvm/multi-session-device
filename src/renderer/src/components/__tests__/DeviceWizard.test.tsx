@@ -505,7 +505,7 @@ const installSdkStub = (parts: {
   ;(window as { api?: unknown }).api = {
     sdk: {
       profiles: parts.profiles ?? vi.fn(async () => PROFILES),
-      images: parts.images ?? vi.fn(async () => catalogOf(IMAGES)),
+      images: parts.images ?? vi.fn(async () => catalogOf(IMAGES, null, null, 'managed')),
       downloadImage: parts.downloadImage ?? vi.fn(async () => {}),
       cancelDownloadImage: parts.cancelDownloadImage ?? vi.fn(async () => {}),
       wizardCapabilities: vi.fn(async () => CAPABILITIES),
@@ -533,7 +533,8 @@ const installSdkStub = (parts: {
         handle.emitSdkProgress = (percent: number): void => cb({ percent })
         return () => {}
       }
-    }
+    },
+    platform: 'darwin'
   }
   return handle
 }
@@ -585,16 +586,39 @@ describe('DeviceWizard 清单加载反馈（代次守卫回归）', () => {
     render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
     expect(await screen.findByText(/共享 SDK 缺少可用组件/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: copy.sdkBootstrapAction })).toBeNull()
-    // 分步图文指引在场：标题 + 五步全量（issue 2026-10-31 修复批二）
+    // 分步图文指引在场：标题 + 五步全量（issue 2026-10-31 修复批二）；默认桩是
+    // darwin——第一步按平台出 mac 键（Preferences/Cmd+,，review P3-8），win 键不出现
     expect(screen.getByText(copy.sdkSharedGuideTitle)).toBeTruthy()
+    expect(screen.getByText(copy.sdkSharedGuideStep1Mac)).toBeTruthy()
+    expect(screen.queryByText(copy.sdkSharedGuideStep1)).toBeNull()
     for (const step of [
-      copy.sdkSharedGuideStep1,
       copy.sdkSharedGuideStep2,
       copy.sdkSharedGuideStep3,
       copy.sdkSharedGuideStep4,
       copy.sdkSharedGuideStep5
     ]) {
       expect(screen.getByText(step)).toBeTruthy()
+    }
+  })
+
+  it('共享指引第一步随平台：win32 桩出 win 入口文案（File > Settings / Ctrl+Alt+S）', async () => {
+    installSdkStub({
+      profiles: vi.fn(async (): Promise<DeviceProfile[]> => {
+        throw new Error('共享 SDK 缺少可用组件')
+      }),
+      images: vi.fn(async () =>
+        catalogOf([image({ apiMajor: 36, installed: true })], null, null, 'shared-studio')
+      )
+    })
+    const api = (window as { api: { platform: string } }).api
+    const original = api.platform
+    api.platform = 'win32'
+    try {
+      render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+      expect(await screen.findByText(copy.sdkSharedGuideStep1)).toBeTruthy()
+      expect(screen.queryByText(copy.sdkSharedGuideStep1Mac)).toBeNull()
+    } finally {
+      api.platform = original
     }
   })
 
@@ -1320,6 +1344,25 @@ describe('DeviceWizard 共享 Studio SDK 收窄（plan 2026-10-12）', () => {
     image({ apiMajor: 36, installed: false }),
     image({ apiMajor: 34, installed: true })
   ]
+
+  it('win32 注入：宿主 ABI verdict 切 x86_64——仅有 arm64 镜像的画像全隐藏（P5 review P3-3 接线直测）', async () => {
+    installSdkStub({
+      profiles: vi.fn(async () => SHARED_PROFILES),
+      images: vi.fn(async () => sharedCatalog(SHARED_IMAGES))
+    })
+    const api = (window as { api: { platform: string } }).api
+    const original = api.platform
+    api.platform = 'win32'
+    try {
+      render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+      await screen.findByText(format(copy.sharedModeFilteredProfiles, { count: 2 }))
+      // Pixel 8（有 arm64 镜像但不匹配 x86_64 宿主）与 Old Nexus（API 超范围）都不可见
+      expect(screen.queryByText('Pixel 8')).toBeNull()
+      expect(screen.queryByText('Old Nexus')).toBeNull()
+    } finally {
+      api.platform = original
+    }
+  })
 
   it('画像页：不匹配画像（API 超范围）隐藏 + 提示行含隐藏计数 + 零类别导航隐藏', async () => {
     installSdkStub({
