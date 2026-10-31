@@ -33,6 +33,12 @@ tags: [windows, review, acceptance, adb, migration]
 - 迁移崩溃恢复语义未被削弱（钩子只加 best-effort 前置，不触碰 journal 生命周期）。
 - 测试无弱化：占位守卫用例改注入抛错 fetcher 属升级；profiles win32 夹具是真 cmd.exe 真解析边界；本宿主新用例全绿，153 失败逐一核对均为记档 posix 旧账。
 
+## 修复批（2026-10-31 同日，用户拍板全量修）
+
+P2-1/P2-2/P3-3 全部落地（钩子上移至 startMigration 落 journal 后盖住 replaceTarget 清场；adopt 前置停 adb；corrupt 回滚补钩；钩子用例升级为双调用 + 钩子内断言 isMigrationActive=true 的顺序契约）。P3-4（ensureServerDefault 二检收窄 TOCTOU）、P3-5（无线四入口迁移门）、P3-6（探测与渲染双闸对 null 也生效）、P3-7（根改 div、步骤独立 ol）、P3-8（第一步按平台出 Preferences/Cmd+, 文案，三语）、P3-10（profiles.javaBin 后缀与 startup.emulatorPath 收编 sdkPaths 单源）全部落地。另收口三件早期遗留：四处 spawn 补 windowsHide（闪黑框）、P5 review P3-3 后半（win32 verdict 注入直测）、**qemu 残留守卫**（orphan issue 候选 A 最小版：tasklist/pgrep 探测 seam，四个删源入口前置拒绝 + 三语新键 sdkEmulatorProcessAlive）、fsTypeOf 的 win 实现（Get-Volume，失败恒回 null 不误拦）。P3-9（darwin 张力补记）见 orphan issue 第五幕注记。
+
+**仍开放**：P5 review P3-3 前半（sdkIpcImages 下载守卫 win32 传参直测）——需完整 IPC harness，超出本批合理范围，随下次触碰 sdkIpcImages 补。门禁：typecheck/lint 0 错；全套 155 失败中 153 为既有基线、另 2 例（DeviceWizard/SettingsWindow）单独复跑 54/54 全过属负载抖动；新增 11 用例全绿（探针 3、守卫 2、无线门 1、win32 verdict 1、mac 指引 1、corrupt 钩子 1 钉 darwin、及其它）。
+
 ## 处置
 
 只记录未修（纪律）。P2×2 与 P3-3 建议并成「删源 adb 预检收口批」（五处清单：迁移正链/回滚/清保留根/adopt/corrupt 回滚），复用既有模式约几十行 + 用例；P3-7/8 随下次渲染/i18n 批；其余记录在案。

@@ -25,3 +25,5 @@ description: P5 模拟器环境适配代码评审发现——1 条 P2（繁中�
 
 - **P2-1 已修**：`errors.ts` zh-TW 的 `whpxMissing` 功能显示名改为系统实际文案「Windows Hypervisor 平台」（附改词理由注释）；zh-CN/en 本就正确未动。1379 测试全绿、typecheck/lint 0 错。
 - **P3-1～P3-3 未修**（按纪律顺延；P3-1/P3-2 的裁决点在真机集成验证，P3-3 补测随下一批）。
+
+> **补测批（2026-10-31）**：P3-3 后半已补——`DeviceWizard` win32 verdict 注入直测（win32 桩下 arm64 镜像画像全隐藏）；前半（sdkIpcImages 下载守卫 win32 传参直测）需 IPC harness，仍开放。P3-1 的真机样本采样仍待 WHPX 剧本执行。

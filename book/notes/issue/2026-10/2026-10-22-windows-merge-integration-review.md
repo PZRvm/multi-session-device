@@ -37,6 +37,8 @@ tags: [windows, code-review, merge, integration, p1-sdk-bootstrap, p2-studio-det
 
 ### P3（可顺延，记录在案）
 
+> **修复批（2026-10-31，验收 review 收口）**：P3-1 四处 spawn（screenshot/index.ts、logcat/index.ts、scrcpy/proc.ts ×2）已补 `windowsHide: true`——win32 截屏/日志/投屏不再闪黑框；P2-1 profiles.ts 三连缺陷此前已修（c3028cc）。
+
 1. **四处 spawn 缺 `windowsHide`——win32 上每次调用闪 console 黑框**：`screenshot/index.ts:31`、`logcat/index.ts:194-197`、`scrcpy/proc.ts:13 与 :34`（`transport.ts:147` 经 `deps.spawn` 落到 spawnProc）。四处都是 spawn `adb.exe`（真 exe，无 `.bat` EINVAL 风险），属 UX 降级不属功能阻断——截屏、日志、投屏恰是 Windows 上最常用的交互路径。外围调研 A4 声称「全仓 spawn 调用点」但只枚举了 sdk/avd/runner/cameras/adb/downloader 六个文件，这四个站点漏在清单外，三份 plan 均未覆盖。修法：四处补 `windowsHide: true`（posix 无副作用），可与 P2-1 同批。
 
 ## 验证边界

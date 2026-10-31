@@ -41,6 +41,14 @@ tags: [windows, process, migration, acceptance]
 
 修法方向补充：迁移/回滚预检应先 `adb kill-server`（应用自管的 adb）并暂停外部跟踪重连，或迁移期间将 adb server 纳入生命周期管理；否则 win32 上任何删源操作都可能撞活体 adb。
 
+## 第五幕（2026-10-31 review 收口批）：候选 A 最小版 + 删源预检全量收口
+
+- **qemu 残留守卫落地**（候选 A 的预检版）：`emulatorProcessProbe.ts`（win32 tasklist 匹配 qemu-system / posix pgrep -f；失败按无残留放行——宁松勿误拦），`SwitchDeps.emulatorProcessAlive` 接缝，四个删源入口（startSourceMigration 含 resume、cancelSourceMigration、clearRetainedRoot、adoptSourceSwitch）前置拒绝 + 三语 `sdkEmulatorProcessAlive`。启动收养（完整候选 A）仍留待后续。
+- **删源 adb 预检五处收口清单**（review P2-1/P2-2/P3-3）：迁移正链（startMigration 落 journal 后即停，盖 replaceTarget 清场）／回滚／corrupt 回滚／清保留根／采纳替换——「先置位再杀」顺序契约升级为测试事实。
+- **无线四入口迁移门**（review P3-5）+ ensureServerDefault 二检（P3-4，收窄不消除）。
+- **darwin 张力补记**（review P3-9，有意取舍非回归）：① kill 钩子非 win 平台同样执行——mac 上迁移期间共享 adb server 会被停 ≤30s 后自愈重生（外部真机跟踪短暂断开）；② 单实例锁未按平台 gate——mac `open -n` 强开第二实例从「完整运行」变「退出并唤回主窗」。两者均为跨平台行为，后续审计勿按「darwin 逐字节零变化」字面打回。
+- **fsTypeOf win 实现收口**（matrix issue 遗留备注）：Get-Volume 查卷文件系统，FAT/exFAT 预检在 win32 重新生效；UNC/任何失败恒回 null 不误拦。
+
 ## 第三幕（同日）：反复重试致 platform-tools 部分文件丢失与状态分叉
 
 回滚收尾后用户另选新路径 `Desktop\sdk1` 重跑正向迁移（成功，sdk.json 翻 custom），再迁回托管时又于 platform-tools 失败并多次重试。终态盘点：7 个小组件已回托管；system-images（34 文件/8.2G）完好滞留 sdk1；**platform-tools 两侧各剩同一组 3 文件**（adb.exe + 两个 AdbWin dll），其余 12 个工具文件在失败的 rmTree 半途中被删——复制分支「先保目标再删源」的顺序在 rename(staging→to) 撞已存在目标失败时也会留下双残本。**手工修复（2026-10-31）**：关应用→杀 adb→清两处残本与空骨架→同盘 rename 把 system-images 移回托管→删 sdk1→sdk.json 回 managed→清 journal→`sdkmanager --install platform-tools`（r37.0.1，15 文件全量补回）。AVD config 为相对路径（`image.sysdir.1=system-images\...`）无需 relink。另证：**与 C 盘管理员权限无关**（AppData 为用户目录；全部失败均为进程占用/状态分叉）。
