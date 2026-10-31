@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Download, ListChecks, Loader2, RotateCcw, Settings, SquareCheck } from 'lucide-react'
 import styled from 'styled-components'
 import type {
   CreateDeviceInput,
@@ -118,6 +118,15 @@ type DeviceWizardProps = {
   /** 卸载触发注入（测试用）；缺省走 sdk.uninstallImage（原生确认框在组件内弹） */
   onUninstallImage?: (packageName: string) => Promise<void>
 }
+
+/** 共享 SDK 补装指引的步骤图标（lucide，14px；文案键见 i18n sdkSharedGuideStep1-5） */
+const SHARED_GUIDE_STEPS = [
+  { icon: Settings, textKey: 'sdkSharedGuideStep1' },
+  { icon: ListChecks, textKey: 'sdkSharedGuideStep2' },
+  { icon: SquareCheck, textKey: 'sdkSharedGuideStep3' },
+  { icon: Download, textKey: 'sdkSharedGuideStep4' },
+  { icon: RotateCcw, textKey: 'sdkSharedGuideStep5' }
+] as const
 
 const DeviceWizard = ({
   onCreate,
@@ -682,8 +691,21 @@ const DeviceWizard = ({
           }
           emptyNote={sharedNoImages ? copy.sharedModeNoImages : null}
         />,
-        // 渲染侧再闸一次模式：sdkSource 随镜像清单异步到达，可能晚于报错与探测置位
-        sdkBootstrapable && sdkSource !== 'shared-studio' ? (
+        // 共享态：必败按钮换分步图文指引（issue 2026-10-31-shared-mode-bootstrap-
+        // button-misleading 修复批二）；其余模式维持引导按钮，渲染侧再闸一次模式——
+        // sdkSource 随镜像清单异步到达，可能晚于报错与探测置位
+        sdkSource === 'shared-studio' ? (
+          <SharedSdkGuide>
+            <p className="guide-title">{copy.sdkSharedGuideTitle}</p>
+            {SHARED_GUIDE_STEPS.map(({ icon: Icon, textKey }, index) => (
+              <li className="guide-step" key={textKey}>
+                <span className="guide-index">{index + 1}</span>
+                <Icon size={14} aria-hidden="true" className="guide-icon" />
+                <span className="guide-text">{copy[textKey]}</span>
+              </li>
+            ))}
+          </SharedSdkGuide>
+        ) : sdkBootstrapable ? (
           <>
             <Button
               onClick={() => void runSdkBootstrap()}
@@ -851,6 +873,56 @@ const DeviceWizard = ({
     </Wrapper>
   )
 }
+
+/* 共享态补装指引（分步图文）：与错误块同列的浅底卡——board 令牌配色，
+   深浅主题随 CSS 变量自适应；图标用产品 accent 色（tile-ink） */
+const SharedSdkGuide = styled.ol`
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  background: var(--board-bg-raised);
+  border: 1px solid var(--board-hairline);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--board-ink);
+
+  .guide-title {
+    margin: 0 0 2px;
+    font-weight: 600;
+    color: var(--board-ink);
+  }
+
+  .guide-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .guide-index {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 50%;
+    font-size: 10px;
+    color: var(--board-ink-dim);
+  }
+
+  .guide-icon {
+    flex: none;
+    color: var(--board-tile-ink);
+  }
+
+  .guide-text {
+    color: var(--board-ink);
+  }
+`
 
 const Wrapper = styled.div`
   display: flex;

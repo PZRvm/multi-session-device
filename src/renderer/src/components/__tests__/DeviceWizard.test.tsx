@@ -585,6 +585,17 @@ describe('DeviceWizard 清单加载反馈（代次守卫回归）', () => {
     render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
     expect(await screen.findByText(/共享 SDK 缺少可用组件/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: copy.sdkBootstrapAction })).toBeNull()
+    // 分步图文指引在场：标题 + 五步全量（issue 2026-10-31 修复批二）
+    expect(screen.getByText(copy.sdkSharedGuideTitle)).toBeTruthy()
+    for (const step of [
+      copy.sdkSharedGuideStep1,
+      copy.sdkSharedGuideStep2,
+      copy.sdkSharedGuideStep3,
+      copy.sdkSharedGuideStep4,
+      copy.sdkSharedGuideStep5
+    ]) {
+      expect(screen.getByText(step)).toBeTruthy()
+    }
   })
 
   it('SDK 未就绪（清除保留根后的空根场景）：错误块出现「完成 SDK 引导」，忙碌由进度驱动，成功后自动重拉画像', async () => {
