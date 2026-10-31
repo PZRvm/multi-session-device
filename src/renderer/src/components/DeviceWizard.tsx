@@ -169,6 +169,10 @@ const DeviceWizard = ({
   const [bootstrapError, setBootstrapError] = useState<string | null>(null)
   useEffect(() => {
     if (profiles.error === null || sdkBootstrapable || bootstrapping || bootstrapPending) return
+    // 共享模式不引导：sdkBootstrap 入口被共享只读守卫拒绝（必败），指引已在
+    // profiles.error 的 sdkSharedNotReady 文案里——补装走 Android Studio SDK Manager
+    // （issue 2026-10-31-shared-mode-bootstrap-button-misleading）
+    if (sdkSource === 'shared-studio') return
     let alive = true
     void (async () => {
       try {
@@ -187,7 +191,7 @@ const DeviceWizard = ({
     return () => {
       alive = false
     }
-  }, [profiles.error, sdkBootstrapable, bootstrapping, bootstrapPending])
+  }, [profiles.error, sdkBootstrapable, bootstrapping, bootstrapPending, sdkSource])
   // 两段式忙碌（用户 2026-10-12 反馈）：点击先只是 pending（钮禁用、许可弹窗在途），
   // 首个 sdk:progress 事件（= 许可已确认、组件开始下载）才转「引导中」spinner——
   // 许可拒绝在 main 侧静默返回当前态，这里不报错，按钮原地恢复
@@ -678,7 +682,8 @@ const DeviceWizard = ({
           }
           emptyNote={sharedNoImages ? copy.sharedModeNoImages : null}
         />,
-        sdkBootstrapable ? (
+        // 渲染侧再闸一次模式：sdkSource 随镜像清单异步到达，可能晚于报错与探测置位
+        sdkBootstrapable && sdkSource !== 'shared-studio' ? (
           <>
             <Button
               onClick={() => void runSdkBootstrap()}

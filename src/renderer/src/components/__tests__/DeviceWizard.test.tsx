@@ -562,6 +562,31 @@ describe('DeviceWizard 清单加载反馈（代次守卫回归）', () => {
     expect((screen.getByLabelText(copy.nameLabel) as HTMLInputElement).value).toBe('Pixel 8 API 36')
   })
 
+  it('共享态缺件：不出「完成 SDK 引导」按钮（入口被只读守卫必拒），指引文案在场', async () => {
+    const profiles = vi.fn(async (): Promise<DeviceProfile[]> => {
+      throw new Error(
+        '共享 SDK 缺少可用组件（cmdline-tools 或 Android Studio 的 Java）：请在 Android Studio 的 SDK Manager 补装命令行工具'
+      )
+    })
+    installSdkStub({
+      profiles,
+      images: vi.fn(async () =>
+        catalogOf([image({ apiMajor: 36, installed: true })], null, null, 'shared-studio')
+      ),
+      status: vi.fn(async (): Promise<SdkSnapshot> => ({
+        root: '/studio-sdk',
+        jre: { present: true },
+        cmdlineTools: { present: false },
+        platformTools: { present: true },
+        emulator: { present: true },
+        licensed: true
+      }))
+    })
+    render(<DeviceWizard onCreate={vi.fn()} onCancel={vi.fn()} />)
+    expect(await screen.findByText(/共享 SDK 缺少可用组件/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: copy.sdkBootstrapAction })).toBeNull()
+  })
+
   it('SDK 未就绪（清除保留根后的空根场景）：错误块出现「完成 SDK 引导」，忙碌由进度驱动，成功后自动重拉画像', async () => {
     let calls = 0
     const profiles = vi.fn(async (): Promise<DeviceProfile[]> => {
