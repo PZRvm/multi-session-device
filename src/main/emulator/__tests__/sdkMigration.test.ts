@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest'
+import { join } from 'node:path'
 
 import {
   MigrationCancelledError,
@@ -515,6 +516,16 @@ describe('classifyRoot', () => {
     expect(await classifyRoot('/junk-root', deps)).toBe('junk')
     fs.write('/sdk-root/emulator/emulator', 'bin')
     expect(await classifyRoot('/sdk-root', deps)).toBe('sdk')
+  })
+
+  it('win32 标记带 .exe/.bat（platform 接缝注入）——darwin 字面量在 win32 判定下不可见', async () => {
+    const fs = new FakeFs()
+    const deps = { ...makeDeps(fs), platform: 'win32' as const }
+    // 夹具用 join 构建：分隔符随宿主与 sdkPaths 探测一致，双宿主同绿
+    fs.write('/win-sdk/emulator/emulator', 'bin')
+    expect(await classifyRoot('/win-sdk', deps)).toBe('junk')
+    fs.write(join('/win-sdk', 'emulator', 'emulator.exe'), 'bin')
+    expect(await classifyRoot('/win-sdk', deps)).toBe('sdk')
   })
 })
 

@@ -9,7 +9,7 @@ import type {
   SdkMigrationView,
   SdkSnapshot
 } from '@shared/types'
-import { detectSdk } from './sdk'
+import { detectSdk, sdkPaths } from './sdk'
 import { rewriteConfigPathPrefixes } from './avd'
 
 /**
@@ -47,6 +47,8 @@ export interface MigrationDeps {
   detectSnapshot: (root: string) => Promise<SdkSnapshot>
   /** journal 落盘目录（userData） */
   journalDir: () => string
+  /** 平台接缝（缺省 process.platform）：SDK 标记路径按平台取后缀（win32 adb.exe 等） */
+  platform?: NodeJS.Platform
 }
 
 const DISKUTIL_TIMEOUT_MS = 5_000
@@ -283,10 +285,13 @@ export async function classifyRoot(root: string, deps: MigrationDeps): Promise<T
     return 'empty'
   }
   if (names.length === 0) return 'empty'
+  // 标记走 sdkPaths 单源（win32：adb.exe/emulator.exe/sdkmanager.bat）——darwin 字面量
+  // 曾让本判定在 win32 恒 junk，来源切换矩阵整体失真（issue 2026-10-31-windows-sdk-source-switch-matrix）
+  const markers = sdkPaths(root, deps.platform ?? process.platform)
   const recognizable =
-    (await deps.pathExists(join(root, 'platform-tools', 'adb'))) ||
-    (await deps.pathExists(join(root, 'emulator', 'emulator'))) ||
-    (await deps.pathExists(join(root, 'cmdline-tools', 'latest', 'bin', 'sdkmanager')))
+    (await deps.pathExists(markers.adbBin)) ||
+    (await deps.pathExists(markers.emulatorBin)) ||
+    (await deps.pathExists(markers.sdkmanagerBin))
   return recognizable ? 'sdk' : 'junk'
 }
 
