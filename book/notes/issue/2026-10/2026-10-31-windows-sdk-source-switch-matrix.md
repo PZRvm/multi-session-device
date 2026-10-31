@@ -35,7 +35,9 @@ tags: [windows, sdk, migration, source-switch, acceptance]
 
 `classifyRoot` 三标记改走 `sdkPaths(root, platform)` 单源（`adbBin`/`emulatorBin`/`sdkmanagerBin`，platform 接缝注入，先例：javaBinFor 修复 5de6436）；`appOwnedLosers`/switchSource 经 deps 透传 platform；补 win32 单测（win 布局根判 sdk、空根判 empty、杂物判 junk）。修复后真机补验：托 管→自选迁移全链（含 EXDEV 跨盘）、切回托管、AVD relink。
 
-> **修复批（2026-10-31 同日，用户拍板验收期间即修）**：按上述方向落地——`MigrationDeps` 增可选 `platform` 接缝（缺省 `process.platform`），`classifyRoot` 三标记改取 `sdkPaths(root, deps.platform ?? process.platform)` 的 `adbBin`/`emulatorBin`/`sdkmanagerBin`（darwin 输出与原字面量逐字节一致，构造性零回归）；`appOwnedLosers`/switchSource/adoptSourceSwitch 均经 `deps.migration` 自动获得平台。补 win32 单测（platform 注入 + join 夹具，双宿主绿）。定向三文件（sdkMigration/sdkSourceSwitch/sdkSource）失败数与基线逐文件一致（15/30/4，均宿主旧账），typecheck/lint 0 错。真机补验待用户重启后进行：托管→自选迁移全链、切回托管。
+> **修复批（2026-10-31 同日，用户拍板验收期间即修）**：按上述方向落地——`MigrationDeps` 增可选 `platform` 接缝（缺省 `process.platform`），`classifyRoot` 三标记改取 `sdkPaths(root, deps.platform ?? process.platform)` 的 `adbBin`/`emulatorBin`/`sdkmanagerBin`（darwin 输出与原字面量逐字节一致，构造性零回归）；`appOwnedLosers`/switchSource/adoptSourceSwitch 均经 `deps.migration` 自动获得平台。补 win32 单测（platform 注入 + join 夹具，双宿主绿）。定向三文件（sdkMigration/sdkSourceSwitch/sdkSource）失败数与基线逐文件一致（15/30/4，均宿主旧账），typecheck/lint 0 错。
+>
+> **真机补验（同日）**：矩阵修复实证生效——托管→自选（Desktop）迁移评估弹窗出现、确认后逐条目搬移、journal 记账正确，cmdline-tools/emulator/jre/platform-tools/licenses/android-user 等全部搬完。`system-images` 条目因**孤儿模拟器占用**报 EPERM 中断（进程域问题，独立记 [issue 2026-10-31-orphan-emulator-after-app-restart]；journal 可重入接住中断，清占用者后续跑即恢复）。切回托管待续跑完成后补记。
 
 ## 遗留备注（本批不修，只记录）
 
