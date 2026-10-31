@@ -49,6 +49,10 @@ tags: [windows, process, migration, acceptance]
 - **darwin 张力补记**（review P3-9，有意取舍非回归）：① kill 钩子非 win 平台同样执行——mac 上迁移期间共享 adb server 会被停 ≤30s 后自愈重生（外部真机跟踪短暂断开）；② 单实例锁未按平台 gate——mac `open -n` 强开第二实例从「完整运行」变「退出并唤回主窗」。两者均为跨平台行为，后续审计勿按「darwin 逐字节零变化」字面打回。
 - **fsTypeOf win 实现收口**（matrix issue 遗留备注）：Get-Volume 查卷文件系统，FAT/exFAT 预检在 win32 重新生效；UNC/任何失败恒回 null 不误拦。
 
+## 第六幕（2026-10-31）：应用内停止设备后 qemu 残留——守卫首次实战命中
+
+用户真机流程：启动一台模拟器 → 应用内停止 → 迁移到自选路径 → 守卫正确拦截（提示残留模拟器进程）。实测 `tasklist` 确有 `qemu-system-x86_64-headless.exe`（725MB），且**父进程 emulator.exe 已死、qemu 子进程存活**——停止链的树杀未传导到 qemu（taskkill /T 应达整树；怀疑竞态窗口内 qemu 被 emulator 重新拉起后父 PID 链断裂，或某停止路径未走树杀）。手工 `taskkill /T /F` 清树后迁移放行。**这是 P3 验收项「停止后无孤儿 qemu」的真机实证缺陷**：根因定位（stop 链路哪个环节丢了树杀）归 P3 修复批；守卫的存在把该缺陷从「迁移神秘 EPERM」降级为「一条可操作提示」——正是设计意图。复测剧本：P3 进程剧本执行时，每次应用内停止设备后立即 `tasklist | findstr qemu` 核验。
+
 ## 第三幕（同日）：反复重试致 platform-tools 部分文件丢失与状态分叉
 
 回滚收尾后用户另选新路径 `Desktop\sdk1` 重跑正向迁移（成功，sdk.json 翻 custom），再迁回托管时又于 platform-tools 失败并多次重试。终态盘点：7 个小组件已回托管；system-images（34 文件/8.2G）完好滞留 sdk1；**platform-tools 两侧各剩同一组 3 文件**（adb.exe + 两个 AdbWin dll），其余 12 个工具文件在失败的 rmTree 半途中被删——复制分支「先保目标再删源」的顺序在 rename(staging→to) 撞已存在目标失败时也会留下双残本。**手工修复（2026-10-31）**：关应用→杀 adb→清两处残本与空骨架→同盘 rename 把 system-images 移回托管→删 sdk1→sdk.json 回 managed→清 journal→`sdkmanager --install platform-tools`（r37.0.1，15 文件全量补回）。AVD config 为相对路径（`image.sysdir.1=system-images\...`）无需 relink。另证：**与 C 盘管理员权限无关**（AppData 为用户目录；全部失败均为进程占用/状态分叉）。
