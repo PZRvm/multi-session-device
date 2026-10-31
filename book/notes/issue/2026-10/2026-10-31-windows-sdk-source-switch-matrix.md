@@ -35,6 +35,13 @@ tags: [windows, sdk, migration, source-switch, acceptance]
 
 `classifyRoot` 三标记改走 `sdkPaths(root, platform)` 单源（`adbBin`/`emulatorBin`/`sdkmanagerBin`，platform 接缝注入，先例：javaBinFor 修复 5de6436）；`appOwnedLosers`/switchSource 经 deps 透传 platform；补 win32 单测（win 布局根判 sdk、空根判 empty、杂物判 junk）。修复后真机补验：托 管→自选迁移全链（含 EXDEV 跨盘）、切回托管、AVD relink。
 
-## 验收期 workaround（已告知用户）
+> **修复批（2026-10-31 同日，用户拍板验收期间即修）**：按上述方向落地——`MigrationDeps` 增可选 `platform` 接缝（缺省 `process.platform`），`classifyRoot` 三标记改取 `sdkPaths(root, deps.platform ?? process.platform)` 的 `adbBin`/`emulatorBin`/`sdkmanagerBin`（darwin 输出与原字面量逐字节一致，构造性零回归）；`appOwnedLosers`/switchSource/adoptSourceSwitch 均经 `deps.migration` 自动获得平台。补 win32 单测（platform 注入 + join 夹具，双宿主绿）。定向三文件（sdkMigration/sdkSourceSwitch/sdkSource）失败数与基线逐文件一致（15/30/4，均宿主旧账），typecheck/lint 0 错。真机补验待用户重启后进行：托管→自选迁移全链、切回托管。
+
+## 遗留备注（本批不修，只记录）
+
+- `defaultDeps.fsTypeOf`（sdkMigration.ts）用 mac 的 `diskutil` 解析卷文件系统——win32 上 spawn 失败恒回 null，FAT/exFAT 目标卷预检在 Windows 实际不拦（宽松降级，不误拦但也不防护）。后续如需 win 等效，走 `Get-Volume`/`fsutil` 另立批次。
+- 验收期间已知抖动：external.test.ts 与部分 renderer 组件测试在全套并发跑时偶发超时（单独跑全绿，P4 施工期即有记录），与平台分支无关。
+
+## 验收期 workaround（已执行，2026-10-31）
 
 关闭应用后手改 `%APPDATA%\multi-session-device\sdk.json` 为 `{"version":1,"source":"managed","customPath":null,"sharedPath":null}` 重启即恢复托管根（磁盘内容从未被动过，无损）；自选空目录可删。**不要**按报错提示"清空目标路径"——托管根里有 8.2G 镜像。
