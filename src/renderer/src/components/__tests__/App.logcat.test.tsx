@@ -54,7 +54,7 @@ const setViewport = (width: number): void => {
   Object.defineProperty(window, 'innerWidth', { value: width, configurable: true })
 }
 
-describe('主窗日志 dock', () => {
+describe.each(['darwin', 'win32', 'linux'])('主窗日志 dock（%s）', (platform) => {
   beforeEach(() => {
     vi.clearAllMocks()
     setViewport(1400)
@@ -74,7 +74,7 @@ describe('主窗日志 dock', () => {
       }
     })
     ;(window as unknown as { api: unknown }).api = {
-      platform: 'darwin',
+      platform,
       wizard: { open: vi.fn(async () => undefined), openEditor: vi.fn(async () => undefined) },
       settings: { open: vi.fn(async () => undefined) },
       dialog: { show: dialogShow },
@@ -107,6 +107,23 @@ describe('主窗日志 dock', () => {
   })
 
   const toggleButton = (): HTMLElement => screen.getByTitle(copy.logcatTitle)
+
+  it('板头留在列表内，Windows 开关浮在右上且不创建独立顶部行', async () => {
+    const { container } = render(<App />)
+    const button = toggleButton()
+    const selector = platform === 'win32' ? '.window-actions' : '.canvas-tools'
+    expect(button.closest(selector)).toBeTruthy()
+    expect(container.querySelectorAll('.log-toggle')).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: copy.settings })).toHaveLength(1)
+    expect(container.querySelector('.list-pane')?.querySelector('.settings-button')).toBeTruthy()
+    expect(container.querySelector('.workspace')).toBeNull()
+    expect(container.querySelector('.windows-header')).toBeNull()
+    expect(Boolean(container.querySelector('.window-drag-region'))).toBe(platform === 'win32')
+    fireEvent.click(button)
+    await screen.findByRole('log')
+    expect(button.closest(selector)).toBeTruthy()
+    expect(container.querySelectorAll('.log-toggle')).toHaveLength(1)
+  })
 
   it('dock 默认收起（不持久化）；点击展开并订阅，再点收起退订', async () => {
     render(<App />)
@@ -209,7 +226,7 @@ describe('主窗日志 dock', () => {
     expect(openLogcatWindow).toHaveBeenCalledWith('d1')
     await waitFor(() => expect(screen.queryByRole('log')).toBeNull())
     // 独立窗口态主窗宽度自由：dock 不可见即解锁
-    expect(setDockState).toHaveBeenLastCalledWith({ expanded: false })
+    await waitFor(() => expect(setDockState).toHaveBeenLastCalledWith({ expanded: false }))
   })
 
   it('窄窗贴回：按需拉宽主窗并黏滞展开 dock', async () => {

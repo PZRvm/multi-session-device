@@ -4,10 +4,25 @@ import {
   isThemeMode,
   isThemeSystemId,
   resolveThemeMode,
-  themeBoardBackground
+  themeBoardBackground,
+  THEME_SYSTEMS
 } from '@shared/themeSystems'
 import { getThemeState, loadThemeState, persistThemeState, updateThemeState } from './store'
 import { msg } from '../locale'
+
+const titleBarWindows = new WeakSet<BrowserWindow>()
+
+/** Windows 顶部与页面板面同色，首帧与后续主题切换共用。 */
+export function themeWindowTitleBarOverlay(): Electron.TitleBarOverlay {
+  const { systemId, mode } = getThemeState()
+  const tokens = THEME_SYSTEMS[systemId][resolveThemeMode(mode, nativeTheme.shouldUseDarkColors)]
+  return { height: 40, color: tokens.bg, symbolColor: tokens.ink }
+}
+
+/** 仅登记明确启用覆盖层的窗口，其他子窗继续使用系统标题栏。 */
+export function registerWindowTitleBar(window: BrowserWindow): void {
+  if (process.platform === 'win32') titleBarWindows.add(window)
+}
 
 /** 建窗底色：token 单源派生（themeSystems 既定消费方式：建窗注入 + 全窗 setBackgroundColor）。
  *  system 模式依赖 themeSource 已先行设置（boot 恢复或切换时同步），shouldUseDarkColors 才反映正确解析 */
@@ -20,6 +35,7 @@ export function themeWindowBackground(): string {
 function refreshWindowBackgrounds(): void {
   for (const window of BrowserWindow.getAllWindows()) {
     window.setBackgroundColor(themeWindowBackground())
+    if (titleBarWindows.has(window)) window.setTitleBarOverlay(themeWindowTitleBarOverlay())
   }
 }
 

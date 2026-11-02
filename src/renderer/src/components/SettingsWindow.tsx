@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { AlertTriangle, Command, Info, Monitor, Settings } from 'lucide-react'
 import styled from 'styled-components'
-import { SETTINGS_COPY } from '@shared/i18n'
+import { ERRORS_COPY, SETTINGS_COPY } from '@shared/i18n'
+import windowsIcon from '../../../../resources/icon-windows.png'
 import type { SettingsPaneId, SettingsViewModel } from './settings/model'
 import PaneGeneral from './settings/PaneGeneral'
 import PaneEmulator from './settings/PaneEmulator'
@@ -33,11 +34,19 @@ const SettingsWindow = ({ model, platform }: SettingsWindowProps): React.JSX.Ele
   const copy = SETTINGS_COPY[model.locale]
   const Pane = PANES[active]
   return (
-    <Wrapper lang={model.locale}>
-      {/* darwin 去标题条后窗口拖动与左上原生三灯都归系统；其余平台保留系统框，无需让位 */}
-      {platform === 'darwin' ? <div className="drag-region" aria-hidden="true" /> : null}
+    <Wrapper lang={model.locale} data-windows={platform === 'win32'}>
+      {/* macOS 原生三灯和原有拖拽区保留；Linux 使用系统标题栏。 */}
+      {platform === 'darwin' || platform === 'win32' ? (
+        <div className="drag-region" aria-hidden="true" />
+      ) : null}
       <div className="body">
         <nav aria-label={copy.navigation}>
+          {platform === 'win32' ? (
+            <div className="settings-identity">
+              <img src={windowsIcon} width={24} height={24} alt="" />
+              <span>{ERRORS_COPY[model.locale].settingsWindowTitle}</span>
+            </div>
+          ) : null}
           {NAVIGATION.map(({ id, Icon }) => (
             <button
               key={id}
@@ -70,6 +79,28 @@ const Wrapper = styled.div`
   ::selection {
     background: var(--accent);
     color: var(--accent-ink);
+  }
+  .settings-identity {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    margin: 0 -8px 4px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .settings-identity img {
+    flex: none;
+    object-fit: contain;
+  }
+  &[data-windows='true'] nav {
+    padding-top: 0;
+  }
+  &[data-windows='true'] .drag-region {
+    height: 40px;
+    pointer-events: none;
   }
   .drag-region {
     position: absolute;

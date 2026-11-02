@@ -4,6 +4,7 @@ import { MAIN_COPY, format } from '@shared/i18n'
 import { useCopy } from '../hooks/useCopy'
 import { useThemeStore } from '../stores/themeStore'
 import AppearanceModePicker from './AppearanceModePicker'
+import windowsIcon from '../../../../resources/icon-windows.png'
 
 type BoardHeadProps = {
   /** 设备总数，两位补零展示，上限 99 */
@@ -13,7 +14,7 @@ type BoardHeadProps = {
   onOpenSettings?: () => void
 }
 
-/** 40px 拖拽带：mac 原生三灯留位（非 mac 无标题——系统标题栏已承担，去双标题），
+/** 40px 拖拽带：mac 原生三灯留位，Windows 显示透明图标与应用名，
  *  右端为外观选择（设置齿轮左侧，与设置窗通用页共用 AppearanceModePicker）、
  *  设置入口与设备计数。 */
 const BoardHead = ({ count, compact, onOpenSettings }: BoardHeadProps): React.JSX.Element => {
@@ -24,6 +25,14 @@ const BoardHead = ({ count, compact, onOpenSettings }: BoardHeadProps): React.JS
     <Wrapper>
       {window.api.platform === 'darwin' ? (
         <span className="traffic-space" aria-hidden="true" />
+      ) : null}
+      {window.api.platform === 'win32' ? (
+        <span className="window-identity">
+          <img src={windowsIcon} width={24} height={24} alt="" />
+          <span className="window-title" title={copy.appName}>
+            {copy.appName}
+          </span>
+        </span>
       ) : null}
       <span className="head-right">
         <AppearanceModePicker
@@ -66,6 +75,25 @@ const Wrapper = styled.div`
   padding: 0 14px;
   border-bottom: 1px solid var(--board-hairline);
   -webkit-app-region: drag;
+  .window-identity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .window-identity img {
+    flex: none;
+    object-fit: contain;
+  }
+  .window-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--board-ink);
+  }
   .traffic-space {
     flex: none;
     width: 60px;
@@ -73,6 +101,7 @@ const Wrapper = styled.div`
   }
   /* 右端控件带：外观选择 + 设置 + 设备计数；整组可交互区禁拖 */
   .head-right {
+    flex: none;
     position: relative;
     display: inline-flex;
     align-items: center;
