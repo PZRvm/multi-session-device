@@ -200,6 +200,8 @@ const zhCN = {
   screenshotSave: '保存到下载文件夹',
   screenshotSaving: '保存中…',
   screenshotSaved: '已保存：{fileName}',
+  /** 气泡「编辑」钮：打开截图编辑子窗（plan 2026-11-02-screenshot-editor；源 browser.ts capture.edit 同文案） */
+  screenshotEdit: '编辑',
   // ---- 网络开关组（plan 2026-10-12-network-switch-group；工具条三开关）----
   networkGroupAria: '网络开关',
   networkAirplaneToggle: '断网（飞行模式）',
@@ -420,6 +422,7 @@ const zhTW: MainWindowCopy = {
   screenshotSave: '儲存到下載資料夾',
   screenshotSaving: '儲存中…',
   screenshotSaved: '已儲存：{fileName}',
+  screenshotEdit: '編輯',
   // ---- 網路開關組（plan 2026-10-12-network-switch-group；工具列三開關）----
   networkGroupAria: '網路開關',
   networkAirplaneToggle: '斷網（飛行模式）',
@@ -651,6 +654,7 @@ const enUS: MainWindowCopy = {
   screenshotSave: 'Save to Downloads',
   screenshotSaving: 'Saving…',
   screenshotSaved: 'Saved: {fileName}',
+  screenshotEdit: 'Edit',
   // ---- Network switches (plan 2026-10-12-network-switch-group; toolbar trio) ----
   networkGroupAria: 'Network switches',
   networkAirplaneToggle: 'Airplane mode',

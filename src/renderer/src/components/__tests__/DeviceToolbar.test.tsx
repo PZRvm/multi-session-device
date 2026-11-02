@@ -25,6 +25,8 @@ const baseProps: ToolbarProps = {
   screenshotState: idle,
   onScreenshot: () => undefined,
   onScreenshotSave: () => undefined,
+  onScreenshotEdit: () => undefined,
+  screenshotEditing: false,
   onScreenshotDismiss: () => undefined,
   networkState: netOnline,
   networkBusy: null,
@@ -42,6 +44,8 @@ describe('DeviceToolbar 截屏钮与气泡', () => {
       screenshotState: idle,
       onScreenshot: () => undefined,
       onScreenshotSave: () => undefined,
+      onScreenshotEdit: () => undefined,
+      screenshotEditing: false,
       onScreenshotDismiss: () => undefined,
       networkState: netOnline,
       networkBusy: null,
@@ -106,6 +110,34 @@ describe('DeviceToolbar 截屏钮与气泡', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: copy.screenshotClose }))
     expect(onScreenshotDismiss).toHaveBeenCalledTimes(1)
+  })
+
+  it('气泡编辑钮走 onScreenshotEdit；screenshotEditing 禁用（不牵连相机钮）', () => {
+    const onScreenshotEdit = vi.fn()
+    const { rerender } = render(
+      <DeviceToolbar
+        {...baseProps}
+        screenshotState={{ phase: 'copied', thumbnail }}
+        onScreenshotEdit={onScreenshotEdit}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: copy.screenshotEdit }))
+    expect(onScreenshotEdit).toHaveBeenCalledTimes(1)
+    rerender(
+      <DeviceToolbar
+        {...baseProps}
+        screenshotState={{ phase: 'copied', thumbnail }}
+        onScreenshotEdit={onScreenshotEdit}
+        screenshotEditing
+      />
+    )
+    expect(
+      (screen.getByRole('button', { name: copy.screenshotEdit }) as HTMLButtonElement).disabled
+    ).toBe(true)
+    // 开窗 busy 只作用于编辑钮：相机钮不受牵连
+    expect(
+      (screen.getByRole('button', { name: copy.screenshotAction }) as HTMLButtonElement).disabled
+    ).toBe(false)
   })
 })
 

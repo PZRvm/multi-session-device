@@ -34,6 +34,10 @@ type DeviceToolbarProps = {
   screenshotState: ScreenshotState
   onScreenshot: () => void
   onScreenshotSave: () => void
+  /** 气泡「编辑」入口（plan 2026-11-02-screenshot-editor）：打开该设备的编辑子窗 */
+  onScreenshotEdit: () => void
+  /** 开窗进行中（独立 busy，不牵连相机钮） */
+  screenshotEditing: boolean
   onScreenshotDismiss: () => void
   /** 网络开关组（plan 2026-10-12）：走 adb 独立链路，不受 disabled 牵连；
    * state 未知（设备未运行/初值未达）三开关禁用，态由 aria-pressed 承载 */
@@ -54,6 +58,8 @@ const DeviceToolbar = ({
   screenshotState,
   onScreenshot,
   onScreenshotSave,
+  onScreenshotEdit,
+  screenshotEditing,
   onScreenshotDismiss,
   networkState,
   networkBusy,
@@ -120,6 +126,8 @@ const DeviceToolbar = ({
           <ScreenshotPopover
             state={screenshotState}
             onSave={onScreenshotSave}
+            onEdit={onScreenshotEdit}
+            editBusy={screenshotEditing}
             onClose={onScreenshotDismiss}
           />
         ) : null}

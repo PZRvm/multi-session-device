@@ -8,14 +8,21 @@ import type { ScreenshotState } from '../hooks/useScreenshot'
 type ScreenshotPopoverProps = {
   state: Extract<ScreenshotState, { phase: 'copied' | 'saving' | 'saved' | 'error' }>
   onSave: () => void
+  /** 打开截图编辑子窗（plan 2026-11-02-screenshot-editor T5）：copied 与保存并排、saved 保留 */
+  onEdit: () => void
+  /** 开窗进行中：编辑钮禁用防重复 */
+  editBusy: boolean
   onClose: () => void
 }
 
-/** 截屏结果气泡（非模态，role=status）：左上关闭 + 缩略图 + 已复制反馈 + 保存到下载文件夹。
- *  10 秒自动消失由 useScreenshot 管理；capturing/idle 时不渲染 */
+/** 截屏结果气泡（非模态，role=status）：左上关闭 + 缩略图 + 已复制反馈 + 保存到下载文件夹
+ *  + 编辑入口（copied/saved 态；saving/error 无编辑对象不显示）。10 秒自动消失由
+ *  useScreenshot 管理；capturing/idle 时不渲染 */
 const ScreenshotPopover = ({
   state,
   onSave,
+  onEdit,
+  editBusy,
   onClose
 }: ScreenshotPopoverProps): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
@@ -33,9 +40,14 @@ const ScreenshotPopover = ({
       {state.phase === 'copied' ? (
         <>
           <p className="line">{copy.screenshotCopied}</p>
-          <button className="save-btn" type="button" onClick={onSave}>
-            {copy.screenshotSave}
-          </button>
+          <div className="actions">
+            <button className="save-btn" type="button" onClick={onSave}>
+              {copy.screenshotSave}
+            </button>
+            <button className="edit-btn" type="button" onClick={onEdit} disabled={editBusy}>
+              {copy.screenshotEdit}
+            </button>
+          </div>
         </>
       ) : state.phase === 'saving' ? (
         <p className="line">
@@ -43,7 +55,14 @@ const ScreenshotPopover = ({
           {copy.screenshotSaving}
         </p>
       ) : state.phase === 'saved' ? (
-        <p className="line saved">{format(copy.screenshotSaved, { fileName: state.fileName })}</p>
+        <>
+          <p className="line saved">{format(copy.screenshotSaved, { fileName: state.fileName })}</p>
+          <div className="actions">
+            <button className="edit-btn" type="button" onClick={onEdit} disabled={editBusy}>
+              {copy.screenshotEdit}
+            </button>
+          </div>
+        </>
       ) : (
         <p className="line error">{state.message}</p>
       )}
@@ -123,8 +142,13 @@ const Card = styled.div`
 
   /* 主操作钮用强调色实底（同 Button primary 语言）——描边 + 淡字在浅底上像禁用态
      （用户 2026-10-13 反馈），实底 + 深字明确可点 */
+  .actions {
+    display: flex;
+    gap: 6px;
+  }
+
   .save-btn {
-    align-self: stretch;
+    flex: 1 1 auto;
     height: 26px;
     border: none;
     border-radius: 6px;
@@ -145,6 +169,34 @@ const Card = styled.div`
   }
 
   .save-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  /* 编辑入口（打开截图编辑子窗）：次操作钮——hairline 描边 + 常墨，与主钮并排成主次 */
+  .edit-btn {
+    flex: 1 1 auto;
+    height: 26px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 6px;
+    background: var(--board-bg-raised);
+    color: var(--board-ink);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.12s;
+  }
+
+  .edit-btn:hover:not(:disabled) {
+    background: var(--board-hover-veil);
+  }
+
+  .edit-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .edit-btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
   }

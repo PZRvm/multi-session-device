@@ -252,6 +252,10 @@ const ExternalCanvas = ({ device }: ExternalCanvasProps): React.JSX.Element => {
           onScreenshotSave={() => {
             void shot.save()
           }}
+          onScreenshotEdit={() => {
+            void shot.edit()
+          }}
+          screenshotEditing={shot.editing}
           onScreenshotDismiss={shot.dismiss}
           networkState={device.state === 'device' ? net.state : null}
           networkBusy={net.busyTarget}

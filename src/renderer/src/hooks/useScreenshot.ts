@@ -24,11 +24,19 @@ export const useScreenshot = (
   busy: boolean
   capture: () => Promise<void>
   save: () => Promise<void>
+  /** 打开截图编辑子窗（plan 2026-11-02-screenshot-editor T5）：走缓存现图，
+   *  不发起 adb 截屏；成功不改变气泡态（编辑窗独立呈现），失败落入 error */
+  edit: () => Promise<void>
+  /** 开窗进行中（独立 busy，不与截屏 capturing 互斥） */
+  editing: boolean
   dismiss: () => void
 } => {
   const [latched, setLatched] = useState<ScreenshotState>({ phase: 'idle' })
+  const [editing, setEditing] = useState(false)
   const timerRef = useRef(0)
   const stateRef = useRef(latched)
+  /** 开窗在途标志的同步镜像：点击即读（提交前 state 有延迟），防重复开窗 */
+  const editingRef = useRef(false)
   /** 单调操作序号：异步完成时 seq 不匹配即过期丢弃（读提交后 state 有提交延迟，不可靠） */
   const opSeqRef = useRef(0)
 
@@ -79,6 +87,27 @@ export const useScreenshot = (
     }
   }, [armAutoDismiss, clearTimer, device.id])
 
+  const edit = useCallback(async (): Promise<void> => {
+    if (editingRef.current) return
+    editingRef.current = true
+    setEditing(true)
+    const seq = ++opSeqRef.current
+    const result = await toApiResult(window.api.screenshot.openEditor(device.id))
+    // busy 无条件复员（钮可用性），错误回填才看过期
+    editingRef.current = false
+    setEditing(false)
+    if (seq !== opSeqRef.current) return
+    if (result.ok) return
+    // 开窗失败有错误归宿：error 态保留现有缩略图（save 失败同款），不自动消失
+    const current = stateRef.current
+    const thumbnail =
+      current.phase === 'copied' || current.phase === 'saving' || current.phase === 'saved'
+        ? current.thumbnail
+        : null
+    clearTimer()
+    setLatched({ phase: 'error', message: result.error, thumbnail })
+  }, [clearTimer, device.id])
+
   useEffect(() => clearTimer, [clearTimer])
 
   const dismiss = useCallback((): void => {
@@ -96,6 +125,8 @@ export const useScreenshot = (
     busy: state.phase === 'capturing',
     capture,
     save,
+    edit,
+    editing,
     dismiss
   }
 }

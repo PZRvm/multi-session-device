@@ -6,6 +6,7 @@ import { useScreenshot } from '../useScreenshot'
 const capture =
   vi.fn<(id: string) => Promise<{ pngBase64: string; width: number; height: number }>>()
 const save = vi.fn<(id: string) => Promise<{ fileName: string }>>()
+const openEditor = vi.fn<(id: string) => Promise<void>>()
 
 const device = (status: Device['status']): Device =>
   ({ id: 'd1', name: '测试设备', status }) as unknown as Device
@@ -14,7 +15,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.useFakeTimers()
   ;(window as { api?: unknown }).api = {
-    screenshot: { capture, save }
+    screenshot: { capture, save, openEditor }
   }
 })
 
@@ -224,5 +225,116 @@ describe('useScreenshot', () => {
       phase: 'copied',
       thumbnail: 'data:image/png;base64,REVGI'
     })
+  })
+})
+
+describe('useScreenshot.edit（plan 2026-11-02-screenshot-editor T5）', () => {
+  it('edit 成功：openEditor 携设备 id，气泡态不变（不再次发起截屏），editing 复员', async () => {
+    capture.mockResolvedValue({ pngBase64: 'QUJD', width: 1, height: 1 })
+    openEditor.mockResolvedValue(undefined)
+    const { result } = renderHook(() => useScreenshot(device('running')))
+    await act(async () => {
+      await result.current.capture()
+    })
+    let pending: Promise<void> | null = null
+    act(() => {
+      pending = result.current.edit()
+    })
+    expect(result.current.editing).toBe(true)
+    await act(async () => {
+      await pending
+    })
+    expect(openEditor).toHaveBeenCalledWith('d1')
+    expect(openEditor).toHaveBeenCalledTimes(1)
+    expect(result.current.editing).toBe(false)
+    // 编辑走缓存现图：气泡保持 copied，capture 不因开窗再次发生
+    expect(result.current.state).toEqual({
+      phase: 'copied',
+      thumbnail: 'data:image/png;base64,QUJD'
+    })
+    expect(capture).toHaveBeenCalledTimes(1)
+  })
+
+  it('edit 防重复：开窗在途再点不重复调 openEditor；busy 无条件复员', async () => {
+    let release: () => void = () => undefined
+    openEditor.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        })
+    )
+    const { result } = renderHook(() => useScreenshot(device('running')))
+    let pending: Promise<void> | null = null
+    act(() => {
+      pending = result.current.edit()
+    })
+    expect(result.current.editing).toBe(true)
+    await act(async () => {
+      await result.current.edit()
+    })
+    expect(openEditor).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      release()
+      await pending
+    })
+    expect(result.current.editing).toBe(false)
+  })
+
+  it('edit 失败：error 态带主进程文案、保留原缩略图，不自动消失', async () => {
+    capture.mockResolvedValue({ pngBase64: 'QUJD', width: 1, height: 1 })
+    openEditor.mockRejectedValue(new Error('设备不在运行中'))
+    const { result } = renderHook(() => useScreenshot(device('running')))
+    await act(async () => {
+      await result.current.capture()
+    })
+    await act(async () => {
+      await result.current.edit()
+    })
+    expect(result.current.state).toEqual({
+      phase: 'error',
+      message: '设备不在运行中',
+      thumbnail: 'data:image/png;base64,QUJD'
+    })
+    act(() => {
+      vi.advanceTimersByTime(60_000)
+    })
+    expect(result.current.state.phase).toBe('error')
+  })
+
+  it('edit 过期回填丢弃：开窗期间重新截屏，旧失败不覆盖新 copied（busy 仍复员）', async () => {
+    capture
+      .mockResolvedValueOnce({ pngBase64: 'QUJD', width: 1, height: 1 })
+      .mockResolvedValueOnce({ pngBase64: 'REVGI', width: 1, height: 1 })
+    let rejectEdit: (reason?: unknown) => void = () => undefined
+    openEditor.mockImplementation(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectEdit = reject
+        })
+    )
+    const { result } = renderHook(() => useScreenshot(device('running')))
+    await act(async () => {
+      await result.current.capture()
+    })
+    let pendingEdit: Promise<void> | null = null
+    act(() => {
+      pendingEdit = result.current.edit()
+    })
+    await act(async () => {
+      await result.current.capture()
+    })
+    expect(result.current.state).toEqual({
+      phase: 'copied',
+      thumbnail: 'data:image/png;base64,REVGI'
+    })
+    await act(async () => {
+      rejectEdit(new Error('late failure'))
+      await pendingEdit
+    })
+    expect(result.current.state).toEqual({
+      phase: 'copied',
+      thumbnail: 'data:image/png;base64,REVGI'
+    })
+    expect(result.current.editing).toBe(false)
   })
 })
