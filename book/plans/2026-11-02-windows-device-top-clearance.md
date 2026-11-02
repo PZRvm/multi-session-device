@@ -1,0 +1,40 @@
+---
+description: Windows 投屏按顶部控件下方的剩余空间缩放，让手机外框避开 Logcat 和原生窗口按钮，保持无通栏布局
+status: completed
+created: 2026-11-02
+---
+
+# Windows 手机顶部避让
+
+## Step 0：需求简报
+
+- 背景：用户截图中 Logcat 图标压到真机外框的顶部。用户要求手机顶端低于图标和窗口功能区，空间不足时缩小整台手机。
+- 范围：主窗 Windows 投屏内容区的可用高度，以及真实 Electron 几何回归和文档。
+- 排除：不恢复通栏，不改左侧列表、设置窗、Mac/Linux、原生按钮、日志业务、投屏解码、输入协议或通用缩放公式。
+- 需求：Windows 手机外框在顶部 40px 控件区下方显示；缩小窗口、旋转或打开 dock 后继续等比适配。真机、模拟器与皮肤共用相同避让。
+- 授权：用户明确要求修复图标遮挡；本轮在现有工作区实施。无新增权限、通知或数据。
+
+## 阶段 1：分析
+
+App 的 canvas-content 从 y=0 填满高度；DeviceCanvas 与 ExternalCanvas 在其中铺满，各自的 stage 通过 ResizeObserver 提供可用尺寸。computeLayout/computeSkinLayout 只知道 stage 尺寸，按居中和最少 12px 留白计算，手机外框最早出现在窗口 y=28。右上控件占到约 y=40，因此高度受限的手机会进入控件区。
+
+根因是外层提供的投屏可用区域没有避开 Windows 控件，现有等比缩放算法本身不需要变更。
+
+## 阶段 2：设计
+
+- 仅对 App 的 Windows canvas-content 设置 padding-top:40px。
+- 保持 canvas-area 和左右分栏从 y=0 开始，不增加节点、背景、分隔线或独立顶部行。
+- 子画布从剩余 content box 获取高度，既有 ResizeObserver 与等比布局自动缩小整台设备；外框、视频、皮肤和坐标映射继续采用同一 stage。
+- 顶部控件仍占原位置；底部设备工具条由既有 flex 布局保留在窗口内。
+- 先用真实 Electron 的 ready 投屏 fixture 复现外框 top 小于 48px；修复后验证 top 至少 48px（控件区 40px + 8px 间距）、等比完整、工具条不越底边。覆盖真机/模拟器、竖屏/横屏、窗口缩放、dock 和显示缩放。
+
+## 阶段 3–6
+
+- [x] 在现有未修复布局中确认 ready 手机外框进入顶部控件区。
+- [x] 添加局部 Windows 内容区避让，不修改缩放/输入算法。
+- [x] 真实 Electron 回归及相关组件/几何测试通过，typecheck、lint、build 通过。
+- [x] 只读评审，只记录发现。
+- [x] 更新功能报告、设计说明和计划状态，刷新 book 索引和卫生检查。
+
+
+结果：默认通用外框 top 从28变为68、height从562变为522，短窗和横屏继续适配。64项组件/几何测试通过，三档Electron缩放各25项通过；类型检查、lint、构建和独立评审通过。详见 [报告](../notes/summary/2026-11/2026-11-02-windows-device-top-clearance.md)。

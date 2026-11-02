@@ -304,6 +304,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 ### notes/learn/2026-11/
 
+- [2026-11-02-device-overlap-ready-fixture.md](notes/learn/2026-11/2026-11-02-device-overlap-ready-fixture.md) — 检查投屏与窗口控件遮挡时必须提供 ready 视频尺寸，连接中占位和 DOM 结构测试无法覆盖外框缩放
 - [2026-11-02-window-controls-overlay-safe-area.md](notes/learn/2026-11/2026-11-02-window-controls-overlay-safe-area.md) — Electron 原生按钮安全区不仅要读取 env，内部 flex 也必须允许收缩，否则宽左栏仍会把 Logcat 挤进窗口按钮区
 
 ### notes/summary/2026-10/
@@ -322,6 +323,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 ### notes/summary/2026-11/
 
+- [2026-11-02-windows-device-top-clearance.md](notes/summary/2026-11/2026-11-02-windows-device-top-clearance.md) — Windows 投屏内容区避开顶部控件，手机等比缩小，默认外框 top 从 28px 改到 68px，三档缩放各 25 项通过
 - [2026-11-02-windows-icon.md](notes/summary/2026-11/2026-11-02-windows-icon.md) — Windows 使用无底板、屏幕镂空的三手机透明图标，覆盖窗口、可执行文件与关于页，黑屏版已覆盖，macOS 原图保留
 - [2026-11-02-windows-inline-window-controls.md](notes/summary/2026-11/2026-11-02-windows-inline-window-controls.md) — 取消 Windows 主窗和设置窗的通栏顶部，标识归左栏、窗口按钮与 Logcat 置于右上，正文恢复从 y=0 开始
 - [2026-11-02-windows-titlebar-adaptation.md](notes/summary/2026-11/2026-11-02-windows-titlebar-adaptation.md) — Windows 主窗和设置窗顶部适配完成，原生按钮与 Logcat 分区，窄窗问题经独立修复轮次解决，三档缩放各 23 项通过
@@ -429,6 +431,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-22-windows-sdk-bootstrap.md](plans/2026-10-22-windows-sdk-bootstrap.md) — SDK 引导 Windows 平台化——下载源按平台查表、sdkPaths 补 .exe/.bat、platformExec 执行器（cmd.exe /c + windowsHide）、解压改 Windows 自带 tar.exe；Win P1，依赖主体工程调研
 - [2026-10-22-windows-studio-detect.md](plans/2026-10-22-windows-studio-detect.md) — Studio/SDK 检测链 Windows 分支——studioDetect 四条候选链平台化（零注册表）、adb 系统候选补 Windows 路径、路径比较大小写规范化；Win P2，依赖主体工程调研
 - [2026-10-23-windows-settings-finish.md](plans/2026-10-23-windows-settings-finish.md) — 设置页 Windows 收尾——杀软白名单性能建议卡片（确切路径清单 + Defender 受控深链）、SDK 根路径过长检测提示（260 预算，只提示不拦截）、非 mac 板头去标题消除双标题；Win P6，依赖外围调研 C2/B3/E1
+- [2026-11-02-windows-device-top-clearance.md](plans/2026-11-02-windows-device-top-clearance.md) — Windows 投屏按顶部控件下方的剩余空间缩放，让手机外框避开 Logcat 和原生窗口按钮，保持无通栏布局
 - [2026-11-02-windows-icon.md](plans/2026-11-02-windows-icon.md) — Windows 使用屏幕镂空的三手机透明图标，替换母版、运行时 PNG 与 ICO，清理黑屏版本和预览副本
 - [2026-11-02-windows-inline-window-controls.md](plans/2026-11-02-windows-inline-window-controls.md) — 按用户修订移除主窗和设置窗的通栏顶部行，将标识放回左栏，窗口按钮与 Logcat 直接悬置右上
 - [2026-11-02-windows-titlebar-narrow-window.md](plans/2026-11-02-windows-titlebar-narrow-window.md) — 修复 Windows 顶部宽左栏与窄主窗组合下的 Logcat 越界，让左侧收缩并为右侧按钮保留空间
@@ -446,4 +449,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 340 documents -->
+<!-- 343 documents -->
