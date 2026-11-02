@@ -32,6 +32,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 | `notes/learn/` | 经验与教训，写码前后按 tags 检索，按月份归档 |
 | `notes/learn/2026-09/` | 归档于 notes/learn/，按月份分组 |
 | `notes/learn/2026-10/` | 归档于 notes/learn/，按月份分组 |
+| `notes/learn/2026-11/` | 归档于 notes/learn/，按月份分组 |
 | `notes/summary/2026-10/` | 归档于 notes/summary/，按月份分组 |
 | `notes/summary/2026-11/` | 2026 年 11 月功能报告 |
 | `notes/task/` | 任务跟踪与拆解的检查清单 |
@@ -67,6 +68,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [ADR-002-adopt-bowrite.md](docs/decisions/ADR-002-adopt-bowrite.md) — 我们把 shuorenhua 加上自己的 review 模式蒸馏成 bowrite（薄写）——一个仓库内的写作 skill：写薄，写好
 - [ADR-003-intent-gates-vs-distrust-gates.md](docs/decisions/ADR-003-intent-gates-vs-distrust-gates.md) — 我们按理由给工作流关卡分类——意图关卡保持硬，不信任关卡随模型改进而软化；Phase 2 的确认制改为缺口制停车
 - [ADR-004-recording-media-pipeline.md](docs/decisions/ADR-004-recording-media-pipeline.md) — 录屏采用 Mediabunny 1.61.5 封装 MP4、独立 WebCodecs renderer 处理画布；设备音频独立采集与采样时钟，真机验收后移
+- [ADR-005-screenshot-editor-reuse.md](docs/decisions/ADR-005-screenshot-editor-reuse.md) — 截图编辑器直接迁入多会话浏览器实现——Konva/react-konva 是复用源编辑器的绘图依赖而非新 UI 栈；图标、窗口、缓存与文件发布按本项目差异适配
 - [README.md](docs/decisions/README.md) — 这里怎么写 ADR——章节、命名、编号，以及什么决定需要一份记录
 
 ### docs/poc/
@@ -75,6 +77,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-clipboard-sync-validation.md](docs/poc/2026-10-16-clipboard-sync-validation.md) — 双向剪贴板真实链路、解码与连续内存样本，用户人工验收通过；含 P2 修复前后微基准与最终验证结果
 - [2026-10-16-recording-implementation.md](docs/poc/2026-10-16-recording-implementation.md) — 录屏正式实现验证——独立 MP4、暂停旋转、后台与打包产物已跑通；1282 项测试通过，十分钟同步 112/106ms 未过，真机声音与交互性能待验
 - [2026-10-16-recording-p0.md](docs/poc/2026-10-16-recording-p0.md) — 录屏先行 P0——双 AVD、最大画布与 MP4 可行；原始 AAC PTS 漂移，修订仪器后候选 46/120ms，真机音频验收后移
+- [2026-11-02-screenshot-editor.md](docs/poc/2026-11-02-screenshot-editor.md) — 截图编辑器 T6 验收记录——自动门禁摘要 + V1—V9 人工画布验收结论（全部通过）
 
 ### guidelines/
 
@@ -204,8 +207,10 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 ### notes/issue/2026-11/
 
+- [2026-11-02-screenshot-editor-review.md](notes/issue/2026-11/2026-11-02-screenshot-editor-review.md) — 截图编辑器阶段 5 评审——八项检查与 plan 专项全部通过，无 P1/P2；1 项 P3（导出防重 React state 理论重入窗口，来源同款，main 侧占位兜底）
 - [2026-11-02-windows-icon-master-edge.md](notes/issue/2026-11/2026-11-02-windows-icon-master-edge.md) — 黑屏 Windows 图标母版原尺寸下，手机外沿仍有少量生成杂色，常用小尺寸不影响黑屏识别
 - [2026-11-02-windows-test-baseline.md](notes/issue/2026-11/2026-11-02-windows-test-baseline.md) — Windows 图标替换前的全量测试已有 153 项失败，涉及平台假设、路径、符号链接与权限，未在本任务修复
+- [2026-11-02-worktree单实例锁互斥.md](notes/issue/2026-11/2026-11-02-worktree单实例锁互斥.md) — 多 worktree 并行开发时同包名 Electron 应用共享 userData，单实例锁先到先得——后启动的 dev 拿不到锁静默退出，人工验收被挡；create-worktree 只分配了端口未处理锁
 
 ### notes/learn/
 
@@ -300,6 +305,10 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-30-book-index-win32-path-separator.md](notes/learn/2026-10/2026-10-30-book-index-win32-path-separator.md) — 零依赖 Node 脚本里凡是要产出「跨平台一致的文本」（索引、清单、模板），path.relative/join 的结果必须先归一为正斜杠——win32 的反斜杠会击穿按 'a/b' 写死的键匹配与 split('/')
 - [2026-10-30-windows-darwin-path-duplicates.md](notes/learn/2026-10/2026-10-30-windows-darwin-path-duplicates.md) — Windows 真机验收连爆三处 darwin 路径硬编码（sdkMigration adb 探测、profiles avdmanager 链、javaBinFor/javaHomeFor）——同一根因：P1 平台化只改了 sdkPaths 单源及其直接消费方，自行 join 布局的"第二路径真源"全数漏网；两判定源口径分叉会让 UI 逻辑死锁
 
+### notes/learn/2026-11/
+
+- [2026-11-02-worktree-stash-checkout三重坑.md](notes/learn/2026-11/2026-11-02-worktree-stash-checkout三重坑.md) — worktree 里用 stash+checkout 对比基线有三重坑——stash 是仓库级共享（pop 到别的分支遗留条目）、untracked 文件冲突卡半途、切换分支会杀死运行中的 dev；基线对比只用只读方式
+
 ### notes/summary/2026-10/
 
 - [2026-10-03-项目骨架与规范.md](notes/summary/2026-10/2026-10-03-项目骨架与规范.md) — 交付可开发的骨架：目录/组件书写规范成文，styled-components + zustand + lucide-react 就位，原生对话框通道打通，骨架文档同步
@@ -317,6 +326,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 ### notes/summary/2026-11/
 
 - [2026-11-02-windows-icon.md](notes/summary/2026-11/2026-11-02-windows-icon.md) — Windows 使用无底板、屏幕镂空的三手机透明图标，覆盖窗口、可执行文件与关于页，黑屏版已覆盖，macOS 原图保留
+- [2026-11-02-截图编辑器.md](notes/summary/2026-11/2026-11-02-截图编辑器.md) — 从 multi-session-browser 复刻截图编辑器——四核心文件原样迁入加记录在案的接缝，设备单例编辑窗与编辑四通道，气泡编辑入口双画布接线；V1—V9 人工验收通过
 
 ### notes/task/
 
@@ -335,6 +345,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261016173327-录屏计时与提示交互.md](notes/think-report/20261016173327-录屏计时与提示交互.md) — 录屏交互方案已确认并实施——左侧状态、Logcat 左侧计时/生成反馈、原生结果 dialog、按设备条件记忆与统一恢复入口；验证见交互 plan
 - [20261022110137-Windows兼容问题解决方案调研.md](notes/think-report/20261022110137-Windows兼容问题解决方案调研.md) — Windows 兼容 16 项外围问题（进程/文件系统/打包/模拟器环境/UI）的线上方案选型，已全部批复
 - [20261022125639-Windows适配主体工程调研.md](notes/think-report/20261022125639-Windows适配主体工程调研.md) — Windows 适配主体工程（SDK 引导平台化/解压选型 tar.exe/Studio 检测链零注册表）的方案选型，已全部批复
+- [20261102145653-截图编辑器功能盘点.md](notes/think-report/20261102145653-截图编辑器功能盘点.md) — 已确认的浏览器截图编辑器功能盘点：7 个主工具与 13 项配套能力，以及导出清空历史、单槽过期等复刻边界
 
 ### plans/
 
@@ -421,6 +432,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-22-windows-sdk-bootstrap.md](plans/2026-10-22-windows-sdk-bootstrap.md) — SDK 引导 Windows 平台化——下载源按平台查表、sdkPaths 补 .exe/.bat、platformExec 执行器（cmd.exe /c + windowsHide）、解压改 Windows 自带 tar.exe；Win P1，依赖主体工程调研
 - [2026-10-22-windows-studio-detect.md](plans/2026-10-22-windows-studio-detect.md) — Studio/SDK 检测链 Windows 分支——studioDetect 四条候选链平台化（零注册表）、adb 系统候选补 Windows 路径、路径比较大小写规范化；Win P2，依赖主体工程调研
 - [2026-10-23-windows-settings-finish.md](plans/2026-10-23-windows-settings-finish.md) — 设置页 Windows 收尾——杀软白名单性能建议卡片（确切路径清单 + Defender 受控深链）、SDK 根路径过长检测提示（260 预算，只提示不拦截）、非 mac 板头去标题消除双标题；Win P6，依赖外围调研 C2/B3/E1
+- [2026-11-02-screenshot-editor.md](plans/2026-11-02-screenshot-editor.md) — 截图编辑器复刻计划：直接迁入多会话浏览器的画布、工具条、历史与导出交互，仅适配设备缓存、窗口、IPC、三语和主题
 - [2026-11-02-windows-icon.md](plans/2026-11-02-windows-icon.md) — Windows 使用屏幕镂空的三手机透明图标，替换母版、运行时 PNG 与 ICO，清理黑屏版本和预览副本
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
@@ -435,4 +447,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 333 documents -->
+<!-- 341 documents -->
