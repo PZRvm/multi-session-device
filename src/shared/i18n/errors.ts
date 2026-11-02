@@ -465,6 +465,8 @@ const zhCN = {
   screenshotSaveBusy: '保存进行中，请稍候',
   screenshotOversized: '截图数据超出大小上限',
   screenshotStale: '截图已过期（设备状态已变化），请重新截屏',
+  screenshotEditorWindowTitle: '截图编辑器',
+  loadScreenshotEditorFailed: '打开截图编辑器窗口失败：{detail}',
   // ---- 网络开关域（plan 2026-10-12-network-switch-group；detail 保留 adb 原文）----
   networkDeviceNotRunning: '设备不在运行中，无法切换网络开关',
   networkBusy: '网络开关操作进行中，请稍候',
@@ -933,6 +935,8 @@ const zhTW: ErrorsCopy = {
   screenshotSaveBusy: '儲存進行中，請稍候',
   screenshotOversized: '截圖資料超出大小上限',
   screenshotStale: '截圖已過期（裝置狀態已變化），請重新截圖',
+  screenshotEditorWindowTitle: '截圖編輯器',
+  loadScreenshotEditorFailed: '開啟截圖編輯器視窗失敗：{detail}',
   // ---- 網路開關域（plan 2026-10-12-network-switch-group；detail 保留 adb 原文）----
   networkDeviceNotRunning: '裝置不在執行中，無法切換網路開關',
   networkBusy: '網路開關操作進行中，請稍候',
@@ -1450,6 +1454,8 @@ const enUS: ErrorsCopy = {
   screenshotSaveBusy: 'A save is already in progress',
   screenshotOversized: 'Screenshot data exceeds the size limit',
   screenshotStale: 'The screenshot expired (device state changed); take a new one',
+  screenshotEditorWindowTitle: 'Screenshot editor',
+  loadScreenshotEditorFailed: 'Failed to open the screenshot editor window: {detail}',
   // ---- Network switch domain (plan 2026-10-12-network-switch-group; detail keeps adb output) ----
   networkDeviceNotRunning: 'The device is not running; network switches are unavailable',
   networkBusy: 'A network toggle is already in progress',

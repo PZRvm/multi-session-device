@@ -30,7 +30,8 @@ export default defineConfig({
     plugins: [react(), stripDevOnlyCsp()],
     build: {
       rollupOptions: {
-        // 六个独立入口：主窗、设备向导、设置窗、日志窗、对账详情窗、无线连接窗。
+        // 七个独立入口：主窗、设备向导、设置窗、日志窗、对账详情窗、无线连接窗、
+        // 截图编辑窗。
         input: {
           index: resolve('src/renderer/index.html'),
           wizard: resolve('src/renderer/wizard.html'),
@@ -38,7 +39,8 @@ export default defineConfig({
           logcat: resolve('src/renderer/logcat.html'),
           report: resolve('src/renderer/report.html'),
           wireless: resolve('src/renderer/wireless.html'),
-          recordingProcessor: resolve('src/renderer/recording-processor.html')
+          recordingProcessor: resolve('src/renderer/recording-processor.html'),
+          screenshotEditor: resolve('src/renderer/screenshot-editor.html')
         }
       }
     }

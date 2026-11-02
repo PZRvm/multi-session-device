@@ -8,6 +8,7 @@ import { closeSettingsWindow } from './settings'
 import { closeLogcatWindow } from './logcat'
 import { closeReportWindow } from './report'
 import { closeWirelessWindow } from './wireless'
+import { closeAllScreenshotEditorWindows } from './screenshotEditor'
 import { msg } from '../locale'
 
 // 主窗登记（devices 域 sender 白名单的判定源）：引用随窗口销毁清空
@@ -50,6 +51,7 @@ export function createMainWindow(): BrowserWindow {
     closeLogcatWindow()
     closeReportWindow()
     closeWirelessWindow()
+    closeAllScreenshotEditorWindows()
   })
 
   window.on('ready-to-show', () => {

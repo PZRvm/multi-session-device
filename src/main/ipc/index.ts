@@ -34,6 +34,10 @@ import { registerSettingsIpc } from '../window/settings'
 import { registerLogcatIpc, isLogcatWindowSender } from '../window/logcat'
 import { registerReportIpc } from '../window/report'
 import { wirelessOwns, registerWirelessIpc } from '../window/wireless'
+import {
+  openScreenshotEditorWindow,
+  screenshotEditorDeviceId
+} from '../window/screenshotEditor'
 import { registerThemeIpc } from '../theme'
 import { registerLocaleIpc } from '../locale'
 import { getMainWindow } from '../window'
@@ -81,16 +85,16 @@ export function registerIpcHandlers(): void {
   // 截屏域（plan 2026-10-10）：running 校验经注入进入 devices 域，域自身不反向依赖；
   // 尾段复核用同步 isRunningDevice——迟到回填与停止钩子清缓存之间零异步间隙。
   // 真机适配（plan 2026-10-13-real-device-toolbar-parity）：注入换组合查询（外部 device
-  // 态优先，miss 落 AVD running），AVD 行为不变
+  // 态优先，miss 落 AVD running），AVD 行为不变。
+  // 编辑窗注入（plan 2026-11-02-screenshot-editor T3）：开窗等待就绪与 sender 归属
+  // 都走窗口登记表（openScreenshotEditorWindow/screenshotEditorDeviceId）
   registerScreenshotIpc({
     adbPath: adbBinaryPath,
     runningDevice: deviceRefOfId,
     isRunningDevice: isDeviceActiveOfId,
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id,
-    // T2 过渡桩（plan 2026-11-02-screenshot-editor）：T3 接真实编辑窗登记
-    // （openEditor 开窗等待就绪、editorDeviceId 按窗口登记表解析归属）后替换
-    openEditor: async () => undefined,
-    editorDeviceId: () => null
+    openEditor: openScreenshotEditorWindow,
+    editorDeviceId: screenshotEditorDeviceId
   })
   // 网络开关域（plan 2026-10-12）：注入同截屏域；句柄供桥启停轮询（running 起、停止收）。
   // 真机适配（plan 2026-10-13-real-device-toolbar-parity）：注入换组合查询
