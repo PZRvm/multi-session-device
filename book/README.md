@@ -323,6 +323,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 ### notes/summary/2026-11/
 
 - [2026-11-02-windows-icon.md](notes/summary/2026-11/2026-11-02-windows-icon.md) — Windows 使用无底板、屏幕镂空的三手机透明图标，覆盖窗口、可执行文件与关于页，黑屏版已覆盖，macOS 原图保留
+- [2026-11-02-windows-inline-window-controls.md](notes/summary/2026-11/2026-11-02-windows-inline-window-controls.md) — 取消 Windows 主窗和设置窗的通栏顶部，标识归左栏、窗口按钮与 Logcat 置于右上，正文恢复从 y=0 开始
 - [2026-11-02-windows-titlebar-adaptation.md](notes/summary/2026-11/2026-11-02-windows-titlebar-adaptation.md) — Windows 主窗和设置窗顶部适配完成，原生按钮与 Logcat 分区，窄窗问题经独立修复轮次解决，三档缩放各 23 项通过
 
 ### notes/task/
@@ -429,6 +430,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-22-windows-studio-detect.md](plans/2026-10-22-windows-studio-detect.md) — Studio/SDK 检测链 Windows 分支——studioDetect 四条候选链平台化（零注册表）、adb 系统候选补 Windows 路径、路径比较大小写规范化；Win P2，依赖主体工程调研
 - [2026-10-23-windows-settings-finish.md](plans/2026-10-23-windows-settings-finish.md) — 设置页 Windows 收尾——杀软白名单性能建议卡片（确切路径清单 + Defender 受控深链）、SDK 根路径过长检测提示（260 预算，只提示不拦截）、非 mac 板头去标题消除双标题；Win P6，依赖外围调研 C2/B3/E1
 - [2026-11-02-windows-icon.md](plans/2026-11-02-windows-icon.md) — Windows 使用屏幕镂空的三手机透明图标，替换母版、运行时 PNG 与 ICO，清理黑屏版本和预览副本
+- [2026-11-02-windows-inline-window-controls.md](plans/2026-11-02-windows-inline-window-controls.md) — 按用户修订移除主窗和设置窗的通栏顶部行，将标识放回左栏，窗口按钮与 Logcat 直接悬置右上
 - [2026-11-02-windows-titlebar-narrow-window.md](plans/2026-11-02-windows-titlebar-narrow-window.md) — 修复 Windows 顶部宽左栏与窄主窗组合下的 Logcat 越界，让左侧收缩并为右侧按钮保留空间
 - [2026-11-02-windows-window-chrome.md](plans/2026-11-02-windows-window-chrome.md) — Windows 主窗和设置窗移除系统标题栏，将透明图标、标题与原生窗口按钮融入应用顶部，Logcat 开关位于窗口按钮左侧
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
@@ -444,4 +446,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 338 documents -->
+<!-- 340 documents -->

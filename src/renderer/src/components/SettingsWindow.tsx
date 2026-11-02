@@ -35,18 +35,18 @@ const SettingsWindow = ({ model, platform }: SettingsWindowProps): React.JSX.Ele
   const Pane = PANES[active]
   return (
     <Wrapper lang={model.locale} data-windows={platform === 'win32'}>
-      {platform === 'win32' ? (
-        <header className="windows-header">
-          <div className="header-content">
-            <img src={windowsIcon} width={24} height={24} alt="" />
-            <span>{ERRORS_COPY[model.locale].settingsWindowTitle}</span>
-          </div>
-        </header>
-      ) : null}
       {/* macOS 原生三灯和原有拖拽区保留；Linux 使用系统标题栏。 */}
-      {platform === 'darwin' ? <div className="drag-region" aria-hidden="true" /> : null}
+      {platform === 'darwin' || platform === 'win32' ? (
+        <div className="drag-region" aria-hidden="true" />
+      ) : null}
       <div className="body">
         <nav aria-label={copy.navigation}>
+          {platform === 'win32' ? (
+            <div className="settings-identity">
+              <img src={windowsIcon} width={24} height={24} alt="" />
+              <span>{ERRORS_COPY[model.locale].settingsWindowTitle}</span>
+            </div>
+          ) : null}
           {NAVIGATION.map(({ id, Icon }) => (
             <button
               key={id}
@@ -80,29 +80,27 @@ const Wrapper = styled.div`
     background: var(--accent);
     color: var(--accent-ink);
   }
-  .windows-header {
+  .settings-identity {
     flex: none;
-    height: 40px;
-    border-bottom: 1px solid var(--board-hairline);
-    -webkit-app-region: drag;
-  }
-  .header-content {
     display: flex;
     align-items: center;
     gap: 8px;
-    height: 100%;
-    margin-left: env(titlebar-area-x, 0px);
-    width: env(titlebar-area-width, calc(100% - 138px));
+    height: 40px;
+    margin: 0 -8px 4px;
     padding: 0 14px;
     font-size: 13px;
     font-weight: 600;
   }
-  .header-content img {
+  .settings-identity img {
     flex: none;
     object-fit: contain;
   }
   &[data-windows='true'] nav {
-    padding-top: 12px;
+    padding-top: 0;
+  }
+  &[data-windows='true'] .drag-region {
+    height: 40px;
+    pointer-events: none;
   }
   .drag-region {
     position: absolute;

@@ -108,17 +108,17 @@ describe.each(['darwin', 'win32', 'linux'])('主窗日志 dock（%s）', (platfo
 
   const toggleButton = (): HTMLElement => screen.getByTitle(copy.logcatTitle)
 
-  it('开关按平台放在顶部或画布中，展开后位置保持且不重复', async () => {
+  it('板头留在列表内，Windows 开关浮在右上且不创建独立顶部行', async () => {
     const { container } = render(<App />)
     const button = toggleButton()
-    const selector = platform === 'win32' ? '.windows-header' : '.canvas-tools'
+    const selector = platform === 'win32' ? '.window-actions' : '.canvas-tools'
     expect(button.closest(selector)).toBeTruthy()
     expect(container.querySelectorAll('.log-toggle')).toHaveLength(1)
     expect(screen.getAllByRole('button', { name: copy.settings })).toHaveLength(1)
-    if (platform === 'win32') {
-      expect(container.querySelector('.list-pane')?.querySelector('.settings-button')).toBeNull()
-      expect(container.querySelector('.workspace')).toBeTruthy()
-    } else expect(container.querySelector('.windows-header')).toBeNull()
+    expect(container.querySelector('.list-pane')?.querySelector('.settings-button')).toBeTruthy()
+    expect(container.querySelector('.workspace')).toBeNull()
+    expect(container.querySelector('.windows-header')).toBeNull()
+    expect(Boolean(container.querySelector('.window-drag-region'))).toBe(platform === 'win32')
     fireEvent.click(button)
     await screen.findByRole('log')
     expect(button.closest(selector)).toBeTruthy()

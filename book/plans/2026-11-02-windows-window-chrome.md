@@ -6,6 +6,8 @@ created: 2026-11-02
 
 # Windows 窗口顶部适配
 
+> 布局已按用户后续要求修订：不再保留本计划首轮的全宽顶部行，当前实现以[取消通栏修订](2026-11-02-windows-inline-window-controls.md)为准。下方保留首轮设计与执行记录。
+
 用户于 2026-11-02 授权在 feature/windows-titlebar-adaptation 工作区执行本计划，基分支 dev，开发端口 6175。Step 0、阶段 1 和阶段 2 已完成，按下方顺序进入实现。
 
 ## Requirements brief（Step 0）
