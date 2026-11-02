@@ -197,6 +197,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-31-orphan-emulator-after-app-restart.md](notes/issue/2026-10/2026-10-31-orphan-emulator-after-app-restart.md) — 应用重启后上代 headless 模拟器进程存活成孤儿——runningCount 预检看不见，迁移与活体模拟器抢镜像文件（EPERM）；P3「孤儿进程」验收项的真机实证变体
 - [2026-10-31-shared-mode-bootstrap-button-misleading.md](notes/issue/2026-10/2026-10-31-shared-mode-bootstrap-button-misleading.md) — 共享模式缺 cmdline-tools 时向导仍出「完成 SDK 引导」按钮——点击必被共享只读守卫拒绝；应显示「去 SDK Manager 补装」指引（sdkSharedNotReady 文案已备而未接）
 - [2026-10-31-windows-acceptance-fixes-review.md](notes/issue/2026-10/2026-10-31-windows-acceptance-fixes-review.md) — Windows 真机验收十批修复（da14795..733e2b0）代码评审——0 P1 / 2 P2 / 8 P3；「删源前停 adb」族尚差 adopt 与 replaceTarget 清场两处，只记录未修
+- [2026-10-31-windows-dev-merge-integration-review.md](notes/issue/2026-10/2026-10-31-windows-dev-merge-integration-review.md) — feat/windows-branch 并入 dev 的合并集成 review——0 P1 / 1 P2（dialog avdHome 白名单 win32 失效，孤立报告「打开目录」必被拒）/ 4 P3；接缝文件双侧内容完整、护栏口径一致、npmrc×下载链证伪交互
 - [2026-10-31-windows-sdk-source-switch-matrix.md](notes/issue/2026-10/2026-10-31-windows-sdk-source-switch-matrix.md) — SDK 来源切换矩阵在 win32 整体失真——classifyRoot 三个 SDK 标记全是 darwin 路径，切出零迁移不弹评估、回切被 target-junk 拒绝；真机验收实证（2026-10-22 记录的 sdkMigration adb 探测假阴性实为三处全中）
 
 ### notes/learn/
@@ -409,6 +410,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-22-windows-sdk-bootstrap.md](plans/2026-10-22-windows-sdk-bootstrap.md) — SDK 引导 Windows 平台化——下载源按平台查表、sdkPaths 补 .exe/.bat、platformExec 执行器（cmd.exe /c + windowsHide）、解压改 Windows 自带 tar.exe；Win P1，依赖主体工程调研
 - [2026-10-22-windows-studio-detect.md](plans/2026-10-22-windows-studio-detect.md) — Studio/SDK 检测链 Windows 分支——studioDetect 四条候选链平台化（零注册表）、adb 系统候选补 Windows 路径、路径比较大小写规范化；Win P2，依赖主体工程调研
 - [2026-10-23-windows-settings-finish.md](plans/2026-10-23-windows-settings-finish.md) — 设置页 Windows 收尾——杀软白名单性能建议卡片（确切路径清单 + Defender 受控深链）、SDK 根路径过长检测提示（260 预算，只提示不拦截）、非 mac 板头去标题消除双标题；Win P6，依赖外围调研 C2/B3/E1
+- [2026-11-02-windows-icon.md](plans/2026-11-02-windows-icon.md) — Windows 图标去掉米白底板并放大三部手机，独立接入运行时 PNG 与打包 ICO
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### think-report/
@@ -422,4 +424,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 328 documents -->
+<!-- 330 documents -->
