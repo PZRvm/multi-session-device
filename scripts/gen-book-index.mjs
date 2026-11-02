@@ -80,7 +80,9 @@ function walkMd(dir) {
 
 function parseDescription(text) {
   if (!text.startsWith('---')) return null
-  const lines = text.split('\n')
+  // 按 \r?\n 切行：win 上 autocrlf 检出的 CRLF 文件行尾残留 \r，会让
+  // ^description:(.+)$ 失配（JS 正则的 . 不匹配 \r）→ 全部报「缺 description」
+  const lines = text.split(/\r?\n/)
   for (let i = 1; i < lines.length; i++) {
     if (lines[i].trim() === '---') return null // frontmatter 结束了，没找到
     const m = lines[i].match(/^description:\s*(.+)$/)

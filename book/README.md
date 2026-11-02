@@ -192,6 +192,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-22-windows-quit-stay-no-window.md](notes/issue/2026-10/2026-10-22-windows-quit-stay-no-window.md) — Windows 关窗确认选「留在应用」后 app 无窗口且无唤回入口——需 second-instance 处理，真机验收前修复
 - [2026-10-22-windows-sdk-bootstrap-review.md](notes/issue/2026-10/2026-10-22-windows-sdk-bootstrap-review.md) — Windows P1 SDK 引导平台化 code review——0 项 P1、1 项 P2（cmd.exe 含空格路径待真机验证）、4 项 P3（同日修复批已全部处置）
 - [2026-10-22-windows-studio-detect-review.md](notes/issue/2026-10/2026-10-22-windows-studio-detect-review.md) — P2 Windows 检测链（4dc8d46）代码评审发现——4 项 P3：平台传参风格、APPDATA 未优先读 env、win 用例 runner 可携带性、isStudioSdk 遗留未用声明；只记录未修
+- [2026-10-23-关于页真值对接-review.md](notes/issue/2026-10/2026-10-23-关于页真值对接-review.md) — 关于页真值对接（about:get / about:open-data-directory）阶段 5 评审——无 P1/P2，P3 三条（openPath 无 catch、错误路径测试缺口、可选链层级不一致）；同日修复批全量处置
 - [2026-10-30-windows-test-suite-platform-assumptions.md](notes/issue/2026-10/2026-10-30-windows-test-suite-platform-assumptions.md) — Windows 真机 npm test 全套 153 失败（基线 160）——测试夹具的 mac 平台假设经 process.platform 泄漏，产品代码 Windows 分支行为正确；裁决不修，mac 全绿为门禁口径
 - [2026-10-31-orphan-emulator-after-app-restart.md](notes/issue/2026-10/2026-10-31-orphan-emulator-after-app-restart.md) — 应用重启后上代 headless 模拟器进程存活成孤儿——runningCount 预检看不见，迁移与活体模拟器抢镜像文件（EPERM）；P3「孤儿进程」验收项的真机实证变体
 - [2026-10-31-shared-mode-bootstrap-button-misleading.md](notes/issue/2026-10/2026-10-31-shared-mode-bootstrap-button-misleading.md) — 共享模式缺 cmdline-tools 时向导仍出「完成 SDK 引导」按钮——点击必被共享只读守卫拒绝；应显示「去 SDK Manager 补装」指引（sdkSharedNotReady 文案已备而未接）
@@ -287,6 +288,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-22-window-api-default-stub-injected-tests.md](notes/learn/2026-10/2026-10-22-window-api-default-stub-injected-tests.md) — 组件新增 window.api 读取时，注入式测试用例会因缺 api 桩 TypeError——beforeEach 挂默认桩（含 platform），自挂完整桩的用例自然覆盖
 - [2026-10-22-windows-spawn-bat-tar-exe.md](notes/learn/2026-10/2026-10-22-windows-spawn-bat-tar-exe.md) — win32 下 spawn .bat/.cmd 必须 cmd.exe /c 包装（Node 安全修复后直接抛 EINVAL）；GUI 进程拉子进程要带 windowsHide 防闪黑框；Windows 解 zip 用系统自带 tar.exe（bsdtar 原生 zip64），PowerShell Expand-Archive 有 2GB 单文件上限不可用
 - [2026-10-22-接缝存在不等于接缝生效.md](notes/learn/2026-10/2026-10-22-接缝存在不等于接缝生效.md) — 测试接缝的可注入性要靠「默认实现也走注入」锁定——defaultAdbOnPath 收了 fileExists 接缝却写死 defaultFileExists，接缝自始未生效
+- [2026-10-23-可选链部分mock抛错.md](notes/learn/2026-10/2026-10-23-可选链部分mock抛错.md) — 可选链只护到链上最后一个 ?.——访问 window.api 下更深的域时，测试部分 mock 缺中间键会让 useEffect 同步抛错
 - [2026-10-30-book-index-win32-path-separator.md](notes/learn/2026-10/2026-10-30-book-index-win32-path-separator.md) — 零依赖 Node 脚本里凡是要产出「跨平台一致的文本」（索引、清单、模板），path.relative/join 的结果必须先归一为正斜杠——win32 的反斜杠会击穿按 'a/b' 写死的键匹配与 split('/')
 - [2026-10-30-windows-darwin-path-duplicates.md](notes/learn/2026-10/2026-10-30-windows-darwin-path-duplicates.md) — Windows 真机验收连爆三处 darwin 路径硬编码（sdkMigration adb 探测、profiles avdmanager 链、javaBinFor/javaHomeFor）——同一根因：P1 平台化只改了 sdkPaths 单源及其直接消费方，自行 join 布局的"第二路径真源"全数漏网；两判定源口径分叉会让 UI 逻辑死锁
 
@@ -302,6 +304,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-22-windows-file-resilience.md](notes/summary/2026-10/2026-10-22-windows-file-resilience.md) — P4 文件链路健壮性落地——fsWin rename 容错（win32 锁重试+EXDEV 回退）接入三条链路、sha1 边下边算；零实现偏差，mac 构造性零回归
 - [2026-10-22-windows-process-mgmt.md](notes/summary/2026-10/2026-10-22-windows-process-mgmt.md) — Windows 进程管理落地——runner 树杀 taskkill /T、win32 不 detached、关窗确认弹窗；win32-only 分支 mac 零回归
 - [2026-10-22-windows-studio-detect.md](notes/summary/2026-10/2026-10-22-windows-studio-detect.md) — Windows 检测链分支——studioDetect 四条候选链与 adb 候选平台化、零注册表固定目录探测、路径大小写规范化；mac 行为零变化
+- [2026-10-23-关于页真值对接.md](notes/summary/2026-10/2026-10-23-关于页真值对接.md) — 设置窗关于页接通真值：应用/Electron/Chromium 版本与数据目录经 about:get 拉取，打开目录按钮接通并贴行右缘
 
 ### notes/task/
 
@@ -419,4 +422,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 325 documents -->
+<!-- 328 documents -->
