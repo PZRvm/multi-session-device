@@ -48,15 +48,17 @@ describe('ScreenshotPopover', () => {
   })
 
   it('saved：显示已保存与文件名', () => {
-    render(<ScreenshotPopover {...props({ phase: 'saved', thumbnail, fileName: '设备-20261010-130509.png' })} />)
+    render(
+      <ScreenshotPopover
+        {...props({ phase: 'saved', thumbnail, fileName: '设备-20261010-130509.png' })}
+      />
+    )
     expect(screen.queryByText('已保存：设备-20261010-130509.png')).not.toBeNull()
   })
 
   it('error：显示错误文案；capture 失败无图时不渲染 img', () => {
     const { rerender } = render(
-      <ScreenshotPopover
-        {...props({ phase: 'error', message: '截屏失败：boom', thumbnail })}
-      />
+      <ScreenshotPopover {...props({ phase: 'error', message: '截屏失败：boom', thumbnail })} />
     )
     expect(screen.queryByText('截屏失败：boom')).not.toBeNull()
     expect(screen.queryByAltText('')).not.toBeNull()
@@ -88,9 +90,7 @@ describe('ScreenshotPopover 编辑入口（plan 2026-11-02-screenshot-editor T5�
   it('saved：保留编辑入口', () => {
     const onEdit = vi.fn()
     render(
-      <ScreenshotPopover
-        {...props({ phase: 'saved', thumbnail, fileName: 'f.png' }, { onEdit })}
-      />
+      <ScreenshotPopover {...props({ phase: 'saved', thumbnail, fileName: 'f.png' }, { onEdit })} />
     )
     fireEvent.click(screen.getByRole('button', { name: copy.screenshotEdit }))
     expect(onEdit).toHaveBeenCalledTimes(1)

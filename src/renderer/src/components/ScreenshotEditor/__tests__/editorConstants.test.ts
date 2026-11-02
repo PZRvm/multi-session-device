@@ -11,11 +11,33 @@ const fullView = (width: number, height: number): EditorView => ({
 describe('applyCropFrame 标注平移', () => {
   it('rect/text/ellipse 左上角（圆心）平移 −选区原点', () => {
     const annotations: Annotation[] = [
-      { id: 'r', kind: 'rect', x: 30, y: 40, width: 10, height: 10, stroke: '#fa5151', strokeWidth: 2 },
+      {
+        id: 'r',
+        kind: 'rect',
+        x: 30,
+        y: 40,
+        width: 10,
+        height: 10,
+        stroke: '#fa5151',
+        strokeWidth: 2
+      },
       { id: 't', kind: 'text', x: 30, y: 40, text: '标注', fontSize: 42, fill: '#fa5151' },
-      { id: 'e', kind: 'ellipse', x: 30, y: 40, radiusX: 5, radiusY: 5, stroke: '#fa5151', strokeWidth: 2 }
+      {
+        id: 'e',
+        kind: 'ellipse',
+        x: 30,
+        y: 40,
+        radiusX: 5,
+        radiusY: 5,
+        stroke: '#fa5151',
+        strokeWidth: 2
+      }
     ]
-    const result = applyCropFrame(fullView(100, 100), { x: 10, y: 20, width: 50, height: 60 }, annotations)
+    const result = applyCropFrame(
+      fullView(100, 100),
+      { x: 10, y: 20, width: 50, height: 60 },
+      annotations
+    )
     for (const a of result.annotations) {
       expect(a.kind === 'rect' || a.kind === 'text' || a.kind === 'ellipse').toBe(true)
       if (a.kind === 'rect' || a.kind === 'text' || a.kind === 'ellipse') {
@@ -27,11 +49,9 @@ describe('applyCropFrame 标注平移', () => {
   })
 
   it('arrow 两端点整体平移', () => {
-    const result = applyCropFrame(
-      fullView(100, 100),
-      { x: 10, y: 20, width: 50, height: 60 },
-      [{ id: 'a', kind: 'arrow', x1: 15, y1: 25, x2: 45, y2: 65, stroke: '#fa5151', strokeWidth: 2 }]
-    )
+    const result = applyCropFrame(fullView(100, 100), { x: 10, y: 20, width: 50, height: 60 }, [
+      { id: 'a', kind: 'arrow', x1: 15, y1: 25, x2: 45, y2: 65, stroke: '#fa5151', strokeWidth: 2 }
+    ])
     const arrow = result.annotations[0]
     expect(arrow.kind).toBe('arrow')
     if (arrow.kind === 'arrow') {
@@ -47,21 +67,22 @@ describe('applyCropFrame 标注平移', () => {
       { id: 'b', kind: 'brush', points: [12, 22, 30, 44], stroke: '#fa5151', strokeWidth: 5 },
       { id: 'm', kind: 'mosaicBrush', points: [12, 22, 30, 44], pixelSize: 18, width: 36 }
     ])
-    expect(result.annotations.map((a) => (a.kind === 'brush' || a.kind === 'mosaicBrush' ? a.points : null)))
-      .toEqual([
-        [2, 2, 20, 24],
-        [2, 2, 20, 24]
-      ])
+    expect(
+      result.annotations.map((a) =>
+        a.kind === 'brush' || a.kind === 'mosaicBrush' ? a.points : null
+      )
+    ).toEqual([
+      [2, 2, 20, 24],
+      [2, 2, 20, 24]
+    ])
   })
 
   it('马赛克越出选区被夹回新视口内（整块收纳、不产生透明边）', () => {
     // 选区 (10,20,50,60)；马赛克 (40,70,30,30) 相对新视口位于 (30,50)、右下越界——
     // 尺寸压到视口内（30×30 未超 50×60 不收缩），位置夹回使整块留在视口内 (20,30)
-    const result = applyCropFrame(
-      fullView(100, 100),
-      { x: 10, y: 20, width: 50, height: 60 },
-      [{ id: 'm', kind: 'mosaic', x: 40, y: 70, width: 30, height: 30, pixelSize: 10 }]
-    )
+    const result = applyCropFrame(fullView(100, 100), { x: 10, y: 20, width: 50, height: 60 }, [
+      { id: 'm', kind: 'mosaic', x: 40, y: 70, width: 30, height: 30, pixelSize: 10 }
+    ])
     const mosaic = result.annotations[0]
     expect(mosaic.kind).toBe('mosaic')
     if (mosaic.kind === 'mosaic') {
@@ -76,11 +97,9 @@ describe('applyCropFrame 标注平移', () => {
   })
 
   it('马赛克大于新视口时尺寸收缩到视口尺寸', () => {
-    const result = applyCropFrame(
-      fullView(100, 100),
-      { x: 0, y: 0, width: 20, height: 10 },
-      [{ id: 'm', kind: 'mosaic', x: 0, y: 0, width: 80, height: 80, pixelSize: 10 }]
-    )
+    const result = applyCropFrame(fullView(100, 100), { x: 0, y: 0, width: 20, height: 10 }, [
+      { id: 'm', kind: 'mosaic', x: 0, y: 0, width: 80, height: 80, pixelSize: 10 }
+    ])
     const mosaic = result.annotations[0]
     expect(mosaic.kind).toBe('mosaic')
     if (mosaic.kind === 'mosaic') {
@@ -105,7 +124,11 @@ describe('applyCropFrame 选区夹紧', () => {
   })
 
   it('负起点归零；超宽收窄到视口内', () => {
-    const result = applyCropFrame(fullView(100, 80), { x: -10, y: -10, width: 300, height: 300 }, [])
+    const result = applyCropFrame(
+      fullView(100, 80),
+      { x: -10, y: -10, width: 300, height: 300 },
+      []
+    )
     expect(result.view).toEqual({ originX: 0, originY: 0, width: 100, height: 80 })
   })
 

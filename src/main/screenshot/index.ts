@@ -325,21 +325,18 @@ export function registerScreenshotIpc(deps: ScreenshotDeps): void {
 
   // 主窗调：打开/聚焦该设备编辑窗并等待就绪。空缓存不拦截开窗（默认度量开窗，
   // 空态错误由编辑窗 get-edit-image 如实呈现）——同来源语义，不伪造内容
-  ipcMain.handle(
-    IPC_CHANNELS.screenshotOpenEditor,
-    async (event, raw: unknown): Promise<void> => {
-      requireMainSender(IPC_CHANNELS.screenshotOpenEditor, event)
-      if (!isDeviceIdPayload(raw)) throw invalidPayload(IPC_CHANNELS.screenshotOpenEditor)
-      const id = raw.id
-      const cached = cache.get(id)
-      await deps.openEditor(
-        id,
-        cached && cached.width > 0 && cached.height > 0
-          ? { imageWidth: cached.width, imageHeight: cached.height }
-          : undefined
-      )
-    }
-  )
+  ipcMain.handle(IPC_CHANNELS.screenshotOpenEditor, async (event, raw: unknown): Promise<void> => {
+    requireMainSender(IPC_CHANNELS.screenshotOpenEditor, event)
+    if (!isDeviceIdPayload(raw)) throw invalidPayload(IPC_CHANNELS.screenshotOpenEditor)
+    const id = raw.id
+    const cached = cache.get(id)
+    await deps.openEditor(
+      id,
+      cached && cached.width > 0 && cached.height > 0
+        ? { imageWidth: cached.width, imageHeight: cached.height }
+        : undefined
+    )
+  })
 
   // 编辑窗取本设备缓存现图：归属由 sender 解析；dataUrl 由缓存 PNG 现编码，尺寸随
   // 载荷返回（编辑窗显示缩放与导出 pixelRatio 的基准，契约 CaptureEditImagePayload）

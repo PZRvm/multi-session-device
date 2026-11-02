@@ -117,7 +117,10 @@ describe('i18n 字典键齐性（每域三语同键闭集）', () => {
       )
       for (const value of Object.values(SCREENSHOT_EDITOR_COPY[locale]))
         if (typeof value === 'string') expect(value.trim().length).toBeGreaterThan(0)
-      for (const group of [SCREENSHOT_EDITOR_COPY[locale].tools, SCREENSHOT_EDITOR_COPY[locale].colors])
+      for (const group of [
+        SCREENSHOT_EDITOR_COPY[locale].tools,
+        SCREENSHOT_EDITOR_COPY[locale].colors
+      ])
         for (const value of Object.values(group)) expect(value.trim().length).toBeGreaterThan(0)
     }
   })

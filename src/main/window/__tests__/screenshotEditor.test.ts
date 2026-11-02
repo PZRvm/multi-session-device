@@ -30,9 +30,9 @@ class TestWindow extends EventEmitter {
   show = vi.fn()
   focus = vi.fn()
   loadURL = vi.fn<(path: string) => Promise<void>>(() => new Promise<void>(() => {}))
-  loadFile = vi.fn<
-    (path: string, options?: { query?: Record<string, string> }) => Promise<void>
-  >(() => new Promise<void>(() => {}))
+  loadFile = vi.fn<(path: string, options?: { query?: Record<string, string> }) => Promise<void>>(
+    () => new Promise<void>(() => {})
+  )
   isDestroyed = (): boolean => this.destroyed
   close = vi.fn(() => {
     this.destroyed = true

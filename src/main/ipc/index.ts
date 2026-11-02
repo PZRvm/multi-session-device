@@ -34,10 +34,7 @@ import { registerSettingsIpc } from '../window/settings'
 import { registerLogcatIpc, isLogcatWindowSender } from '../window/logcat'
 import { registerReportIpc } from '../window/report'
 import { wirelessOwns, registerWirelessIpc } from '../window/wireless'
-import {
-  openScreenshotEditorWindow,
-  screenshotEditorDeviceId
-} from '../window/screenshotEditor'
+import { openScreenshotEditorWindow, screenshotEditorDeviceId } from '../window/screenshotEditor'
 import { registerThemeIpc } from '../theme'
 import { registerLocaleIpc } from '../locale'
 import { getMainWindow } from '../window'

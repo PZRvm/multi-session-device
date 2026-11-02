@@ -110,7 +110,11 @@ describe('EditorToolbar', () => {
     render(<EditorToolbar {...props({ tool: 'text', onFontSizeIndexChange })} />)
     const group = screen.getByRole('group', { name: copy.fontSize })
     const tiers = Array.from(group.querySelectorAll('button'))
-    expect(tiers.map((b) => b.textContent)).toEqual([copy.fontSmall, copy.fontMedium, copy.fontLarge])
+    expect(tiers.map((b) => b.textContent)).toEqual([
+      copy.fontSmall,
+      copy.fontMedium,
+      copy.fontLarge
+    ])
     expect(tiers.map((b) => b.getAttribute('aria-label'))).toEqual([
       `${copy.fontSize} ${copy.fontSmall}`,
       `${copy.fontSize} ${copy.fontMedium}`,

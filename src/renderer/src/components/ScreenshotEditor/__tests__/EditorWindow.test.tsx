@@ -38,9 +38,8 @@ const EXPORT_PNG = 'data:image/png;base64,RURJVA=='
 
 const getEditImage = vi.fn<() => Promise<CaptureEditImagePayload>>()
 const editCopy = vi.fn<(payload: { captureId: string; dataUrl: string }) => Promise<void>>()
-const editDownload = vi.fn<
-  (payload: { captureId: string; dataUrl: string }) => Promise<{ fileName: string }>
->()
+const editDownload =
+  vi.fn<(payload: { captureId: string; dataUrl: string }) => Promise<{ fileName: string }>>()
 
 // jsdom 不解码图片：替换全局 Image。src 赋值后以真微任务结算 onload/onerror
 // （decodeEditImage 先挂 handler 再赋 src，时序兼容）
@@ -193,9 +192,7 @@ describe('EditorWindow 产出链', () => {
   })
 
   it('产出成功而续编取图失败：成功 flash 保留 + 错误条如实呈现（分别呈现）', async () => {
-    getEditImage
-      .mockResolvedValueOnce(payload())
-      .mockRejectedValueOnce(new Error('截图槽位已清空'))
+    getEditImage.mockResolvedValueOnce(payload()).mockRejectedValueOnce(new Error('截图槽位已清空'))
     editCopy.mockResolvedValue(undefined)
     render(<EditorWindow />)
     await flush()
@@ -221,9 +218,10 @@ describe('EditorWindow 产出链', () => {
     getEditImage.mockResolvedValue(payload())
     let releaseCopy!: () => void
     editCopy.mockImplementation(
-      () => new Promise<void>((resolve) => {
-        releaseCopy = resolve
-      })
+      () =>
+        new Promise<void>((resolve) => {
+          releaseCopy = resolve
+        })
     )
     render(<EditorWindow />)
     await flush()

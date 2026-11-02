@@ -36,8 +36,11 @@ const TOOL_DEFS = [
 }>
 
 /** 档位名（细/中/粗）字典键：粗细与块径共用（语义随工具切换，键注释同源） */
-const WEIGHT_LABEL_KEYS = ['strokeThin', 'strokeMedium', 'strokeThick'] as const satisfies
-  ReadonlyArray<keyof ScreenshotEditorCopy>
+const WEIGHT_LABEL_KEYS = [
+  'strokeThin',
+  'strokeMedium',
+  'strokeThick'
+] as const satisfies ReadonlyArray<keyof ScreenshotEditorCopy>
 
 /** 色板六色 aria-label 键映射（与 COLOR_PALETTE 同序同源） */
 const COLOR_LABEL_KEYS: Record<AnnotationColor, keyof ScreenshotEditorCopy['colors']> = {
@@ -54,8 +57,9 @@ const WEIGHT_DOT_SIZES = [6, 8, 10] as const
 
 /** 字号档名字典键（与 FONT_SIZE_TIERS 同序：32→小、42→中、54→大——档钮从左到
  *  右由小到大，同粗细档律） */
-const FONT_LABEL_KEYS = ['fontSmall', 'fontMedium', 'fontLarge'] as const satisfies
-  ReadonlyArray<keyof ScreenshotEditorCopy>
+const FONT_LABEL_KEYS = ['fontSmall', 'fontMedium', 'fontLarge'] as const satisfies ReadonlyArray<
+  keyof ScreenshotEditorCopy
+>
 
 export interface EditorToolbarProps {
   tool: EditorToolId
@@ -169,11 +173,7 @@ function EditorToolbar(props: EditorToolbarProps): React.JSX.Element {
       {showWeight && (
         <>
           <span className="chrome-capture-editor-sep" aria-hidden="true" />
-          <div
-            className="chrome-capture-editor-weight"
-            role="group"
-            aria-label={copy.weightAria}
-          >
+          <div className="chrome-capture-editor-weight" role="group" aria-label={copy.weightAria}>
             {WEIGHT_LABEL_KEYS.map((key, index) => {
               const label = copy[key]
               return (
@@ -201,11 +201,7 @@ function EditorToolbar(props: EditorToolbarProps): React.JSX.Element {
       {showPalette && (
         <>
           <span className="chrome-capture-editor-sep" aria-hidden="true" />
-          <div
-            className="chrome-capture-editor-palette"
-            role="group"
-            aria-label={copy.paletteAria}
-          >
+          <div className="chrome-capture-editor-palette" role="group" aria-label={copy.paletteAria}>
             {COLOR_PALETTE.map((value) => {
               const label = copy.colors[COLOR_LABEL_KEYS[value]]
               return (
@@ -227,11 +223,7 @@ function EditorToolbar(props: EditorToolbarProps): React.JSX.Element {
       {tool === 'text' && (
         <>
           <span className="chrome-capture-editor-sep" aria-hidden="true" />
-          <div
-            className="chrome-capture-editor-fontsizes"
-            role="group"
-            aria-label={copy.fontSize}
-          >
+          <div className="chrome-capture-editor-fontsizes" role="group" aria-label={copy.fontSize}>
             {FONT_SIZE_TIERS.map((size, index) => {
               // 档钮显示「小/中/大」（数值 32/42/54 仅内部使用不外显）；键位显式元组
               const nameKey = FONT_LABEL_KEYS[index]

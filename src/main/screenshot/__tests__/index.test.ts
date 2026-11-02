@@ -16,7 +16,11 @@ import {
 
 const mocks = vi.hoisted(() => {
   /** nativeImage 替身：尺寸与空态可控（isEmpty 返回 boolean，供 mockImplementationOnce 覆写） */
-  const fakeImage = (width: number, height: number, empty = false) => ({
+  const fakeImage = (
+    width: number,
+    height: number,
+    empty = false
+  ): { getSize: () => { width: number; height: number }; isEmpty: () => boolean } => ({
     getSize: () => ({ width, height }),
     isEmpty: () => empty
   })
@@ -424,7 +428,8 @@ describe('runAdbBinary', () => {
   })
 })
 
-describe('文件名工具', () => {  it('sanitizeFileSegment：替换路径非法字符、保留中文、空名兜底、60 字符截断', () => {
+describe('文件名工具', () => {
+  it('sanitizeFileSegment：替换路径非法字符、保留中文、空名兜底、60 字符截断', () => {
     expect(sanitizeFileSegment('a/b\\c:d*e?f"g<h>i|j')).toBe('a_b_c_d_e_f_g_h_i_j')
     expect(sanitizeFileSegment('  Pixel 8  ')).toBe('Pixel 8')
     expect(sanitizeFileSegment('设备')).toBe('设备')
@@ -513,7 +518,9 @@ describe('screenshot 编辑器域', () => {
   it('getEditImage：设备无缓存（他设备有）报 stale', async () => {
     const h = setup()
     await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
-    const stale = await rejectMessage(h.callAs(IPC_CHANNELS.screenshotGetEditImage, undefined, { sender: { id: 20 } }))
+    const stale = await rejectMessage(
+      h.callAs(IPC_CHANNELS.screenshotGetEditImage, undefined, { sender: { id: 20 } })
+    )
     expect(stale).toBe('screenshotStale')
   })
 
@@ -571,7 +578,10 @@ describe('screenshot 编辑器域', () => {
     await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
     const before = await getEditImage(h, h.eventA)
     const badPayloads: Array<Record<string, unknown>> = [
-      { captureId: before.captureId, dataUrl: `data:image/jpeg;base64,${EDIT_PNG.toString('base64')}` },
+      {
+        captureId: before.captureId,
+        dataUrl: `data:image/jpeg;base64,${EDIT_PNG.toString('base64')}`
+      },
       { captureId: before.captureId, dataUrl: `data:image/png;base64,${'A'.repeat(30_000_001)}` },
       { captureId: '', dataUrl: EDIT_DATAURL },
       { captureId: 'x'.repeat(129), dataUrl: EDIT_DATAURL },
