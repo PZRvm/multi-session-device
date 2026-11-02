@@ -6,5 +6,6 @@ export { LANGUAGE_OPTIONS, SETTINGS_COPY, type SettingsCopy } from './settings'
 export { MAIN_COPY, type MainWindowCopy } from './mainWindow'
 export { WIZARD_COPY, type WizardCopy } from './wizard'
 export { ERRORS_COPY, type ErrorsCopy } from './errors'
+export { SCREENSHOT_EDITOR_COPY, type ScreenshotEditorCopy } from './screenshotEditor'
 
 export { RECORDING_COPY, type RecordingCopy } from './recording'

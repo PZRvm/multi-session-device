@@ -9,6 +9,7 @@ import {
   SETTINGS_LOCALES
 } from '@shared/i18n'
 import { RECORDING_COPY } from '@shared/i18n/recording'
+import { SCREENSHOT_EDITOR_COPY } from '@shared/i18n/screenshotEditor'
 import { normalizeAdvancedSettings } from '@shared/settings-contract'
 import type { WizardCapabilities } from '@shared/types'
 
@@ -75,6 +76,66 @@ describe('i18n 字典键齐性（每域三语同键闭集）', () => {
     for (const locale of SETTINGS_LOCALES)
       for (const key of Object.keys(base))
         expect(tokens(RECORDING_COPY[locale][key as keyof typeof base])).toBe(tokens(base[key]))
+  })
+
+  it('screenshotEditor 域三语键全等（含嵌套 tools/colors 组）且无空文案', () => {
+    const base = SCREENSHOT_EDITOR_COPY['zh-CN']
+    expect(Object.keys(base).sort()).toEqual([
+      'colors',
+      'copied',
+      'copy',
+      'cropCancel',
+      'cropConfirm',
+      'download',
+      'failed',
+      'fontLarge',
+      'fontMedium',
+      'fontSize',
+      'fontSmall',
+      'loading',
+      'mosaicBrush',
+      'mosaicRect',
+      'paletteAria',
+      'redo',
+      'saved',
+      'slotSwitched',
+      'strokeMedium',
+      'strokeThick',
+      'strokeThin',
+      'toolbarAria',
+      'tools',
+      'undo',
+      'weightAria'
+    ])
+    for (const locale of SETTINGS_LOCALES) {
+      expect(Object.keys(SCREENSHOT_EDITOR_COPY[locale]).sort()).toEqual(Object.keys(base).sort())
+      expect(Object.keys(SCREENSHOT_EDITOR_COPY[locale].tools).sort()).toEqual(
+        Object.keys(base.tools).sort()
+      )
+      expect(Object.keys(SCREENSHOT_EDITOR_COPY[locale].colors).sort()).toEqual(
+        Object.keys(base.colors).sort()
+      )
+      for (const value of Object.values(SCREENSHOT_EDITOR_COPY[locale]))
+        if (typeof value === 'string') expect(value.trim().length).toBeGreaterThan(0)
+      for (const group of [SCREENSHOT_EDITOR_COPY[locale].tools, SCREENSHOT_EDITOR_COPY[locale].colors])
+        for (const value of Object.values(group)) expect(value.trim().length).toBeGreaterThan(0)
+    }
+  })
+
+  it('screenshotEditor 域占位符三语一致', () => {
+    const tokens = (text: string): string =>
+      [...text.matchAll(/\{(\w+)\}/g)]
+        .map((match) => match[1])
+        .sort()
+        .join(',')
+    const base = SCREENSHOT_EDITOR_COPY['zh-CN']
+    for (const locale of SETTINGS_LOCALES)
+      for (const key of Object.keys(base)) {
+        const value = base[key as keyof typeof base]
+        const other = SCREENSHOT_EDITOR_COPY[locale][key as keyof typeof base]
+        if (typeof value === 'string' && typeof other === 'string')
+          expect(tokens(other)).toBe(tokens(value))
+      }
   })
 })
 

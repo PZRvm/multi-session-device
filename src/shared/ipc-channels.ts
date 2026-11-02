@@ -148,6 +148,17 @@ export const IPC_CHANNELS = {
   screenshotCapture: 'screenshot:capture',
   /** 用主进程缓存的最近一张写系统下载目录（不弹保存对话框） */
   screenshotSave: 'screenshot:save',
+  // ---- 截屏编辑器域（plan 2026-11-02-screenshot-editor；迁自 multi-session-browser）----
+  /** 主窗调：打开/聚焦该设备的编辑窗（按设备单例，重复触发聚焦；仅主窗） */
+  screenshotOpenEditor: 'screenshot:open-editor',
+  /** 编辑窗调：取本设备缓存截图（返回 CaptureEditImagePayload；仅已登记编辑窗，
+   *  设备归属由 sender 解析，不信 renderer 自报 id；空缓存报「截图已过期」） */
+  screenshotGetEditImage: 'screenshot:get-edit-image',
+  /** 编辑窗调：编辑成品写系统剪贴板并回写本设备缓存（captureId 对账；仅编辑窗） */
+  screenshotEditCopy: 'screenshot:edit-copy',
+  /** 编辑窗调：编辑成品落系统下载目录并回写本设备缓存（对账；返回文件名，
+   *  复用既有防覆盖落盘链；仅编辑窗） */
+  screenshotEditDownload: 'screenshot:edit-download',
   // ---- APK 安装域（plan 2026-10-10-drag-apk-install；仅登记主窗）----
   /** 拖拽 APK 安装到 running 设备（每设备串行；结果一次返回，无进度推送） */
   apkInstall: 'apk:install',

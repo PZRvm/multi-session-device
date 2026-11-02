@@ -150,6 +150,7 @@ src/shared/      类型 + IPC channel 常量 + 主题 tokens + i18n 字典（单
 ```
 
 - IPC 纪律平移浏览器仓库：invoke 拉取 + `changed` 推送；写操作整单校验、零部分成功。
+- 截图编辑器（2026-11-02）：编辑器核心（画布/工具条/历史/导出）直接迁自 multi-session-browser（基线 `1c5db74`，见 ADR-005）；`konva@10.8.0` + `react-konva@19.2.7` 是复用源编辑器的绘图依赖，只在独立 screenshot-editor 入口加载，主窗不静态引入，不替换现有 UI 栈。本项目接缝：按设备的截图缓存（captureId 对账）、设备单例编辑窗（sender 身份解析）、既有防覆盖下载发布、lucide 图标与三语 Record 字典。
 - 录屏：采用锁定的 Mediabunny 1.61.5（MPL-2.0）在主进程封装 MP4，独立隐藏 renderer 用 WebCodecs 处理旋转与最大画布；原始媒体直接来自设备，零桌面/麦克风采集。真机音频验收按用户批准后移，详见 ADR-004。
 - 画面链路：主进程 Tango 连 adbd → 推 scrcpy-server（版本锁定，随包分发）→ H.264 流经 IPC 送 renderer → WebCodecs 硬解 → canvas 渲染；指针/键盘事件反向编码为 scrcpy 控制消息。
 - 状态机：`创建中 → 停止 ⇄ 启动中（可取消） → 运行中 → 删除中`；`emulator -no-window -port <n>`，控制台端口空间 5554–5682（官方上限 64 并发）。
