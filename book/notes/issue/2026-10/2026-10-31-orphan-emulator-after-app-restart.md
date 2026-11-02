@@ -53,6 +53,8 @@ tags: [windows, process, migration, acceptance]
 
 用户真机流程：启动一台模拟器 → 应用内停止 → 迁移到自选路径 → 守卫正确拦截（提示残留模拟器进程）。实测 `tasklist` 确有 `qemu-system-x86_64-headless.exe`（725MB），且**父进程 emulator.exe 已死、qemu 子进程存活**——停止链的树杀未传导到 qemu（taskkill /T 应达整树；怀疑竞态窗口内 qemu 被 emulator 重新拉起后父 PID 链断裂，或某停止路径未走树杀）。手工 `taskkill /T /F` 清树后迁移放行。**这是 P3 验收项「停止后无孤儿 qemu」的真机实证缺陷**：根因定位（stop 链路哪个环节丢了树杀）归 P3 修复批；守卫的存在把该缺陷从「迁移神秘 EPERM」降级为「一条可操作提示」——正是设计意图。复测剧本：P3 进程剧本执行时，每次应用内停止设备后立即 `tasklist | findstr qemu` 核验。
 
+**P3 剧本终检对照（同日）**：多开 2 台 → 关窗确认「留在应用」（应用驻留无窗、双模拟器与 5554-5557 全程在跑）→ 快捷方式二次启动唤回主窗（second-instance 修复真机实证 ✓）→ 再关窗确认退出 → 终检**零残留**：无 qemu/emulator 进程、5554-5557 全释放、adb 设备清空、应用进程退出。**关键对比**：确认退出的树杀链是干净的，残留只发生在「应用内停止单台」路径——根因方向收窄到 stop 链路（killGroup 对单设备的树杀），quit 链无罪。
+
 ## 第三幕（同日）：反复重试致 platform-tools 部分文件丢失与状态分叉
 
 回滚收尾后用户另选新路径 `Desktop\sdk1` 重跑正向迁移（成功，sdk.json 翻 custom），再迁回托管时又于 platform-tools 失败并多次重试。终态盘点：7 个小组件已回托管；system-images（34 文件/8.2G）完好滞留 sdk1；**platform-tools 两侧各剩同一组 3 文件**（adb.exe + 两个 AdbWin dll），其余 12 个工具文件在失败的 rmTree 半途中被删——复制分支「先保目标再删源」的顺序在 rename(staging→to) 撞已存在目标失败时也会留下双残本。**手工修复（2026-10-31）**：关应用→杀 adb→清两处残本与空骨架→同盘 rename 把 system-images 移回托管→删 sdk1→sdk.json 回 managed→清 journal→`sdkmanager --install platform-tools`（r37.0.1，15 文件全量补回）。AVD config 为相对路径（`image.sysdir.1=system-images\...`）无需 relink。另证：**与 C 盘管理员权限无关**（AppData 为用户目录；全部失败均为进程占用/状态分叉）。
