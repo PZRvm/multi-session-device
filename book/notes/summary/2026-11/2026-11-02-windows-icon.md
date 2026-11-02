@@ -1,5 +1,5 @@
 ---
-description: Windows 使用无底板、黑屏、主体占高约 95% 的透明三手机图标，覆盖窗口、可执行文件与关于页，macOS 原图保留
+description: Windows 使用无底板、屏幕镂空的三手机透明图标，覆盖窗口、可执行文件与关于页，黑屏版已覆盖，macOS 原图保留
 ---
 
 # Windows 透明图标
@@ -10,7 +10,7 @@ description: Windows 使用无底板、黑屏、主体占高约 95% 的透明三
 
 ## 做了什么
 
-基于现有三手机图标，用内置 imagegen 生成透明版本。保留橙黄前层、深灰中层、浅灰后层，去掉外部米白底板。用户随后要求将屏幕由白色改成黑色，已再次生成并覆盖 Windows 图片；黑屏版主体可见高度占画布约 95.3%。
+用 Codex 内置 imagegen 生成三手机透明图标，保留橙黄前层、深灰中层、浅灰后层。用户先尝试白屏、黑屏，最终选用三块屏幕都镂空的版本；外部背景和屏幕内部都能透出桌面颜色。
 
 - 母版：`resources/logo-multi-session-device-windows.png`，1254×1254 RGBA。
 - 应用图：`resources/icon-windows.png`，512×512 RGBA。
@@ -34,6 +34,12 @@ Windows 打包配置已引用 `build/icon.ico`，直接替换即可。运行时�
 
 本地免安装验证产物：`dist/windows-icon-check/win-unpacked/multi-session-device.exe`；NativeImage 检查记录：`dist/windows-icon-check/native-icon-verification.json`。这些产物被 git 忽略。
 
+透明屏幕版已正式替换。母版直接复制获选生成原图，字节一致；仅使用 Electron NativeImage 缩放导出 PNG 和封装七档 ICO，未使用 Python、未修图。母版及运行时图三屏抽样 alpha 都为 0，框体仍有实体像素；七档 ICO 帧可解码。生产构建、Windows 目录打包和六项平台图标检查通过，从 EXE 提取的 32px 图标三屏抽样 alpha 也为 0。四份 macOS/Linux 原图字节未变；本轮未重复执行源码类型/lint/单元测试。
+
+原黑屏母版、PNG 和 ICO 已被同名透明版覆盖；已采用的 `logo-multi-session-device-windows-transparent-preview.png` 删除，不保留重复资源。项目仍使用的原 macOS/Linux 图片保留，Codex 生成缓存不在本次清理范围内。
+
 ## 后续
+
+透明版已供应用使用。后续如调整图案，从正式母版 `resources/logo-multi-session-device-windows.png` 开始，不再依赖已删除的预览副本。
 
 重新启动开发应用或使用新打包产物可加载新图；本任务未替换机器上已有安装。计划与定稿提示词见 [Windows 透明图标计划](../../../plans/2026-11-02-windows-icon.md)。

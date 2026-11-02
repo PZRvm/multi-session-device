@@ -1,10 +1,27 @@
 ---
-description: Windows 图标去掉米白底板并放大三部手机，独立接入运行时 PNG 与打包 ICO
+description: Windows 使用屏幕镂空的三手机透明图标，替换母版、运行时 PNG 与 ICO，清理黑屏版本和预览副本
 status: completed
 created: 2026-11-02
 ---
 
 # Windows 透明图标
+
+## 透明屏幕修订（2026-11-02）
+
+用户随后指定仅用 Codex 图片生成重新出图，不用 Python 修改。已用内置 imagegen 从文字重新生成三手机造型，原样复制的试稿为 `resources/logo-multi-session-device-windows-transparent-preview.png`，三块屏幕抽样 alpha 均为 0。用户最新明确要求替换，并删除多余的黑屏图片。
+
+Step 0：用户认为黑屏观感不好，要求把三部手机的屏幕改为透明，并将生成的透明试稿正式替换进去、清理多余黑屏图片。范围仅为 Windows 母版、运行时 PNG、ICO 与已采用的预览副本；保留 macOS/Linux 图片，不改源码或业务行为，不使用 Python。
+
+阶段 1：Windows 消费入口已接入专用资源，替换图片即可生效。主要风险是工具把屏幕画成黑色或棋盘格而没有真实 alpha，需逐块检查屏幕透明度。
+
+阶段 2：将用户已选定的 Codex 图片生成原图原样复制为正式 Windows 母版；仅用项目现有 Electron NativeImage 接口缩放导出 512px PNG 和七档 PNG 帧 ICO，不修改图案内容。覆盖原黑屏母版、PNG 和 ICO，确认覆盖成功后删除已采用的预览副本。验证屏幕和外部 alpha、框体保留、ICO 解码与旧平台资源不变，再更新本地 Windows 验证包。清理范围仅为本仓库资源，不删除 Codex 生成缓存。
+
+- [x] 阶段 3：将用户选定的生成原图原样写入正式母版，用 Electron NativeImage 缩放和封装 PNG/ICO，覆盖黑屏资源，删除预览副本；未使用 Python，未修改图案内容。
+- [x] 阶段 4：母版/512px PNG 三屏 alpha 抽样均为 0、框体抽样 alpha ≥250，七档 ICO 帧均可解码；四份 macOS/Linux 资源字节未变；生产构建、Windows 目录打包、六项 NativeImage 平台检查通过，从 EXE 提取的 32px 图标三个屏幕抽样 alpha 也为 0。
+- [x] 阶段 5：按资源与八项评审清单复核，无源码改动、无范围外删除；已有边缘问题继续记录，不另做修图。
+- [x] 阶段 6：报告和计划已更新，刷新索引并通过 book 卫生检查。
+
+正式母版与获选生成原图字节一致（SHA256：`7295D780C2F07D4884CB8F5EF5065AF6EEEAD9EB421F27DFA25CB51871BEF1F1`）。预览文件不再单独保留，后续直接使用正式母版。验证记录：`dist/windows-icon-check/transparent-icon-export.json`。
 
 ## 黑屏修订（2026-11-02）
 
@@ -64,4 +81,10 @@ Use case: precise-object-edit. Polish this EXACT three-smartphone transparent Wi
 
 ```text
 Use case: precise-object-edit. Final production cleanup of this app icon. Preserve the EXACT three phones with BLACK opaque screens, orange front frame, dark slate middle frame, light slate rear frame, pale bottom bars, precise positions, scale and silhouette. Remove ALL tiny exterior colored fringe pixels, confetti and irregular protrusions: especially yellow ragged strips below the front phone, red at lower right of front phone, cyan/blue around rear phone. Re-render phone outlines as perfectly clean smooth rounded geometric contours with tight antialiasing. There must be NO pixels of any kind outside the smooth phone silhouettes. Three opaque PURE BLACK screen interiors, keep all existing phone geometry and colors. Completely transparent empty background, transparent margins. NO backing plate, no drop shadow, no glow, no black backdrop. Same square composition and near-full-height group, no clipping. Treat this as a clean vector-like export of the identical icon, no added details or redesign.
+```
+
+## 透明屏幕试稿提示词（内置 imagegen，未后处理）
+
+```text
+A professional minimalist Windows application icon: THREE OVERLAPPING UPRIGHT SMARTPHONE OUTLINES, stepped diagonally from lower-left foreground to upper-right background. Foreground phone frame is golden amber orange (#FFB000), middle phone frame is dark cool gray (#6F7984), back phone frame is light cool gray (#A0ACBA). Each is a simple thick rounded-rectangle phone frame with a large EMPTY TRANSPARENT rounded-rectangle screen cutout, a small dark horizontal earpiece pill in its top bezel, and a small pale gray pill in its bottom bezel. The phone frames are solid clean flat colors with perfectly smooth geometric edges. The three screens are genuine clear see-through holes with alpha zero, showing the same transparency as the empty exterior. NO black or white screen fill. Only draw the visible parts of the rear phones, hidden portions occluded by the front phone. Crisp polished flat vector aesthetic, no texture or raster noise. Square transparent PNG canvas; the combined phone group is centered and fills 94% of the canvas height with a safe unclipped margin. No background, backing plate, shadow, gradient, reflections, text, watermark, scene, or checkerboard pattern. This is a finished icon asset consisting solely of orange and gray phone frame shapes on alpha transparency.
 ```

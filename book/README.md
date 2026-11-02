@@ -316,7 +316,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 ### notes/summary/2026-11/
 
-- [2026-11-02-windows-icon.md](notes/summary/2026-11/2026-11-02-windows-icon.md) — Windows 使用无底板、黑屏、主体占高约 95% 的透明三手机图标，覆盖窗口、可执行文件与关于页，macOS 原图保留
+- [2026-11-02-windows-icon.md](notes/summary/2026-11/2026-11-02-windows-icon.md) — Windows 使用无底板、屏幕镂空的三手机透明图标，覆盖窗口、可执行文件与关于页，黑屏版已覆盖，macOS 原图保留
 
 ### notes/task/
 
@@ -421,7 +421,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-22-windows-sdk-bootstrap.md](plans/2026-10-22-windows-sdk-bootstrap.md) — SDK 引导 Windows 平台化——下载源按平台查表、sdkPaths 补 .exe/.bat、platformExec 执行器（cmd.exe /c + windowsHide）、解压改 Windows 自带 tar.exe；Win P1，依赖主体工程调研
 - [2026-10-22-windows-studio-detect.md](plans/2026-10-22-windows-studio-detect.md) — Studio/SDK 检测链 Windows 分支——studioDetect 四条候选链平台化（零注册表）、adb 系统候选补 Windows 路径、路径比较大小写规范化；Win P2，依赖主体工程调研
 - [2026-10-23-windows-settings-finish.md](plans/2026-10-23-windows-settings-finish.md) — 设置页 Windows 收尾——杀软白名单性能建议卡片（确切路径清单 + Defender 受控深链）、SDK 根路径过长检测提示（260 预算，只提示不拦截）、非 mac 板头去标题消除双标题；Win P6，依赖外围调研 C2/B3/E1
-- [2026-11-02-windows-icon.md](plans/2026-11-02-windows-icon.md) — Windows 图标去掉米白底板并放大三部手机，独立接入运行时 PNG 与打包 ICO
+- [2026-11-02-windows-icon.md](plans/2026-11-02-windows-icon.md) — Windows 使用屏幕镂空的三手机透明图标，替换母版、运行时 PNG 与 ICO，清理黑屏版本和预览副本
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### think-report/
