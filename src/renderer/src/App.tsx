@@ -472,143 +472,160 @@ const App = (): React.JSX.Element => {
     []
   )
 
+  const isWindows = window.api.platform === 'win32'
+  const boardHead = (
+    <BoardHead
+      count={visibleDevices.length}
+      compact={listWidth <= 320}
+      onOpenSettings={() => void openSettings()}
+    />
+  )
+  const logToggle = logTarget ? (
+    <button
+      type="button"
+      className="log-toggle"
+      aria-label={copy.logcatTitle}
+      aria-pressed={dockVisible}
+      title={copy.logcatTitle}
+      onClick={handleToggleLogDock}
+    >
+      <ScrollText size={16} />
+    </button>
+  ) : null
   return (
-    <Wrapper lang={locale}>
-      <div className="list-pane" style={{ width: listWidth }}>
-        <BoardHead
-          count={visibleDevices.length}
-          compact={listWidth <= 320}
-          onOpenSettings={() => void openSettings()}
-        />
-        <DeviceHealthNotice
-          summary={reconciliation}
-          storeHealth={storeHealth}
-          unavailableCount={affectedNames.length}
-          affectedNames={affectedNames}
-          rechecking={rechecking}
-          onRecheck={handleRecheck}
-          onViewDetail={handleViewDetail}
-        />
-        <DeviceListPane
-          devices={devices}
-          selectedId={externalSelected !== null ? null : selectedId}
-          storeTrusted={storeTrusted}
-          metaWritable={metaWritable}
-          storeState={storeHealth.state}
-          sourceBucket={sourceBucket}
-          loadError={loadError}
-          externalDevices={externalDevices}
-          selectedExternalId={selectedExternalId}
-          onSelectExternal={selectExternal}
-          onRetryLoad={handleRetryLoad}
-          onSelect={handleSelectAvd}
-          onStart={handleStart}
-          onStop={handleStop}
-          onCancelStart={handleCancelStart}
-          onCopySerial={handleCopySerial}
-          onDelete={handleDelete}
-          onRename={handleRename}
-          onEdit={handleEdit}
-          onRenameBlocked={handleRenameBlocked}
-          onCrossBucketBlocked={handleCrossBucketBlocked}
-        />
-        <footer className="foot">
-          <Button
-            variant="primary"
-            onClick={openWizard}
-            disabled={!metaWritable}
-            title={metaWritable ? undefined : copy.createDisabledTitleFooter}
-          >
-            <span className="new-label">
-              <Plus size={14} />
-              {copy.createDevice}
-            </span>
-          </Button>
-        </footer>
-      </div>
-      <ResizeHandle
-        width={listWidth}
-        onResize={setListWidth}
-        maxWidth={
-          dockVisible ? viewportWidth - logPaneWidth - 5 - LOG_CANVAS_MIN_WIDTH : LIST_MAX_WIDTH
-        }
-        clamp={(width) =>
-          dockVisible
-            ? clampListWidth(
-                Math.min(width, viewportWidth - logPaneWidth - 5 - LOG_CANVAS_MIN_WIDTH)
-              )
-            : clampListWidth(width)
-        }
-      />
-      <main className="canvas-area">
-        <div className="canvas-content">
-          {externalSelected !== null ? (
-            externalSelected.state === 'device' ? (
-              <ExternalCanvas key={externalSelected.id} device={externalSelected} />
-            ) : (
-              <ExternalCanvasPlaceholder device={externalSelected} />
-            )
-          ) : selected && selected.status === 'running' ? (
-            <DeviceCanvas
-              key={`${selected.id}:${selected.runId}`}
-              device={selected}
-              onStop={() => handleStop(selected.id)}
-            />
-          ) : (
-            <CanvasPlaceholder
-              device={selected}
-              onCreate={openWizard}
-              onRecheck={handleRecheck}
-              rechecking={rechecking}
-              storeState={storeHealth.state}
-              createDisabled={!metaWritable}
-            />
-          )}
-        </div>
-        <div className="canvas-tools">
-          {indicatorDevice ? <RecordingIndicator deviceId={indicatorDevice.id} /> : null}
-          {logTarget ? (
-            <button
-              type="button"
-              className="log-toggle"
-              aria-label={copy.logcatTitle}
-              aria-pressed={dockVisible}
-              title={copy.logcatTitle}
-              onClick={handleToggleLogDock}
-            >
-              <ScrollText size={16} />
-            </button>
-          ) : null}
-        </div>
-      </main>
-      {dockVisible ? (
-        <>
-          <ResizeHandle
-            edge="left"
-            width={logPaneWidth}
-            onResize={setLogPaneWidth}
-            ariaLabel={copy.logcatResizeAria}
-            minWidth={LOG_PANE_MIN_WIDTH}
-            maxWidth={Math.min(
-              LOG_PANE_MAX_WIDTH,
-              viewportWidth - listWidth - 5 - LOG_CANVAS_MIN_WIDTH
-            )}
-            clamp={(width) =>
-              clampLogPaneWidth(
-                Math.min(width, viewportWidth - listWidth - 5 - LOG_CANVAS_MIN_WIDTH)
-              )
-            }
-          />
-          <aside className="log-pane" style={{ width: logPaneWidth }}>
-            <LogcatPanel
-              key={logcatKey ?? 'none:'}
-              deviceId={logTarget?.id ?? null}
-              runId={logTarget?.runId ?? null}
-              onPopOut={() => void handlePopOutLogcat()}
-            />
-          </aside>
-        </>
+    <Wrapper lang={locale} data-windows={isWindows}>
+      {isWindows ? (
+        <header className="windows-header">
+          <div className="header-content">
+            <div className="windows-board-head" style={{ width: listWidth }}>
+              {boardHead}
+            </div>
+            <div className="header-actions">{logToggle}</div>
+          </div>
+        </header>
       ) : null}
+      <div className="workspace">
+        <div className="list-pane" style={{ width: listWidth }}>
+          {!isWindows ? boardHead : null}
+          <DeviceHealthNotice
+            summary={reconciliation}
+            storeHealth={storeHealth}
+            unavailableCount={affectedNames.length}
+            affectedNames={affectedNames}
+            rechecking={rechecking}
+            onRecheck={handleRecheck}
+            onViewDetail={handleViewDetail}
+          />
+          <DeviceListPane
+            devices={devices}
+            selectedId={externalSelected !== null ? null : selectedId}
+            storeTrusted={storeTrusted}
+            metaWritable={metaWritable}
+            storeState={storeHealth.state}
+            sourceBucket={sourceBucket}
+            loadError={loadError}
+            externalDevices={externalDevices}
+            selectedExternalId={selectedExternalId}
+            onSelectExternal={selectExternal}
+            onRetryLoad={handleRetryLoad}
+            onSelect={handleSelectAvd}
+            onStart={handleStart}
+            onStop={handleStop}
+            onCancelStart={handleCancelStart}
+            onCopySerial={handleCopySerial}
+            onDelete={handleDelete}
+            onRename={handleRename}
+            onEdit={handleEdit}
+            onRenameBlocked={handleRenameBlocked}
+            onCrossBucketBlocked={handleCrossBucketBlocked}
+          />
+          <footer className="foot">
+            <Button
+              variant="primary"
+              onClick={openWizard}
+              disabled={!metaWritable}
+              title={metaWritable ? undefined : copy.createDisabledTitleFooter}
+            >
+              <span className="new-label">
+                <Plus size={14} />
+                {copy.createDevice}
+              </span>
+            </Button>
+          </footer>
+        </div>
+        <ResizeHandle
+          width={listWidth}
+          onResize={setListWidth}
+          maxWidth={
+            dockVisible ? viewportWidth - logPaneWidth - 5 - LOG_CANVAS_MIN_WIDTH : LIST_MAX_WIDTH
+          }
+          clamp={(width) =>
+            dockVisible
+              ? clampListWidth(
+                  Math.min(width, viewportWidth - logPaneWidth - 5 - LOG_CANVAS_MIN_WIDTH)
+                )
+              : clampListWidth(width)
+          }
+        />
+        <main className="canvas-area">
+          <div className="canvas-content">
+            {externalSelected !== null ? (
+              externalSelected.state === 'device' ? (
+                <ExternalCanvas key={externalSelected.id} device={externalSelected} />
+              ) : (
+                <ExternalCanvasPlaceholder device={externalSelected} />
+              )
+            ) : selected && selected.status === 'running' ? (
+              <DeviceCanvas
+                key={`${selected.id}:${selected.runId}`}
+                device={selected}
+                onStop={() => handleStop(selected.id)}
+              />
+            ) : (
+              <CanvasPlaceholder
+                device={selected}
+                onCreate={openWizard}
+                onRecheck={handleRecheck}
+                rechecking={rechecking}
+                storeState={storeHealth.state}
+                createDisabled={!metaWritable}
+              />
+            )}
+          </div>
+          <div className="canvas-tools">
+            {indicatorDevice ? <RecordingIndicator deviceId={indicatorDevice.id} /> : null}
+            {!isWindows ? logToggle : null}
+          </div>
+        </main>
+        {dockVisible ? (
+          <>
+            <ResizeHandle
+              edge="left"
+              width={logPaneWidth}
+              onResize={setLogPaneWidth}
+              ariaLabel={copy.logcatResizeAria}
+              minWidth={LOG_PANE_MIN_WIDTH}
+              maxWidth={Math.min(
+                LOG_PANE_MAX_WIDTH,
+                viewportWidth - listWidth - 5 - LOG_CANVAS_MIN_WIDTH
+              )}
+              clamp={(width) =>
+                clampLogPaneWidth(
+                  Math.min(width, viewportWidth - listWidth - 5 - LOG_CANVAS_MIN_WIDTH)
+                )
+              }
+            />
+            <aside className="log-pane" style={{ width: logPaneWidth }}>
+              <LogcatPanel
+                key={logcatKey ?? 'none:'}
+                deviceId={logTarget?.id ?? null}
+                runId={logTarget?.runId ?? null}
+                onPopOut={() => void handlePopOutLogcat()}
+              />
+            </aside>
+          </>
+        ) : null}
+      </div>
     </Wrapper>
   )
 }
@@ -617,6 +634,58 @@ const Wrapper = styled.div`
   display: flex;
   height: 100vh;
   overflow: hidden;
+
+  .workspace {
+    display: contents;
+  }
+  &[data-windows='true'] {
+    flex-direction: column;
+  }
+  &[data-windows='true'] .workspace {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+  .windows-header {
+    position: relative;
+    flex: none;
+    height: 40px;
+    background: var(--board-bg);
+    -webkit-app-region: drag;
+  }
+  .windows-header::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--board-hairline);
+    pointer-events: none;
+  }
+  .header-content {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    margin-left: env(titlebar-area-x, 0px);
+    width: env(titlebar-area-width, calc(100% - 138px));
+  }
+  .windows-board-head {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  .header-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex: 1 0 40px;
+    min-width: 40px;
+    height: 100%;
+    padding-right: 10px;
+  }
+  .header-actions button {
+    -webkit-app-region: no-drag;
+  }
 
   .list-pane {
     display: flex;

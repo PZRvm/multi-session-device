@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import { resolveThemeMode, THEME_SYSTEMS } from '@shared/themeSystems'
+import type { BrowserWindow } from 'electron'
 
 const mocks = vi.hoisted(() => {
   const nativeTheme = {
@@ -36,7 +37,13 @@ vi.mock('../store', () => ({
   persistThemeState: mocks.persistThemeState
 }))
 
-import { registerThemeIpc, restoreTheme, themeWindowBackground } from '..'
+import {
+  registerThemeIpc,
+  registerWindowTitleBar,
+  restoreTheme,
+  themeWindowBackground,
+  themeWindowTitleBarOverlay
+} from '..'
 
 type Handler = (...args: unknown[]) => unknown
 
@@ -69,6 +76,53 @@ describe('主题域主进程接线', () => {
       expect(resolveThemeMode('dark', false)).toBe('dark')
       expect(resolveThemeMode('system', true)).toBe('dark')
       expect(resolveThemeMode('system', false)).toBe('light')
+    })
+  })
+
+  describe('Windows 原生按钮覆盖层', () => {
+    it.each(['amber', 'mist', 'moss'] as const)('%s 首帧颜色取同一主题 token', (systemId) => {
+      for (const mode of ['light', 'dark'] as const) {
+        mocks.getThemeState.mockReturnValue({ systemId, mode, fresh: false })
+        expect(themeWindowTitleBarOverlay()).toEqual({
+          height: 40,
+          color: THEME_SYSTEMS[systemId][mode].bg,
+          symbolColor: THEME_SYSTEMS[systemId][mode].ink
+        })
+      }
+    })
+
+    it.each(['win32', 'darwin', 'linux'])('%s 只刷新登记的 Windows 覆盖层', async (platform) => {
+      const originalPlatform = process.platform
+      const target = {
+        setBackgroundColor: vi.fn(),
+        setTitleBarOverlay: vi.fn(),
+        webContents: { send: vi.fn() }
+      }
+      const plain = { ...target, setTitleBarOverlay: vi.fn() }
+      mocks.windows.push(target, plain)
+      Object.defineProperty(process, 'platform', { value: platform })
+      try {
+        registerWindowTitleBar(target as unknown as BrowserWindow)
+        mocks.getThemeState.mockReturnValue({ systemId: 'moss', mode: 'dark', fresh: false })
+        await handlerOf(IPC_CHANNELS.themeSetMode)({}, 'dark')
+        await handlerOf(IPC_CHANNELS.themeSetSystemId)({}, 'moss')
+        mocks.getThemeState.mockReturnValue({ systemId: 'mist', mode: 'system', fresh: false })
+        mocks.nativeTheme.shouldUseDarkColors = true
+        await restoreTheme()
+        ;(mocks.nativeTheme.on.mock.calls[0][1] as () => void)()
+        if (platform === 'win32') {
+          expect(target.setTitleBarOverlay).toHaveBeenCalledTimes(3)
+          expect(target.setTitleBarOverlay).toHaveBeenLastCalledWith({
+            height: 40,
+            color: THEME_SYSTEMS.mist.dark.bg,
+            symbolColor: THEME_SYSTEMS.mist.dark.ink
+          })
+        } else expect(target.setTitleBarOverlay).not.toHaveBeenCalled()
+        expect(plain.setTitleBarOverlay).not.toHaveBeenCalled()
+      } finally {
+        Object.defineProperty(process, 'platform', { value: originalPlatform })
+        mocks.windows.splice(-2)
+      }
     })
   })
 

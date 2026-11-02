@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { LANGUAGE_OPTIONS, SETTINGS_COPY } from '@shared/i18n'
+import { ERRORS_COPY, LANGUAGE_OPTIONS, SETTINGS_COPY } from '@shared/i18n'
 import type { SdkSourceSnapshot } from '@shared/types'
 import SettingsWindow from '../SettingsWindow'
 import { SETTINGS_PREVIEW, type SettingsViewModel } from '../settings/model'
@@ -22,6 +22,23 @@ const previewModel = (overrides: Partial<SettingsViewModel> = {}): SettingsViewM
 })
 
 describe('设置窗静态边界与语言切换', () => {
+  it.each(LANGUAGE_OPTIONS)('Windows 顶部复用透明图标与 $value 设置标题', ({ value }) => {
+    const { container, rerender } = render(
+      <SettingsWindow model={previewModel({ locale: value })} platform="win32" />
+    )
+    const header = screen.getByRole('banner')
+    expect(header.textContent).toBe(ERRORS_COPY[value].settingsWindowTitle)
+    expect(header.querySelector('img')?.getAttribute('src')).toContain('icon-windows.png')
+    expect(header.querySelector('img')?.getAttribute('alt')).toBe('')
+    expect(header.querySelector('button')).toBeNull()
+    expect(container.querySelector('.drag-region')).toBeNull()
+    for (const platform of ['darwin', 'linux']) {
+      rerender(<SettingsWindow model={previewModel({ locale: value })} platform={platform} />)
+      expect(screen.queryByRole('banner')).toBeNull()
+      expect(Boolean(container.querySelector('.drag-region'))).toBe(platform === 'darwin')
+    }
+  })
+
   it.each(LANGUAGE_OPTIONS)('$value 字典齐全，浏览各版面不调用业务写 API', ({ value }) => {
     const write = vi.fn()
     const onLocaleChange = vi.fn()

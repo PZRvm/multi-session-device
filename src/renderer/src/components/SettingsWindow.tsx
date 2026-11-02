@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { AlertTriangle, Command, Info, Monitor, Settings } from 'lucide-react'
 import styled from 'styled-components'
-import { SETTINGS_COPY } from '@shared/i18n'
+import { ERRORS_COPY, SETTINGS_COPY } from '@shared/i18n'
+import windowsIcon from '../../../../resources/icon-windows.png'
 import type { SettingsPaneId, SettingsViewModel } from './settings/model'
 import PaneGeneral from './settings/PaneGeneral'
 import PaneEmulator from './settings/PaneEmulator'
@@ -33,8 +34,16 @@ const SettingsWindow = ({ model, platform }: SettingsWindowProps): React.JSX.Ele
   const copy = SETTINGS_COPY[model.locale]
   const Pane = PANES[active]
   return (
-    <Wrapper lang={model.locale}>
-      {/* darwin 去标题条后窗口拖动与左上原生三灯都归系统；其余平台保留系统框，无需让位 */}
+    <Wrapper lang={model.locale} data-windows={platform === 'win32'}>
+      {platform === 'win32' ? (
+        <header className="windows-header">
+          <div className="header-content">
+            <img src={windowsIcon} width={24} height={24} alt="" />
+            <span>{ERRORS_COPY[model.locale].settingsWindowTitle}</span>
+          </div>
+        </header>
+      ) : null}
+      {/* macOS 原生三灯和原有拖拽区保留；Linux 使用系统标题栏。 */}
       {platform === 'darwin' ? <div className="drag-region" aria-hidden="true" /> : null}
       <div className="body">
         <nav aria-label={copy.navigation}>
@@ -70,6 +79,30 @@ const Wrapper = styled.div`
   ::selection {
     background: var(--accent);
     color: var(--accent-ink);
+  }
+  .windows-header {
+    flex: none;
+    height: 40px;
+    border-bottom: 1px solid var(--board-hairline);
+    -webkit-app-region: drag;
+  }
+  .header-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 100%;
+    margin-left: env(titlebar-area-x, 0px);
+    width: env(titlebar-area-width, calc(100% - 138px));
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .header-content img {
+    flex: none;
+    object-fit: contain;
+  }
+  &[data-windows='true'] nav {
+    padding-top: 12px;
   }
   .drag-region {
     position: absolute;

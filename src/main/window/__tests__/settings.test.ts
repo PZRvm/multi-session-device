@@ -5,6 +5,7 @@ import { IPC_CHANNELS } from '@shared/ipc-channels'
 
 const mocks = vi.hoisted(() => ({
   construct: vi.fn(),
+  registerTitleBar: vi.fn(),
   handle: vi.fn(),
   main: { webContents: { id: 1 } },
   dev: true,
@@ -27,7 +28,11 @@ vi.mock('@electron-toolkit/utils', () => ({
   }
 }))
 vi.mock('../../app-icon', () => ({ appIcon: undefined }))
-vi.mock('../../theme', () => ({ themeWindowBackground: () => '#fff' }))
+vi.mock('../../theme', () => ({
+  themeWindowBackground: () => '#fff',
+  themeWindowTitleBarOverlay: () => ({ height: 40, color: '#fff', symbolColor: '#111' }),
+  registerWindowTitleBar: mocks.registerTitleBar
+}))
 vi.mock('..', () => ({ getMainWindow: () => mocks.main }))
 
 class TestWindow extends EventEmitter {
@@ -75,6 +80,40 @@ const handlerOf = (channel: string): ((...args: unknown[]) => unknown) =>
   mocks.handle.mock.calls.find(([name]) => name === channel)![1]
 
 describe('设置窗口边界', () => {
+  it.each(['win32', 'darwin', 'linux'])('%s 顶部与窗口能力按平台隔离', async (platform) => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: platform })
+    try {
+      const pending = module!.openSettingsWindow()
+      const options = mocks.construct.mock.calls[0][0]
+      expect(options).toMatchObject({
+        minimizable: platform === 'win32',
+        fullscreenable: false
+      })
+      if (platform === 'win32') {
+        expect(options).toMatchObject({
+          titleBarStyle: 'hidden',
+          titleBarOverlay: { height: 40, color: '#fff', symbolColor: '#111' },
+          maximizable: true
+        })
+        expect(mocks.registerTitleBar).toHaveBeenCalledWith(windows[0])
+      } else {
+        expect(options).not.toHaveProperty('titleBarOverlay')
+        expect(mocks.registerTitleBar).not.toHaveBeenCalled()
+        if (platform === 'darwin') {
+          expect(options).toMatchObject({
+            titleBarStyle: 'hiddenInset',
+            trafficLightPosition: { x: 14, y: 12 }
+          })
+        } else expect(options).not.toHaveProperty('titleBarStyle')
+      }
+      windows[0].emit('ready-to-show')
+      await pending
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform })
+    }
+  })
+
   it('并发打开共享结果；就绪后只聚焦，保持独立与 sandbox', async () => {
     const first = module!.openSettingsWindow()
     expect(module!.openSettingsWindow()).toBe(first)
@@ -85,7 +124,7 @@ describe('设置窗口边界', () => {
       minWidth: 640,
       minHeight: 460,
       show: false,
-      minimizable: false,
+      minimizable: process.platform === 'win32',
       fullscreenable: false,
       webPreferences: { sandbox: true }
     })
@@ -176,7 +215,7 @@ describe('设置窗口边界', () => {
       const pending = module!.openSettingsWindow()
       const window = windows.at(-1)!
       if (dev) expect(window.loadURL).toHaveBeenCalledWith('http://localhost:1234/settings.html')
-      else expect(window.loadFile.mock.calls[0][0]).toMatch(/renderer\/settings\.html$/)
+      else expect(window.loadFile.mock.calls[0][0]).toMatch(/renderer[\\/]settings\.html$/)
       module!.closeSettingsWindow()
       await pending
     }

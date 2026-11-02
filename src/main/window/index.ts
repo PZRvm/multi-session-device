@@ -2,7 +2,7 @@ import { BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { appIcon } from '../app-icon'
-import { themeWindowBackground } from '../theme'
+import { registerWindowTitleBar, themeWindowBackground, themeWindowTitleBarOverlay } from '../theme'
 import { closeWizardWindow } from './wizard'
 import { closeSettingsWindow } from './settings'
 import { closeLogcatWindow } from './logcat'
@@ -32,7 +32,9 @@ export function createMainWindow(): BrowserWindow {
     title: msg('windowTitle'),
     ...(process.platform === 'darwin'
       ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 12 } }
-      : {}),
+      : process.platform === 'win32'
+        ? { titleBarStyle: 'hidden' as const, titleBarOverlay: themeWindowTitleBarOverlay() }
+        : {}),
     icon: appIcon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -40,6 +42,7 @@ export function createMainWindow(): BrowserWindow {
     }
   })
 
+  if (process.platform === 'win32') registerWindowTitleBar(window)
   window.on('page-title-updated', (event) => event.preventDefault())
 
   window.on('closed', () => {
