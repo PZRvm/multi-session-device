@@ -28,10 +28,12 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 | `notes/` | 过程笔记：开发中发生了什么，只增不改 |
 | `notes/issue/` | 发现但不修的问题——只记录，修复是另一份工作 |
 | `notes/issue/2026-10/` | 归档于 notes/issue/，按月份分组 |
+| `notes/issue/2026-11/` | 2026 年 11 月发现但未修的问题 |
 | `notes/learn/` | 经验与教训，写码前后按 tags 检索，按月份归档 |
 | `notes/learn/2026-09/` | 归档于 notes/learn/，按月份分组 |
 | `notes/learn/2026-10/` | 归档于 notes/learn/，按月份分组 |
 | `notes/summary/2026-10/` | 归档于 notes/summary/，按月份分组 |
+| `notes/summary/2026-11/` | 2026 年 11 月功能报告 |
 | `notes/task/` | 任务跟踪与拆解的检查清单 |
 | `notes/think-report/` | 功能可行性调研：配置能力、候选方案、落地路径与待确认边界 |
 | `plans/` | 施工图：一个功能一篇，Phase 2 设计确认后落盘，agent 照着施工 |
@@ -200,6 +202,10 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-31-windows-dev-merge-integration-review.md](notes/issue/2026-10/2026-10-31-windows-dev-merge-integration-review.md) — feat/windows-branch 并入 dev 的合并集成 review——0 P1 / 1 P2（dialog avdHome 白名单 win32 失效，孤立报告「打开目录」必被拒）/ 4 P3；接缝文件双侧内容完整、护栏口径一致、npmrc×下载链证伪交互
 - [2026-10-31-windows-sdk-source-switch-matrix.md](notes/issue/2026-10/2026-10-31-windows-sdk-source-switch-matrix.md) — SDK 来源切换矩阵在 win32 整体失真——classifyRoot 三个 SDK 标记全是 darwin 路径，切出零迁移不弹评估、回切被 target-junk 拒绝；真机验收实证（2026-10-22 记录的 sdkMigration adb 探测假阴性实为三处全中）
 
+### notes/issue/2026-11/
+
+- [2026-11-02-windows-test-baseline.md](notes/issue/2026-11/2026-11-02-windows-test-baseline.md) — Windows 图标替换前的全量测试已有 153 项失败，涉及平台假设、路径、符号链接与权限，未在本任务修复
+
 ### notes/learn/
 
 - [2026-10-06-红绿灯垂直居中实测.md](notes/learn/2026-10-06-红绿灯垂直居中实测.md) — darwin 红绿灯垂直居中的像素实测法——12px 灯、trafficLightPosition 的 +2 内禀偏移与 40px 板头的 y=12 公式；多实例/多显示器下的可靠测量路径
@@ -306,6 +312,10 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-22-windows-process-mgmt.md](notes/summary/2026-10/2026-10-22-windows-process-mgmt.md) — Windows 进程管理落地——runner 树杀 taskkill /T、win32 不 detached、关窗确认弹窗；win32-only 分支 mac 零回归
 - [2026-10-22-windows-studio-detect.md](notes/summary/2026-10/2026-10-22-windows-studio-detect.md) — Windows 检测链分支——studioDetect 四条候选链与 adb 候选平台化、零注册表固定目录探测、路径大小写规范化；mac 行为零变化
 - [2026-10-23-关于页真值对接.md](notes/summary/2026-10/2026-10-23-关于页真值对接.md) — 设置窗关于页接通真值：应用/Electron/Chromium 版本与数据目录经 about:get 拉取，打开目录按钮接通并贴行右缘
+
+### notes/summary/2026-11/
+
+- [2026-11-02-windows-icon.md](notes/summary/2026-11/2026-11-02-windows-icon.md) — Windows 使用无底板、黑屏、主体占高约 95% 的透明三手机图标，覆盖窗口、可执行文件与关于页，macOS 原图保留
 
 ### notes/task/
 
@@ -424,4 +434,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 330 documents -->
+<!-- 332 documents -->

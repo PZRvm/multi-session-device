@@ -28,6 +28,10 @@ tags: [windows, review, merge, integration, dev]
 4. `SettingsWindow.test.tsx:119` 快照夹具未标类型——branch 新增的 `avdHome` 必填字段静默漏过（win32-gated 不渲染故无害）；补 `: SdkSourceSnapshot` 注解让类型把门。
 5. `dialog/index.ts:63-65` DLG_DBG 调试残留（merge-base 既有）。
 
+## 修复批（2026-11-02 同日，用户拍板全修）
+
+P2-1 落地：白名单比对抽为 `isPathInsideBase`（分隔符归一——win 反斜杠归一后前缀比对，darwin 路径不含反斜杠故行为逐字节不变），双宿主纯函数用例覆盖 win 形态/同前缀不同目录/darwin 不变；既有 handler 用例断言改按 `resolve()` 计算期望——**该 win 宿主基线失败用例就此转绿（153→152）**。附带文案：三语补 `showInExplorer`，ReportApp 按 `window.api.platform` 取词（darwin 仍出 Finder）。P3-3：`dialog/index.ts` 与 `sdkSource.ts:152` 的 avdHome 复算收编 `avdHomePath()` 单源（过时的"拉不动依赖链"注释一并清除）。P3-4：SettingsWindow 快照夹具类型化并补 `avdHome` 字段（此后漏写必填字段会被 TS 拦下）。P3-5：DLG_DBG 调试残留已删。P3-2 为过程教训无代码项。门禁：typecheck/lint 0 错；全套 160 失败经隔离对账 = 152 基线 + 8 负载抖动（external/persistence/lifecycle/renderer 超时族单跑全绿），零回归。
+
 ## 处置
 
 只记录未修（纪律）。P2-1 建议单独小修批（一处分隔符 + 一处文案 + 单测）；P3-3/4 可并小清理批；P3-2 为过程教训已入档。
