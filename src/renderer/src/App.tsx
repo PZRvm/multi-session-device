@@ -657,8 +657,8 @@ const Wrapper = styled.div`
     max-width: calc(env(titlebar-area-width, calc(100vw - 138px)) - 40px);
   }
   &[data-windows='true'] .canvas-content {
-    /* 只缩小投屏可用区域，让设备等比适配右上控件下方的空间。 */
-    padding-top: 40px;
+    /* 功能区 40px + 间距 8px，减去画布内既有的 16px + 12px 留白。 */
+    padding-top: 20px;
   }
   &[data-windows='true'] .canvas-tools {
     top: 50px;

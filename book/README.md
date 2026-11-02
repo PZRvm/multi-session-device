@@ -323,7 +323,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 ### notes/summary/2026-11/
 
-- [2026-11-02-windows-device-top-clearance.md](notes/summary/2026-11/2026-11-02-windows-device-top-clearance.md) — Windows 投屏内容区避开顶部控件，手机等比缩小，默认外框 top 从 28px 改到 68px，三档缩放各 25 项通过
+- [2026-11-02-windows-device-top-clearance.md](notes/summary/2026-11/2026-11-02-windows-device-top-clearance.md) — Windows 手机顶部避开控件，后续按用户要求将实际间距由 28px 收紧至 8px，三档缩放验证通过
 - [2026-11-02-windows-icon.md](notes/summary/2026-11/2026-11-02-windows-icon.md) — Windows 使用无底板、屏幕镂空的三手机透明图标，覆盖窗口、可执行文件与关于页，黑屏版已覆盖，macOS 原图保留
 - [2026-11-02-windows-inline-window-controls.md](notes/summary/2026-11/2026-11-02-windows-inline-window-controls.md) — 取消 Windows 主窗和设置窗的通栏顶部，标识归左栏、窗口按钮与 Logcat 置于右上，正文恢复从 y=0 开始
 - [2026-11-02-windows-titlebar-adaptation.md](notes/summary/2026-11/2026-11-02-windows-titlebar-adaptation.md) — Windows 主窗和设置窗顶部适配完成，原生按钮与 Logcat 分区，窄窗问题经独立修复轮次解决，三档缩放各 23 项通过
