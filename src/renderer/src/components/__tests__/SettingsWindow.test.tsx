@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LANGUAGE_OPTIONS, SETTINGS_COPY } from '@shared/i18n'
+import type { SdkSourceSnapshot } from '@shared/types'
 import SettingsWindow from '../SettingsWindow'
 import { SETTINGS_PREVIEW, type SettingsViewModel } from '../settings/model'
 
@@ -116,8 +117,10 @@ describe('设置窗静态边界与语言切换', () => {
   })
 
   it('SDK 版面接通数据面：快照渲染三态与路径，内存阈值仍占位不伪造', async () => {
-    const snapshot = {
+    // 类型化夹具（merge review P3-4）：让新增必填字段（如 avdHome）漏写时被 TS 拦下
+    const snapshot: SdkSourceSnapshot = {
       source: 'custom',
+      avdHome: '/userdata/avd-home',
       managedRoot: '/data/AndroidSDK',
       customPath: '/vol/sdk',
       sharedPath: null,

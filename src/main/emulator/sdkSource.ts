@@ -149,7 +149,7 @@ export async function getSdkSourceSnapshot(): Promise<SdkSourceSnapshot> {
   // 保留根清单只在共享态计算（不变量：非共享态无保留根；全树 walk 有 IO 成本）
   const retainedRoots: SdkRetainedRoot[] = []
   if (state.source === 'shared-studio') {
-    const avdHome = join(app.getPath('userData'), 'avd-home')
+    const avdHome = avdHomePath()
     for (const root of [managedSdkRoot(), state.customPath]) {
       if (root === null) continue
       if ((await classifyRoot(root, migrationDeps)) !== 'sdk') continue

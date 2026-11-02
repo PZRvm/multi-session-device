@@ -147,7 +147,8 @@ const ReportBody = ({ report }: { report: ReconcileReport }): React.JSX.Element 
                     )
                   }}
                 >
-                  {copy.showInFinder}
+                  {/* 文案随平台：win 是资源管理器（merge review P2 附带） */}
+                  {window.api.platform === 'win32' ? copy.showInExplorer : copy.showInFinder}
                 </button>
               </div>
             </div>

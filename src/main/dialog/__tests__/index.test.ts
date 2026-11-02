@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolve } from 'node:path'
 
 const mocks = vi.hoisted(() => ({
   handle: vi.fn(),
@@ -37,7 +38,7 @@ vi.mock('../../locale', () => ({
         : `MSG(${key})`
 }))
 
-import { registerDialogIpc } from '../index'
+import { isPathInsideBase, registerDialogIpc } from '../index'
 
 const fakeEvent = { sender: { id: 7 } }
 const handlerOf =
@@ -96,12 +97,24 @@ describe('shell:show-item-in-folder 白名单（review P1）', () => {
       .at(-1)![1](fakeEvent, payload)
 
   it('avdHome 内放行；avdHome 外拒绝', async () => {
+    // 断言按 resolve 计算期望：win 宿主会补盘符（分隔符归一修复后本用例在 win 也绿）
     await show({ path: '/userdata/avd-home/x.ini' })
-    expect(mocks.showItemInFolder).toHaveBeenCalledWith('/userdata/avd-home/x.ini')
+    expect(mocks.showItemInFolder).toHaveBeenCalledWith(resolve('/userdata/avd-home/x.ini'))
 
     mocks.showItemInFolder.mockClear()
     await expectShellReject(() => show({ path: '/etc/passwd' }))
     expect(mocks.showItemInFolder).not.toHaveBeenCalled()
+  })
+
+  it('isPathInsideBase：win32 反斜杠路径界内放行、跨界拒绝——分隔符归一（merge review P2，双宿主纯函数）', () => {
+    expect(isPathInsideBase('C:\\avd-home\\a\\x.ini', 'C:\\avd-home')).toBe(true)
+    expect(isPathInsideBase('C:\\avd-home', 'C:\\avd-home')).toBe(true)
+    // 同前缀不同目录不算界内
+    expect(isPathInsideBase('C:\\avd-home-evil\\x', 'C:\\avd-home')).toBe(false)
+    expect(isPathInsideBase('C:\\Windows\\system32', 'C:\\avd-home')).toBe(false)
+    // darwin 形态行为不变
+    expect(isPathInsideBase('/userdata/avd-home/x.ini', '/userdata/avd-home')).toBe(true)
+    expect(isPathInsideBase('/etc/passwd', '/userdata/avd-home')).toBe(false)
   })
 
   it('`..` 穿越被归一化后拒绝（review P1 主场景）', async () => {

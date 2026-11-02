@@ -3,8 +3,8 @@ import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { DialogOptions, DialogResult } from '@shared/types'
 import { appIcon } from '../app-icon'
 import { msg } from '../locale'
-import { app } from 'electron'
 import { resolve as resolvePath } from 'node:path'
+import { avdHomePath } from '../emulator/avdHomePath'
 
 /** 原生 MessageBox 没有滚动条：detail 行数直接撑高度，超长时按钮被挤出屏幕且
  *  无法点击（用户实测对账明细弹窗，2026-10-12）。统一防线：超过预算行数截断
@@ -42,8 +42,18 @@ const isDialogOptions = (value: unknown): value is DialogOptions => {
   return true
 }
 
+/**
+ * 白名单前缀比对：win32 的 resolve 产反斜杠路径，`base + '/'` 恒不匹配会让
+ * avdHome 内文件全被拒（issue 2026-10-31-windows-dev-merge-integration-review P2）。
+ * 分隔符归一后比对——darwin 的 avdHome 路径不含反斜杠，行为逐字节不变。
+ */
+export const isPathInsideBase = (resolved: string, base: string): boolean => {
+  const key = (p: string): string => p.split('\\').join('/')
+  return key(resolved) === key(base) || key(resolved).startsWith(key(base) + '/')
+}
+
 export function registerDialogIpc(): void {
-  // 孤立组处置入口：在 Finder 中显示（用户自行删改——保留「不自动清理」语义）。
+  // 孤立组处置入口：打开所在目录（用户自行删改——保留「不自动清理」语义）。
   // 路径白名单：只放行应用 avdHome 下的文件，拒绝任意路径探测。
   ipcMain.handle(IPC_CHANNELS.shellShowItemInFolder, (_event, raw: unknown): void => {
     if (
@@ -57,14 +67,11 @@ export function registerDialogIpc(): void {
     if (target.includes('\0')) {
       throw new Error(`${IPC_CHANNELS.shellShowItemInFolder}: ${msg('shellPathRejected')}`)
     }
-    // 白名单按归一化绝对路径比对（issue review P1：未归一化前缀比对可被 `..` 穿越）
-    // avdHome 单源表达式（本地复算：dialog 测试环境拉不动 emulator/index 依赖链）
-    const base = resolvePath(app.getPath('userData'), 'avd-home')
+    // 白名单按归一化绝对路径比对（issue review P1：未归一化前缀比对可被 `..` 穿越）；
+    // avdHome 走单源叶子模块（本地复算是第 5 处旁路——merge review P3-3 收编）
+    const base = resolvePath(avdHomePath())
     const resolved = resolvePath(target)
-    if (process.env.DLG_DBG) {
-      console.log('[dbg]', JSON.stringify({ target, base, resolved, cwd: process.cwd() }))
-    }
-    if (resolved !== base && !resolved.startsWith(base + '/')) {
+    if (!isPathInsideBase(resolved, base)) {
       throw new Error(`${IPC_CHANNELS.shellShowItemInFolder}: ${msg('shellPathRejected')}`)
     }
     void shell.showItemInFolder(resolved)
