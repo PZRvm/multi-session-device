@@ -1,10 +1,13 @@
 ---
 description: 进程管理 Windows 化——runner 树杀 taskkill /T、detached 平台化与 windowsHide、before-quit 关窗确认弹窗（有设备在跑先确认再退出）；Win P3，依赖外围调研与用户批复
-status: pending
+status: completed
 created: 2026-10-22
 ---
 
 # Windows 进程管理 — plan
+
+> 实现记录（2026-10-22，feature/windows-process-mgmt，基 dev c77fbe4）：按 Build order 全部完成。runner `killGroup` 平台分支 + `defaultKillTree`（taskkill /PID /T /F，竞态 3s 宽限 + 有界重试一次，失败保留 entry）+ `spawnEmulator` posix-only detached / 恒 windowsHide；新增 `src/main/quit-confirm.ts` 与 `before-quit` 接入（留在应用折返，quitPending 由既有 finally 复位）。**三处实现偏差**：① 确认逻辑抽独立模块 `quit-confirm.ts`（index.ts 副作用重不可直测，dialog 域是 IPC 注册模块不合适）——Impact range 实际多两个新文件（含 `__tests__/quit-confirm.test.ts`）；② i18n 落四键非三键——「退出」按钮文案独立成 `quitConfirmQuitButton`（复用 quitStayButton 做「留在应用」），避免误用「强制退出」的既有语义；③ `defaultKillTree` 加 `spawnFn` 可选接缝参数——vitest 下 `vi.spyOn` 打不通 node 内置模块的 ESM 命名空间（learn 2026-10-22-vitest-esm-namespace-spy）。全套 1327 测试过（新增 12：win32 树杀 7 + quit-confirm 5）、typecheck/lint 0 错、mac 侧既有用例零改动。真机项（多开关窗弹窗、孤儿进程检查、taskkill 真实行为）归统一集成验证阶段。
+review 修复轮（2026-10-22，发现见 issue 2026-10-22-windows-process-mgmt-review）：P2-1 `makeRunner` 基线钉 `platform: 'darwin'`——套件平台无关，Windows 真机跑 `npm test` 时既有用例不再隐含 POSIX 假设；P2-2 会话结束旁路——Electron 39 的 `query-session-end`/`session-end` 是 BaseWindow 级 win32 专属事件（app 级已不存在），在 `browser-window-created` 统一挂钩 `markSessionEnding`（quit-confirm 模块标记 + `sessionEnding` 接缝），关机/注销触发的 before-quit 跳过确认弹窗；「会话结束是否恒先于 before-quit」因 Windows 版本而异，真机关机剧本仍是最终裁决（P2-2 的真机验证项保留）。P3-1～P3-4 按纪律顺延不修。1329 测试过（quit-confirm +2）、typecheck/lint 0 错。
 
 > 依据：[外围调研](../notes/think-report/20261022110137-Windows兼容问题解决方案调研.md) §2（A1 树杀 / A4 windowsHide）与 2026-10-22 用户批复：**不做托盘；Windows 关窗即退出，但退出前若有本工具启动的设备在跑，先弹确认框**。任务清单见 [todos](../todos/windows-support.md) P3。
 > 与 P1 无代码依赖（不同文件群），可并行施工；**明确不与 P1 的 platformExec 合并**——runner 管长驻进程池（detached/stdio/崩溃监听），与引导链短命令执行器需求不同，合并即引入无谓抽象（两 plan 已约定平行维护）。

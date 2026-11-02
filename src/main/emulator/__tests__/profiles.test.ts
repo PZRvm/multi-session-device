@@ -122,6 +122,9 @@ describe('listDeviceProfiles（avdmanager 输出 + jar 元数据关联）', () =
 })
 
 describe('listDeviceProfiles 默认子进程（自带 Java，不依赖宿主安装）', () => {
+  // 夹具按平台落形态：win32 是 avdmanager.bat（cmd.exe 剧本）+ java.exe 占位过 X_OK 探测；
+  // darwin 维持原 shell 脚本逐字节不变
+  const WIN = process.platform === 'win32'
   const tempRoots: string[] = []
 
   afterEach(async () => {
@@ -129,34 +132,67 @@ describe('listDeviceProfiles 默认子进程（自带 Java，不依赖宿主安�
     await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
   })
 
-  const makeSdk = async (): Promise<{ sdkRoot: string; javaBin: string; envFile: string }> => {
+  const makeSdk = async (): Promise<{
+    sdkRoot: string
+    javaBin: string
+    avdmanager: string
+    envFile: string
+  }> => {
     const root = await mkdtemp(join(tmpdir(), 'msd-profile-java-'))
     tempRoots.push(root)
     const sdkRoot = join(root, 'SDK path with spaces')
-    const javaBin = join(sdkRoot, 'jre', 'Contents', 'Home', 'bin', 'java')
+    const javaBin = WIN
+      ? join(sdkRoot, 'jre', 'bin', 'java.exe')
+      : join(sdkRoot, 'jre', 'Contents', 'Home', 'bin', 'java')
     const envFile = join(sdkRoot, 'observed-environment.txt')
     const avdmanager = avdmanagerPathFor(sdkRoot)
     await mkdir(join(javaBin, '..'), { recursive: true })
     await mkdir(join(avdmanager, '..'), { recursive: true })
-    await writeFile(
-      avdmanager,
-      '#!/bin/sh\n[ "$1" = list ] && [ "$2" = device ] || exit 23\nexec "$JAVA_HOME/bin/java"\n',
-      { mode: 0o755 }
-    )
-    await writeFile(
-      javaBin,
-      `#!/bin/sh\nprintf '%s\\n' "$JAVA_HOME" "$ANDROID_SDK_ROOT" "$ANDROID_HOME" "$ANDROID_USER_HOME" "$ANDROID_EMULATOR_HOME" "$ANDROID_AVD_HOME" > "$ANDROID_SDK_ROOT/observed-environment.txt"\nprintf '%s\\n' 'id: 43 or "pixel_8"' '    Name: Pixel 8' '    OEM : Google'\n`,
-      { mode: 0o755 }
-    )
-    return { sdkRoot, javaBin, envFile }
+    if (WIN) {
+      await writeFile(javaBin, '')
+      await writeFile(
+        avdmanager,
+        [
+          '@echo off',
+          'if not "%~1"=="list" exit /b 23',
+          'if not "%~2"=="device" exit /b 23',
+          '>"%ANDROID_SDK_ROOT%\\observed-environment.txt" echo %JAVA_HOME%',
+          '>>"%ANDROID_SDK_ROOT%\\observed-environment.txt" echo %ANDROID_SDK_ROOT%',
+          '>>"%ANDROID_SDK_ROOT%\\observed-environment.txt" echo %ANDROID_HOME%',
+          '>>"%ANDROID_SDK_ROOT%\\observed-environment.txt" echo %ANDROID_USER_HOME%',
+          '>>"%ANDROID_SDK_ROOT%\\observed-environment.txt" echo %ANDROID_EMULATOR_HOME%',
+          '>>"%ANDROID_SDK_ROOT%\\observed-environment.txt" echo %ANDROID_AVD_HOME%',
+          'echo id: 43 or "pixel_8"',
+          'echo Name: Pixel 8',
+          'echo OEM : Google'
+        ].join('\r\n')
+      )
+    } else {
+      await writeFile(
+        avdmanager,
+        '#!/bin/sh\n[ "$1" = list ] && [ "$2" = device ] || exit 23\nexec "$JAVA_HOME/bin/java"\n',
+        { mode: 0o755 }
+      )
+      await writeFile(
+        javaBin,
+        `#!/bin/sh\nprintf '%s\\n' "$JAVA_HOME" "$ANDROID_SDK_ROOT" "$ANDROID_HOME" "$ANDROID_USER_HOME" "$ANDROID_EMULATOR_HOME" "$ANDROID_AVD_HOME" > "$ANDROID_SDK_ROOT/observed-environment.txt"\nprintf '%s\\n' 'id: 43 or "pixel_8"' '    Name: Pixel 8' '    OEM : Google'\n`,
+        { mode: 0o755 }
+      )
+    }
+    return { sdkRoot, javaBin, avdmanager, envFile }
   }
 
   it.each([undefined, '/wrong/host-jdk'])(
     'PATH 无 Java、宿主 JAVA_HOME=%s 时仍枚举，SDK 路径含空格',
     async (hostJava) => {
       const { sdkRoot, envFile } = await makeSdk()
+      // 「PATH 无 Java」剧本：win32 下 PATH 只留 System32（无 java，但 cmd.exe 可解析——
+      // libuv 找裸命令只搜 cwd 与 PATH，不留 System32 会连 cmd.exe 一起 ENOENT）
+      const stubPath = WIN
+        ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')
+        : '/no-host-programs'
       vi.stubEnv('JAVA_HOME', hostJava)
-      vi.stubEnv('PATH', '/no-host-programs')
+      vi.stubEnv('PATH', stubPath)
       vi.stubEnv('ANDROID_USER_HOME', '/wrong/android-user')
       vi.stubEnv('ANDROID_EMULATOR_HOME', '/wrong/emulator-home')
       vi.stubEnv('ANDROID_AVD_HOME', '/wrong/avds')
@@ -167,8 +203,9 @@ describe('listDeviceProfiles 默认子进程（自带 Java，不依赖宿主安�
       })
       expect(profiles).toHaveLength(1)
       expect(profiles[0]).toMatchObject({ id: 'pixel_8', creatable: true, ramMiB: 7562 })
-      expect((await readFile(envFile, 'utf8')).trim().split('\n')).toEqual([
-        join(sdkRoot, 'jre', 'Contents', 'Home'),
+      // cmd 的 echo 落 CRLF，拆行容忍 \r（darwin 脚本为 \n，正则两态兼容）
+      expect((await readFile(envFile, 'utf8')).trim().split(/\r?\n/)).toEqual([
+        WIN ? join(sdkRoot, 'jre') : join(sdkRoot, 'jre', 'Contents', 'Home'),
         sdkRoot,
         sdkRoot,
         join(sdkRoot, 'android-user'),
@@ -176,17 +213,27 @@ describe('listDeviceProfiles 默认子进程（自带 Java，不依赖宿主安�
         join(sdkRoot, 'android-user', 'avd')
       ])
       expect(process.env.JAVA_HOME).toBe(hostJava)
-      expect(process.env.PATH).toBe('/no-host-programs')
+      expect(process.env.PATH).toBe(stubPath)
       expect(process.env.ANDROID_USER_HOME).toBe('/wrong/android-user')
     }
   )
 
-  it.each(['missing', 'not-executable'] as const)(
-    '自带 Java %s：明确提示修复 SDK/JRE，不能依赖宿主回退',
-    async (kind) => {
+  it('自带 Java missing：明确提示修复 SDK/JRE，不能依赖宿主回退', async () => {
+    const { sdkRoot, javaBin, envFile } = await makeSdk()
+    await rm(javaBin)
+    vi.stubEnv('JAVA_HOME', '/host-jdk')
+    await expect(
+      listDeviceProfiles({ sdkRoot, avdmanagerPath: avdmanagerPathFor(sdkRoot) })
+    ).rejects.toThrow(/SDK.*JRE.*修复/)
+    await expect(readFile(envFile)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  // not-executable 是 POSIX 执行位形态——win32 无执行位（X_OK 只看在场），无对应剧本
+  it.skipIf(process.platform === 'win32')(
+    '自带 Java not-executable：明确提示修复 SDK/JRE，不能依赖宿主回退',
+    async () => {
       const { sdkRoot, javaBin, envFile } = await makeSdk()
-      if (kind === 'missing') await rm(javaBin)
-      else await chmod(javaBin, 0o644)
+      await chmod(javaBin, 0o644)
       vi.stubEnv('JAVA_HOME', '/host-jdk')
       await expect(
         listDeviceProfiles({ sdkRoot, avdmanagerPath: avdmanagerPathFor(sdkRoot) })
@@ -196,8 +243,15 @@ describe('listDeviceProfiles 默认子进程（自带 Java，不依赖宿主安�
   )
 
   it('自带 Java 执行失败：保留 stdout 中的错误原因，并提示修复 SDK/JRE', async () => {
-    const { sdkRoot, javaBin } = await makeSdk()
-    await writeFile(javaBin, '#!/bin/sh\nprintf "broken JRE runtime\\n"\nexit 17\n')
+    const { sdkRoot, javaBin, avdmanager } = await makeSdk()
+    if (WIN) {
+      // win 剧本：失败发生在 bat 本身（java.exe 占位不参与执行）
+      await writeFile(avdmanager, '@echo off\r\necho broken JRE runtime\r\nexit /b 17\r\n')
+    } else {
+      await writeFile(javaBin, '#!/bin/sh\nprintf "broken JRE runtime\n"\nexit 17\n', {
+        mode: 0o755
+      })
+    }
     await expect(
       listDeviceProfiles({ sdkRoot, avdmanagerPath: avdmanagerPathFor(sdkRoot) })
     ).rejects.toThrow(/SDK.*JRE.*修复.*exit 17.*broken JRE runtime/)

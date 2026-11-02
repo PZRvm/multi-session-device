@@ -37,6 +37,7 @@ const snapshotOf = (over: Partial<SdkSourceSnapshot> = {}): SdkSourceSnapshot =>
   managedRoot: '/data/AndroidSDK',
   customPath: null,
   sharedPath: null,
+  avdHome: '/data/avd-home',
   detection: detectionOf(),
   migration: null,
   journalCorrupt: false,
@@ -86,7 +87,10 @@ const installApi = (snapshot: SdkSourceSnapshot): SdkApiMock => {
     dialogShow: vi.fn(async () => ({ response: 0, checkboxChecked: false })),
     listeners
   }
+  // platform 默认 darwin（mac 现状）；win32 用例在 installApi 后自行覆写 window.api
+  // （learn 2026-10-22-window-api-default-stub-injected-tests：组件读 platform 缺桩必崩）
   ;(window as unknown as { api: unknown }).api = {
+    platform: 'darwin',
     dialog: { show: mock.dialogShow },
     sdk: mock
   }
@@ -119,17 +123,17 @@ describe('PaneEmulator（SDK 来源交互化）', () => {
     expect(api.sourceSet).not.toHaveBeenCalled()
   })
 
-  it('点共享（Studio 在场）：sourceSet 走矩阵判定；direct 即完成不弹卡', async () => {
+  it('点共享（Studio 在场）：sourceSet 走矩阵判定；direct 即完成不弹窗', async () => {
     api = installApi(snapshotOf())
     await openPane(api)
     fireEvent.click(screen.getByRole('radio', { name: '共享 Android Studio SDK' }))
     await waitFor(() => {
       expect(api.sourceSet).toHaveBeenCalledWith('shared-studio', undefined)
     })
-    expect(screen.queryByRole('group', { name: '迁移 SDK' })).toBeNull()
+    expect(api.dialogShow).not.toHaveBeenCalled()
   })
 
-  it('needs-migration：确认卡展示体量与影响设备 → 原生确认 → sourceMigrate', async () => {
+  it('needs-migration：评估并入单个原生确认弹窗 → 确认后 sourceMigrate', async () => {
     api = installApi(snapshotOf())
     api.sourceSet.mockResolvedValueOnce({
       action: 'needs-migration',
@@ -142,20 +146,21 @@ describe('PaneEmulator（SDK 来源交互化）', () => {
     api.chooseCustomRoot.mockResolvedValueOnce('/vol/sdk')
     fireEvent.click(screen.getByRole('radio', { name: '自选 SDK 路径' }))
     await waitFor(() => {
-      expect(api.sourceSet).toHaveBeenCalledWith('custom', '/vol/sdk')
-    })
-    const card = await screen.findByRole('group', { name: '迁移 SDK' })
-    expect(card.textContent).toContain('/data/AndroidSDK')
-    expect(card.textContent).toContain('6.1 GB')
-    expect(card.textContent).toContain('3 台设备')
-    fireEvent.click(screen.getByRole('button', { name: '开始迁移…' }))
-    await waitFor(() => {
       expect(api.dialogShow).toHaveBeenCalledTimes(1)
+    })
+    const options = api.dialogShow.mock.calls[0]![0] as Record<string, unknown>
+    expect(options['title']).toBe('确认迁移 SDK')
+    expect(options['message']).toContain('/data/AndroidSDK → /vol/sdk')
+    expect(options['message']).toContain('6.1 GB')
+    expect(options['detail'] as string).toContain('3 台设备')
+    expect(options['buttons']).toEqual(['开始迁移…', '取消'])
+    expect(options['cancelId']).toBe(1)
+    await waitFor(() => {
       expect(api.sourceMigrate).toHaveBeenCalledWith('custom', '/vol/sdk', false)
     })
   })
 
-  it('needs-choice：迁移替换与直接使用都经原生确认后才提交', async () => {
+  it('needs-choice：三按钮弹窗，替换迁移与直接使用各走各的提交', async () => {
     api = installApi(snapshotOf())
     api.sourceSet.mockResolvedValueOnce({
       action: 'needs-choice',
@@ -168,15 +173,24 @@ describe('PaneEmulator（SDK 来源交互化）', () => {
     await openPane(api)
     api.chooseCustomRoot.mockResolvedValueOnce('/vol/sdk')
     fireEvent.click(screen.getByRole('radio', { name: '自选 SDK 路径' }))
-    const card = await screen.findByRole('group', { name: '目标路径已有 SDK' })
-    expect(card.textContent).toContain('目标路径的 SDK')
-
-    fireEvent.click(screen.getByRole('button', { name: '迁移替换…' }))
+    await waitFor(() => {
+      expect(api.dialogShow).toHaveBeenCalledTimes(1)
+    })
+    const options = api.dialogShow.mock.calls[0]![0] as Record<string, unknown>
+    expect(options['title']).toBe('目标路径已有 SDK')
+    expect(options['message']).toContain('/vol/sdk')
+    expect(options['detail'] as string).toContain('① ')
+    expect(options['detail'] as string).toContain('② ')
+    expect(options['detail'] as string).toContain('/data/AndroidSDK')
+    expect(options['detail'] as string).toContain('2 台设备')
+    expect(options['buttons']).toEqual(['迁移替换…', '直接使用…', '取消'])
+    expect(options['cancelId']).toBe(2)
+    // 默认 mock response 0 = 迁移替换
     await waitFor(() => {
       expect(api.sourceMigrate).toHaveBeenCalledWith('custom', '/vol/sdk', true)
     })
 
-    // 直接使用分支：重开二选一卡再走
+    // 直接使用分支：response 1
     api.sourceSet.mockResolvedValueOnce({
       action: 'needs-choice',
       targetRoot: '/vol/sdk',
@@ -185,16 +199,15 @@ describe('PaneEmulator（SDK 来源交互化）', () => {
       loserBytes: 6_200_000_000,
       loserBoundDevices: 0
     } as SdkSourceSwitchEvaluation)
+    api.dialogShow.mockResolvedValueOnce({ response: 1, checkboxChecked: false })
     api.chooseCustomRoot.mockResolvedValueOnce('/vol/sdk')
     fireEvent.click(screen.getByRole('radio', { name: '自选 SDK 路径' }))
-    await screen.findByRole('group', { name: '目标路径已有 SDK' })
-    fireEvent.click(screen.getByRole('button', { name: '直接使用…' }))
     await waitFor(() => {
       expect(api.sourceAdopt).toHaveBeenCalledWith('custom', '/vol/sdk')
     })
   })
 
-  it('确认框取消：不提交动作、卡片收起', async () => {
+  it('弹窗取消：不提交动作，窗口无残留', async () => {
     api = installApi(snapshotOf())
     api.sourceSet.mockResolvedValueOnce({
       action: 'needs-migration',
@@ -203,17 +216,37 @@ describe('PaneEmulator（SDK 来源交互化）', () => {
       bytes: 1000,
       boundDevices: 0
     } as SdkSourceSwitchEvaluation)
+    api.dialogShow.mockResolvedValueOnce({ response: 1, checkboxChecked: false })
     await openPane(api)
     api.chooseCustomRoot.mockResolvedValueOnce('/vol/sdk')
     fireEvent.click(screen.getByRole('radio', { name: '自选 SDK 路径' }))
-    await screen.findByRole('group', { name: '迁移 SDK' })
-    api.dialogShow.mockResolvedValueOnce({ response: 1, checkboxChecked: false })
-    fireEvent.click(screen.getByRole('button', { name: '开始迁移…' }))
     await waitFor(() => {
       expect(api.dialogShow).toHaveBeenCalledTimes(1)
     })
     expect(api.sourceMigrate).not.toHaveBeenCalled()
     expect(screen.queryByRole('group', { name: '迁移 SDK' })).toBeNull()
+  })
+
+  it('托管模式切回自选、选的是上次记住的路径：不再被静默吞掉，照走判定矩阵', async () => {
+    api = installApi(snapshotOf({ source: 'managed', customPath: '/vol/sdk' }))
+    await openPane(api)
+    api.chooseCustomRoot.mockResolvedValueOnce('/vol/sdk')
+    fireEvent.click(screen.getByRole('radio', { name: '自选 SDK 路径' }))
+    await waitFor(() => {
+      expect(api.sourceSet).toHaveBeenCalledWith('custom', '/vol/sdk')
+    })
+  })
+
+  it('已在自选模式时重选同路径：仍是无操作（不触发判定）', async () => {
+    api = installApi(snapshotOf({ source: 'custom', customPath: '/vol/sdk' }))
+    await openPane(api)
+    api.chooseCustomRoot.mockResolvedValueOnce('/vol/sdk')
+    // 重选入口是选中行里的「更换路径…」（单选钮本身在已选中时会被 currentMode 守卫拦下）
+    fireEvent.click(screen.getByRole('button', { name: '更换路径…' }))
+    await waitFor(() => {
+      expect(api.chooseCustomRoot).toHaveBeenCalled()
+    })
+    expect(api.sourceSet).not.toHaveBeenCalled()
   })
 
   it('rejected：词条映射到错误行（运行会话示例）', async () => {
@@ -402,5 +435,61 @@ describe('PaneEmulator（SDK 来源交互化）', () => {
     api = installApi(snapshotOf())
     await openPane(api)
     expect(screen.queryByText('保留的 SDK（仅共享模式）')).toBeNull()
+  })
+})
+
+describe('win32 性能建议卡片与路径过长警示（plan 2026-10-23-windows-settings-finish）', () => {
+  const copy = SETTINGS_COPY['zh-CN']
+
+  /** installApi 之上覆写 win32 平台与深链桩（默认桩是 darwin） */
+  const installWin32Api = (
+    snapshot: SdkSourceSnapshot
+  ): { api: SdkApiMock; openDefender: ReturnType<typeof vi.fn> } => {
+    const api = installApi(snapshot)
+    const openDefender = vi.fn(async () => undefined)
+    ;(window as unknown as { api: unknown }).api = {
+      platform: 'win32',
+      dialog: { show: api.dialogShow, openWindowsDefender: openDefender },
+      sdk: api
+    }
+    return { api, openDefender }
+  }
+
+  it('win32 + 托管快照：卡片出现，路径行为托管根与 avdHome，按钮调深链，短根不警', async () => {
+    const { api, openDefender } = installWin32Api(snapshotOf())
+    await openPane(api)
+    expect(screen.getByText(copy.defenderTitle)).toBeTruthy()
+    expect(screen.getByText('/data/avd-home')).toBeTruthy()
+    // 托管根同时出现在单选行与卡片 → 至少两处
+    expect(screen.getAllByText('/data/AndroidSDK').length).toBeGreaterThanOrEqual(2)
+    fireEvent.click(screen.getByRole('button', { name: copy.defenderOpen }))
+    expect(openDefender).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(copy.pathTooLongTitle)).toBeNull()
+  })
+
+  it('darwin：卡片与警示均不渲染（mac 零回归）', async () => {
+    const api = installApi(snapshotOf())
+    await openPane(api)
+    expect(screen.queryByText(copy.defenderTitle)).toBeNull()
+    expect(screen.queryByText(copy.pathTooLongTitle)).toBeNull()
+  })
+
+  it('win32 + 共享快照：卡片活动根跟随 sharedPath', async () => {
+    const { api } = installWin32Api(
+      snapshotOf({ source: 'shared-studio', sharedPath: 'D:/Android/Sdk' })
+    )
+    await openPane(api)
+    expect(screen.getAllByText('D:/Android/Sdk').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('win32 + 160 字符自选根：警示出现含长度数字，卡片活动根跟随自选路径', async () => {
+    const longRoot = `C:\\${'a'.repeat(157)}` // 3 + 157 = 160 字符
+    const { api } = installWin32Api(
+      snapshotOf({ source: 'custom', customPath: longRoot, managedRoot: '/data/AndroidSDK' })
+    )
+    await openPane(api)
+    expect(screen.getByText(copy.pathTooLongTitle)).toBeTruthy()
+    expect(screen.getByText(copy.pathTooLongHint.replace('{length}', '160'))).toBeTruthy()
+    expect(screen.getAllByText(longRoot).length).toBeGreaterThanOrEqual(2)
   })
 })

@@ -103,6 +103,8 @@ const zhCN = {
   saveVerifyFailed: '保存前核验未通过：{message}',
   saveCameraVerifyFailed: '保存前无法核验摄像头：{message}',
   unexpectedExit: '模拟器意外退出：{detail}',
+  whpxMissing:
+    '启动失败：Windows 虚拟化（WHPX）未开启——请在「启用或关闭 Windows 功能」中勾选「Windows 虚拟机监控程序平台」并重启电脑后重试（{detail}）',
   stopFailedError: '停止失败：{message}',
   createVerifyFailed: '创建后核验失败（{message}）',
   createFailedRollbackFailed:
@@ -178,6 +180,8 @@ const zhCN = {
   sdkSharedReadOnly:
     '共享 Android Studio SDK 只读：不安装/不升级/不卸载 SDK 包，缺包请回 Android Studio 安装或切换来源',
   sdkMigrationBusy: 'SDK 迁移进行中，此操作暂不可用——请到设置的 SDK 来源页继续或回滚',
+  sdkEmulatorProcessAlive:
+    '检测到仍在运行的模拟器进程（可能是应用重启遗留的残留实例）——请先在任务管理器结束 qemu-system 开头的进程后重试',
   dialogDetailTruncated: '……（报告过长，已省略后 {omitted} 行）',
   shellPathRejected: '路径不在应用数据目录内，已拒绝',
   wizardCallerNotFound: '无法定位调用方窗口',
@@ -253,6 +257,8 @@ const zhCN = {
   checksumMismatch: '校验和不匹配（{algorithm}）：期望 {expected}…，实际 {actual}…',
   sdkExtractFailed: '解压失败（exit {code}）：{tail}',
   downloadHttpFailed: '下载失败：HTTP {status}（{url}）',
+  sdkWindowsSourcePending:
+    '当前平台引导源尚未钉版（下载地址与校验值待实测填入），本功能等待对应平台的集成验证阶段',
   sdkUninstallTimeout: 'sdkmanager --uninstall {pkg} 超时（{seconds} 秒）',
   sdkUninstallTimeoutKilled: 'sdkmanager --uninstall {pkg} 超时（{seconds} 秒），进程已终止',
   sdkUninstallFailed: 'sdkmanager --uninstall {pkg} 失败（exit {code}）：{tail}',
@@ -285,6 +291,8 @@ const zhCN = {
   cameraFormatUnrecognized: '摄像头输出格式无法识别，请检查 emulator 版本',
   cameraPermissionNotGranted: '摄像头权限未开放，请在系统设置中允许访问并重启应用',
   cameraNoneFound: '未枚举到摄像头；请检查连接及本应用的系统权限，刷新后重试',
+  cameraNoneFoundWindows:
+    '未枚举到摄像头；Windows 可能已对桌面应用关闭相机——请在系统「设置 > 隐私和安全性 > 相机」中开启后刷新重试',
   cameraPermissionRequired: '需要允许本应用访问摄像头',
   cameraListTimeout: '摄像头枚举超时（{seconds} 秒），进程已终止',
   cameraListFailed: '摄像头枚举失败（exit {code}）：{tail}',
@@ -428,11 +436,15 @@ const zhCN = {
     '可以留在应用重试退出；强制退出会留下仍在运行的模拟器进程（它们占用的端口与 AVD 锁会让下次启动被拦截）。',
   quitStayButton: '留在应用',
   quitForceButton: '强制退出',
+  quitConfirmTitle: '退出将停止运行中的设备',
+  quitConfirmMessage: '有 {count} 台设备正在运行，退出会停止它们',
+  quitConfirmDetail: '留在应用可继续使用；选择退出会先停止全部设备，再关闭应用。',
+  quitConfirmQuitButton: '退出',
   slotFront: '前置摄像头',
   slotRear: '后置摄像头',
   cameraOccupiedNotice: '{slot}被设备「{holder}」占用，本次以模拟画面运行',
   cameraUnavailableNotice: '{slot}（{deviceId}）已不可用，本次以模拟画面运行',
-  compatCrossArch: '跨架构镜像（{abi}）在 macOS Apple Silicon 本期不支持',
+  compatCrossArch: '跨架构镜像（{abi}）不支持——macOS（Apple Silicon）需 arm64，Windows 需 x86_64',
   compatPreview: 'Preview/canary 镜像（{codename}），本期不开放创建',
   compatNotCreatable: '该画像无法通过 avdmanager 创建（元数据未关联）',
   compatUnknownForm: '画像形态未知，兼容性无法判定',
@@ -572,6 +584,10 @@ const zhTW: ErrorsCopy = {
   saveVerifyFailed: '儲存前核驗未通過：{message}',
   saveCameraVerifyFailed: '儲存前無法核驗鏡頭：{message}',
   unexpectedExit: '模擬器意外退出：{detail}',
+  whpxMissing:
+    // 功能顯示名照抄繁中系統實際文案「Windows Hypervisor 平台」（review P2-1 實測校對）——
+    // 直譯「虛擬機器監控平台」會讓使用者在功能清單裡搜不到對應項
+    '啟動失敗：Windows 虛擬化（WHPX）未開啟——請在「開啟或關閉 Windows 功能」中勾選「Windows Hypervisor 平台」並重新啟動電腦後重試（{detail}）',
   stopFailedError: '停止失敗：{message}',
   createVerifyFailed: '建立後核驗失敗（{message}）',
   createFailedRollbackFailed:
@@ -642,6 +658,8 @@ const zhTW: ErrorsCopy = {
   sdkSharedReadOnly:
     '共享 Android Studio SDK 唯讀：不安裝/不升級/不解除安裝 SDK 套件，缺套件請回 Android Studio 安裝或切換來源',
   sdkMigrationBusy: 'SDK 遷移進行中，此操作暫不可用——請到設定的 SDK 來源頁繼續或回復',
+  sdkEmulatorProcessAlive:
+    '偵測到仍在執行的模擬器處理程序（可能是應用重啟遺留的殘留實例）——請先在工作管理員結束 qemu-system 開頭的處理程序後重試',
   dialogDetailTruncated: '……（報告過長，已省略後 {omitted} 行）',
   shellPathRejected: '路徑不在應用程式資料目錄內，已拒絕',
   wizardCallerNotFound: '無法定位呼叫方視窗',
@@ -717,6 +735,8 @@ const zhTW: ErrorsCopy = {
   checksumMismatch: '校驗和不匹配（{algorithm}）：期望 {expected}…，實際 {actual}…',
   sdkExtractFailed: '解壓失敗（exit {code}）：{tail}',
   downloadHttpFailed: '下載失敗：HTTP {status}（{url}）',
+  sdkWindowsSourcePending:
+    '當前平台引導源尚未釘版（下載位址與校驗值待實測填入），本功能等待對應平台的整合驗證階段',
   sdkUninstallTimeout: 'sdkmanager --uninstall {pkg} 逾時（{seconds} 秒）',
   sdkUninstallTimeoutKilled: 'sdkmanager --uninstall {pkg} 逾時（{seconds} 秒），處理程序已終止',
   sdkUninstallFailed: 'sdkmanager --uninstall {pkg} 失敗（exit {code}）：{tail}',
@@ -745,6 +765,8 @@ const zhTW: ErrorsCopy = {
   cameraFormatUnrecognized: '鏡頭輸出格式無法識別，請檢查 emulator 版本',
   cameraPermissionNotGranted: '鏡頭權限未開放，請在系統設定中允許存取並重新啟動應用程式',
   cameraNoneFound: '未列舉到鏡頭；請檢查連接及本應用程式的系統權限，重新整理後重試',
+  cameraNoneFoundWindows:
+    '未列舉到鏡頭；Windows 可能已對桌面應用程式關閉相機——請在系統「設定 > 隱私權與安全性 > 相機」中開啟後重新整理重試',
   cameraPermissionRequired: '需要允許本應用程式存取鏡頭',
   cameraListTimeout: '鏡頭列舉逾時（{seconds} 秒），處理程序已終止',
   cameraListFailed: '鏡頭列舉失敗（exit {code}）：{tail}',
@@ -882,11 +904,15 @@ const zhTW: ErrorsCopy = {
     '可以留在應用程式重試退出；強制退出會留下仍在執行的模擬器處理程序（它們占用的連接埠與 AVD 鎖會讓下次啟動被攔截）。',
   quitStayButton: '留在應用程式',
   quitForceButton: '強制退出',
+  quitConfirmTitle: '離開將停止執行中的裝置',
+  quitConfirmMessage: '有 {count} 台裝置正在執行，離開會停止它們',
+  quitConfirmDetail: '留在應用程式可繼續使用；選擇離開會先停止全部裝置，再關閉應用程式。',
+  quitConfirmQuitButton: '離開',
   slotFront: '前置鏡頭',
   slotRear: '後置鏡頭',
   cameraOccupiedNotice: '{slot}被裝置「{holder}」占用，本次以模擬畫面執行',
   cameraUnavailableNotice: '{slot}（{deviceId}）已不可用，本次以模擬畫面執行',
-  compatCrossArch: '跨架構映像（{abi}）在 macOS Apple Silicon 本期不支援',
+  compatCrossArch: '跨架構映像（{abi}）不支援——macOS（Apple Silicon）需 arm64，Windows 需 x86_64',
   compatPreview: 'Preview/canary 映像（{codename}），本期不開放建立',
   compatNotCreatable: '該畫像無法透過 avdmanager 建立（中繼資料未關聯）',
   compatUnknownForm: '畫像形態未知，相容性無法判定',
@@ -1034,6 +1060,8 @@ const enUS: ErrorsCopy = {
   saveVerifyFailed: 'Pre-save verification failed: {message}',
   saveCameraVerifyFailed: 'Cannot verify cameras before saving: {message}',
   unexpectedExit: 'The emulator exited unexpectedly: {detail}',
+  whpxMissing:
+    'Startup failed: Windows virtualization (WHPX) is not enabled—turn on "Windows Hypervisor Platform" in "Turn Windows features on or off", reboot, then retry ({detail})',
   stopFailedError: 'Stop failed: {message}',
   createVerifyFailed: 'Post-create verification failed ({message})',
   createFailedRollbackFailed:
@@ -1115,6 +1143,8 @@ const enUS: ErrorsCopy = {
     'The shared Android Studio SDK is read-only: packages cannot be installed, upgraded or uninstalled here. Install missing packages in Android Studio or switch the SDK source',
   sdkMigrationBusy:
     'An SDK migration is in progress and this operation is unavailable. Continue or roll it back on the SDK source page in Settings',
+  sdkEmulatorProcessAlive:
+    'Emulator processes are still running (possibly left over from an app restart) — end the qemu-system processes in Task Manager and retry',
   dialogDetailTruncated: '…(report truncated, {omitted} more lines omitted)',
   shellPathRejected: 'The path is outside the app data directory and was rejected',
   chooseSdkRootTitle: 'Choose the SDK root folder',
@@ -1196,6 +1226,8 @@ const enUS: ErrorsCopy = {
   checksumMismatch: 'Checksum mismatch ({algorithm}): expected {expected}…, got {actual}…',
   sdkExtractFailed: 'Extraction failed (exit {code}): {tail}',
   downloadHttpFailed: 'Download failed: HTTP {status} ({url})',
+  sdkWindowsSourcePending:
+    'Bootstrap sources for this platform are not pinned yet (URLs and checksums pending real-device verification); waiting for that platform integration phase',
   sdkUninstallTimeout: 'sdkmanager --uninstall {pkg} timed out ({seconds} s)',
   sdkUninstallTimeoutKilled:
     'sdkmanager --uninstall {pkg} timed out ({seconds} s); the process was terminated',
@@ -1231,6 +1263,8 @@ const enUS: ErrorsCopy = {
     'Camera permission is not granted; allow access in System Settings and restart the app',
   cameraNoneFound:
     'No cameras enumerated; check connections and this app\u2019s system permissions, then refresh and retry',
+  cameraNoneFoundWindows:
+    'No cameras enumerated; Windows may have camera access disabled for desktop apps—enable it in Settings > Privacy & security > Camera, then refresh and retry',
   cameraPermissionRequired: 'Camera access needs to be allowed for this app',
   cameraListTimeout: 'Camera enumeration timed out ({seconds} s); the process was terminated',
   cameraListFailed: 'Camera enumeration failed (exit {code}): {tail}',
@@ -1382,6 +1416,10 @@ const enUS: ErrorsCopy = {
     'You can stay in the app and retry quitting; force-quitting leaves emulator processes running (their ports and AVD locks will block the next start).',
   quitStayButton: 'Stay in app',
   quitForceButton: 'Force quit',
+  quitConfirmTitle: 'Quitting will stop running devices',
+  quitConfirmMessage: '{count} device(s) are running; quitting stops them all',
+  quitConfirmDetail: 'Stay in app to keep them running; Quit stops every device before closing.',
+  quitConfirmQuitButton: 'Quit',
   slotFront: 'front camera',
   slotRear: 'rear camera',
   cameraOccupiedNotice:
@@ -1389,7 +1427,7 @@ const enUS: ErrorsCopy = {
   cameraUnavailableNotice:
     'The {slot} ({deviceId}) is no longer available; running with the emulated camera this time',
   compatCrossArch:
-    'Cross-architecture images ({abi}) are unsupported on macOS Apple Silicon this phase',
+    'Cross-architecture images ({abi}) are unsupported—macOS (Apple Silicon) needs arm64, Windows needs x86_64',
   compatPreview: 'Preview/canary image ({codename}); creation is not open this phase',
   compatNotCreatable: 'This profile cannot be created via avdmanager (metadata not linked)',
   compatUnknownForm: 'Unknown profile form factor; compatibility cannot be determined',

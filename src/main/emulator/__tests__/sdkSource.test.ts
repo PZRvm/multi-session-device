@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 
 const mocks = vi.hoisted(() => ({
   readFile: vi.fn(),
@@ -25,9 +26,11 @@ vi.mock('../studioDetect', () => ({
 }))
 
 import {
+  getSdkSourceSnapshot,
   getSdkSourceState,
   isSharedReadOnly,
   javaBinFor,
+  javaHomeFor,
   managedSdkRoot,
   persistSdkSourceState,
   resetSdkSourceStateForTest,
@@ -200,6 +203,12 @@ describe('sdkSource store（sdk.json）', () => {
     expect(javaBinFor()).toBe('/Users/t/Library/Android/sdk/jre/Contents/Home/bin/java')
   })
 
+  it('win32：内置布局无 Contents 层、二进制名 java.exe——就绪门不再 darwin 写死假阴性', () => {
+    expect(javaHomeFor('C:/sdk', 'win32')).toBe(join('C:/sdk', 'jre'))
+    expect(javaBinFor('C:/sdk', 'win32')).toBe(join('C:/sdk', 'jre', 'bin', 'java.exe'))
+    // （darwin 回归由上一条用例的缺省断言锚定，字面量在此不写——join 分隔符随宿主）
+  })
+
   it('boot 恢复为共享态时自动补跑一次检测；非共享态不跑', async () => {
     await loadWith(
       JSON.stringify({
@@ -230,5 +239,27 @@ describe('sdkSource store（sdk.json）', () => {
       })
     )
     expect(resolveSdkRoot()).toBe('/Users/t/Library/Android/sdk')
+  })
+})
+
+describe('getSdkSourceSnapshot（plan 2026-10-23-windows-settings-finish）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    studioMocks.get.mockReturnValue(null)
+    resetSdkSourceStateForTest()
+  })
+
+  it('托管缺省快照：avdHome 为 avdHomePath 单源值，journal 缺席', async () => {
+    // journal 读取（唯一一次 IO）：ENOENT → absent，migration null / journalCorrupt false
+    mocks.readFile.mockImplementationOnce(() =>
+      Promise.reject(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+    )
+    const snapshot = await getSdkSourceSnapshot()
+    expect(snapshot.avdHome).toBe('/userdata/avd-home')
+    expect(snapshot.source).toBe('managed')
+    expect(snapshot.managedRoot).toBe('/userdata/AndroidSDK')
+    expect(snapshot.migration).toBeNull()
+    expect(snapshot.journalCorrupt).toBe(false)
+    expect(snapshot.retainedRoots).toEqual([])
   })
 })

@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process'
-import { join } from 'node:path'
 import { systemPreferences } from 'electron'
 import type { CameraSnapshot, HostWebcam } from '@shared/types'
 import { msg } from '../locale'
+import { sdkPaths } from './sdk'
 
 /** 所装 emulator 的摄像头探针；macOS 权限由宿主应用身份与取流责任链共同决定。 */
 export type WebcamEntry = HostWebcam
@@ -16,7 +16,11 @@ const WEBCAM_LIST_TIMEOUT_MS = 10_000
 
 const defaultRunner = (emulatorPath: string, args: string[]): Promise<string> =>
   new Promise((resolve, reject) => {
-    const child = spawn(emulatorPath, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    // windowsHide：win32 上 GUI 进程拉 console 子进程不闪黑框（posix 无副作用）
+    const child = spawn(emulatorPath, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true
+    })
     const out: Buffer[] = []
     const err: Buffer[] = []
     child.stdout?.on('data', (chunk: Buffer) => out.push(chunk))
@@ -76,18 +80,35 @@ export const requestCameraPermission = async (): Promise<boolean> => {
     permissionRequest = null
   }
 }
+/** 摄像头系统设置深链（平台单源，plan 2026-10-22-windows-emulator-env 设计 4）：
+ *  mac 系统偏好（原串逐字节不变）、Windows 隐私设置、其余平台无入口（null = no-op）。 */
+export const cameraSettingsUrlFor = (platform: NodeJS.Platform): string | null =>
+  platform === 'darwin'
+    ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera'
+    : platform === 'win32'
+      ? 'ms-settings:privacy-webcam'
+      : null
+
+/** 空列表错误文案：win32 指向系统隐私设置（Windows 对桌面应用只有全局相机开关、
+ *  无 Electron 可查的 API，permission 恒 granted——空列表即事实）；其余平台
+ *  维持原 permission 三分支，darwin 原文逐字节不变。 */
+export const cameraListEmptyMessage = (
+  permission: CameraSnapshot['permission'],
+  platform: NodeJS.Platform
+): string => {
+  if (platform === 'win32') return msg('cameraNoneFoundWindows')
+  if (permission === 'not-determined') return msg('cameraPermissionRequired')
+  if (permission === 'denied' || permission === 'restricted') {
+    return msg('cameraPermissionNotGranted')
+  }
+  return msg('cameraNoneFound')
+}
+
 export const readCameraSnapshot = async (sdkRoot: string): Promise<CameraSnapshot> => {
   const permission = cameraPermission()
   try {
     const devices = await listWebcams(sdkRoot)
-    const error =
-      devices.length > 0
-        ? null
-        : permission === 'not-determined'
-          ? msg('cameraPermissionRequired')
-          : permission === 'denied' || permission === 'restricted'
-            ? msg('cameraPermissionNotGranted')
-            : msg('cameraNoneFound')
+    const error = devices.length > 0 ? null : cameraListEmptyMessage(permission, process.platform)
     return { permission, devices, error }
   } catch (error) {
     return {
@@ -102,7 +123,8 @@ export const listWebcams = async (
   sdkRoot: string,
   deps: WebcamDeps = {}
 ): Promise<WebcamEntry[]> => {
-  const emulatorPath = join(sdkRoot, 'emulator', 'emulator')
+  // emulatorBin 随平台带 .exe 后缀（sdkPaths 单源）
+  const emulatorPath = sdkPaths(sdkRoot).emulatorBin
   const run = deps.runner ?? defaultRunner
   const output = await run(emulatorPath, ['-avd', '__webcam_probe__', '-webcam-list'])
   const entries = parseWebcamList(output)

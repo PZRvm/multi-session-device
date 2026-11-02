@@ -11,20 +11,38 @@ import {
   prepareAppShutdown,
   resumeAfterShutdown,
   resumeExternalSessions,
+  runningDeviceCount,
   stopExternalTracking
 } from './devices'
+import { confirmQuitIfNeeded, markSessionEnding, reviveMainWindow } from './quit-confirm'
 import { restoreTheme } from './theme'
 import { restoreLocale } from './locale'
 import { restoreSdkSource } from './emulator/sdkSource'
 import { appIcon } from './app-icon'
 import { msg } from './locale'
 
+// 单实例锁（issue 2026-10-22-windows-quit-stay-no-window）：win32「留在应用」折返后主窗
+// 已销毁、无托盘无 dock——二次启动经 second-instance 唤回/聚焦主窗；被拒的第二实例直接退出
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    reviveMainWindow({ getMainWindow, createMainWindow })
+  })
+}
+
 app.whenReady().then(() => {
+  if (!gotSingleInstanceLock) return
   electronApp.setAppUserModelId('com.foreunit.multi-session-device')
   if (process.platform === 'darwin') app.dock?.setIcon(appIcon)
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
+    // Windows 会话结束（关机/注销）经窗口事件先知会（BaseWindow 级、win32 专属）：
+    // 标记后 before-quit 跳过关窗确认弹窗，不让模态框挂住系统关机；其他平台空挂无副作用
+    window.on('query-session-end', markSessionEnding)
+    window.on('session-end', markSessionEnding)
   })
 
   registerIpcHandlers()
@@ -54,11 +72,15 @@ app.on('window-all-closed', () => {
 let quitGuard = false
 let quitPending = false
 app.on('before-quit', (event) => {
-  if (quitGuard) return
+  // 无单实例锁的进程是被拒的第二实例：让默认退出直行，不走清理链
+  if (quitGuard || !gotSingleInstanceLock) return
   event.preventDefault()
   if (quitPending) return
   quitPending = true
   void (async () => {
+    // Windows 关窗确认（plan 2026-10-22-windows-process-mgmt）：win32 且有本工具启动的
+    // 设备在跑时先仲裁；留在应用直接折返——录制/设备清理均未启动，finally 复位 quitPending
+    if (!(await confirmQuitIfNeeded({ runningCount: runningDeviceCount }))) return
     if (!(await prepareRecordingQuit())) return
     const { leftovers } = await prepareAppShutdown()
     await shutdownStreams()

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Download, ListChecks, Loader2, RotateCcw, Settings, SquareCheck } from 'lucide-react'
 import styled from 'styled-components'
 import type {
   CreateDeviceInput,
@@ -11,7 +11,11 @@ import type {
   SdkSourceMode
 } from '@shared/types'
 import { WIZARD_COPY, format } from '@shared/i18n'
-import { assessImageCompatibility, profileHasSupportedImage } from '@shared/compatibility'
+import {
+  assessImageCompatibility,
+  hostImageAbi,
+  profileHasSupportedImage
+} from '@shared/compatibility'
 import { normalizeAdvancedSettings } from '@shared/settings-contract'
 import Button from './Button'
 import Input from './Input'
@@ -115,6 +119,15 @@ type DeviceWizardProps = {
   onUninstallImage?: (packageName: string) => Promise<void>
 }
 
+/** 共享 SDK 补装指引的步骤图标（lucide，14px；文案键见 i18n sdkSharedGuideStep1-5） */
+const SHARED_GUIDE_STEPS = [
+  { icon: Settings, textKey: 'sdkSharedGuideStep1' },
+  { icon: ListChecks, textKey: 'sdkSharedGuideStep2' },
+  { icon: SquareCheck, textKey: 'sdkSharedGuideStep3' },
+  { icon: Download, textKey: 'sdkSharedGuideStep4' },
+  { icon: RotateCcw, textKey: 'sdkSharedGuideStep5' }
+] as const
+
 const DeviceWizard = ({
   onCreate,
   onCancel,
@@ -165,6 +178,11 @@ const DeviceWizard = ({
   const [bootstrapError, setBootstrapError] = useState<string | null>(null)
   useEffect(() => {
     if (profiles.error === null || sdkBootstrapable || bootstrapping || bootstrapPending) return
+    // 共享模式不引导：sdkBootstrap 入口被共享只读守卫拒绝（必败），指引已在
+    // profiles.error 的 sdkSharedNotReady 文案里——补装走 Android Studio SDK Manager
+    // （issue 2026-10-31-shared-mode-bootstrap-button-misleading）。模式未知（null，
+    // 随镜像清单异步到达）同样等待（review P3-6）——清单整体失败时错误块+重试已在场
+    if (sdkSource === null || sdkSource === 'shared-studio') return
     let alive = true
     void (async () => {
       try {
@@ -183,7 +201,7 @@ const DeviceWizard = ({
     return () => {
       alive = false
     }
-  }, [profiles.error, sdkBootstrapable, bootstrapping, bootstrapPending])
+  }, [profiles.error, sdkBootstrapable, bootstrapping, bootstrapPending, sdkSource])
   // 两段式忙碌（用户 2026-10-12 反馈）：点击先只是 pending（钮禁用、许可弹窗在途），
   // 首个 sdk:progress 事件（= 许可已确认、组件开始下载）才转「引导中」spinner——
   // 许可拒绝在 main 侧静默返回当前态，这里不报错，按钮原地恢复
@@ -485,12 +503,14 @@ const DeviceWizard = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 依赖收敛到 id/packageName：整对象入依赖会在清单刷新时把未变化的选择误判重拉
   }, [selectedProfile?.id, selectedImage?.packageName, onWizardCapabilities])
 
-  // 逐镜像兼容性（画像未选时不判——verdict 显示为空）。创建守卫在 main，此处仅展示
+  // 逐镜像兼容性（画像未选时不判——verdict 显示为空）。创建守卫在 main，此处仅展示；
+  // 宿主 ABI 单源（sandbox 渲染层读不到 process.platform，经 preload 的 platform 注入）
   const verdicts = useMemo(() => {
     const map = new Map<string, ReturnType<typeof assessImageCompatibility>>()
     if (selectedProfile === null) return map
+    const hostAbi = hostImageAbi(window.api.platform)
     for (const entry of images.data) {
-      map.set(entry.packageName, assessImageCompatibility(selectedProfile, entry, locale))
+      map.set(entry.packageName, assessImageCompatibility(selectedProfile, entry, locale, hostAbi))
     }
     return map
   }, [selectedProfile, images.data, locale])
@@ -504,7 +524,9 @@ const DeviceWizard = ({
   const eligibleProfiles = useMemo(
     () =>
       sharedMode && profilesReady
-        ? profiles.data.filter((entry) => profileHasSupportedImage(entry, images.data, locale))
+        ? profiles.data.filter((entry) =>
+            profileHasSupportedImage(entry, images.data, locale, hostImageAbi(window.api.platform))
+          )
         : profiles.data,
     [sharedMode, profilesReady, profiles.data, images.data, locale]
   )
@@ -670,7 +692,28 @@ const DeviceWizard = ({
           }
           emptyNote={sharedNoImages ? copy.sharedModeNoImages : null}
         />,
-        sdkBootstrapable ? (
+        // 共享态：必败按钮换分步图文指引（issue 2026-10-31-shared-mode-bootstrap-
+        // button-misleading 修复批二）；其余模式维持引导按钮，渲染侧再闸一次模式——
+        // sdkSource 随镜像清单异步到达，可能晚于报错与探测置位
+        sdkSource === 'shared-studio' ? (
+          <SharedSdkGuide>
+            <p className="guide-title">{copy.sdkSharedGuideTitle}</p>
+            <ol className="guide-steps">
+              {SHARED_GUIDE_STEPS.map(({ icon: Icon, textKey }, index) => (
+                <li className="guide-step" key={textKey}>
+                  <span className="guide-index">{index + 1}</span>
+                  <Icon size={14} aria-hidden="true" className="guide-icon" />
+                  <span className="guide-text">
+                    {/* 第一步的入口随平台（mac 是 Preferences/Cmd+,，review P3-8） */}
+                    {textKey === 'sdkSharedGuideStep1' && window.api.platform === 'darwin'
+                      ? copy.sdkSharedGuideStep1Mac
+                      : copy[textKey]}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </SharedSdkGuide>
+        ) : sdkBootstrapable && sdkSource !== null ? (
           <>
             <Button
               onClick={() => void runSdkBootstrap()}
@@ -839,6 +882,82 @@ const DeviceWizard = ({
   )
 }
 
+/* 共享态补装指引（分步图文）：与错误块同列的浅底卡——board 令牌配色，
+   深浅主题随 CSS 变量自适应；图标用产品 accent 色（tile-ink） */
+const SharedSdkGuide = styled.div`
+  /* 独占一行：error-block 是 flex 行（错误文案+重试按钮），basis 100% 把整卡
+     换到下一行全宽展示（用户 2026-10-31 验收反馈：不与上方内容同行）。根是 div：
+     标题 p 与步骤 ol 分离（ol 内容模型只许 li——review P3-7） */
+  flex-basis: 100%;
+  min-width: 0;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  background: var(--board-bg-raised);
+  border: 1px solid var(--board-hairline);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--board-ink);
+
+  .guide-title {
+    margin: 0 0 2px;
+    font-weight: 600;
+    color: var(--board-ink);
+  }
+
+  .guide-steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .guide-step {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* 步序贯穿线（时间轴）：从当前徽章下缘跨过行距接到下一枚徽章中心；
+     徽章带底色置上层，线从珠后穿过（末步不画） */
+  .guide-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 7.5px;
+    top: 17px;
+    bottom: -15px;
+    width: 1px;
+    background: var(--board-hairline);
+  }
+
+  .guide-index {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 50%;
+    background: var(--board-bg-raised);
+    font-size: 10px;
+    color: var(--board-ink-dim);
+  }
+
+  .guide-icon {
+    flex: none;
+    color: var(--board-tile-ink);
+  }
+
+  .guide-text {
+    color: var(--board-ink);
+  }
+`
+
 const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
@@ -944,6 +1063,7 @@ const Wrapper = styled.div`
 
   .error-block {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     margin: 8px 16px;

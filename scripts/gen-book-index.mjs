@@ -115,7 +115,9 @@ const brokenLinks = []
 const byDir = new Map()
 
 for (const abs of files) {
-  const rel = relative(BOOK_ROOT, abs)
+  // 路径一律归一为正斜杠：win32 的 relative() 产反斜杠，会击穿 DIR_PURPOSE 前缀
+  // 匹配与 rel.split('/').pop() 的文件名截取（索引目录用途全空、名字带全路径）
+  const rel = relative(BOOK_ROOT, abs).split('\\').join('/')
   const dir = dirname(rel) === '.' ? '' : dirname(rel)
   const text = readFileSync(abs, 'utf8')
   const desc = parseDescription(text)

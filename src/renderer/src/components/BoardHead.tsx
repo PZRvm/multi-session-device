@@ -13,8 +13,9 @@ type BoardHeadProps = {
   onOpenSettings?: () => void
 }
 
-/** 40px 拖拽带：原生三灯留位/标题居左，右端为外观选择（设置齿轮左侧，与设置窗
- *  通用页共用 AppearanceModePicker）、设置入口与设备计数。 */
+/** 40px 拖拽带：mac 原生三灯留位（非 mac 无标题——系统标题栏已承担，去双标题），
+ *  右端为外观选择（设置齿轮左侧，与设置窗通用页共用 AppearanceModePicker）、
+ *  设置入口与设备计数。 */
 const BoardHead = ({ count, compact, onOpenSettings }: BoardHeadProps): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
   const mode = useThemeStore((state) => state.mode)
@@ -23,9 +24,7 @@ const BoardHead = ({ count, compact, onOpenSettings }: BoardHeadProps): React.JS
     <Wrapper>
       {window.api.platform === 'darwin' ? (
         <span className="traffic-space" aria-hidden="true" />
-      ) : (
-        <span className="title">{copy.appName}</span>
-      )}
+      ) : null}
       <span className="head-right">
         <AppearanceModePicker
           mode={mode}
@@ -67,11 +66,6 @@ const Wrapper = styled.div`
   padding: 0 14px;
   border-bottom: 1px solid var(--board-hairline);
   -webkit-app-region: drag;
-  .title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--board-ink);
-  }
   .traffic-space {
     flex: none;
     width: 60px;

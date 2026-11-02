@@ -1,6 +1,12 @@
 import { useState } from 'react'
-import type { SdkMigrationProgress, SdkSourceMode, SdkSourceSwitchEvaluation } from '@shared/types'
+import type {
+  SdkMigrationProgress,
+  SdkSourceMode,
+  SdkSourceSnapshot,
+  SdkSourceSwitchEvaluation
+} from '@shared/types'
 import { format } from '@shared/i18n'
+import { windowsSdkRootTooLong } from '@shared/windowsPath'
 import SettingsParts, { type SettingsPaneProps } from './SettingsParts'
 import { useSdkSource } from './useSdkSource'
 
@@ -46,33 +52,20 @@ const rejectedText = (
   }
 }
 
-interface MigrateCard {
-  kind: 'migrate'
-  target: SdkSourceMode
-  customPath: string | undefined
-  fromRoot: string
-  toRoot: string
-  bytes: number
-  boundDevices: number
+/** 活动根的原始值（plan 2026-10-23-windows-settings-finish）：单选行的路径展示与
+ *  杀软白名单卡片 / 长路径警示共用的选择逻辑；null = 该模式当前未定位到路径。 */
+const activeRootOf = (mode: SdkSourceMode, snapshot: SdkSourceSnapshot | null): string | null => {
+  if (snapshot === null) return null
+  if (mode === 'managed') return snapshot.managedRoot
+  if (mode === 'shared-studio') {
+    return snapshot.sharedPath ?? snapshot.detection?.sdkCandidate ?? null
+  }
+  return snapshot.customPath
 }
-
-interface ChoiceCard {
-  kind: 'choice'
-  target: SdkSourceMode
-  customPath: string | undefined
-  targetRoot: string
-  targetBytes: number
-  loserRoot: string
-  loserBytes: number
-  loserBoundDevices: number
-}
-
-type PendingCard = MigrateCard | ChoiceCard
 
 const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => {
   const sdk = useSdkSource()
   const { appOwnedDeviceCount } = sdk
-  const [card, setCard] = useState<PendingCard | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const snapshot = sdk.snapshot
@@ -86,6 +79,10 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
     progressActive ||
     ((snapshot?.migration != null || snapshot?.journalCorrupt === true) && !progressActive)
   const currentMode: SdkSourceMode = snapshot?.source ?? 'managed'
+  // win32 专属卡片与警示（mac 恒不渲染；窗口平台走 preload 单源 window.api.platform）
+  const isWin32 = window.api.platform === 'win32'
+  const activeRoot = activeRootOf(currentMode, snapshot)
+  const rootTooLong = isWin32 && activeRoot !== null && windowsSdkRootTooLong(activeRoot)
   // 共享选项可用性只由 studioFound 驱动（plan §5）；检测中先行禁用
   const sharedDisabled = sdk.detecting || detection === null || !detection.studioFound
 
@@ -108,25 +105,40 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
         return
       }
       if (evaluation.action === 'direct') return
-      setCard({
-        kind: evaluation.action === 'needs-migration' ? 'migrate' : 'choice',
-        target,
-        customPath,
-        ...(evaluation.action === 'needs-migration'
-          ? {
-              fromRoot: evaluation.fromRoot,
-              toRoot: evaluation.toRoot,
-              bytes: evaluation.bytes,
-              boundDevices: evaluation.boundDevices
-            }
-          : {
-              targetRoot: evaluation.targetRoot,
-              targetBytes: evaluation.targetBytes,
-              loserRoot: evaluation.loserRoot,
-              loserBytes: evaluation.loserBytes,
-              loserBoundDevices: evaluation.loserBoundDevices
-            })
-      } as PendingCard)
+      // 评估确认一步到位原生弹窗（2026-10-22 用户指示：弃窗内底部卡片，避免两连确认）
+      if (evaluation.action === 'needs-migration') {
+        const ok = await confirmDialog({
+          title: copy.migrateConfirmTitle,
+          message: `${evaluation.fromRoot} → ${evaluation.toRoot}（${formatBytes(
+            evaluation.bytes
+          )}）`,
+          detail:
+            copy.migrateConfirmDetail +
+            (evaluation.boundDevices > 0
+              ? `${evaluation.boundDevices}${copy.boundDevicesSuffix}`
+              : ''),
+          confirm: copy.migrateStart
+        })
+        if (ok) await sdk.startMigration(target, customPath, false)
+        return
+      }
+      // needs-choice：三按钮弹窗（替换迁移 / 直接使用 / 取消），①②方案说明并入 detail
+      const result = await window.api.dialog.show({
+        title: copy.choiceCardTitle,
+        message: `${evaluation.targetRoot}（${formatBytes(evaluation.targetBytes)}）`,
+        detail:
+          `① ${copy.choiceReplaceDetail}：${evaluation.loserRoot}（${formatBytes(
+            evaluation.loserBytes
+          )}）` +
+          (evaluation.loserBoundDevices > 0
+            ? `${evaluation.loserBoundDevices}${copy.boundDevicesSuffix}`
+            : '') +
+          `\n② ${copy.choiceUseDetail}`,
+        buttons: [copy.choiceReplace, copy.choiceUse, copy.cancelAction],
+        cancelId: 2
+      })
+      if (result.response === 0) await sdk.startMigration(target, customPath, true)
+      else if (result.response === 1) await sdk.adopt(target, customPath)
     })
   }
 
@@ -134,7 +146,9 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
     await runAction(async () => {
       const picked = await sdk.chooseCustomRoot()
       if (picked === null) return
-      if (target === 'custom' && picked === snapshot?.customPath) return
+      // 同路径重选的无操作仅限「已在自选模式」；从托管/共享切回自选时，即便选的是
+      // 上次记住的路径也要走判定矩阵（否则静默吞掉切换：不弹窗也不换——2026-10-22 实测）
+      if (target === 'custom' && currentMode === 'custom' && picked === snapshot?.customPath) return
       await applySwitch(target, picked)
     })
   }
@@ -166,34 +180,6 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
     return result.response === 0
   }
 
-  const startMigration = async (input: MigrateCard, replace: boolean): Promise<void> => {
-    const ok = await confirmDialog({
-      title: replace ? copy.replaceConfirmTitle : copy.migrateConfirmTitle,
-      message: `${input.fromRoot} → ${input.toRoot}（${formatBytes(input.bytes)}）`,
-      detail:
-        copy.migrateConfirmDetail +
-        (input.boundDevices > 0 ? `${input.boundDevices}${copy.boundDevicesSuffix}` : ''),
-      confirm: copy.migrateStart
-    })
-    setCard(null)
-    if (!ok) return
-    await runAction(() => sdk.startMigration(input.target, input.customPath, replace))
-  }
-
-  const adoptTarget = async (input: ChoiceCard): Promise<void> => {
-    const ok = await confirmDialog({
-      title: copy.useConfirmTitle,
-      message: `${input.targetRoot}（${formatBytes(input.targetBytes)}）`,
-      detail:
-        `${copy.choiceUseDetail}：${input.loserRoot}（${formatBytes(input.loserBytes)}）` +
-        (input.loserBoundDevices > 0 ? `${input.loserBoundDevices}${copy.boundDevicesSuffix}` : ''),
-      confirm: copy.choiceUse
-    })
-    setCard(null)
-    if (!ok) return
-    await runAction(() => sdk.adopt(input.target, input.customPath))
-  }
-
   const clearRetained = async (root: string, bytes: number): Promise<void> => {
     // 级联计数（用户 2026-10-12 批复）：清除保留 SDK 连带删除全部项目自有设备
     const appOwned = await appOwnedDeviceCount()
@@ -223,18 +209,17 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
           const selected = currentMode === mode
           // 原「SDK 目录」板块并入（2026-10-12 用户指示删除重复板块）：选中态在
           // 选项行内展示路径与入口——托管显路径；共享显路径 + 重新检测；自选显路径 + 更换路径
+          const selectedRoot = selected ? activeRootOf(mode, snapshot) : null
+          // 选中行路径 = 活动根原始值；未定位到路径时退各模式的占位文案
           const activePath =
-            mode === 'managed'
-              ? selected
-                ? (snapshot?.managedRoot ?? copy.managedDirectory)
-                : null
-              : mode === 'shared-studio'
-                ? selected
-                  ? (snapshot?.sharedPath ?? detection?.sdkCandidate ?? copy.notDetected)
-                  : null
-                : selected
-                  ? (snapshot?.customPath ?? copy.pathNotChosen)
-                  : null
+            selectedRoot ??
+            (selected
+              ? mode === 'managed'
+                ? copy.managedDirectory
+                : mode === 'shared-studio'
+                  ? copy.notDetected
+                  : copy.pathNotChosen
+              : null)
           return (
             <div className="sdk-option" key={mode}>
               <input
@@ -303,103 +288,42 @@ const PaneEmulator = ({ model, copy }: SettingsPaneProps): React.JSX.Element => 
       </fieldset>
       <p className="hint block-divider">{copy.avdHint}</p>
 
+      {isWin32 && snapshot !== null ? (
+        <div className="action-card defender-card">
+          <p className="card-title">{copy.defenderTitle}</p>
+          <p className="card-line">{copy.defenderHint}</p>
+          <p className="card-line defender-pair">
+            <span>{copy.defenderSdkRoot}</span>
+            <span className="path">{activeRoot ?? copy.notDetected}</span>
+          </p>
+          <p className="card-line defender-pair">
+            <span>{copy.defenderAvdHome}</span>
+            <span className="path">{snapshot.avdHome}</span>
+          </p>
+          <div className="card-actions">
+            <button
+              type="button"
+              onClick={() => {
+                void window.api.dialog.openWindowsDefender()
+              }}
+            >
+              {copy.defenderOpen}
+            </button>
+          </div>
+          <p className="card-line">{copy.defenderThirdParty}</p>
+        </div>
+      ) : null}
+
+      {rootTooLong ? (
+        <div className="action-card warn">
+          <p className="card-title">{copy.pathTooLongTitle}</p>
+          <p className="card-line">
+            {format(copy.pathTooLongHint, { length: activeRoot?.length ?? 0 })}
+          </p>
+        </div>
+      ) : null}
+
       {error !== null ? <p className="error-line">{error}</p> : null}
-
-      {card?.kind === 'migrate' ? (
-        <div className="action-card" role="group" aria-label={copy.migrateCardTitle}>
-          <p className="card-title">{copy.migrateCardTitle}</p>
-          <p className="card-line">
-            {copy.migrateCardFrom}：<span className="path">{card.fromRoot}</span>
-          </p>
-          <p className="card-line">
-            {copy.migrateCardTo}：<span className="path">{card.toRoot}</span>（
-            {formatBytes(card.bytes)}）
-          </p>
-          {card.boundDevices > 0 ? (
-            <p className="card-line">
-              {copy.migrateCardBound}：{card.boundDevices}
-              {copy.boundDevicesSuffix}
-            </p>
-          ) : null}
-          <div className="card-actions">
-            <button
-              type="button"
-              onClick={() => {
-                setCard(null)
-                setError(null)
-              }}
-            >
-              {copy.cancelAction}
-            </button>
-            <button
-              type="button"
-              disabled={sdk.acting}
-              onClick={() => {
-                void startMigration(card, false)
-              }}
-            >
-              {copy.migrateStart}
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {card?.kind === 'choice' ? (
-        <div className="action-card" role="group" aria-label={copy.choiceCardTitle}>
-          <p className="card-title">{copy.choiceCardTitle}</p>
-          <p className="card-line">
-            <span className="path">{card.targetRoot}</span>（{formatBytes(card.targetBytes)}）
-          </p>
-          <p className="card-line">① {copy.choiceReplaceDetail}</p>
-          <p className="card-line">② {copy.choiceUseDetail}</p>
-          {card.loserBoundDevices > 0 ? (
-            <p className="card-line">
-              {copy.migrateCardBound}：{card.loserBoundDevices}
-              {copy.boundDevicesSuffix}
-            </p>
-          ) : null}
-          <div className="card-actions">
-            <button
-              type="button"
-              onClick={() => {
-                setCard(null)
-                setError(null)
-              }}
-            >
-              {copy.cancelAction}
-            </button>
-            <button
-              type="button"
-              disabled={sdk.acting}
-              onClick={() => {
-                void startMigration(
-                  {
-                    kind: 'migrate',
-                    target: card.target,
-                    customPath: card.customPath,
-                    fromRoot: card.loserRoot,
-                    toRoot: card.targetRoot,
-                    bytes: card.loserBytes,
-                    boundDevices: card.loserBoundDevices
-                  },
-                  true
-                )
-              }}
-            >
-              {copy.choiceReplace}
-            </button>
-            <button
-              type="button"
-              disabled={sdk.acting}
-              onClick={() => {
-                void adoptTarget(card)
-              }}
-            >
-              {copy.choiceUse}
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       {snapshot?.migration != null && !progressActive ? (
         <div className="action-card warn" role="alert">

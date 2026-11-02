@@ -8,6 +8,7 @@ import {
   detectSdk,
   parseSdkManagerPercent,
   planBootstrap,
+  sdkPaths,
   writeLicenseFiles,
   ANDROID_SDK_LICENSE_HASHES
 } from '../sdk'
@@ -216,5 +217,122 @@ describe('bootstrapSdk（注入 fake 依赖）', () => {
     expect(onProgress).toHaveBeenCalledWith(
       expect.objectContaining({ stage: 'done', percent: 100 })
     )
+  })
+})
+
+describe('sdkPaths（平台分支）', () => {
+  it('darwin 返回值与历史布局逐字节一致（mac 零回归钉住）', () => {
+    expect(sdkPaths('/sdk', 'darwin')).toEqual({
+      root: '/sdk',
+      jreHome: '/sdk/jre/Contents/Home',
+      javaBin: '/sdk/jre/Contents/Home/bin/java',
+      cmdlineToolsMarker: '/sdk/cmdline-tools/latest/bin/sdkmanager',
+      sdkmanagerBin: '/sdk/cmdline-tools/latest/bin/sdkmanager',
+      avdmanagerBin: '/sdk/cmdline-tools/latest/bin/avdmanager',
+      adbBin: '/sdk/platform-tools/adb',
+      emulatorBin: '/sdk/emulator/emulator',
+      licensesDir: '/sdk/licenses'
+    })
+  })
+
+  it('win32 二进制带 .exe/.bat 后缀、JRE 无 Contents/Home 层', () => {
+    const paths = sdkPaths('/sdk', 'win32')
+    expect(paths.jreHome).toBe('/sdk/jre')
+    expect(paths.javaBin).toBe('/sdk/jre/bin/java.exe')
+    expect(paths.sdkmanagerBin).toBe('/sdk/cmdline-tools/latest/bin/sdkmanager.bat')
+    expect(paths.cmdlineToolsMarker).toBe(paths.sdkmanagerBin)
+    expect(paths.avdmanagerBin).toBe('/sdk/cmdline-tools/latest/bin/avdmanager.bat')
+    expect(paths.adbBin).toBe('/sdk/platform-tools/adb.exe')
+    expect(paths.emulatorBin).toBe('/sdk/emulator/emulator.exe')
+  })
+})
+
+describe('detectSdk（win32 布局）', () => {
+  it('win32 特征路径（java.exe / sdkmanager.bat / adb.exe）探测', async () => {
+    const root = await makeTmp()
+    await mkdir(join(root, 'jre', 'bin'), { recursive: true })
+    await writeFile(join(root, 'jre', 'bin', 'java.exe'), '', 'utf8')
+    await mkdir(join(root, 'cmdline-tools', 'latest', 'bin'), { recursive: true })
+    await writeFile(join(root, 'cmdline-tools', 'latest', 'bin', 'sdkmanager.bat'), '', 'utf8')
+    await mkdir(join(root, 'platform-tools'), { recursive: true })
+    await writeFile(join(root, 'platform-tools', 'adb.exe'), '', 'utf8')
+    const snapshot = await detectSdk(root, 'win32')
+    expect(snapshot.jre.present).toBe(true)
+    expect(snapshot.cmdlineTools.present).toBe(true)
+    expect(snapshot.platformTools.present).toBe(true)
+    expect(snapshot.platformTools.version).toBeUndefined()
+    expect(snapshot.emulator.present).toBe(false)
+  })
+
+  it('同一目录按 darwin 布局探测不到（win32 分支真的换了特征名）', async () => {
+    const root = await makeTmp()
+    await mkdir(join(root, 'jre', 'bin'), { recursive: true })
+    await writeFile(join(root, 'jre', 'bin', 'java.exe'), '', 'utf8')
+    const darwinSnapshot = await detectSdk(root, 'darwin')
+    expect(darwinSnapshot.jre.present).toBe(false)
+  })
+})
+
+describe('bootstrapSdk（win32 分支）', () => {
+  it('win32 钉版源已填真值（2026-10-30 真机实测）：占位守卫放行，流程推进到下载', async () => {
+    const root = await makeTmp()
+    // 默认源不再被「尚未钉版」拦截——注入即刻抛错的 fetcher 证明已走到下载步
+    await expect(
+      bootstrapSdk(root, {
+        platform: 'win32',
+        fetcher: async () => {
+          throw new Error('fetch-reached')
+        }
+      })
+    ).rejects.toThrow('fetch-reached')
+  })
+
+  it('未登记平台（linux）同样被占位守卫拒绝，不静默回退 darwin 源', async () => {
+    const root = await makeTmp()
+    await expect(bootstrapSdk(root, { platform: 'linux' })).rejects.toThrow('尚未钉版')
+  })
+
+  it('win32 全流程（假源）：JRE zip 顶层即 jre 根，产物按 win32 布局落位', async () => {
+    const root = await makeTmp()
+    const result = await bootstrapSdk(root, {
+      platform: 'win32',
+      sources: {
+        jreUrl: 'https://fake/jre.zip',
+        jreSha256: sha256('jre-win'),
+        cmdlineToolsUrl: 'https://fake/ct.zip',
+        cmdlineToolsSha1: sha1('ct-win')
+      },
+      fetcher: async (url) => Buffer.from(url.includes('jre') ? 'jre-win' : 'ct-win'),
+      unpacker: async (_archive, dest) => {
+        if (dest.endsWith('.tmp-jre')) {
+          // Temurin win zip 顶层：<version>-jre/（bin 在内，无 macOS 的 Contents 层）
+          await mkdir(join(dest, 'jdk-21.0.12.1+1-jre', 'bin'), { recursive: true })
+          await writeFile(join(dest, 'jdk-21.0.12.1+1-jre', 'bin', 'java.exe'), '', 'utf8')
+        } else {
+          await mkdir(join(dest, 'cmdline-tools', 'bin'), { recursive: true })
+          await writeFile(join(dest, 'cmdline-tools', 'bin', 'sdkmanager.bat'), '', 'utf8')
+        }
+      },
+      runner: async (r, packages) => {
+        for (const pkg of packages) {
+          const dir = join(r, pkg)
+          await mkdir(dir, { recursive: true })
+          await writeFile(
+            join(dir, pkg === 'platform-tools' ? 'adb.exe' : 'emulator.exe'),
+            '',
+            'utf8'
+          )
+          await writeSourceProps(dir, '1.0')
+        }
+      }
+    })
+    expect(result.jre.present).toBe(true)
+    expect(result.cmdlineTools.present).toBe(true)
+    expect(result.platformTools.present).toBe(true)
+    expect(result.emulator.present).toBe(true)
+    // win32 JRE 归位形态：<root>/jre/bin/java.exe（整目录 rename，无 Contents 层）
+    await expect(readFile(join(root, 'jre', 'bin', 'java.exe'), 'utf8')).resolves.toBe('')
+    // 临时目录不残留
+    await expect(readFile(join(root, '.tmp-jre'))).rejects.toThrow()
   })
 })

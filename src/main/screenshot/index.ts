@@ -28,7 +28,7 @@ export async function runAdbBinary(
   { timeoutMs = SCREENCAP_TIMEOUT_MS }: { timeoutMs?: number } = {}
 ): Promise<AdbBinaryResult> {
   return new Promise<AdbBinaryResult>((resolve, reject) => {
-    const child = spawn(adbPath, args, { env: scrubAdbEnv(process.env) })
+    const child = spawn(adbPath, args, { env: scrubAdbEnv(process.env), windowsHide: true })
     const out: Buffer[] = []
     const err: Buffer[] = []
     let settled = false

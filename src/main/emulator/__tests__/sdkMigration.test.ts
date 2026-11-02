@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest'
+import { join } from 'node:path'
 
 import {
   MigrationCancelledError,
@@ -516,6 +517,16 @@ describe('classifyRoot', () => {
     fs.write('/sdk-root/emulator/emulator', 'bin')
     expect(await classifyRoot('/sdk-root', deps)).toBe('sdk')
   })
+
+  it('win32 标记带 .exe/.bat（platform 接缝注入）——darwin 字面量在 win32 判定下不可见', async () => {
+    const fs = new FakeFs()
+    const deps = { ...makeDeps(fs), platform: 'win32' as const }
+    // 夹具用 join 构建：分隔符随宿主与 sdkPaths 探测一致，双宿主同绿
+    fs.write('/win-sdk/emulator/emulator', 'bin')
+    expect(await classifyRoot('/win-sdk', deps)).toBe('junk')
+    fs.write(join('/win-sdk', 'emulator', 'emulator.exe'), 'bin')
+    expect(await classifyRoot('/win-sdk', deps)).toBe('sdk')
+  })
 })
 
 describe('journal 三态与损坏接管（issue 2026-10-11 问题二处置）', () => {
@@ -576,3 +587,86 @@ describe('journal 三态与损坏接管（issue 2026-10-11 问题二处置）', 
     expect(fs.read(`${AVD_HOME}/device1.avd/config.ini`)).toContain(`image.sys.src.dir=${FROM}/`)
   })
 })
+
+// 本 describe 钉 darwin：引擎内 resolve()/join() 的宿主分隔符与 FakeFs 的正斜杠
+// 键位只在 posix 一致（win 宿主属既有 15 例宿主旧账，不在此扩）；钩子的 win32 真值
+// 由真机迁移链验证（issue 2026-10-31 修复批第二辑）
+describe.skipIf(process.platform !== 'darwin')(
+  'stopSharedAdbServer 钩子（win32 adb 预检，issue 2026-10-31）',
+  () => {
+    it('正向：journal 置位后、条目移动前调用（清场段与 moving 段各一次）；回滚：装载后、移回前调用', async () => {
+      resetMigrationFlagForTest()
+      const fs = new FakeFs()
+      seedSource(fs)
+      seedAvdHome(fs)
+      fs.mkdirP(TO)
+      const calls: string[] = []
+      const deps: MigrationDeps = {
+        ...makeDeps(fs),
+        platform: 'darwin',
+        stopSharedAdbServer: async () => {
+          // 「先置位再杀」顺序契约（review 建议）：钩子观察到的一定是迁移激活态
+          calls.push(
+            `fwd active:${isMigrationActive()} from:${fs.exists(`${FROM}/platform-tools/adb`)} to:${fs.exists(`${TO}/platform-tools/adb`)}`
+          )
+        }
+      }
+      const plan = await planMigration(
+        {
+          fromRoot: FROM,
+          toRoot: TO,
+          targetSource: 'custom',
+          replaceTarget: false,
+          runningCount: 0
+        },
+        deps
+      )
+      if (!plan.ok) throw new Error(`plan failed: ${plan.code}`)
+      expect(calls).toHaveLength(0)
+      await startMigration(plan.plan, { avdHome: AVD_HOME }, deps)
+      // 两次调用：startMigration 落 journal 后（盖 replaceTarget 清场）+ runJournal moving 落盘后
+      expect(calls).toEqual([
+        'fwd active:true from:true to:false',
+        'fwd active:true from:true to:false'
+      ])
+      expect(fs.exists(`${TO}/platform-tools/adb`)).toBe(true)
+
+      const rollbackDeps: MigrationDeps = {
+        ...makeDeps(fs),
+        platform: 'darwin',
+        stopSharedAdbServer: async () => {
+          calls.push(
+            `back active:${isMigrationActive()} from:${fs.exists(`${FROM}/platform-tools/adb`)} to:${fs.exists(`${TO}/platform-tools/adb`)}`
+          )
+        }
+      }
+      await rollbackMigration({ avdHome: AVD_HOME }, rollbackDeps)
+      expect(calls[2]).toBe('back active:true from:false to:true')
+      expect(fs.exists(`${FROM}/platform-tools/adb`)).toBe(true)
+    })
+
+    it('corrupt 回滚同样前置停 adb（review P3-3）', async () => {
+      const fs = new FakeFs()
+      fs.write(`${TO}/platform-tools/adb`, 'bin')
+      fs.mkdirP(AVD_HOME)
+      const calls: string[] = []
+      const deps: MigrationDeps = {
+        ...makeDeps(fs),
+        platform: 'darwin',
+        stopSharedAdbServer: async () => {
+          calls.push(
+            `corrupt active:${isMigrationActive()} moved:${fs.exists(`${TO}/platform-tools/adb`)}`
+          )
+        }
+      }
+      await rollbackCorruptMigration(
+        { movedRoot: TO, originalRoot: FROM, avdHome: AVD_HOME },
+        { avdHome: AVD_HOME },
+        deps
+      )
+      // corrupt 路径无 journal 可载（这正是 corrupt）——active 可能 false，前置调用本身是契约
+      expect(calls).toEqual(['corrupt active:false moved:true'])
+      expect(fs.exists(`${FROM}/platform-tools/adb`)).toBe(true)
+    })
+  }
+)

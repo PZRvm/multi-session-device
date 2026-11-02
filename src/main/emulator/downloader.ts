@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
 import { netFetch } from './netFetch'
-import { createReadStream, createWriteStream } from 'node:fs'
-import { mkdir, readdir, rename, rm, stat, readFile } from 'node:fs/promises'
+import { makeResilientRename } from './fsWin'
+import { createWriteStream } from 'node:fs'
+import { mkdir, readdir, rm, stat, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { execFile } from 'node:child_process'
 import { XMLParser } from 'fast-xml-parser'
@@ -28,6 +29,16 @@ export class CancelledError extends Error {
   }
 }
 
+/** 镜像 zip 解压命令（平台分支，导出供单测钉形态）：mac 用 unzip，win32 用自带 tar.exe */
+export const extractZipCommand = (
+  platform: NodeJS.Platform,
+  zipPath: string,
+  targetDir: string
+): { command: string; args: string[] } =>
+  platform === 'win32'
+    ? { command: 'tar.exe', args: ['-xf', zipPath, '-C', targetDir] }
+    : { command: 'unzip', args: ['-q', zipPath, '-d', targetDir] }
+
 export interface DownloaderDeps {
   /** 拉起下载流；默认 fetch（挂 signal，中断即时）。totalBytes 优先 Content-Length，缺省回退 manifest size */
   openUrl?: (
@@ -35,8 +46,8 @@ export interface DownloaderDeps {
     signal?: AbortSignal
   ) => Promise<{ stream: AsyncIterable<Uint8Array>; totalBytes: number | null }>
   now?: () => number
-  /** sha1（默认流式读文件；接缝供单测注入固定值） */
-  sha1Of?: (path: string) => Promise<string>
+  /** 哈希器（默认 sha1；下载循环内增量喂入——plan P4 边下边算，省一次整文件重读） */
+  createHasher?: () => { update: (chunk: Uint8Array) => void; digest: () => string }
   /** 解压 zip 到目录（默认系统 unzip，异步 + signal 可中断——execFileSync 阻塞 main 已退役） */
   extractZip?: (zipPath: string, targetDir: string, signal?: AbortSignal) => Promise<void>
   pathExists?: (path: string) => Promise<boolean>
@@ -64,6 +75,27 @@ export interface ChunkSink {
   waitDrain: () => Promise<void>
 }
 
+/**
+ * 平台化解压器工厂（review P3-2 接缝）：默认实现按 process.platform 选命令，
+ * 平台可注入——win32 分支在 mac 上可测（以 ENOENT 证实解析到 tar.exe）。
+ * 镜像 zip 的 system.img 解压后常 ≥2GB——adm-zip 会整条目分配 Buffer 撞 2^31
+ * 上限（真机实测 android-21 即 2147483648 字节）；系统解压器原生支持 zip64 与
+ * 大条目：macOS 用自带 unzip，win32 用自带 tar.exe（bsdtar，官方支持解 zip；
+ * Expand-Archive 有 2GB 上限不可用）。异步 execFile + signal：取消时 kill
+ * 子进程立即返回（execFileSync 阻塞 main 且不可中断——取消 plan 顺带退役）
+ */
+export const makeExtractZip =
+  (platform: NodeJS.Platform): NonNullable<DownloaderDeps['extractZip']> =>
+  (zipPath, targetDir, signal) =>
+    new Promise<void>((resolve, reject) => {
+      const { command, args } = extractZipCommand(platform, zipPath, targetDir)
+      execFile(command, args, { signal, windowsHide: true }, (error) => {
+        if (signal?.aborted) reject(new CancelledError())
+        else if (error === null) resolve()
+        else reject(new Error(msg('dlUnzipFailed', { message: error.message })))
+      })
+    })
+
 /** 默认依赖集合（导出供 default extractZip 等真实子进程行为做单测） */
 export const defaultDeps: Required<DownloaderDeps> = {
   openUrl: async (url, signal) => {
@@ -81,27 +113,16 @@ export const defaultDeps: Required<DownloaderDeps> = {
     }
   },
   now: () => Date.now(),
-  sha1Of: (path) =>
-    new Promise((resolve, reject) => {
-      const hash = createHash('sha1')
-      createReadStream(path)
-        .on('data', (chunk) => hash.update(chunk))
-        .on('error', reject)
-        .on('end', () => resolve(hash.digest('hex')))
-    }),
-  extractZip: (zipPath, targetDir, signal) =>
-    new Promise<void>((resolve, reject) => {
-      // 镜像 zip 的 system.img 解压后常 ≥2GB——adm-zip 会整条目分配 Buffer 撞
-      // 2^31 上限（真机实测 android-21 即 2147483648 字节）；系统 unzip 原生
-      // 支持 zip64 与大条目（macOS/Linux 自带；与皮肤下载的系统 tar 同策略）。
-      // 异步 execFile + signal：取消时 kill 子进程立即返回（execFileSync 阻塞
-      // main 且不可中断——取消 plan 顺带退役）
-      execFile('unzip', ['-q', zipPath, '-d', targetDir], { signal }, (error) => {
-        if (signal?.aborted) reject(new CancelledError())
-        else if (error === null) resolve()
-        else reject(new Error(msg('dlUnzipFailed', { message: error.message })))
-      })
-    }),
+  createHasher: () => {
+    const hash = createHash('sha1')
+    return {
+      update: (chunk: Uint8Array) => {
+        hash.update(chunk)
+      },
+      digest: () => hash.digest('hex')
+    }
+  },
+  extractZip: makeExtractZip(process.platform),
   pathExists: async (path) => {
     try {
       await stat(path)
@@ -113,7 +134,7 @@ export const defaultDeps: Required<DownloaderDeps> = {
   makeDir: async (dir: string): Promise<void> => {
     await mkdir(dir, { recursive: true })
   },
-  moveDir: (from, to) => rename(from, to),
+  moveDir: makeResilientRename(process.platform),
   removePath: async (path: string): Promise<void> => {
     await rm(path, { recursive: true, force: true })
   },
@@ -210,6 +231,8 @@ export const downloadImageZip = async (
   let received = 0
   let lastPercent = 0
   let lastPushAt = 0
+  // 边下边算（plan P4）：zipSha1 在场才建哈希器——省掉下载完成后的整文件重读
+  const hasher = target.zipSha1 !== null ? d.createHasher() : null
   const sink = d.createSink(zipPath)
   try {
     for await (const chunk of stream) {
@@ -218,6 +241,7 @@ export const downloadImageZip = async (
       // 2GB 级包也不会全攒内存）；写已出错时 write 直接抛（review P1 修复）
       if (!sink.write(chunk)) await sink.waitDrain()
       received += chunk.byteLength
+      hasher?.update(chunk)
       if (expectedTotal !== null && expectedTotal > 0) {
         const percent = Math.min(99, Math.floor((received / expectedTotal) * 100))
         const at = d.now()
@@ -241,8 +265,8 @@ export const downloadImageZip = async (
     throw error
   }
 
-  if (target.zipSha1 !== null) {
-    const actual = await d.sha1Of(zipPath)
+  if (hasher !== null && target.zipSha1 !== null) {
+    const actual = hasher.digest()
     if (actual !== target.zipSha1) {
       await d.removePath(zipPath).catch(() => undefined)
       throw new Error(

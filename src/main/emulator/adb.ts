@@ -118,19 +118,47 @@ export interface AdbExecutable {
   protocolVersion: number
 }
 
+export interface AdbCandidateDeps {
+  /** 环境变量（默认 process.env——win32 用 LOCALAPPDATA 定位标准 SDK） */
+  env?: Record<string, string | undefined>
+  /** 主目录（默认 os.homedir） */
+  homedir?: () => string
+  /** 平台（默认 process.platform；win32 用 `;` 分隔 PATH、`adb.exe` 后缀与 %LOCALAPPDATA% 布局） */
+  platform?: NodeJS.Platform
+}
+
 /** 用户已有 platform-tools 优先（PATH → 标准 SDK 候选），应用自有 adb 兜底 */
 export function candidateAdbPaths(
-  appSdkRoot: string
+  appSdkRoot: string,
+  deps: AdbCandidateDeps = {}
 ): Array<{ path: string; source: AdbExecutable['source'] }> {
+  const env = deps.env ?? process.env
+  const home = (deps.homedir ?? homedir)()
+  const isWin = (deps.platform ?? process.platform) === 'win32'
+  const adbName = isWin ? 'adb.exe' : 'adb'
   const candidates: Array<{ path: string; source: AdbExecutable['source'] }> = []
-  for (const dir of (process.env['PATH'] ?? '').split(':')) {
-    if (dir.length > 0) candidates.push({ path: join(dir, 'adb'), source: 'path' })
+  for (const dir of (env['PATH'] ?? '').split(isWin ? ';' : ':')) {
+    if (dir.length > 0) candidates.push({ path: join(dir, adbName), source: 'path' })
   }
-  candidates.push({
-    path: join(homedir(), 'Library', 'Android', 'sdk', 'platform-tools', 'adb'),
-    source: 'standard-sdk'
-  })
-  candidates.push({ path: join(appSdkRoot, 'platform-tools', 'adb'), source: 'app-sdk' })
+  candidates.push(
+    isWin
+      ? {
+          // Windows 标准 SDK：%LOCALAPPDATA%\Android\Sdk（缺失时按 homedir 推 AppData\Local）
+          path: join(
+            env['LOCALAPPDATA'] ?? join(home, 'AppData', 'Local'),
+            'Android',
+            'Sdk',
+            'platform-tools',
+            adbName
+          ),
+          source: 'standard-sdk'
+        }
+      : {
+          path: join(home, 'Library', 'Android', 'sdk', 'platform-tools', adbName),
+          source: 'standard-sdk'
+        }
+  )
+  candidates.push({ path: join(appSdkRoot, 'platform-tools', adbName), source: 'app-sdk' })
   return candidates
 }
 
@@ -150,7 +178,7 @@ export async function runAdb(
 ): Promise<AdbRunResult> {
   if (signal?.aborted) throw new Error(msg('adbOperationCancelled'))
   return new Promise<AdbRunResult>((resolve, reject) => {
-    const child = spawn(adbPath, args, { env: scrubAdbEnv(process.env) })
+    const child = spawn(adbPath, args, { env: scrubAdbEnv(process.env), windowsHide: true })
     const out: Buffer[] = []
     const err: Buffer[] = []
     let settled = false

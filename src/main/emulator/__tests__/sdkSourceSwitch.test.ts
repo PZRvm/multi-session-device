@@ -255,6 +255,35 @@ describe('adoptSourceSwitch（直接使用）', () => {
   })
 })
 
+describe('残留模拟器进程守卫（orphan issue 候选 A 最小版）', () => {
+  it('startSourceMigration：探测命中即拒绝（fresh 与 resume 共用入口）', async () => {
+    const fs = new FakeFs()
+    await expect(
+      startSourceMigration(
+        { target: 'managed', replace: false },
+        buildDeps(fs, { emulatorProcessAlive: async () => true })
+      )
+    ).rejects.toThrow('残留')
+  })
+
+  it('clearRetainedRoot：合法保留根上探测命中即拒绝（删源之前）', async () => {
+    const fs = new FakeFs()
+    resetSdkSourceStateForTest()
+    setSdkSourceState({
+      version: 1,
+      source: 'shared-studio',
+      customPath: null,
+      sharedPath: STUDIO_SDK
+    })
+    await expect(
+      clearRetainedRoot(
+        { root: MANAGED },
+        buildDeps(fs, { emulatorProcessAlive: async () => true })
+      )
+    ).rejects.toThrow('残留')
+  })
+})
+
 describe('clearRetainedRoot（仅共享模式）', () => {
   let fs: FakeFs
   beforeEach(() => {
@@ -281,6 +310,36 @@ describe('clearRetainedRoot（仅共享模式）', () => {
     expect(fs.exists(MANAGED)).toBe(false)
     await expect(clearRetainedRoot({ root: '/other' }, buildDeps(fs))).rejects.toThrow('retained')
   })
+
+  // 钉 darwin：本 describe 的 FakeFs 夹具在 win 宿主属既有 30 例旧账（resolve/join
+  // 分隔符）；钩子时点的 win32 真值由真机清保留根链验证（issue 2026-10-31 第四幕）
+  it.skipIf(process.platform !== 'darwin')(
+    '清根前先停 adb：stopSharedAdbServer 钩子在删除前、根仍完整时被调用',
+    async () => {
+      seedSourceInto(fs, MANAGED)
+      setSdkSourceState({
+        version: 1,
+        source: 'shared-studio',
+        customPath: null,
+        sharedPath: STUDIO_SDK
+      })
+      const calls: string[] = []
+      const snapshot = await clearRetainedRoot(
+        { root: MANAGED },
+        buildDeps(fs, {
+          migration: {
+            ...makeDeps(fs),
+            stopSharedAdbServer: async () => {
+              calls.push(`stop root-exists:${fs.exists(`${MANAGED}/platform-tools/adb`)}`)
+            }
+          }
+        })
+      )
+      expect(snapshot.source).toBe('shared-studio')
+      expect(calls).toEqual(['stop root-exists:true'])
+      expect(fs.exists(MANAGED)).toBe(false)
+    }
+  )
 })
 
 describe('clearRetainedWithCascade（清除级联编排，review P2-3）', () => {

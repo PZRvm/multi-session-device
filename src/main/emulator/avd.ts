@@ -1,7 +1,8 @@
 import { mkdir, readFile, rm } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
-import { spawn } from 'node:child_process'
 import { msg } from '../locale'
+import { sdkPaths } from './sdk'
+import { spawnCommand } from './platformExec'
 
 export interface AvdDirs {
   /** 应用自有 AVD 根（ANDROID_AVD_HOME 语义） */
@@ -60,10 +61,10 @@ export async function createAvd(
     throw new Error(msg('avdExists', { ini: avdPaths(avdName, dirs).ini }))
   }
 
-  const avdmanagerBin = join(dirs.sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager')
+  const { avdmanagerBin, jreHome } = sdkPaths(dirs.sdkRoot)
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    JAVA_HOME: dirs.javaHome ?? join(dirs.sdkRoot, 'jre', 'Contents', 'Home'),
+    JAVA_HOME: dirs.javaHome ?? jreHome,
     ANDROID_SDK_ROOT: dirs.sdkRoot,
     ANDROID_HOME: dirs.sdkRoot,
     ANDROID_AVD_HOME: dirs.avdHome,
@@ -76,7 +77,7 @@ export async function createAvd(
     deps.runner ??
     ((runArgs: string[], runEnv: NodeJS.ProcessEnv): Promise<void> =>
       new Promise((resolve, reject) => {
-        const child = spawn(avdmanagerBin, runArgs, {
+        const child = spawnCommand({}, avdmanagerBin, runArgs, {
           env: runEnv,
           stdio: ['pipe', 'pipe', 'pipe']
         })

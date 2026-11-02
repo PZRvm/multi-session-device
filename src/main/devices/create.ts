@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { CreateDeviceInput, CreateDeviceResult, Device, DeviceSnapshot } from '@shared/types'
-import { assessImageCompatibility } from '@shared/compatibility'
+import { assessImageCompatibility, hostImageAbi } from '@shared/compatibility'
 import { getLocaleState } from '../locale/store'
 import { msg } from '../locale'
 import { createAvd, deleteAvd, patchAvdConfig } from '../emulator/avd'
@@ -119,7 +119,8 @@ const createDeviceTransaction = async (
         baseExtension: null
       }
     },
-    getLocaleState()
+    getLocaleState(),
+    hostImageAbi(process.platform)
   )
   if (verdict.status !== 'supported') {
     throw new Error(msg('compatReject', { reasons: verdict.reasons.join('；') }))

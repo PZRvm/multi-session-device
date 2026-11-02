@@ -17,13 +17,14 @@ const mocks = vi.hoisted(() => ({
   })),
   fromWebContents: vi.fn(() => null),
   showItemInFolder: vi.fn(async () => undefined),
+  openExternal: vi.fn(async () => undefined),
   appGetPath: vi.fn(() => '/userdata')
 }))
 vi.mock('electron', () => ({
   ipcMain: { handle: mocks.handle },
   dialog: { showMessageBox: mocks.showMessageBox },
   BrowserWindow: { fromWebContents: mocks.fromWebContents },
-  shell: { showItemInFolder: mocks.showItemInFolder },
+  shell: { showItemInFolder: mocks.showItemInFolder, openExternal: mocks.openExternal },
   app: { getPath: mocks.appGetPath }
 }))
 vi.mock('../../app-icon', () => ({ appIcon: undefined }))
@@ -124,3 +125,68 @@ async function expectShellReject(run: () => Promise<unknown>): Promise<void> {
   }
   expect(threw).toBe(true)
 }
+
+/** process.platform 覆写助手（深链通道的 win32 门测试共用） */
+const withPlatform = async <T>(platform: string, run: () => Promise<T>): Promise<T> => {
+  const original = process.platform
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+  try {
+    return await run()
+  } finally {
+    Object.defineProperty(process, 'platform', { value: original, configurable: true })
+  }
+}
+
+describe('shell:open-windows-features 深链（plan 2026-10-22-windows-emulator-env）', () => {
+  beforeEach(() => {
+    mocks.handle.mockClear()
+    mocks.openExternal.mockClear()
+    registerDialogIpc()
+  })
+
+  it('win32：放行且 URI 固定为 Windows 功能页（无 renderer 入参面）', async () => {
+    await withPlatform(
+      'win32',
+      () => handlerOf('shell:open-windows-features')(undefined) as Promise<void>
+    )
+    expect(mocks.openExternal).toHaveBeenCalledTimes(1)
+    expect(mocks.openExternal).toHaveBeenCalledWith('ms-settings:windows-optionalfeatures')
+  })
+
+  it('非 win32：按通道拒绝（异常路径——该 code 仅 win32 收口产生）', async () => {
+    await expect(
+      withPlatform(
+        'darwin',
+        () => handlerOf('shell:open-windows-features')(undefined) as Promise<void>
+      )
+    ).rejects.toThrow('win32 only')
+    expect(mocks.openExternal).not.toHaveBeenCalled()
+  })
+})
+
+describe('shell:open-windows-defender 深链（plan 2026-10-23-windows-settings-finish）', () => {
+  beforeEach(() => {
+    mocks.handle.mockClear()
+    mocks.openExternal.mockClear()
+    registerDialogIpc()
+  })
+
+  it('win32：放行且 URI 固定为 Windows 安全中心（无 renderer 入参面）', async () => {
+    await withPlatform(
+      'win32',
+      () => handlerOf('shell:open-windows-defender')(undefined) as Promise<void>
+    )
+    expect(mocks.openExternal).toHaveBeenCalledTimes(1)
+    expect(mocks.openExternal).toHaveBeenCalledWith('ms-settings:windowsdefender')
+  })
+
+  it('非 win32：按通道拒绝', async () => {
+    await expect(
+      withPlatform(
+        'darwin',
+        () => handlerOf('shell:open-windows-defender')(undefined) as Promise<void>
+      )
+    ).rejects.toThrow('win32 only')
+    expect(mocks.openExternal).not.toHaveBeenCalled()
+  })
+})

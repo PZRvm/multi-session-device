@@ -183,7 +183,20 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-投屏回放无ACK恢复盲点.md](notes/issue/2026-10/2026-10-16-投屏回放无ACK恢复盲点.md) — 已实窗复现并修复回放首批无 ACK 的互等：4 包解码阈值先于 8 包 ACK，渲染端停收而 main 未武装；新增显式重同步请求、阈值 16 与归属校验/去重
 - [2026-10-16-无线投屏建流失败后切回缺少重试入口.md](notes/issue/2026-10/2026-10-16-无线投屏建流失败后切回缺少重试入口.md) — USB/无线双条目两次启动分别有一侧 scrcpy video socket 超时；错误会话清理后切回，activate 返回空，界面停在连接态且没有重试入口，留后续单独修复
 - [2026-10-16-解锁投屏修复-code-review.md](notes/issue/2026-10/2026-10-16-解锁投屏修复-code-review.md) — 解锁投屏 Phase 5 的三项发现已修复并正式回归：本地手势随代次取消、零帧有界恢复与可重试错误态、ACK 安全整数校验；全量 1254 项通过
-- [2026-10-23-关于页真值对接-review.md](notes/issue/2026-10/2026-10-23-关于页真值对接-review.md) — 关于页真值对接（about:get / about:open-data-directory）阶段 5 评审——无 P1/P2，P3 三条（openPath 无 catch、错误路径测试缺口、可选链层级不一致）；同日修复批全量处置
+- [2026-10-22-sdk-migration-adb-probe-win32.md](notes/issue/2026-10/2026-10-22-sdk-migration-adb-probe-win32.md) — sdkMigration 的 SDK 根核验探测写死无后缀 adb 路径——win32 下恒假阴性，迁移/切换根验证会误判
+- [2026-10-22-win32-hidden-non-x86-images.md](notes/issue/2026-10/2026-10-22-win32-hidden-non-x86-images.md) — win32 目录过滤后本地非 x86_64 镜像不可见（卸载入口随之隐藏）——一期接受，后续可加「不可用已装镜像」提示
+- [2026-10-22-windows-emulator-env-review.md](notes/issue/2026-10/2026-10-22-windows-emulator-env-review.md) — P5 模拟器环境适配代码评审发现——1 条 P2（繁中功能显示名与系统实际不符）+ 3 条 P3；只记录不修
+- [2026-10-22-windows-file-resilience-review.md](notes/issue/2026-10/2026-10-22-windows-file-resilience-review.md) — P4 分支（fsWin/sha1 流式化 + SDK 切换弹窗化 + 同路径守卫修复）代码评审发现——无 P1；流程 P2 一条（lint 门禁口径）+ P3 两条；只记录不修
+- [2026-10-22-windows-merge-integration-review.md](notes/issue/2026-10/2026-10-22-windows-merge-integration-review.md) — feat/windows-branch 三批合并集成 review——P1 引导/P2 检测链/P3 进程管理的接缝核查；无 P1，P2 一条（profiles.ts avdmanager 调用链 win32 必挂）+ P3 一条（四处 spawn 缺 windowsHide）；只记录不修
+- [2026-10-22-windows-process-mgmt-review.md](notes/issue/2026-10/2026-10-22-windows-process-mgmt-review.md) — P3 进程管理 Windows 化代码评审发现——无 P1；P2 两条（测试平台假设钉住、会话结束弹窗暴露面）+ P3 四条；只记录不修
+- [2026-10-22-windows-quit-stay-no-window.md](notes/issue/2026-10/2026-10-22-windows-quit-stay-no-window.md) — Windows 关窗确认选「留在应用」后 app 无窗口且无唤回入口——需 second-instance 处理，真机验收前修复
+- [2026-10-22-windows-sdk-bootstrap-review.md](notes/issue/2026-10/2026-10-22-windows-sdk-bootstrap-review.md) — Windows P1 SDK 引导平台化 code review——0 项 P1、1 项 P2（cmd.exe 含空格路径待真机验证）、4 项 P3（同日修复批已全部处置）
+- [2026-10-22-windows-studio-detect-review.md](notes/issue/2026-10/2026-10-22-windows-studio-detect-review.md) — P2 Windows 检测链（4dc8d46）代码评审发现——4 项 P3：平台传参风格、APPDATA 未优先读 env、win 用例 runner 可携带性、isStudioSdk 遗留未用声明；只记录未修
+- [2026-10-30-windows-test-suite-platform-assumptions.md](notes/issue/2026-10/2026-10-30-windows-test-suite-platform-assumptions.md) — Windows 真机 npm test 全套 153 失败（基线 160）——测试夹具的 mac 平台假设经 process.platform 泄漏，产品代码 Windows 分支行为正确；裁决不修，mac 全绿为门禁口径
+- [2026-10-31-orphan-emulator-after-app-restart.md](notes/issue/2026-10/2026-10-31-orphan-emulator-after-app-restart.md) — 应用重启后上代 headless 模拟器进程存活成孤儿——runningCount 预检看不见，迁移与活体模拟器抢镜像文件（EPERM）；P3「孤儿进程」验收项的真机实证变体
+- [2026-10-31-shared-mode-bootstrap-button-misleading.md](notes/issue/2026-10/2026-10-31-shared-mode-bootstrap-button-misleading.md) — 共享模式缺 cmdline-tools 时向导仍出「完成 SDK 引导」按钮——点击必被共享只读守卫拒绝；应显示「去 SDK Manager 补装」指引（sdkSharedNotReady 文案已备而未接）
+- [2026-10-31-windows-acceptance-fixes-review.md](notes/issue/2026-10/2026-10-31-windows-acceptance-fixes-review.md) — Windows 真机验收十批修复（da14795..733e2b0）代码评审——0 P1 / 2 P2 / 8 P3；「删源前停 adb」族尚差 adopt 与 replaceTarget 清场两处，只记录未修
+- [2026-10-31-windows-sdk-source-switch-matrix.md](notes/issue/2026-10/2026-10-31-windows-sdk-source-switch-matrix.md) — SDK 来源切换矩阵在 win32 整体失真——classifyRoot 三个 SDK 标记全是 darwin 路径，切出零迁移不弹评估、回切被 target-junk 拒绝；真机验收实证（2026-10-22 记录的 sdkMigration adb 探测假阴性实为三处全中）
 
 ### notes/learn/
 
@@ -270,7 +283,12 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-clipboard-sync-lifecycle.md](notes/learn/2026-10/2026-10-16-clipboard-sync-lifecycle.md) — 双向剪贴板的观察基线、单飞 ACK 队列与 IME 回声必须分开；设备消息消费不能等待出站 ACK
 - [2026-10-16-recording-poc-media-boundaries.md](notes/learn/2026-10/2026-10-16-recording-poc-media-boundaries.md) — 录屏 P0 的三个边界——独立 scrcpy 会话各持 jar 路径，WebCodecs decoder flush 后重新等关键帧，音画测试源按实际播放时间校准
 - [2026-10-16-投屏PTS单位与静置ACK误判.md](notes/learn/2026-10/2026-10-16-投屏PTS单位与静置ACK误判.md) — PTS 与 ACK 单位和节拍须对齐；后台回放从首关键帧起算，拥堵显式恢复须独立计时、有界失败，并同步取消本地手势；验收覆盖真实主窗后台激活
-- [2026-10-23-可选链部分mock抛错.md](notes/learn/2026-10/2026-10-23-可选链部分mock抛错.md) — 可选链只护到链上最后一个 ?.——访问 window.api 下更深的域时，测试部分 mock 缺中间键会让 useEffect 同步抛错
+- [2026-10-22-vitest-esm-namespace-spy.md](notes/learn/2026-10/2026-10-22-vitest-esm-namespace-spy.md) — vitest 里 vi.spyOn 打不通 node 内置模块的 ESM 命名空间——要么整模块 vi.mock，要么给被测函数留接缝参数
+- [2026-10-22-window-api-default-stub-injected-tests.md](notes/learn/2026-10/2026-10-22-window-api-default-stub-injected-tests.md) — 组件新增 window.api 读取时，注入式测试用例会因缺 api 桩 TypeError——beforeEach 挂默认桩（含 platform），自挂完整桩的用例自然覆盖
+- [2026-10-22-windows-spawn-bat-tar-exe.md](notes/learn/2026-10/2026-10-22-windows-spawn-bat-tar-exe.md) — win32 下 spawn .bat/.cmd 必须 cmd.exe /c 包装（Node 安全修复后直接抛 EINVAL）；GUI 进程拉子进程要带 windowsHide 防闪黑框；Windows 解 zip 用系统自带 tar.exe（bsdtar 原生 zip64），PowerShell Expand-Archive 有 2GB 单文件上限不可用
+- [2026-10-22-接缝存在不等于接缝生效.md](notes/learn/2026-10/2026-10-22-接缝存在不等于接缝生效.md) — 测试接缝的可注入性要靠「默认实现也走注入」锁定——defaultAdbOnPath 收了 fileExists 接缝却写死 defaultFileExists，接缝自始未生效
+- [2026-10-30-book-index-win32-path-separator.md](notes/learn/2026-10/2026-10-30-book-index-win32-path-separator.md) — 零依赖 Node 脚本里凡是要产出「跨平台一致的文本」（索引、清单、模板），path.relative/join 的结果必须先归一为正斜杠——win32 的反斜杠会击穿按 'a/b' 写死的键匹配与 split('/')
+- [2026-10-30-windows-darwin-path-duplicates.md](notes/learn/2026-10/2026-10-30-windows-darwin-path-duplicates.md) — Windows 真机验收连爆三处 darwin 路径硬编码（sdkMigration adb 探测、profiles avdmanager 链、javaBinFor/javaHomeFor）——同一根因：P1 平台化只改了 sdkPaths 单源及其直接消费方，自行 join 布局的"第二路径真源"全数漏网；两判定源口径分叉会让 UI 逻辑死锁
 
 ### notes/summary/2026-10/
 
@@ -280,7 +298,10 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-09-模拟器对接.md](notes/summary/2026-10/2026-10-09-模拟器对接.md) — 交付真模拟器全链路：SDK bootstrap 全量、PoC 过验收线（≥30fps/≤150ms）、向导接真 avdmanager、启停状态机、投屏触控物理键
 - [2026-10-16-功能完善.md](notes/summary/2026-10/2026-10-16-功能完善.md) — 交付一期收尾：日志面板、截屏/录屏/拖拽安装/剪贴板/断网、设置窗、并行与内存水位防线
 - [2026-10-16-真机接入与投屏.md](notes/summary/2026-10/2026-10-16-真机接入与投屏.md) — 真机接入——USB 与无线调试（扫描/配对/连接）接入现有设备列表与投屏，复用内置 scrcpy 栈，不引入 QtScrcpy
-- [2026-10-23-关于页真值对接.md](notes/summary/2026-10/2026-10-23-关于页真值对接.md) — 设置窗关于页接通真值：应用/Electron/Chromium 版本与数据目录经 about:get 拉取，打开目录按钮接通并贴行右缘
+- [2026-10-22-windows-emulator-env.md](notes/summary/2026-10/2026-10-22-windows-emulator-env.md) — Windows 模拟器环境适配落地——镜像按宿主 ABI 过滤（x86_64）、WHPX 失败识别与深链引导、摄像头隐私设置入口；win32-only 分支 mac 零回归
+- [2026-10-22-windows-file-resilience.md](notes/summary/2026-10/2026-10-22-windows-file-resilience.md) — P4 文件链路健壮性落地——fsWin rename 容错（win32 锁重试+EXDEV 回退）接入三条链路、sha1 边下边算；零实现偏差，mac 构造性零回归
+- [2026-10-22-windows-process-mgmt.md](notes/summary/2026-10/2026-10-22-windows-process-mgmt.md) — Windows 进程管理落地——runner 树杀 taskkill /T、win32 不 detached、关窗确认弹窗；win32-only 分支 mac 零回归
+- [2026-10-22-windows-studio-detect.md](notes/summary/2026-10/2026-10-22-windows-studio-detect.md) — Windows 检测链分支——studioDetect 四条候选链与 adb 候选平台化、零注册表固定目录探测、路径大小写规范化；mac 行为零变化
 
 ### notes/task/
 
@@ -379,9 +400,12 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-device-recording.md](plans/2026-10-16-device-recording.md) — 模拟器与真机录屏施工图——设备声音、暂停续录、各设备独立 MP4、旋转后最大画布居中、后台任务与下载目录落盘；先过媒体能力验证再接产品
 - [2026-10-16-recording-interactions.md](plans/2026-10-16-recording-interactions.md) — 已确认录屏交互实施——设备行状态、Logcat 左侧计时/生成进度、原生结果队列、按设备条件记忆与统一恢复提示
 - [2026-10-16-unlock-stream-resync.md](plans/2026-10-16-unlock-stream-resync.md) — 解锁首滑冻结及 review 三项修复完成：校正缓存与回放、显式重同步、本地手势清理、有界恢复及 ACK 校验；全量 1254 项回归通过
+- [2026-10-22-windows-emulator-env.md](plans/2026-10-22-windows-emulator-env.md) — 模拟器环境适配——镜像目录按宿主架构过滤 x86_64、WHPX 缺失的失败识别与深链引导、摄像头空列表的系统隐私设置入口；Win P5，依赖外围调研 D1-D3
+- [2026-10-22-windows-file-resilience.md](plans/2026-10-22-windows-file-resilience.md) — 文件链路 Windows 健壮性——rename/move 占用锁退避重试与 EXDEV 跨卷回退小工具（替换四个文件的裸调用点）、sha1 校验并入下载流省一次 2GB 读盘；Win P4，依赖外围调研 B1 与 P1 合并后代码现状
 - [2026-10-22-windows-process-mgmt.md](plans/2026-10-22-windows-process-mgmt.md) — 进程管理 Windows 化——runner 树杀 taskkill /T、detached 平台化与 windowsHide、before-quit 关窗确认弹窗（有设备在跑先确认再退出）；Win P3，依赖外围调研与用户批复
 - [2026-10-22-windows-sdk-bootstrap.md](plans/2026-10-22-windows-sdk-bootstrap.md) — SDK 引导 Windows 平台化——下载源按平台查表、sdkPaths 补 .exe/.bat、platformExec 执行器（cmd.exe /c + windowsHide）、解压改 Windows 自带 tar.exe；Win P1，依赖主体工程调研
 - [2026-10-22-windows-studio-detect.md](plans/2026-10-22-windows-studio-detect.md) — Studio/SDK 检测链 Windows 分支——studioDetect 四条候选链平台化（零注册表）、adb 系统候选补 Windows 路径、路径比较大小写规范化；Win P2，依赖主体工程调研
+- [2026-10-23-windows-settings-finish.md](plans/2026-10-23-windows-settings-finish.md) — 设置页 Windows 收尾——杀软白名单性能建议卡片（确切路径清单 + Defender 受控深链）、SDK 根路径过长检测提示（260 预算，只提示不拦截）、非 mac 板头去标题消除双标题；Win P6，依赖外围调研 C2/B3/E1
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### think-report/
@@ -395,4 +419,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 301 documents -->
+<!-- 325 documents -->

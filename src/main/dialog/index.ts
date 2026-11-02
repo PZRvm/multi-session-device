@@ -70,6 +70,25 @@ export function registerDialogIpc(): void {
     void shell.showItemInFolder(resolved)
   })
 
+  // WHPX 缺失引导（plan 2026-10-22-windows-emulator-env 设计 4）：固定 URI 的受控深链，
+  // 仅 win32 放行、无 renderer 入参——非 win32 调用属异常路径（按钮由 whpx-missing code
+  // 驱动，该 code 仅 win32 收口产生），按通道拒绝即可。
+  ipcMain.handle(IPC_CHANNELS.shellOpenWindowsFeatures, (): void => {
+    if (process.platform !== 'win32') {
+      throw new Error(`${IPC_CHANNELS.shellOpenWindowsFeatures}: win32 only`)
+    }
+    void shell.openExternal('ms-settings:windows-optionalfeatures')
+  })
+
+  // 杀软白名单建议（plan 2026-10-23-windows-settings-finish 设计 2）：与上面同款
+  // 固定 URI 受控深链——仅 win32、无 renderer 入参，非 win32 按通道拒绝。
+  ipcMain.handle(IPC_CHANNELS.shellOpenWindowsDefender, (): void => {
+    if (process.platform !== 'win32') {
+      throw new Error(`${IPC_CHANNELS.shellOpenWindowsDefender}: win32 only`)
+    }
+    void shell.openExternal('ms-settings:windowsdefender')
+  })
+
   ipcMain.handle(IPC_CHANNELS.dialogShow, async (event, raw: unknown): Promise<DialogResult> => {
     // renderer 传来的 payload 不可信，先过运行时守卫再进业务
     if (!isDialogOptions(raw)) {

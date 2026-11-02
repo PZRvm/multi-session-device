@@ -287,3 +287,35 @@ describe('runAdb', () => {
     await expect(runAdb('/nonexistent/adb', ['version'])).rejects.toThrow()
   })
 })
+
+describe('candidateAdbPaths（win32 分支）', () => {
+  it('PATH 按 ; 分隔、adb.exe 后缀、标准 SDK 走 %LOCALAPPDATA%', () => {
+    const candidates = candidateAdbPaths('/app/sdk', {
+      platform: 'win32',
+      env: { PATH: 'C:\\tools;C:\\other', LOCALAPPDATA: 'C:\\Users\\t\\AppData\\Local' },
+      homedir: () => 'C:\\Users\\t'
+    })
+    expect(candidates[0]).toEqual({ path: join('C:\\tools', 'adb.exe'), source: 'path' })
+    expect(candidates[1]).toEqual({ path: join('C:\\other', 'adb.exe'), source: 'path' })
+    expect(candidates).toContainEqual({
+      path: join('C:\\Users\\t\\AppData\\Local', 'Android', 'Sdk', 'platform-tools', 'adb.exe'),
+      source: 'standard-sdk'
+    })
+    expect(candidates.at(-1)).toEqual({
+      path: join('/app/sdk', 'platform-tools', 'adb.exe'),
+      source: 'app-sdk'
+    })
+  })
+
+  it('LOCALAPPDATA 缺省时按 homedir 推 AppData\\Local', () => {
+    const candidates = candidateAdbPaths('/app/sdk', {
+      platform: 'win32',
+      env: { PATH: '' },
+      homedir: () => 'C:\\Users\\t'
+    })
+    expect(candidates).toContainEqual({
+      path: join('C:\\Users\\t', 'AppData', 'Local', 'Android', 'Sdk', 'platform-tools', 'adb.exe'),
+      source: 'standard-sdk'
+    })
+  })
+})

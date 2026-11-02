@@ -76,10 +76,12 @@ describe('BoardHead', () => {
       expect(screen.getByRole('button', { name: copy.themeSwitch })).toBeTruthy()
     })
 
-    it.each(['win32', 'linux'])('非 macOS（%s）保留页面标题', (platform) => {
+    // 双标题去重（plan 2026-10-23-windows-settings-finish）：非 mac 标题由系统
+    // 标题栏承担，板头不再渲染应用名——改写自原「保留页面标题」用例（规格变更）
+    it.each(['win32', 'linux'])('非 macOS（%s）不渲染页面标题（标题归系统标题栏）', (platform) => {
       ;(window as unknown as { api: unknown }).api = { platform }
       render(<BoardHead count={0} compact />)
-      expect(screen.getByText(copy.appName)).toBeTruthy()
+      expect(screen.queryByText(copy.appName)).toBeNull()
       expect(screen.getAllByRole('button')).toHaveLength(2)
     })
   })

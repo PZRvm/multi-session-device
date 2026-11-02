@@ -10,7 +10,7 @@ export const runAdb = (
   timeoutMs: number
 ): Promise<{ code: number; stdout: string; stderr: string }> =>
   new Promise<{ code: number; stdout: string; stderr: string }>((resolve, reject) => {
-    const child = spawn(path, args, { env: scrubAdbEnv(process.env) })
+    const child = spawn(path, args, { env: scrubAdbEnv(process.env), windowsHide: true })
     const out: Buffer[] = []
     const err: Buffer[] = []
     const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs)
@@ -31,7 +31,7 @@ export const runAdb = (
   })
 
 export const spawnProc = (path: string, args: string[], env: NodeJS.ProcessEnv): ChildProcess =>
-  spawn(path, args, { env })
+  spawn(path, args, { env, windowsHide: true })
 
 export const connectTcp = (port: number): Promise<Socket> =>
   new Promise((resolve, reject) => {

@@ -294,6 +294,63 @@ describe('devices 域（启动/停止/取消状态机）', () => {
     )
   })
 
+  it('onUnexpectedExit（win32）：WHPX 致命句式 → whpx-missing 专用收口与通知', async () => {
+    const original = process.platform
+    try {
+      const send = vi.fn()
+      mocks.getMainWindow.mockReturnValue({ webContents: { id: 7, send } })
+      const { handlerFor, runnerEvents } = await freshDomain()
+      // 创建/启动留在真实平台（win32 下 arm64 镜像会被 ABI 守卫正确拦截）；
+      // 平台覆写只罩住收口时刻——handleUnexpectedExit 调用时求值 platform
+      const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+        mainWindowEvent(),
+        validCreateInput
+      )) as { createdId: string }
+      await handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id: created.createdId })
+      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+      runnerEvents().onUnexpectedExit(created.createdId, 'run-1', {
+        code: 1,
+        stderrTail: 'x86 emulation currently requires hardware acceleration!',
+        stdoutTail: ''
+      })
+      const list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+        devices: Array<{ lastError?: { code: string; message: string } }>
+      }
+      expect(list.devices[0].lastError?.code).toBe('whpx-missing')
+      expect(list.devices[0].lastError?.message).toContain('Windows 虚拟机监控程序平台')
+      expect(send).toHaveBeenCalledWith(
+        IPC_CHANNELS.devicesRuntimeError,
+        expect.objectContaining({ deviceId: created.createdId, code: 'whpx-missing' })
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', { value: original, configurable: true })
+    }
+  })
+
+  it('onUnexpectedExit（win32 对照）：非 WHPX 文本仍走既有 unexpected-exit 收口', async () => {
+    const original = process.platform
+    try {
+      const { handlerFor, runnerEvents } = await freshDomain()
+      const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+        mainWindowEvent(),
+        validCreateInput
+      )) as { createdId: string }
+      await handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id: created.createdId })
+      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+      runnerEvents().onUnexpectedExit(created.createdId, 'run-1', {
+        code: 1,
+        stderrTail: 'PANIC',
+        stdoutTail: ''
+      })
+      const list = (await handlerFor(IPC_CHANNELS.devicesList)(mainWindowEvent(), undefined)) as {
+        devices: Array<{ lastError?: { code: string } }>
+      }
+      expect(list.devices[0].lastError?.code).toBe('unexpected-exit')
+    } finally {
+      Object.defineProperty(process, 'platform', { value: original, configurable: true })
+    }
+  })
+
   it('stop：running → stopping → stopped，serial/runId 清空', async () => {
     const { handlerFor, runnerEvents } = await freshDomain()
     const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(

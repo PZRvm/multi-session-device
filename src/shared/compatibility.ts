@@ -3,9 +3,15 @@ import { ERRORS_COPY, format, type SettingsLocale } from './i18n'
 
 /**
  * 镜像兼容性判定（plan 设计 2）：supported | unsupported | unknown + 中文原因。
- * 判定维度：ABI（本期仅 arm64）、形态与镜像服务匹配、画像 API 范围、
- * Preview 开放策略。不支持项的展示开关无法改变创建资格——守卫独立于此模块。
+ * 判定维度：宿主 ABI（win32 → x86_64，其余 → arm64-v8a，单源 hostImageAbi）、
+ * 形态与镜像服务匹配、画像 API 范围、Preview 开放策略。
+ * 不支持项的展示开关无法改变创建资格——守卫独立于此模块。
  */
+
+/** 宿主可运行的镜像 ABI 单源（plan 2026-10-22-windows-emulator-env 设计 1）：
+ *  win32 宿主是 x86_64，Apple Silicon 是 arm64；未知平台随 mac 缺省。 */
+export const hostImageAbi = (platform: NodeJS.Platform): string =>
+  platform === 'win32' ? 'x86_64' : 'arm64-v8a'
 
 export interface CompatibilityVerdict {
   status: 'supported' | 'unsupported' | 'unknown'
@@ -43,12 +49,13 @@ const FORM_FACTOR_SERVICES: Partial<Record<DeviceFormFactor, Set<string>>> = {
 export const assessImageCompatibility = (
   profile: Pick<DeviceProfile, 'formFactor' | 'apiMin' | 'apiMax' | 'creatable'>,
   image: Pick<ImageEntry, 'abi' | 'services' | 'api'>,
-  locale: SettingsLocale = 'zh-CN'
+  locale: SettingsLocale = 'zh-CN',
+  hostAbi: string = 'arm64-v8a'
 ): CompatibilityVerdict => {
   const reasons: string[] = []
   const m = ERRORS_COPY[locale]
 
-  if (image.abi !== 'arm64-v8a') {
+  if (image.abi !== hostAbi) {
     reasons.push(format(m.compatCrossArch, { abi: image.abi }))
     return unsupported(...reasons)
   }
@@ -112,10 +119,11 @@ export const assessImageCompatibility = (
 export const profileHasSupportedImage = (
   profile: Pick<DeviceProfile, 'formFactor' | 'apiMin' | 'apiMax' | 'creatable'>,
   images: Array<Pick<ImageEntry, 'abi' | 'services' | 'api' | 'installed'>>,
-  locale: SettingsLocale = 'zh-CN'
+  locale: SettingsLocale = 'zh-CN',
+  hostAbi: string = 'arm64-v8a'
 ): boolean =>
   images.some(
     (image) =>
       image.installed === true &&
-      assessImageCompatibility(profile, image, locale).status === 'supported'
+      assessImageCompatibility(profile, image, locale, hostAbi).status === 'supported'
   )

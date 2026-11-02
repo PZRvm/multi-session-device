@@ -67,6 +67,10 @@ export interface RunnerDeps {
   /** 共享 server 已登记 serial 集 */
   adbSerials: () => Promise<Set<string>>
   spawnEmulator: (path: string, args: string[], options: SpawnOptions) => ChildProcess
+  /** 平台接缝（默认 process.platform）：win32 决定 detached 与停止路径（树杀 vs 进程组信号） */
+  platform?: NodeJS.Platform
+  /** win32 树杀（taskkill /PID /T /F）；缺省 defaultKillTree，接缝供单测注入 */
+  killTree?: (pid: number) => Promise<void>
   sleep: (ms: number, signal?: AbortSignal) => Promise<void>
   now: () => number
   /** 启动失败后的外部占用复核：进程已退但端口仍可连 = 确认端口冲突（可换端口重试一次） */
@@ -120,6 +124,24 @@ export const defaultBootProbe =
   }
 
 const defaultNow = (): number => Date.now()
+
+/** win32 树杀默认实现：taskkill /T 连启动器带 qemu 整树终止。恒 /F 硬杀——
+ *  -no-window 模拟器无消息循环，taskkill 不带 /F 发不出 WM_CLOSE；优雅退出
+ *  归 emulator console kill（backlog，见 plan 2026-10-22-windows-process-mgmt）。
+ *  spawnFn 接缝仅供单测注入。 */
+export const defaultKillTree = (
+  pid: number,
+  spawnFn: (command: string, args: readonly string[], options: SpawnOptions) => ChildProcess = spawn
+): Promise<void> =>
+  new Promise((resolve, reject) => {
+    const child = spawnFn('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {
+      windowsHide: true,
+      stdio: ['ignore', 'ignore', 'pipe']
+    })
+    child.stderr?.on('data', () => undefined) // drain：防管道写满把 taskkill 阻塞在写 stderr
+    child.on('error', reject)
+    child.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`taskkill: ${code}`))))
+  })
 
 /** boot 期间进程提前退出（崩溃/端口被抢静默 exit 1）——带真实退出码走失败收口 */
 class EarlyExitError extends Error {
@@ -272,6 +294,10 @@ export class EmulatorRunner {
     return entry
   }
 
+  #isWin32(): boolean {
+    return (this.deps.platform ?? process.platform) === 'win32'
+  }
+
   #spawnFor(entry: RunnerEntry): void {
     // 运行字段优先级：设备已验证设置 → legacy 固定 Cold/host（不改已有设备行为）
     const extra = this.deps.extraArgsFor?.(entry.id) ?? ['-no-snapshot', '-gpu', 'host']
@@ -279,9 +305,11 @@ export class EmulatorRunner {
       this.deps.emulatorPath(),
       ['-avd', entry.id, '-no-window', ...extra, '-port', String(entry.port)],
       {
-        // detached 建独立进程组：真身 qemu 与启动器同组，停止按组整组终止；
+        // detached 建独立进程组：真身 qemu 与启动器同组，停止按组整组终止（win32
+        // 无进程组语义，且 detached 会开新控制台、与 windowsHide 冲突——nodejs/node#21825）；
         // stdout 也要：emulator 的致命参数错误只打在 stdout（2026-10-09 实测）
-        detached: true,
+        detached: !this.#isWin32(),
+        windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe'],
         env: scrubAdbEnv({
           ...process.env,
@@ -403,7 +431,7 @@ export class EmulatorRunner {
     throw new Error(msg('runnerBootTimeout', { seconds: BOOT_TIMEOUT_MS / 1000 }))
   }
 
-  /** stop/cancel 共用：SIGTERM → 3s → SIGKILL → 限期收口；失败保留 entry 供重试 */
+  /** stop/cancel 共用：posix SIGTERM → 3s → SIGKILL；win32 taskkill 树杀×2；失败保留 entry 供重试 */
   #terminateEntry(entry: RunnerEntry): Promise<void> {
     if (entry.cleanup) return entry.cleanup
     const cleanup = this.#terminate(entry).catch((error) => {
@@ -432,11 +460,37 @@ export class EmulatorRunner {
         }
       }
     }
-    if (alive) killGroup('SIGTERM')
-    if (!(await this.#closedWithin(entry, TERM_GRACE_MS))) {
-      if (alive) killGroup('SIGKILL')
+    if (this.#isWin32()) {
+      // win32 无进程组/信号语义：taskkill 整树硬杀。非零退出多为竞态（子进程刚
+      // 自行退出）——宽限内收口即成功；真失败有界间隔重试一次，仍失败保留 entry
+      // 供重试（口径同 posix 限期不退）。
+      if (alive && entry.child.pid !== undefined) {
+        const killTree = this.deps.killTree ?? defaultKillTree
+        try {
+          await killTree(entry.child.pid)
+        } catch {
+          if (!(await this.#closedWithin(entry, TERM_GRACE_MS))) {
+            await this.deps.sleep(TERM_GRACE_MS)
+            try {
+              await killTree(entry.child.pid)
+            } catch {
+              if (!(await this.#closedWithin(entry, TERM_GRACE_MS))) {
+                throw new Error(msg('runnerStopTimeout'))
+              }
+            }
+          }
+        }
+      }
       if (!(await this.#closedWithin(entry, KILL_GRACE_MS))) {
         throw new Error(msg('runnerStopTimeout'))
+      }
+    } else {
+      if (alive) killGroup('SIGTERM')
+      if (!(await this.#closedWithin(entry, TERM_GRACE_MS))) {
+        if (alive) killGroup('SIGKILL')
+        if (!(await this.#closedWithin(entry, KILL_GRACE_MS))) {
+          throw new Error(msg('runnerStopTimeout'))
+        }
       }
     }
     this.#entries.delete(entry.id)

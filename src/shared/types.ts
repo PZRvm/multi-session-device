@@ -599,6 +599,8 @@ export interface SdkSourceSnapshot {
   managedRoot: string
   customPath: string | null
   sharedPath: string | null
+  /** 应用 avdHome（杀软白名单建议卡片展示用；main 侧单源 avdHomePath()） */
+  avdHome: string
   detection: StudioSdkDetection | null
   /** 未收尾迁移的 journal 视图（崩溃恢复横幅用）；null = 无在途/中断迁移 */
   migration: SdkMigrationView | null
