@@ -204,23 +204,25 @@ export function applyCropFrame(
   }
   const dx = x
   const dy = y
-  const shifted = annotations.map((annotation): Annotation => {
+  const shifted = annotations.map((annotation): Annotation | null => {
     switch (annotation.kind) {
       case 'rect':
       case 'text':
       case 'ellipse':
         return { ...annotation, x: annotation.x - dx, y: annotation.y - dy }
       case 'mosaic': {
-        // 马赛克区域与选区求交（夹回新视口内）：crop 源矩形越出底图会产生未像素化
-        // 的透明边（敏感信息泄漏面），越界部分按画布裁剪同语义收敛
-        const w = Math.min(annotation.width, width)
-        const h = Math.min(annotation.height, height)
+        // 保留原位置的交集，不能把裁掉的马赛克搬入保留区域。
+        const left = Math.max(annotation.x, x)
+        const top = Math.max(annotation.y, y)
+        const right = Math.min(annotation.x + annotation.width, x + width)
+        const bottom = Math.min(annotation.y + annotation.height, y + height)
+        if (right <= left || bottom <= top) return null
         return {
           ...annotation,
-          width: w,
-          height: h,
-          x: Math.min(Math.max(annotation.x - dx, 0), Math.max(0, width - w)),
-          y: Math.min(Math.max(annotation.y - dy, 0), Math.max(0, height - h))
+          width: right - left,
+          height: bottom - top,
+          x: left - dx,
+          y: top - dy
         }
       }
       case 'arrow':
@@ -241,7 +243,7 @@ export function applyCropFrame(
         }
     }
   })
-  return { view: nextView, annotations: shifted }
+  return { view: nextView, annotations: shifted.filter((a): a is Annotation => a !== null) }
 }
 
 // ===== 标注 id（模块级自增计数即可——窗内自持、关窗即弃，无需全局唯一） =====

@@ -125,6 +125,8 @@ function EditorWindow(): React.JSX.Element {
   const [fontSizeIndex, setFontSizeIndex] = useState(1)
   const [exportError, setExportError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // 覆盖 state 提交前的同步窗口，并守住导出到续编完成的整个事务。
+  const busyRef = useRef(false)
   const [flash, setFlash] = useState<{ text: string; fading: boolean } | null>(null)
   const flashTimers = useRef<number[]>([])
   const stageHandleRef = useRef<AnnotationStageHandle | null>(null)
@@ -168,6 +170,7 @@ function EditorWindow(): React.JSX.Element {
 
   // ===== 快照栈：任何标注/视口变更产生新快照（撤销/重做整体回放） =====
   function commitSnapshot(next: EditorSnapshot): void {
+    if (busyRef.current) return
     setHistory((h) =>
       h ? { past: [...h.past, h.present].slice(-HISTORY_LIMIT), present: next, future: [] } : h
     )
@@ -191,6 +194,7 @@ function EditorWindow(): React.JSX.Element {
   // 撤销/重做路由（反馈轮一）：裁剪态 → 选区独立栈（经 Stage 句柄——撤「上次框选」，
   // 会话期瞬态不进全局快照栈）；其余 → 全局快照栈
   function handleUndo(): void {
+    if (busyRef.current) return
     if (tool === 'crop') {
       stageHandleRef.current?.cropUndo()
       return
@@ -207,6 +211,7 @@ function EditorWindow(): React.JSX.Element {
   }
 
   function handleRedo(): void {
+    if (busyRef.current) return
     if (tool === 'crop') {
       stageHandleRef.current?.cropRedo()
       return
@@ -231,6 +236,7 @@ function EditorWindow(): React.JSX.Element {
   // 保证闭包现值（编辑窗小场景，注册开销可忽略）
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent): void {
+      if (busyRef.current) return
       const target = e.target as HTMLElement | null
       const editingText =
         target !== null && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')
@@ -282,9 +288,10 @@ function EditorWindow(): React.JSX.Element {
   }
 
   async function handleExport(kind: 'copy' | 'download'): Promise<void> {
-    if (!captureId || busy) return
+    if (!captureId || busyRef.current) return
     const handle = stageHandleRef.current
     if (!handle) return
+    busyRef.current = true
     setBusy(true)
     setExportError(null)
     try {
@@ -303,6 +310,7 @@ function EditorWindow(): React.JSX.Element {
     } catch (error) {
       setExportError(editErrorText(error, copy.failed))
     } finally {
+      busyRef.current = false
       setBusy(false)
     }
   }
@@ -326,6 +334,8 @@ function EditorWindow(): React.JSX.Element {
 
   return (
     <EditorShell
+      inert={busy}
+      aria-busy={busy}
       className={`chrome-capture-editor${HIDDEN_TITLEBAR_CHROME ? ' chrome-capture-editor-chrome-custom' : ''}`}
     >
       <header className="chrome-capture-editor-topbar">

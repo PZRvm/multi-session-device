@@ -40,6 +40,11 @@ class TestWindow extends EventEmitter {
   destroyed = false
   show = vi.fn()
   focus = vi.fn()
+  minimized = false
+  isMinimized = (): boolean => this.minimized
+  restore = vi.fn(() => {
+    this.minimized = false
+  })
   setWindowButtonVisibility = vi.fn()
   loadURL = vi.fn<(path: string) => Promise<void>>(() => new Promise<void>(() => {}))
   loadFile = vi.fn<(path: string) => Promise<void>>(() => new Promise<void>(() => {}))
@@ -80,6 +85,20 @@ const handlerOf = (channel: string): ((...args: unknown[]) => unknown) =>
   mocks.handle.mock.calls.find(([name]) => name === channel)![1]
 
 describe('设置窗口边界', () => {
+  it('重新打开最小化设置窗先还原再聚焦，不重建', async () => {
+    const first = module!.openSettingsWindow()
+    windows[0].emit('ready-to-show')
+    await first
+    windows[0].minimized = true
+    windows[0].focus.mockClear()
+    await module!.openSettingsWindow()
+    expect(windows).toHaveLength(1)
+    expect(windows[0].minimized).toBe(false)
+    expect(windows[0].restore.mock.invocationCallOrder[0]).toBeLessThan(
+      windows[0].focus.mock.invocationCallOrder[0]
+    )
+  })
+
   it.each(['win32', 'darwin', 'linux'])('%s 顶部与窗口能力按平台隔离', async (platform) => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { value: platform })

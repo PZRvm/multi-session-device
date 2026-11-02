@@ -36,7 +36,10 @@ export function settingsOwns(sender: Electron.WebContents): boolean {
 export function openSettingsWindow(): Promise<void> {
   const current = settingsSession
   if (current && !current.window?.isDestroyed()) {
-    if (current.ready) current.window?.focus()
+    if (current.ready && current.window) {
+      if (current.window.isMinimized()) current.window.restore()
+      current.window.focus()
+    }
     return current.result
   }
 

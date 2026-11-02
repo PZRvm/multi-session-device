@@ -207,6 +207,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 ### notes/issue/2026-11/
 
+- [2026-11-02-dev-latest-merge-review.md](notes/issue/2026-11/2026-11-02-dev-latest-merge-review.md) — dev 最近合入评审两项 P2 已修复，窗口最小化恢复经实测确认并修复，附验证结果
 - [2026-11-02-screenshot-editor-review.md](notes/issue/2026-11/2026-11-02-screenshot-editor-review.md) — 截图编辑器阶段 5 评审——八项检查与 plan 专项全部通过，无 P1/P2；1 项 P3（导出防重 React state 理论重入窗口，来源同款，main 侧占位兜底）
 - [2026-11-02-windows-icon-master-edge.md](notes/issue/2026-11/2026-11-02-windows-icon-master-edge.md) — 黑屏 Windows 图标母版原尺寸下，手机外沿仍有少量生成杂色，常用小尺寸不影响黑屏识别
 - [2026-11-02-windows-test-baseline.md](notes/issue/2026-11/2026-11-02-windows-test-baseline.md) — Windows 图标替换前的全量测试已有 153 项失败，涉及平台假设、路径、符号链接与权限，未在本任务修复
@@ -309,6 +310,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 ### notes/learn/2026-11/
 
 - [2026-11-02-device-overlap-ready-fixture.md](notes/learn/2026-11/2026-11-02-device-overlap-ready-fixture.md) — 检查投屏与窗口控件遮挡时必须提供 ready 视频尺寸，连接中占位和 DOM 结构测试无法覆盖外框缩放
+- [2026-11-02-minimized-window-focus.md](notes/learn/2026-11/2026-11-02-minimized-window-focus.md) — Windows Electron 最小化工具窗重新打开要先 restore，再 focus；focus 本身不还原
 - [2026-11-02-window-controls-overlay-safe-area.md](notes/learn/2026-11/2026-11-02-window-controls-overlay-safe-area.md) — Electron 原生按钮安全区不仅要读取 env，内部 flex 也必须允许收缩，否则宽左栏仍会把 Logcat 挤进窗口按钮区
 - [2026-11-02-worktree-stash-checkout三重坑.md](notes/learn/2026-11/2026-11-02-worktree-stash-checkout三重坑.md) — worktree 里用 stash+checkout 对比基线有三重坑——stash 是仓库级共享（pop 到别的分支遗留条目）、untracked 文件冲突卡半途、切换分支会杀死运行中的 dev；基线对比只用只读方式
 - [2026-11-02-复刻验收压窗宽极值.md](notes/learn/2026-11/2026-11-02-复刻验收压窗宽极值.md) — 复刻带窗口自适应的源码功能时，视觉验收必须把窗口压到 MIN 宽高极值——典型尺寸（竖屏 551px）通过不代表 360px 极小窗通过；单行 flex 工具条在窄容器必溢出
@@ -329,6 +331,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 ### notes/summary/2026-11/
 
+- [2026-11-02-screenshot-review-fixes.md](notes/summary/2026-11/2026-11-02-screenshot-review-fixes.md) — 截图编辑评审修复：导出事务锁、马赛克裁剪交集、最小化工具窗还原，134 项测试通过
 - [2026-11-02-windows-device-top-clearance.md](notes/summary/2026-11/2026-11-02-windows-device-top-clearance.md) — Windows 手机顶部避开控件，后续按用户要求将实际间距由 28px 收紧至 8px，三档缩放验证通过
 - [2026-11-02-windows-icon.md](notes/summary/2026-11/2026-11-02-windows-icon.md) — Windows 使用无底板、屏幕镂空的三手机透明图标，覆盖窗口、可执行文件与关于页，黑屏版已覆盖，macOS 原图保留
 - [2026-11-02-windows-inline-window-controls.md](notes/summary/2026-11/2026-11-02-windows-inline-window-controls.md) — 取消 Windows 主窗和设置窗的通栏顶部，标识归左栏、窗口按钮与 Logcat 置于右上，正文恢复从 y=0 开始
@@ -440,6 +443,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-22-windows-studio-detect.md](plans/2026-10-22-windows-studio-detect.md) — Studio/SDK 检测链 Windows 分支——studioDetect 四条候选链平台化（零注册表）、adb 系统候选补 Windows 路径、路径比较大小写规范化；Win P2，依赖主体工程调研
 - [2026-10-23-windows-settings-finish.md](plans/2026-10-23-windows-settings-finish.md) — 设置页 Windows 收尾——杀软白名单性能建议卡片（确切路径清单 + Defender 受控深链）、SDK 根路径过长检测提示（260 预算，只提示不拦截）、非 mac 板头去标题消除双标题；Win P6，依赖外围调研 C2/B3/E1
 - [2026-11-02-screenshot-editor.md](plans/2026-11-02-screenshot-editor.md) — 截图编辑器复刻计划：直接迁入多会话浏览器的画布、工具条、历史与导出交互，仅适配设备缓存、窗口、IPC、三语和主题
+- [2026-11-02-screenshot-review-fixes.md](plans/2026-11-02-screenshot-review-fixes.md) — 修复截图评审两项 P2：导出期间锁定编辑、马赛克裁剪求交，并核验窗口最小化恢复
 - [2026-11-02-windows-device-top-clearance.md](plans/2026-11-02-windows-device-top-clearance.md) — Windows 投屏按顶部控件下方的剩余空间缩放，让手机外框避开 Logcat 和原生窗口按钮，保持无通栏布局
 - [2026-11-02-windows-icon.md](plans/2026-11-02-windows-icon.md) — Windows 使用屏幕镂空的三手机透明图标，替换母版、运行时 PNG 与 ICO，清理黑屏版本和预览副本
 - [2026-11-02-windows-inline-window-controls.md](plans/2026-11-02-windows-inline-window-controls.md) — 按用户修订移除主窗和设置窗的通栏顶部行，将标识放回左栏，窗口按钮与 Logcat 直接悬置右上
@@ -458,4 +462,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 352 documents -->
+<!-- 356 documents -->

@@ -28,6 +28,8 @@ tags: [review, p3, screenshot, editor, race]
 
 建议方向：若后续处置，仿 `useScreenshot.edit` 的 `editingRef` 模式加同步 ref 镜像（点击即读）。处置时保持与来源的 diff 可解释性——单独小改动，附接缝理由。
 
+处置：本次 [dev 评审修复轮](../../../plans/2026-11-02-screenshot-review-fixes.md)已引入同步 busy ref，导出入口在 state 提交前即占位，finally 释放；此项随 P2-1 同一导出事务修复。
+
 ## 基线相关（非本功能引入，已有 issue）
 
 Windows 全量测试 154 失败为基线固有（`2026-11-02-windows-test-baseline.md` 已记录 153 项同类；screenshot 域仅 `/bin/sleep` 1 条，`git show 3af2256` 确认为既有用例非本次新增）。本功能范围 34+25+32 用例除该条外全绿。

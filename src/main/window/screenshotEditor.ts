@@ -71,7 +71,10 @@ export function openScreenshotEditorWindow(
 ): Promise<void> {
   const current = sessions.get(deviceId)
   if (current && !current.window?.isDestroyed()) {
-    if (current.ready) current.window?.focus()
+    if (current.ready && current.window) {
+      if (current.window.isMinimized()) current.window.restore()
+      current.window.focus()
+    }
     return current.result
   }
 

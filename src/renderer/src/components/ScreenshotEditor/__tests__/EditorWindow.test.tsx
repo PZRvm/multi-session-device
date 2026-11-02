@@ -146,6 +146,54 @@ describe('EditorWindow 取图链', () => {
 })
 
 describe('EditorWindow 产出链', () => {
+  it('导出到续编取图完成期间锁定编辑与历史，失败后恢复', async () => {
+    let rejectDownload!: (error: Error) => void
+    getEditImage.mockResolvedValue(payload())
+    editDownload.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectDownload = reject
+        })
+    )
+    const { container } = render(<EditorWindow />)
+    await flush()
+    drawAnnotation()
+    fireEvent.click(button(copy.download))
+    await flush()
+    expect(container.firstElementChild?.hasAttribute('inert')).toBe(true)
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true })
+    expect(stageMock.lastProps?.annotations).toEqual([textAnnotation])
+    drawAnnotation()
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true, shiftKey: true })
+    expect(stageMock.lastProps?.annotations).toEqual([textAnnotation])
+    await act(async () => rejectDownload(new Error('磁盘不可写')))
+    await flush()
+    expect(container.firstElementChild?.hasAttribute('inert')).toBe(false)
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true })
+    expect(stageMock.lastProps?.annotations).toEqual([])
+  })
+
+  it('IPC 成功后续编取图尚未完成时仍锁定，完成后可继续编辑', async () => {
+    let resolveImage!: (value: CaptureEditImagePayload) => void
+    getEditImage.mockResolvedValueOnce(payload()).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveImage = resolve
+        })
+    )
+    editCopy.mockResolvedValue(undefined)
+    const { container } = render(<EditorWindow />)
+    await flush()
+    fireEvent.click(button(copy.copy))
+    await flush()
+    expect(container.firstElementChild?.hasAttribute('inert')).toBe(true)
+    await act(async () => resolveImage(payload({ captureId: 'cap-2' })))
+    await flush()
+    expect(container.firstElementChild?.hasAttribute('inert')).toBe(false)
+    drawAnnotation()
+    expect(stageMock.lastProps?.annotations).toEqual([textAnnotation])
+  })
+
   it('旧 id 导出失败（截图已过期）：错误条呈现、编辑态原样保留', async () => {
     getEditImage.mockResolvedValue(payload())
     editCopy.mockRejectedValue(new Error('截图已过期'))

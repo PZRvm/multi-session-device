@@ -29,6 +29,11 @@ class TestWindow extends EventEmitter {
   destroyed = false
   show = vi.fn()
   focus = vi.fn()
+  minimized = false
+  isMinimized = (): boolean => this.minimized
+  restore = vi.fn(() => {
+    this.minimized = false
+  })
   loadURL = vi.fn<(path: string) => Promise<void>>(() => new Promise<void>(() => {}))
   loadFile = vi.fn<(path: string, options?: { query?: Record<string, string> }) => Promise<void>>(
     () => new Promise<void>(() => {})
@@ -71,6 +76,20 @@ afterEach(() => {
 })
 
 describe('截图编辑窗边界（设备单例）', () => {
+  it('重新打开最小化编辑窗先还原再聚焦，不重建', async () => {
+    const first = module!.openScreenshotEditorWindow('d1')
+    windows[0].emit('ready-to-show')
+    await first
+    windows[0].minimized = true
+    windows[0].focus.mockClear()
+    await module!.openScreenshotEditorWindow('d1')
+    expect(windows).toHaveLength(1)
+    expect(windows[0].minimized).toBe(false)
+    expect(windows[0].restore.mock.invocationCallOrder[0]).toBeLessThan(
+      windows[0].focus.mock.invocationCallOrder[0]
+    )
+  })
+
   it('同设备并发打开共享结果；就绪后聚焦不重建；窗口形态与 sandbox 沿项目先例', async () => {
     const first = module!.openScreenshotEditorWindow('d1')
     expect(module!.openScreenshotEditorWindow('d1')).toBe(first)

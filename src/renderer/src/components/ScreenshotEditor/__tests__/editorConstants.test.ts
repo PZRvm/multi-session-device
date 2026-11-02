@@ -77,23 +77,40 @@ describe('applyCropFrame 标注平移', () => {
     ])
   })
 
-  it('马赛克越出选区被夹回新视口内（整块收纳、不产生透明边）', () => {
-    // 选区 (10,20,50,60)；马赛克 (40,70,30,30) 相对新视口位于 (30,50)、右下越界——
-    // 尺寸压到视口内（30×30 未超 50×60 不收缩），位置夹回使整块留在视口内 (20,30)
+  it('马赛克越出选区只保留交集，不搬移或扩大覆盖范围', () => {
+    // 原交集 (40,70,20,10)，平移后为 (30,50,20,10)。
     const result = applyCropFrame(fullView(100, 100), { x: 10, y: 20, width: 50, height: 60 }, [
       { id: 'm', kind: 'mosaic', x: 40, y: 70, width: 30, height: 30, pixelSize: 10 }
     ])
     const mosaic = result.annotations[0]
     expect(mosaic.kind).toBe('mosaic')
     if (mosaic.kind === 'mosaic') {
-      expect(mosaic.width).toBe(30)
-      expect(mosaic.height).toBe(30)
-      expect(mosaic.x).toBe(20)
-      expect(mosaic.y).toBe(30)
+      expect(mosaic.width).toBe(20)
+      expect(mosaic.height).toBe(10)
+      expect(mosaic.x).toBe(30)
+      expect(mosaic.y).toBe(50)
       // 整块在新视口内：crop 源矩形不出底图（无未像素化透明边）
       expect(mosaic.x + mosaic.width).toBeLessThanOrEqual(50)
       expect(mosaic.y + mosaic.height).toBeLessThanOrEqual(60)
     }
+  })
+
+  it.each([0, 400])('裁剪移除完全在选区外或仅接触边缘的马赛克（x=%s）', (x) => {
+    const result = applyCropFrame(
+      fullView(1000, 1000),
+      { x: 500, y: 500, width: 400, height: 400 },
+      [{ id: 'm', kind: 'mosaic', x, y: 500, width: 100, height: 100, pixelSize: 10 }]
+    )
+    expect(result.annotations).toEqual([])
+  })
+
+  it('裁剪左上相交马赛克保留交集并按新原点平移', () => {
+    const result = applyCropFrame(fullView(100, 100), { x: 20, y: 30, width: 50, height: 50 }, [
+      { id: 'm', kind: 'mosaic', x: 10, y: 20, width: 30, height: 30, pixelSize: 10 }
+    ])
+    expect(result.annotations).toEqual([
+      { id: 'm', kind: 'mosaic', x: 0, y: 0, width: 20, height: 20, pixelSize: 10 }
+    ])
   })
 
   it('马赛克大于新视口时尺寸收缩到视口尺寸', () => {
