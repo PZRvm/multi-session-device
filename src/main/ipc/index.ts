@@ -86,7 +86,11 @@ export function registerIpcHandlers(): void {
     adbPath: adbBinaryPath,
     runningDevice: deviceRefOfId,
     isRunningDevice: isDeviceActiveOfId,
-    isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
+    isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id,
+    // T2 过渡桩（plan 2026-11-02-screenshot-editor）：T3 接真实编辑窗登记
+    // （openEditor 开窗等待就绪、editorDeviceId 按窗口登记表解析归属）后替换
+    openEditor: async () => undefined,
+    editorDeviceId: () => null
   })
   // 网络开关域（plan 2026-10-12）：注入同截屏域；句柄供桥启停轮询（running 起、停止收）。
   // 真机适配（plan 2026-10-13-real-device-toolbar-parity）：注入换组合查询
