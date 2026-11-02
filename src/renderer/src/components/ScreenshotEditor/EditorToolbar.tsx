@@ -8,6 +8,11 @@
 // 图标接缝（与源的唯一段内差异）：源图集 @ant-design/icons 无 Circle 系图标，椭圆
 // 钮走 CSS 圆形字形兜底；本项目图标单源 lucide-react 有 Circle——七工具全走图集，
 // .chrome-capture-editor-glyph-circle 字形段不迁（editorWrapper 头注同记）。
+//
+// 窄窗反馈修复（2026-11-02 用户反馈，源同款缺陷）：竖屏截图窗宽可低至 360px，
+// 源单行不换行布局溢出堆叠、文字钮（马赛克双模式）压字破版。本仓把七工具钮
+// 收进 toolgroup、各设置组（含撤销/重做）连前置分隔线收进 sect——工具条按组
+// 原子换行（editorWrapper 的 wrap/sect 段），组内钮与文字不再被压断。
 
 import { ArrowUp, Circle, Grid2x2, Pencil, Redo, Scissors, Square, Type, Undo } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -120,26 +125,28 @@ function EditorToolbar(props: EditorToolbarProps): React.JSX.Element {
 
   return (
     <div className="chrome-capture-editor-toolbar" role="toolbar" aria-label={copy.toolbarAria}>
-      {TOOL_DEFS.map((def) => {
-        const Icon = def.icon
-        const label = copy.tools[def.labelKey]
-        return (
-          <button
-            key={def.id}
-            type="button"
-            className={`chrome-capture-editor-iconbtn${tool === def.id ? ' is-active' : ''}`}
-            aria-pressed={tool === def.id}
-            aria-label={label}
-            title={label}
-            disabled={cropLocked && def.id !== 'crop'}
-            onClick={() => onToolChange(def.id)}
-          >
-            <Icon size={16} />
-          </button>
-        )
-      })}
+      <div className="chrome-capture-editor-toolgroup">
+        {TOOL_DEFS.map((def) => {
+          const Icon = def.icon
+          const label = copy.tools[def.labelKey]
+          return (
+            <button
+              key={def.id}
+              type="button"
+              className={`chrome-capture-editor-iconbtn${tool === def.id ? ' is-active' : ''}`}
+              aria-pressed={tool === def.id}
+              aria-label={label}
+              title={label}
+              disabled={cropLocked && def.id !== 'crop'}
+              onClick={() => onToolChange(def.id)}
+            >
+              <Icon size={16} />
+            </button>
+          )
+        })}
+      </div>
       {tool === 'mosaic' && (
-        <>
+        <div className="chrome-capture-editor-sect">
           <span className="chrome-capture-editor-sep" aria-hidden="true" />
           <div
             className="chrome-capture-editor-mosaicmodes"
@@ -168,10 +175,10 @@ function EditorToolbar(props: EditorToolbarProps): React.JSX.Element {
               )
             })}
           </div>
-        </>
+        </div>
       )}
       {showWeight && (
-        <>
+        <div className="chrome-capture-editor-sect">
           <span className="chrome-capture-editor-sep" aria-hidden="true" />
           <div className="chrome-capture-editor-weight" role="group" aria-label={copy.weightAria}>
             {WEIGHT_LABEL_KEYS.map((key, index) => {
@@ -196,10 +203,10 @@ function EditorToolbar(props: EditorToolbarProps): React.JSX.Element {
               )
             })}
           </div>
-        </>
+        </div>
       )}
       {showPalette && (
-        <>
+        <div className="chrome-capture-editor-sect">
           <span className="chrome-capture-editor-sep" aria-hidden="true" />
           <div className="chrome-capture-editor-palette" role="group" aria-label={copy.paletteAria}>
             {COLOR_PALETTE.map((value) => {
@@ -218,10 +225,10 @@ function EditorToolbar(props: EditorToolbarProps): React.JSX.Element {
               )
             })}
           </div>
-        </>
+        </div>
       )}
       {tool === 'text' && (
-        <>
+        <div className="chrome-capture-editor-sect">
           <span className="chrome-capture-editor-sep" aria-hidden="true" />
           <div className="chrome-capture-editor-fontsizes" role="group" aria-label={copy.fontSize}>
             {FONT_SIZE_TIERS.map((size, index) => {
@@ -244,29 +251,31 @@ function EditorToolbar(props: EditorToolbarProps): React.JSX.Element {
               )
             })}
           </div>
-        </>
+        </div>
       )}
-      <span className="chrome-capture-editor-sep" aria-hidden="true" />
-      <button
-        type="button"
-        className="chrome-capture-editor-iconbtn"
-        disabled={!canUndo}
-        aria-label={copy.undo}
-        title={copy.undo}
-        onClick={onUndo}
-      >
-        <Undo size={16} />
-      </button>
-      <button
-        type="button"
-        className="chrome-capture-editor-iconbtn"
-        disabled={!canRedo}
-        aria-label={copy.redo}
-        title={copy.redo}
-        onClick={onRedo}
-      >
-        <Redo size={16} />
-      </button>
+      <div className="chrome-capture-editor-sect">
+        <span className="chrome-capture-editor-sep" aria-hidden="true" />
+        <button
+          type="button"
+          className="chrome-capture-editor-iconbtn"
+          disabled={!canUndo}
+          aria-label={copy.undo}
+          title={copy.undo}
+          onClick={onUndo}
+        >
+          <Undo size={16} />
+        </button>
+        <button
+          type="button"
+          className="chrome-capture-editor-iconbtn"
+          disabled={!canRedo}
+          aria-label={copy.redo}
+          title={copy.redo}
+          onClick={onRedo}
+        >
+          <Redo size={16} />
+        </button>
+      </div>
     </div>
   )
 }

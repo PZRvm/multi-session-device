@@ -17,6 +17,12 @@ import styled from 'styled-components'
  * 色，本项目入口无 data-role 链）；.chrome-capture-editor-glyph-circle 段不迁
  * （源是 antd 图集无 Circle 的兜底字形，本项目 lucide 有 Circle 图标——图标
  * 单源回正，差异记录见 plan T4 diff 清单）。
+ *
+ * 窄窗反馈修复（2026-11-02 用户反馈，源同款缺陷、源未修）：竖屏截图窗宽可低
+ * 至 360px，源单行工具条溢出堆叠、马赛克双模式等文字钮被压缩后中文折行破版。
+ * 本仓新增三处局部规则（详见各段注）：topbar/toolbar 允许 wrap、toolgroup 与
+ * sect 按组原子换行（结构配合见 EditorToolbar 头注）、文字钮 flex:none +
+ * nowrap 禁压字。单行宽窗下视觉与源一致。
  */
 export const EditorShell = styled.div`
   --chrome-toolbar: var(--board-bg-raised);
@@ -49,24 +55,44 @@ export const EditorShell = styled.div`
   }
 
   /* 顶部工具条行：左侧工具/档位/色板/撤销重做，右端产出钮组（margin-left auto
-     吸收余宽——产出钮保持窗右上角，与工具条同一组视觉带） */
+     吸收余宽——产出钮保持窗右上角，与工具条同一组视觉带）。
+     窄窗反馈修复：wrap + row-gap——空间不足时产出钮组整体落到下一行右贴，
+     不与工具条互压堆叠；padding 上下 4px 给换行后的两行留呼吸（单行时
+     min-height 48 兜住，视觉不变） */
   & .chrome-capture-editor-topbar {
     flex: none;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
+    row-gap: 4px;
     min-height: 48px;
-    padding: 0 8px;
+    padding: 4px 8px;
     box-sizing: border-box;
     background: var(--chrome-toolbar);
     border-bottom: 1px solid var(--chrome-line);
   }
 
+  /* 窄窗反馈修复：wrap + row-gap——组放不下时整组下移换行，不再溢出窗宽；
+     单行时 row-gap 不参与，视觉与源一致 */
   & .chrome-capture-editor-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+    row-gap: 4px;
+    min-width: 0;
+  }
+
+  /* 窄窗反馈修复：换行的原子单位——七工具钮（toolgroup）与各设置组连前置
+     分隔线（sect，结构见 EditorToolbar）各自 flex:none 成段。换行只发生在
+     段与段之间，组内钮不被拆散、分隔线不悬空在行尾 */
+  & .chrome-capture-editor-toolgroup,
+  & .chrome-capture-editor-sect {
     display: flex;
     align-items: center;
     gap: 2px;
-    min-width: 0;
+    flex: none;
   }
 
   /* 图标钮基配方：28px 圆形、灰阶蒙版阶梯、focus 灰阶化（强调色不进右侧）；
@@ -179,6 +205,7 @@ export const EditorShell = styled.div`
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex: none;
     height: 28px;
     min-width: 28px;
     padding: 0 6px;
@@ -189,6 +216,7 @@ export const EditorShell = styled.div`
     font-family: inherit;
     font-size: 12px;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
     cursor: pointer;
     transition:
       background-color 0.12s ease,
@@ -224,6 +252,12 @@ export const EditorShell = styled.div`
     font-size: 12px;
     color: var(--chrome-ink-dim);
     white-space: nowrap;
+    /* 窄窗反馈修复：下载文件名可达两百余像素——窄窗下限宽 + 省略号，不把工具条
+       挤成三行、不与产出钮互压 */
+    min-width: 0;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
     transition: opacity 0.45s ease;
   }
 
@@ -393,6 +427,10 @@ export const EditorShell = styled.div`
     background: transparent;
     padding: 0 8px;
     height: 24px;
+    /* 窄窗反馈修复：flex:none + nowrap——被压缩时中文不再按字折行破版
+       （「画笔涂抹/选区框选」挤成两行），空间不足交给整组换行 */
+    flex: none;
+    white-space: nowrap;
     border-radius: 4px;
     font-family: inherit;
     font-size: 12px;

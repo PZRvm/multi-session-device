@@ -31,8 +31,12 @@ describe('EditorToolbar', () => {
     const onToolChange = vi.fn()
     const { container } = render(<EditorToolbar {...props({ onToolChange })} />)
     const bar = container.querySelector('.chrome-capture-editor-toolbar') as HTMLElement
-    // 工具钮为工具条最前的直接子钮（其后才是档位/色板等条件组与撤销/重做）
-    const toolButtons = Array.from(bar.querySelectorAll(':scope > button')).slice(0, 7)
+    // 工具钮成组收在 toolgroup（窄窗反馈修复：整组为换行原子单位，见下例）
+    const toolButtons = Array.from(
+      (bar.querySelector('.chrome-capture-editor-toolgroup') as HTMLElement).querySelectorAll(
+        'button'
+      )
+    )
     expect(toolButtons.map((b) => b.getAttribute('aria-label'))).toEqual([
       copy.tools.rectangle,
       copy.tools.ellipse,
@@ -47,6 +51,31 @@ describe('EditorToolbar', () => {
     expect(toolButtons[1].getAttribute('aria-pressed')).toBe('false')
     fireEvent.click(toolButtons[1])
     expect(onToolChange).toHaveBeenCalledWith('ellipse')
+  })
+
+  it('窄窗换行不打散组：条内直接子级只有 toolgroup 与各 sect，每段分隔线领段', () => {
+    const { container } = render(<EditorToolbar {...props({ tool: 'mosaic' })} />)
+    const bar = container.querySelector('.chrome-capture-editor-toolbar') as HTMLElement
+    // 直接子级全部是段容器——换行只发生在段间，组内钮/分隔线不被拆散悬空
+    const children = Array.from(bar.children)
+    expect(children.length).toBeGreaterThan(0)
+    for (const child of children) {
+      expect(
+        child.classList.contains('chrome-capture-editor-toolgroup') ||
+          child.classList.contains('chrome-capture-editor-sect')
+      ).toBe(true)
+    }
+    // 马赛克态：双模式 + 档位 + 撤销/重做 三段，每段以分隔线开头（组随段走）
+    const sects = children.filter((child) => child.classList.contains('chrome-capture-editor-sect'))
+    expect(sects.length).toBe(3)
+    for (const sect of sects) {
+      const first = sect.firstElementChild as HTMLElement
+      expect(first.className).toBe('chrome-capture-editor-sep')
+    }
+    // 撤销/重做收在末段：撤销前仍是分隔线（位次与源一致）
+    const lastSect = sects[sects.length - 1]
+    const historyButtons = Array.from(lastSect.querySelectorAll('button'))
+    expect(historyButtons.map((b) => b.getAttribute('aria-label'))).toEqual([copy.undo, copy.redo])
   })
 
   it('马赛克工具：双模式切换钮（画笔/选区）回调；档位选择器呈现（块径语义）', () => {
