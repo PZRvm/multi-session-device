@@ -4,7 +4,7 @@ import { is } from '@electron-toolkit/utils'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { AboutInfo } from '@shared/types'
 import { appIcon } from '../app-icon'
-import { themeWindowBackground } from '../theme'
+import { registerWindowTitleBar, themeWindowBackground, themeWindowTitleBarOverlay } from '../theme'
 import { getMainWindow } from './index'
 import { msg } from '../locale'
 
@@ -91,14 +91,21 @@ export function openSettingsWindow(): Promise<void> {
       // 灯归系统自管且无逐灯隐藏 API，最小化/全屏能力禁用后黄/绿为无效按钮，仅红灯关窗
       ...(process.platform === 'darwin'
         ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 12 } }
-        : {}),
+        : process.platform === 'win32'
+          ? {
+              titleBarStyle: 'hidden' as const,
+              titleBarOverlay: themeWindowTitleBarOverlay(),
+              maximizable: true
+            }
+          : {}),
       resizable: true,
-      minimizable: false,
+      minimizable: process.platform === 'win32',
       fullscreenable: false,
       autoHideMenuBar: true,
       webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true }
     })
     session.window = window
+    if (process.platform === 'win32') registerWindowTitleBar(window)
     window.on('page-title-updated', (event) => event.preventDefault())
     window.on('closed', () => {
       settle()

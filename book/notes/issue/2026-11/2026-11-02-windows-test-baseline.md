@@ -10,3 +10,7 @@ description: Windows 图标替换前的全量测试已有 153 项失败，涉及
 - 建议方向：另立 Windows 测试兼容任务，区分夹具平台假设与真实实现问题。本次未改这些实现或断言。
 
 本次图标相关的 `SettingsWindow.test.tsx`、`quit-confirm.test.ts`、录屏 `prompts.test.ts` 在替换后 21 项通过；构建、类型检查、lint、Windows 目录打包与 NativeImage 资源检查通过。
+
+## 顶部适配扩展回归（2026-11-02）
+
+顶部适配工作区执行 12 个相关测试文件，149 项中 148 项通过。唯一失败在 `src/main/theme/__tests__/store.test.ts:56`：预期 `/userdata/theme.json.tmp`，实际为 Windows 的 `\userdata\theme.json.tmp`。同一单文件测试在未修改的 dev 上复现（7 过、1 失败），属于测试路径平台假设，不是顶部样式回归。本轮未修改该文件。

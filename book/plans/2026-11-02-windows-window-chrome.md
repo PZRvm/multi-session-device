@@ -1,12 +1,14 @@
 ---
 description: Windows 主窗和设置窗移除系统标题栏，将透明图标、标题与原生窗口按钮融入应用顶部，Logcat 开关位于窗口按钮左侧
-status: draft
+status: completed
 created: 2026-11-02
 ---
 
 # Windows 窗口顶部适配
 
-本轮只编写计划，未授权进入实现。Step 0、阶段 1 和阶段 2 的方案记录在下方；阶段 3–6 留待开发时执行。
+> 布局已按用户后续要求修订：不再保留本计划首轮的全宽顶部行，当前实现以[取消通栏修订](2026-11-02-windows-inline-window-controls.md)为准。下方保留首轮设计与执行记录。
+
+用户于 2026-11-02 授权在 feature/windows-titlebar-adaptation 工作区执行本计划，基分支 dev，开发端口 6175。Step 0、阶段 1 和阶段 2 已完成，按下方顺序进入实现。
 
 ## Requirements brief（Step 0）
 
@@ -134,15 +136,15 @@ Windows 建窗配置形态：
 
 ## Build order
 
-以下为实现顺序，每项完成后执行对应验证；本轮均不执行。
+以下为实现顺序，每项完成后执行对应验证。
 
-1. [ ] 为主窗、设置窗补平台配置测试，覆盖 `win32` / `darwin` / `linux`；为主题域补登记窗口与普通窗口混合的测试。先确认新 Windows 断言因现状未实现而失败，现有 macOS/Linux 断言有效。
-2. [ ] 在主题域实现覆盖层配置和登记，再接入两个建窗入口。Windows 设置窗启用最小化/最大化；验证配置测试、原设置窗单例/失败/重开测试和主题测试。
-3. [ ] 补 BoardHead 与 App 的 Windows 用例，再实现透明图标、应用名、全宽顶部和正文布局。迁移 Logcat 按钮的渲染位置并复用处理函数；验证开启、关闭、弹出、贴回及选中目标变化。
-4. [ ] 补设置窗 Windows 用例，再实现图标、设置标题和平台化留白。验证分类、语言、滚动、关于页与 macOS 原拖拽区。
-5. [ ] 执行阶段 4 的自动检查和 Windows 真窗验收；有失败先定位再在实现/测试阶段修复，验证通过后再进入评审。
-6. [ ] 阶段 5 按 `book/guidelines/review-checklist.md` 评审最终 diff；发现问题只记入 `book/notes/issue/2026-11/`，不在评审阶段顺手修。
-7. [ ] 阶段 6 更新 `DESIGN.md`，写 `book/notes/summary/2026-11/` 功能报告；有新经验写 learn，未修问题写 issue。达到完成条件后将本计划改为 `completed`，运行索引与卫生检查。新增目录时补 `scripts/gen-book-index.mjs` 用途表。
+1. [x] 为主窗、设置窗补平台配置测试，覆盖 `win32` / `darwin` / `linux`；为主题域补登记窗口与普通窗口混合的测试。先确认新 Windows 断言因现状未实现而失败，现有 macOS/Linux 断言有效。
+2. [x] 在主题域实现覆盖层配置和登记，再接入两个建窗入口。Windows 设置窗启用最小化/最大化；验证配置测试、原设置窗单例/失败/重开测试和主题测试。
+3. [x] 补 BoardHead 与 App 的 Windows 用例，再实现透明图标、应用名、全宽顶部和正文布局。迁移 Logcat 按钮的渲染位置并复用处理函数；验证开启、关闭、弹出、贴回及选中目标变化。
+4. [x] 补设置窗 Windows 用例，再实现图标、设置标题和平台化留白。验证分类、语言、滚动、关于页与 macOS 原拖拽区。
+5. [x] 执行阶段 4 的自动检查和 Windows 真窗验收；有失败先定位再在实现/测试阶段修复，验证通过后再进入评审。
+6. [x] 阶段 5 按 `book/guidelines/review-checklist.md` 评审最终 diff；发现问题只记入 `book/notes/issue/2026-11/`，不在评审阶段顺手修。
+7. [x] 阶段 6 更新 `DESIGN.md`，写 `book/notes/summary/2026-11/` 功能报告；有新经验写 learn，未修问题写 issue。达到完成条件后将本计划改为 `completed`，运行索引与卫生检查。新增目录时补 `scripts/gen-book-index.mjs` 用途表。
 
 ## Test plan（阶段 4）
 
@@ -190,10 +192,17 @@ macOS：自动测试验证平台分支和原有交互；真机可用时补主窗
 
 ## Done criteria
 
-- [ ] 用户三项要求均有实际窗口证据，主窗只有一个 Logcat 开关，位置不受 dock 影响。
-- [ ] macOS/Linux 分支保持原布局与窗口能力，其他子窗没有启用覆盖层。
-- [ ] 定向测试、typecheck、lint、build 通过；原生按钮、拖拽、缩放和主题已在 Windows 验证，环境限制明确记录。
-- [ ] 阶段 5 评审结果和未修问题已记录；阶段 6 的功能报告、设计说明和必要 learn/issue 已回写。
-- [ ] 本计划状态改为 `completed`，`npm run book:index`、`npm run book:release-check` 通过。
+- [x] 用户三项要求均有实际窗口证据，主窗只有一个 Logcat 开关，位置不受 dock 影响。
+- [x] macOS/Linux 分支保持原布局与窗口能力，其他子窗没有启用覆盖层。
+- [x] 定向测试、typecheck、lint、build 通过；原生按钮、拖拽、缩放和主题已在 Windows 验证，环境限制明确记录。
+- [x] 阶段 5 评审结果和未修问题已记录；阶段 6 的功能报告、设计说明和必要 learn/issue 已回写。
+- [x] 本计划状态改为 `completed`，`npm run book:index`、`npm run book:release-check` 通过。
 
-当前状态：计划草案已具备可执行的范围、方案、文件清单和验收点；尚未修改应用代码或执行功能验收。
+当前状态：实现、定向测试、真实 Electron 几何验证、独立评审和 book 回写已完成。定向六文件 107 项通过；三档缩放含窄窗修复各 23 项通过。真实鼠标命中/拖拽/贴靠菜单与 Mac 真机未验证，限制及扩展回归的一项既有路径测试失败见功能报告。
+
+
+## 执行结果（2026-11-02）
+
+首轮独立评审记录的 P2 窄窗问题未在评审中修复，转入 [独立轮次](2026-11-02-windows-titlebar-narrow-window.md) 后完成。窗口安全区不足时允许顶部左区收缩，Logcat 保留 40px；不改设备列表和 dock 宽度规则。相关日志测试的异步解锁断言改为等待原预期。
+
+详见 [功能报告](../notes/summary/2026-11/2026-11-02-windows-titlebar-adaptation.md)。尚未合并或推送。

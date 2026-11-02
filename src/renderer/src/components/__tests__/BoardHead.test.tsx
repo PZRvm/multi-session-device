@@ -78,11 +78,25 @@ describe('BoardHead', () => {
 
     // 双标题去重（plan 2026-10-23-windows-settings-finish）：非 mac 标题由系统
     // 标题栏承担，板头不再渲染应用名——改写自原「保留页面标题」用例（规格变更）
-    it.each(['win32', 'linux'])('非 macOS（%s）不渲染页面标题（标题归系统标题栏）', (platform) => {
+    it.each(['linux'])('系统标题栏平台（%s）不渲染页面标题', (platform) => {
       ;(window as unknown as { api: unknown }).api = { platform }
       render(<BoardHead count={0} compact />)
       expect(screen.queryByText(copy.appName)).toBeNull()
       expect(screen.getAllByRole('button')).toHaveLength(2)
+    })
+
+    it('Windows 左上显示透明图标与标题，外观和设置入口仍可用', () => {
+      ;(window as unknown as { api: unknown }).api = { platform: 'win32' }
+      const open = vi.fn()
+      const { container } = render(<BoardHead count={6} compact onOpenSettings={open} />)
+      expect(screen.getByText(copy.appName).getAttribute('title')).toBe(copy.appName)
+      const icon = container.querySelector('img')
+      expect(icon?.getAttribute('src')).toContain('icon-windows.png')
+      expect(icon?.getAttribute('alt')).toBe('')
+      expect(screen.getByRole('button', { name: copy.themeSwitch })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: copy.settings }))
+      expect(open).toHaveBeenCalledOnce()
+      expect(countText()).toBe(copy.deviceCount + '06')
     })
   })
 

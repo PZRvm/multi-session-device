@@ -472,14 +472,31 @@ const App = (): React.JSX.Element => {
     []
   )
 
+  const isWindows = window.api.platform === 'win32'
+  const boardHead = (
+    <BoardHead
+      count={visibleDevices.length}
+      compact={listWidth <= 320}
+      onOpenSettings={() => void openSettings()}
+    />
+  )
+  const logToggle = logTarget ? (
+    <button
+      type="button"
+      className="log-toggle"
+      aria-label={copy.logcatTitle}
+      aria-pressed={dockVisible}
+      title={copy.logcatTitle}
+      onClick={handleToggleLogDock}
+    >
+      <ScrollText size={16} />
+    </button>
+  ) : null
   return (
-    <Wrapper lang={locale}>
+    <Wrapper lang={locale} data-windows={isWindows}>
+      {isWindows ? <div className="window-drag-region" aria-hidden="true" /> : null}
       <div className="list-pane" style={{ width: listWidth }}>
-        <BoardHead
-          count={visibleDevices.length}
-          compact={listWidth <= 320}
-          onOpenSettings={() => void openSettings()}
-        />
+        {isWindows ? <div className="list-head">{boardHead}</div> : boardHead}
         <DeviceHealthNotice
           summary={reconciliation}
           storeHealth={storeHealth}
@@ -567,18 +584,7 @@ const App = (): React.JSX.Element => {
         </div>
         <div className="canvas-tools">
           {indicatorDevice ? <RecordingIndicator deviceId={indicatorDevice.id} /> : null}
-          {logTarget ? (
-            <button
-              type="button"
-              className="log-toggle"
-              aria-label={copy.logcatTitle}
-              aria-pressed={dockVisible}
-              title={copy.logcatTitle}
-              onClick={handleToggleLogDock}
-            >
-              <ScrollText size={16} />
-            </button>
-          ) : null}
+          {!isWindows ? logToggle : null}
         </div>
       </main>
       {dockVisible ? (
@@ -609,14 +615,57 @@ const App = (): React.JSX.Element => {
           </aside>
         </>
       ) : null}
+      {isWindows ? <div className="window-actions">{logToggle}</div> : null}
     </Wrapper>
   )
 }
 
 const Wrapper = styled.div`
+  position: relative;
   display: flex;
   height: 100vh;
   overflow: hidden;
+
+  .window-drag-region {
+    position: absolute;
+    top: 0;
+    left: env(titlebar-area-x, 0px);
+    width: env(titlebar-area-width, calc(100% - 138px));
+    height: 40px;
+    -webkit-app-region: drag;
+    pointer-events: none;
+  }
+  .window-actions {
+    position: absolute;
+    top: 0;
+    left: env(titlebar-area-x, 0px);
+    width: env(titlebar-area-width, calc(100% - 138px));
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    height: 40px;
+    padding-right: 10px;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .window-actions button {
+    pointer-events: auto;
+    -webkit-app-region: no-drag;
+  }
+  .list-head {
+    flex: none;
+    max-width: calc(env(titlebar-area-width, calc(100vw - 138px)) - 40px);
+  }
+  &[data-windows='true'] .canvas-content {
+    /* 功能区 40px + 间距 8px，减去画布内既有的 16px + 12px 留白。 */
+    padding-top: 20px;
+  }
+  &[data-windows='true'] .canvas-tools {
+    top: 50px;
+  }
+  &[data-windows='true'] .log-pane {
+    padding-top: 40px;
+  }
 
   .list-pane {
     display: flex;
