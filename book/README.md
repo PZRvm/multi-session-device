@@ -204,6 +204,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 ### notes/issue/2026-11/
 
+- [2026-11-02-windows-icon-master-edge.md](notes/issue/2026-11/2026-11-02-windows-icon-master-edge.md) — 黑屏 Windows 图标母版原尺寸下，手机外沿仍有少量生成杂色，常用小尺寸不影响黑屏识别
 - [2026-11-02-windows-test-baseline.md](notes/issue/2026-11/2026-11-02-windows-test-baseline.md) — Windows 图标替换前的全量测试已有 153 项失败，涉及平台假设、路径、符号链接与权限，未在本任务修复
 
 ### notes/learn/
@@ -434,4 +435,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 332 documents -->
+<!-- 333 documents -->
