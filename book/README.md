@@ -335,6 +335,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261016173327-录屏计时与提示交互.md](notes/think-report/20261016173327-录屏计时与提示交互.md) — 录屏交互方案已确认并实施——左侧状态、Logcat 左侧计时/生成反馈、原生结果 dialog、按设备条件记忆与统一恢复入口；验证见交互 plan
 - [20261022110137-Windows兼容问题解决方案调研.md](notes/think-report/20261022110137-Windows兼容问题解决方案调研.md) — Windows 兼容 16 项外围问题（进程/文件系统/打包/模拟器环境/UI）的线上方案选型，已全部批复
 - [20261022125639-Windows适配主体工程调研.md](notes/think-report/20261022125639-Windows适配主体工程调研.md) — Windows 适配主体工程（SDK 引导平台化/解压选型 tar.exe/Studio 检测链零注册表）的方案选型，已全部批复
+- [20261102145653-截图编辑器功能盘点.md](notes/think-report/20261102145653-截图编辑器功能盘点.md) — 已确认的浏览器截图编辑器功能盘点：7 个主工具与 13 项配套能力，以及导出清空历史、单槽过期等复刻边界
 
 ### plans/
 
@@ -421,7 +422,9 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-22-windows-sdk-bootstrap.md](plans/2026-10-22-windows-sdk-bootstrap.md) — SDK 引导 Windows 平台化——下载源按平台查表、sdkPaths 补 .exe/.bat、platformExec 执行器（cmd.exe /c + windowsHide）、解压改 Windows 自带 tar.exe；Win P1，依赖主体工程调研
 - [2026-10-22-windows-studio-detect.md](plans/2026-10-22-windows-studio-detect.md) — Studio/SDK 检测链 Windows 分支——studioDetect 四条候选链平台化（零注册表）、adb 系统候选补 Windows 路径、路径比较大小写规范化；Win P2，依赖主体工程调研
 - [2026-10-23-windows-settings-finish.md](plans/2026-10-23-windows-settings-finish.md) — 设置页 Windows 收尾——杀软白名单性能建议卡片（确切路径清单 + Defender 受控深链）、SDK 根路径过长检测提示（260 预算，只提示不拦截）、非 mac 板头去标题消除双标题；Win P6，依赖外围调研 C2/B3/E1
+- [2026-11-02-screenshot-editor.md](plans/2026-11-02-screenshot-editor.md) — 截图编辑器复刻计划：直接迁入多会话浏览器的画布、工具条、历史与导出交互，仅适配设备缓存、窗口、IPC、三语和主题
 - [2026-11-02-windows-icon.md](plans/2026-11-02-windows-icon.md) — Windows 使用屏幕镂空的三手机透明图标，替换母版、运行时 PNG 与 ICO，清理黑屏版本和预览副本
+- [2026-11-02-windows-window-chrome.md](plans/2026-11-02-windows-window-chrome.md) — Windows 主窗和设置窗移除系统标题栏，将透明图标、标题与原生窗口按钮融入应用顶部，Logcat 开关位于窗口按钮左侧
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### think-report/
@@ -435,4 +438,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 333 documents -->
+<!-- 336 documents -->
