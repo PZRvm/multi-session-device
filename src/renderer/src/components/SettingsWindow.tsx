@@ -52,7 +52,7 @@ const SettingsWindow = ({ model, platform }: SettingsWindowProps): React.JSX.Ele
           ))}
         </nav>
         <main key={active} tabIndex={0} aria-labelledby="settings-pane-title">
-          <Pane model={model} copy={copy} />
+          <Pane model={model} copy={copy} platform={platform} />
         </main>
       </div>
     </Wrapper>
