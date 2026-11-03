@@ -342,6 +342,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-02-windows-titlebar-adaptation.md](notes/summary/2026-11/2026-11-02-windows-titlebar-adaptation.md) — Windows 主窗和设置窗顶部适配完成，原生按钮与 Logcat 分区，窄窗问题经独立修复轮次解决，三档缩放各 23 项通过
 - [2026-11-02-截图编辑器.md](notes/summary/2026-11/2026-11-02-截图编辑器.md) — 从 multi-session-browser 复刻截图编辑器——四核心文件原样迁入加记录在案的接缝，设备单例编辑窗与编辑四通道，气泡编辑入口双画布接线；V1—V9 人工验收通过
 - [2026-11-03-about-transparent-icon.md](notes/summary/2026-11/2026-11-03-about-transparent-icon.md) — 关于页在所有平台改用已有透明三手机图标，保持原尺寸与布局
+- [2026-11-03-bocode-license-notices.md](notes/summary/2026-11/2026-11-03-bocode-license-notices.md) — 补充 BoCode 原始 MIT 许可和第三方来源声明，标明规范与两份维护脚本的改编范围
 - [2026-11-03-readme-local-assets.md](notes/summary/2026-11/2026-11-03-readme-local-assets.md) — 设备与浏览器三语 README 的十二种 Shields 徽章改为仓库本地 SVG，设备首页使用带背景 logo
 - [2026-11-03-screenshot-editor-layout.md](notes/summary/2026-11/2026-11-03-screenshot-editor-layout.md) — 图片编辑窗下限升至 720px，左右工具区与 macOS 原生三灯随高度居中、左侧工具组水平居中，截图气泡去掉复制成功文本
 - [2026-11-03-wireless-runtime-investigation.md](notes/summary/2026-11/2026-11-03-wireless-runtime-investigation.md) — 三星手机转无线失败来自共享 ADB 服务被 macOS 禁止本地网络访问，手工重启服务后应用显示无线已连接，shell 实测通过
@@ -473,4 +474,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 367 documents -->
+<!-- 368 documents -->
