@@ -214,6 +214,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-02-windows-titlebar-narrow-window.md](notes/issue/2026-11/2026-11-02-windows-titlebar-narrow-window.md) — Windows 顶部宽左栏配合窄主窗时 Logcat 越界，已在独立修复轮次处理，三档缩放复验通过
 - [2026-11-02-worktree单实例锁互斥.md](notes/issue/2026-11/2026-11-02-worktree单实例锁互斥.md) — 多 worktree 并行开发时同包名 Electron 应用共享 userData，单实例锁先到先得——后启动的 dev 拿不到锁静默退出，人工验收被挡；create-worktree 只分配了端口未处理锁
 - [2026-11-03-logcat-subscription-test-flake.md](notes/issue/2026-11/2026-11-03-logcat-subscription-test-flake.md) — 全仓测试中日志 dock 展开后的订阅断言偶发失败，无代码改动复跑全部通过，等待时序需单独核查
+- [2026-11-03-wireless-unreachable-diagnostics.md](notes/issue/2026-11/2026-11-03-wireless-unreachable-diagnostics.md) — 无线连接把 macOS Local network prohibited 引发的 No route to host 统一提示为确认手机 Wi-Fi，原始 ADB 错误未传给用户
 
 ### notes/learn/
 
@@ -315,6 +316,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-02-window-controls-overlay-safe-area.md](notes/learn/2026-11/2026-11-02-window-controls-overlay-safe-area.md) — Electron 原生按钮安全区不仅要读取 env，内部 flex 也必须允许收缩，否则宽左栏仍会把 Logcat 挤进窗口按钮区
 - [2026-11-02-worktree-stash-checkout三重坑.md](notes/learn/2026-11/2026-11-02-worktree-stash-checkout三重坑.md) — worktree 里用 stash+checkout 对比基线有三重坑——stash 是仓库级共享（pop 到别的分支遗留条目）、untracked 文件冲突卡半途、切换分支会杀死运行中的 dev；基线对比只用只读方式
 - [2026-11-02-复刻验收压窗宽极值.md](notes/learn/2026-11/2026-11-02-复刻验收压窗宽极值.md) — 复刻带窗口自适应的源码功能时，视觉验收必须把窗口压到 MIN 宽高极值——典型尺寸（竖屏 551px）通过不代表 360px 极小窗通过；单行 flex 工具条在窄容器必溢出
+- [2026-11-03-adb-local-network-prohibited.md](notes/learn/2026-11/2026-11-03-adb-local-network-prohibited.md) — 手机 Wi-Fi 与 5555 端口正常仍报 No route to host 时，检查共享 ADB 服务的 macOS 本地网络权限；本次重启服务后恢复
 - [2026-11-03-toolbar-centering-validation.md](notes/learn/2026-11/2026-11-03-toolbar-centering-validation.md) — 工具条居中要测实际内容；macOS 原生窗口按钮还需按工具栏高度定位，并用原生窗口截图核验
 
 ### notes/summary/2026-10/
@@ -342,6 +344,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-03-about-transparent-icon.md](notes/summary/2026-11/2026-11-03-about-transparent-icon.md) — 关于页在所有平台改用已有透明三手机图标，保持原尺寸与布局
 - [2026-11-03-readme-local-assets.md](notes/summary/2026-11/2026-11-03-readme-local-assets.md) — 设备与浏览器三语 README 的十二种 Shields 徽章改为仓库本地 SVG，设备首页使用带背景 logo
 - [2026-11-03-screenshot-editor-layout.md](notes/summary/2026-11/2026-11-03-screenshot-editor-layout.md) — 图片编辑窗下限升至 720px，左右工具区与 macOS 原生三灯随高度居中、左侧工具组水平居中，截图气泡去掉复制成功文本
+- [2026-11-03-wireless-runtime-investigation.md](notes/summary/2026-11/2026-11-03-wireless-runtime-investigation.md) — 三星手机转无线失败来自共享 ADB 服务被 macOS 禁止本地网络访问，手工重启服务后应用显示无线已连接，shell 实测通过
 
 ### notes/task/
 
@@ -470,4 +473,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 364 documents -->
+<!-- 367 documents -->
