@@ -151,6 +151,8 @@ export const IPC_CHANNELS = {
   // ---- 截屏编辑器域（plan 2026-11-02-screenshot-editor；迁自 multi-session-browser）----
   /** 主窗调：打开/聚焦该设备的编辑窗（按设备单例，重复触发聚焦；仅主窗） */
   screenshotOpenEditor: 'screenshot:open-editor',
+  /** 编辑窗上报工具栏高度，供本窗 macOS 原生按钮垂直居中（仅本窗主 frame） */
+  screenshotEditorToolbarHeight: 'screenshot:editor-toolbar-height',
   /** 编辑窗调：取本设备缓存截图（返回 CaptureEditImagePayload；仅已登记编辑窗，
    *  设备归属由 sender 解析，不信 renderer 自报 id；空缓存报「截图已过期」） */
   screenshotGetEditImage: 'screenshot:get-edit-image',

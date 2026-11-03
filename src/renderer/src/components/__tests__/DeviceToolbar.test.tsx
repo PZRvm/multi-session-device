@@ -83,7 +83,7 @@ describe('DeviceToolbar 截屏钮与气泡', () => {
     expect(screen.queryByRole('status')).toBeNull()
     rerender(<DeviceToolbar {...baseProps} screenshotState={{ phase: 'copied', thumbnail }} />)
     expect(screen.queryByRole('status')).not.toBeNull()
-    expect(screen.queryByText(copy.screenshotCopied)).not.toBeNull()
+    expect(screen.queryByText(copy.screenshotCopied)).toBeNull()
   })
 
   it('气泡内保存按钮走 onScreenshotSave', () => {

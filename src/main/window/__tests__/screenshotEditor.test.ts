@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { IPC_CHANNELS } from '@shared/ipc-channels'
 
 const mocks = vi.hoisted(() => ({
   construct: vi.fn(),
@@ -25,7 +26,14 @@ vi.mock('../../app-icon', () => ({ appIcon: undefined }))
 vi.mock('../../theme', () => ({ themeWindowBackground: () => '#fff' }))
 
 class TestWindow extends EventEmitter {
-  webContents = Object.assign(new EventEmitter(), { id: 2, setWindowOpenHandler: vi.fn() })
+  webContents = Object.assign(new EventEmitter(), {
+    id: 2,
+    ipc: new EventEmitter(),
+    mainFrame: {},
+    setWindowOpenHandler: vi.fn()
+  })
+  getContentBounds = (): { height: number } => ({ height: 520 })
+  setWindowButtonPosition = vi.fn()
   destroyed = false
   show = vi.fn()
   focus = vi.fn()
@@ -73,9 +81,48 @@ afterEach(() => {
   module?.closeAllScreenshotEditorWindows()
   vi.useRealTimers()
   vi.unstubAllEnvs()
+  vi.restoreAllMocks()
 })
 
 describe('截图编辑窗边界（设备单例）', () => {
+  it('macOS 三灯随本窗工具栏换行和恢复单行居中，忽略异常高度及子 frame', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    const pending = module!.openScreenshotEditorWindow('d1')
+    const window = windows[0]
+    expect(mocks.construct.mock.calls[0][0]).toMatchObject({
+      trafficLightPosition: { x: 14, y: 16 }
+    })
+    const resize = (height: unknown, senderFrame = window.webContents.mainFrame): void => {
+      window.webContents.ipc.emit(
+        IPC_CHANNELS.screenshotEditorToolbarHeight,
+        { senderFrame },
+        height
+      )
+    }
+    resize(69)
+    expect(window.setWindowButtonPosition).toHaveBeenLastCalledWith({ x: 14, y: 27 })
+    resize(48)
+    expect(window.setWindowButtonPosition).toHaveBeenLastCalledWith({ x: 14, y: 16 })
+    for (const height of [undefined, '69', NaN, Infinity, -1, 0, 47, 521]) resize(height)
+    resize(69, {})
+    expect(window.setWindowButtonPosition).toHaveBeenCalledTimes(2)
+    window.emit('ready-to-show')
+    await pending
+    window.close()
+    resize(69)
+    expect(window.setWindowButtonPosition).toHaveBeenCalledTimes(2)
+  })
+
+  it('Windows 不注册 macOS 三灯定位通道', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const pending = module!.openScreenshotEditorWindow('d1')
+    const window = windows[0]
+    expect(mocks.construct.mock.calls[0][0]).not.toHaveProperty('trafficLightPosition')
+    expect(window.webContents.ipc.listenerCount(IPC_CHANNELS.screenshotEditorToolbarHeight)).toBe(0)
+    window.emit('ready-to-show')
+    await pending
+  })
+
   it('重新打开最小化编辑窗先还原再聚焦，不重建', async () => {
     const first = module!.openScreenshotEditorWindow('d1')
     windows[0].emit('ready-to-show')
@@ -137,7 +184,7 @@ describe('截图编辑窗边界（设备单例）', () => {
     expect(mocks.construct.mock.calls[0][0]).toMatchObject({
       width: 840,
       height: 840,
-      minWidth: 360,
+      minWidth: 720,
       minHeight: 280
     })
     expect(windows[0].loadURL).toHaveBeenCalledWith(
@@ -150,7 +197,11 @@ describe('截图编辑窗边界（设备单例）', () => {
       imageWidth: 200,
       imageHeight: 150
     })
-    expect(mocks.construct.mock.calls[1][0]).toMatchObject({ width: 360, height: 280 })
+    expect(mocks.construct.mock.calls[1][0]).toMatchObject({
+      width: 720,
+      height: 280,
+      minWidth: 720
+    })
     expect(windows[1].loadURL).toHaveBeenCalledWith(
       'http://localhost:1234/screenshot-editor.html?scale=1&imgWidth=200&imgHeight=150'
     )
@@ -158,7 +209,11 @@ describe('截图编辑窗边界（设备单例）', () => {
     await small
     // 空缓存开窗：默认度量，不携尺寸 query
     const empty = module!.openScreenshotEditorWindow('d3')
-    expect(mocks.construct.mock.calls[2][0]).toMatchObject({ width: 800, height: 520 })
+    expect(mocks.construct.mock.calls[2][0]).toMatchObject({
+      width: 800,
+      height: 520,
+      minWidth: 720
+    })
     expect(windows[2].loadURL).toHaveBeenCalledWith('http://localhost:1234/screenshot-editor.html')
     windows[2].emit('ready-to-show')
     await empty

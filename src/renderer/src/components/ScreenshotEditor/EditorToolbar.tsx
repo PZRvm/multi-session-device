@@ -9,10 +9,9 @@
 // 钮走 CSS 圆形字形兜底；本项目图标单源 lucide-react 有 Circle——七工具全走图集，
 // .chrome-capture-editor-glyph-circle 字形段不迁（editorWrapper 头注同记）。
 //
-// 窄窗反馈修复（2026-11-02 用户反馈，源同款缺陷）：竖屏截图窗宽可低至 360px，
-// 源单行不换行布局溢出堆叠、文字钮（马赛克双模式）压字破版。本仓把七工具钮
-// 收进 toolgroup、各设置组（含撤销/重做）连前置分隔线收进 sect——工具条按组
-// 原子换行（editorWrapper 的 wrap/sect 段），组内钮与文字不再被压断。
+// 布局反馈修复（2026-11-03）：编辑窗下限为 720px；七工具钮收进 toolgroup、
+// 设置组连前置分隔线收进 sect。长标签或反馈占位时仅段间换行，组内图标与
+// 文字不压缩，左右功能区保持垂直居中（editorWrapper.ts）。
 
 import { ArrowUp, Circle, Grid2x2, Pencil, Redo, Scissors, Square, Type, Undo } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'

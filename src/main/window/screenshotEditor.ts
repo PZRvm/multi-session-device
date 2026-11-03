@@ -1,6 +1,7 @@
 import { BrowserWindow, screen, type WebContents } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
+import { IPC_CHANNELS } from '@shared/ipc-channels'
 import { appIcon } from '../app-icon'
 import { themeWindowBackground } from '../theme'
 import { msg } from '../locale'
@@ -16,16 +17,14 @@ import { msg } from '../locale'
 // 消费（建窗 query 传显示值），导出链不缩放（导出 pixelRatio 由编辑窗按图像像素/
 // 显示尺寸换算，契约 CaptureEditImagePayload 头注）。空缓存开窗无图可依，用默认
 // 度量且不携尺寸 query（空态错误由编辑窗取图时如实呈现）。
-// 与源的两点收敛：darwin 窗体 chrome 用本项目三灯度量（hiddenInset + {x:14,y:12}，
-// settings/logcat 同款；源 hidden-titlebar + {x:16,y:16} 是其仓库内窗形态单源，本项目
-// 窗口形态单源即本先例）；sandbox 沿本项目 true（源 sandbox:false 是其仓库先例）。
+// darwin 沿用 hiddenInset，三灯按编辑工具栏实际高度居中；sandbox 沿本项目 true。
 
 /** 主屏工作区四周留边（工具栏与窗体 chrome 余量一并兜住；迁自来源原值） */
 const WORK_AREA_MARGIN = 80
 /** 窗高在画布显示区之外的工具栏/产出钮预留行（迁自来源原值） */
 const TOOLBAR_ALLOWANCE = 56
 /** 度量下限：极小图（裁剪产物再编辑）仍保可用工具条 */
-const MIN_WINDOW_WIDTH = 360
+const MIN_WINDOW_WIDTH = 720
 const MIN_WINDOW_HEIGHT = 280
 /** 空缓存开窗（无图可依）缺省度量 */
 const DEFAULT_WINDOW_WIDTH = 800
@@ -145,16 +144,35 @@ export function openScreenshotEditorWindow(
       backgroundColor: themeWindowBackground(),
       title: msg('screenshotEditorWindowTitle'),
       icon: appIcon,
-      // darwin 原生三灯（settings/logcat 同款 hiddenInset 度量）；不禁最小化——
-      // 编辑窗是工具窗，红灯三态全保留（源同款裁决）
+      // 初始按 48px 工具栏居中，换行后由 renderer 上报高度更新原生三灯。
       ...(process.platform === 'darwin'
-        ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 12 } }
+        ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 16 } }
         : {}),
       resizable: true,
       autoHideMenuBar: true,
       webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true }
     })
     session.window = window
+    if (process.platform === 'darwin') {
+      // 通道只属于这个编辑窗；不允许子 frame 或其他窗口调整它的按钮。
+      window.webContents.ipc.on(
+        IPC_CHANNELS.screenshotEditorToolbarHeight,
+        (event, height: unknown) => {
+          if (
+            window.isDestroyed() ||
+            event.senderFrame !== window.webContents.mainFrame ||
+            typeof height !== 'number' ||
+            !Number.isFinite(height) ||
+            height < 48 ||
+            height > window.getContentBounds().height
+          ) {
+            return
+          }
+          // 原生灯中心比 position.y 低约 8px，见 learn/2026-10-06-红绿灯垂直居中实测。
+          window.setWindowButtonPosition({ x: 14, y: Math.round(height / 2 - 8) })
+        }
+      )
+    }
     window.on('page-title-updated', (event) => event.preventDefault())
     window.on('closed', () => {
       settle()

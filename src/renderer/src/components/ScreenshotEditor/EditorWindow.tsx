@@ -100,6 +100,18 @@ function initialHistoryOf(payload: CaptureEditImagePayload): EditorHistory {
 
 function EditorWindow(): React.JSX.Element {
   const copy = useCopy(SCREENSHOT_EDITOR_COPY)
+  const observeToolbar = useCallback((node: HTMLElement | null) => {
+    if (!node || !HIDDEN_TITLEBAR_CHROME) return
+    let previousHeight = 0
+    const observer = new ResizeObserver(() => {
+      const height = node.getBoundingClientRect().height
+      if (height === previousHeight) return
+      previousHeight = height
+      window.api.screenshot.setEditorToolbarHeight(height)
+    })
+    observer.observe(node, { box: 'border-box' })
+    return () => observer.disconnect()
+  }, [])
 
   // 建窗 query 的显示缩放系数（主进程按图幅与工作区现算，只缩不放）；缺省/非法
   // 回退 1（空槽默认度量开窗的兜底，画布可能溢出可视区由滚动容器承接）
@@ -338,7 +350,7 @@ function EditorWindow(): React.JSX.Element {
       aria-busy={busy}
       className={`chrome-capture-editor${HIDDEN_TITLEBAR_CHROME ? ' chrome-capture-editor-chrome-custom' : ''}`}
     >
-      <header className="chrome-capture-editor-topbar">
+      <header ref={observeToolbar} className="chrome-capture-editor-topbar">
         <EditorToolbar
           tool={tool}
           onToolChange={setTool}

@@ -15,7 +15,7 @@ type ScreenshotPopoverProps = {
   onClose: () => void
 }
 
-/** 截屏结果气泡（非模态，role=status）：左上关闭 + 缩略图 + 已复制反馈 + 保存到下载文件夹
+/** 截屏结果气泡（非模态，role=status）：左上关闭 + 缩略图 + 保存到下载文件夹
  *  + 编辑入口（copied/saved 态；saving/error 无编辑对象不显示）。10 秒自动消失由
  *  useScreenshot 管理；capturing/idle 时不渲染 */
 const ScreenshotPopover = ({
@@ -39,7 +39,6 @@ const ScreenshotPopover = ({
       {state.thumbnail ? <img className="thumb" src={state.thumbnail} alt="" /> : null}
       {state.phase === 'copied' ? (
         <>
-          <p className="line">{copy.screenshotCopied}</p>
           <div className="actions">
             <button className="save-btn" type="button" onClick={onSave}>
               {copy.screenshotSave}

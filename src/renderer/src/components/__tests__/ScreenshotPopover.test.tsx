@@ -21,13 +21,13 @@ const props = (state: PopoverProps['state'], over: Partial<PopoverProps> = {}): 
 })
 
 describe('ScreenshotPopover', () => {
-  it('copied：显示缩略图与「已复制」，保存按钮触发 onSave', () => {
+  it('copied：只显示缩略图与操作，不显示复制成功文本，保存按钮触发 onSave', () => {
     const onSave = vi.fn()
     const state: Extract<ScreenshotState, { phase: 'copied' }> = { phase: 'copied', thumbnail }
     render(<ScreenshotPopover {...props(state, { onSave })} />)
     expect(screen.queryByRole('status')).not.toBeNull()
     expect(screen.getByAltText('').getAttribute('src')).toBe(thumbnail)
-    expect(screen.queryByText(copy.screenshotCopied)).not.toBeNull()
+    expect(screen.queryByText(copy.screenshotCopied)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: copy.screenshotSave }))
     expect(onSave).toHaveBeenCalledTimes(1)
   })

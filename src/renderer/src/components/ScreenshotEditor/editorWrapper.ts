@@ -18,11 +18,9 @@ import styled from 'styled-components'
  * （源是 antd 图集无 Circle 的兜底字形，本项目 lucide 有 Circle 图标——图标
  * 单源回正，差异记录见 plan T4 diff 清单）。
  *
- * 窄窗反馈修复（2026-11-02 用户反馈，源同款缺陷、源未修）：竖屏截图窗宽可低
- * 至 360px，源单行工具条溢出堆叠、马赛克双模式等文字钮被压缩后中文折行破版。
- * 本仓新增三处局部规则（详见各段注）：topbar/toolbar 允许 wrap、toolgroup 与
- * sect 按组原子换行（结构配合见 EditorToolbar 头注）、文字钮 flex:none +
- * nowrap 禁压字。单行宽窗下视觉与源一致。
+ * 布局反馈修复（2026-11-03）：编辑窗最小宽度 720px，topbar 的左右区保持
+ * 同一行并垂直居中。toolbar 吸收剩余宽度，长标签或成功反馈占位时仅按组
+ * 换行；toolgroup/sect 与文字钮不压缩，避免图标互压与文字折断。
  */
 export const EditorShell = styled.div`
   --chrome-toolbar: var(--board-bg-raised);
@@ -54,18 +52,13 @@ export const EditorShell = styled.div`
     color: var(--chrome-error);
   }
 
-  /* 顶部工具条行：左侧工具/档位/色板/撤销重做，右端产出钮组（margin-left auto
-     吸收余宽——产出钮保持窗右上角，与工具条同一组视觉带）。
-     窄窗反馈修复：wrap + row-gap——空间不足时产出钮组整体落到下一行右贴，
-     不与工具条互压堆叠；padding 上下 4px 给换行后的两行留呼吸（单行时
-     min-height 48 兜住，视觉不变） */
+  /* 左侧工具区占剩余宽度，右侧产出钮固定在同一行；左侧分组换行后两区仍
+     按整组垂直居中，右侧不会单独落到下一行。 */
   & .chrome-capture-editor-topbar {
     flex: none;
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-    row-gap: 4px;
     min-height: 48px;
     padding: 4px 8px;
     box-sizing: border-box;
@@ -73,12 +66,13 @@ export const EditorShell = styled.div`
     border-bottom: 1px solid var(--chrome-line);
   }
 
-  /* 窄窗反馈修复：wrap + row-gap——组放不下时整组下移换行，不再溢出窗宽；
-     单行时 row-gap 不参与，视觉与源一致 */
+  /* 各行工具组在左侧可用区域内水平居中；长标签或反馈占位时按组换行。 */
   & .chrome-capture-editor-toolbar {
+    flex: 1;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    justify-content: center;
     gap: 2px;
     row-gap: 4px;
     min-width: 0;
@@ -241,6 +235,7 @@ export const EditorShell = styled.div`
 
   /* 右端产出钮组 + inline 成功反馈短文案（2.5s 淡出，不弹浮层不自动关窗） */
   & .chrome-capture-editor-actions {
+    flex: none;
     margin-left: auto;
     display: flex;
     align-items: center;
@@ -402,7 +397,7 @@ export const EditorShell = styled.div`
 
   /* darwin 无标题条形态（本项目 hiddenInset 同样无标题条——对齐 WirelessConnector
      先例）：顶部工具条整条承担窗口拖动（app-region drag），工具条与产出钮组
-     no-drag；左让原生三灯位（本项目三灯 {x:14,y:12}，灯组右缘约 x=66，让位
+     no-drag；左让原生三灯位（x=14，y 随工具栏高度居中，灯组右缘约 x=66，让位
      80px 同 LogcatApp/WirelessConnector 口径）。win/linux 有系统框不启用 */
   &.chrome-capture-editor-chrome-custom .chrome-capture-editor-topbar {
     -webkit-app-region: drag;
