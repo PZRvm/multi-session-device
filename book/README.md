@@ -472,6 +472,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-03-first-installers-release.md](plans/2026-11-03-first-installers-release.md) — 从同步后的 dev 构建 macOS ARM64 和 Windows x64 安装包，校验后发布首个 GitHub Release
 - [2026-11-03-github-history-sync.md](plans/2026-11-03-github-history-sync.md) — 将含 book 的完整本地 dev 历史与公开仓库对齐，保留所有原提交并通过普通推送同步
 - [2026-11-03-github-publication.md](plans/2026-11-03-github-publication.md) — 为 GitHub 发布准备三语 README，并确保发布内容和历史均不含 book
+- [2026-11-03-main-merge-release.md](plans/2026-11-03-main-merge-release.md) — 先将当前 dev 合入 main，再将安装包发布改为仅在同仓库 dev 到 main 的 PR 合并后触发，版本号在 dev 更新
 - [2026-11-03-mit-license.md](plans/2026-11-03-mit-license.md) — 按用户选择为项目添加 MIT 许可证，版权署名为 PZRvm
 - [2026-11-03-repository-tools-cleanup.md](plans/2026-11-03-repository-tools-cleanup.md) — 清理 GitHub 上的 e2e 与脚本目录，同时保留必要构建和检查能力，并在三语 README 致谢 BoCode
 - [2026-11-03-screenshot-editor-layout.md](plans/2026-11-03-screenshot-editor-layout.md) — 图片编辑窗口最小宽度调为 720px，左右工具区居中，并移除截图气泡的复制成功文本
@@ -489,4 +490,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 383 documents -->
+<!-- 384 documents -->

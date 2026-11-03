@@ -11,19 +11,38 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   branch-direction:
     runs-on: ubuntu-latest
     steps:
-      # before 为零值 = 首次建仓推送，豁免（否则 main 第一次推上远端就吃红灯）
-      - name: main 只收来自 dev 的 PR，且不许直推
-        if: >-
-          (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.ref != 'dev') ||
-          (github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.before != '0000000000000000000000000000000000000000')
+      - name: main 只收同仓库 dev 的 PR merge commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_SHA: ${{ github.sha }}
         run: |
-          echo "::error::Clean Flow：main 只接收来自 dev 的 merge commit——直推 main 与非 dev 来源的 PR 都不允许"
-          exit 1
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == 'pull_request' ]]; then
+            if [[ "$BASE_REF" == 'main' && ("$HEAD_REF" != 'dev' || "$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY") ]]; then
+              echo '::error::main only accepts pull requests from dev in this repository.'
+              exit 1
+            fi
+          elif [[ "$GITHUB_REF" == 'refs/heads/main' && "$PUSH_BEFORE" != '0000000000000000000000000000000000000000' ]]; then
+            parents=$(gh api "repos/$GITHUB_REPOSITORY/commits/$PUSH_SHA" --jq '.parents | length')
+            prs=$(gh api "repos/$GITHUB_REPOSITORY/commits/$PUSH_SHA/pulls?per_page=100")
+            count=$(printf '%s' "$prs" | jq --arg sha "$PUSH_SHA" --arg repo "$GITHUB_REPOSITORY" \
+              '[.[] | select(.merged_at != null and .base.ref == "main" and .head.ref == "dev" and .head.repo.full_name == $repo and .merge_commit_sha == $sha)] | length')
+            if [[ "$parents" != '2' || "$count" == '0' ]]; then
+              echo '::error::main updates must be merge commits from a merged dev pull request.'
+              exit 1
+            fi
+          fi
 
   commit-subjects:
     runs-on: ubuntu-latest

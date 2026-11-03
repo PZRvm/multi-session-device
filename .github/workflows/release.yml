@@ -1,20 +1,82 @@
 name: release-installers
 
 on:
-  push:
-    branches: ['release/v*']
-  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    types: [closed]
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-installers-${{ github.ref }}
+  group: release-installers-main
   cancel-in-progress: false
 
 jobs:
+  prepare:
+    name: Check merged PR and release version
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.ref == 'dev' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.release.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+      - name: Validate package version
+        id: version
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs')
+          const { version } = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'))
+          if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version) ||
+              lock.version !== version || lock.packages[''].version !== version) {
+            throw new Error('package.json and package-lock.json must have the same valid release version')
+          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`)
+          NODE
+      - name: Skip an already published version
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: v${{ steps.version.outputs.version }}
+          RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          error_file="$RUNNER_TEMP/release-version-error.txt"
+          if draft=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" \
+            --jq '.draft' 2>"$error_file"); then
+            if [[ "$draft" != 'false' ]]; then
+              echo '::error::This version has an unfinished draft release. Resolve it before retrying.'
+              exit 1
+            fi
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            echo "### $RELEASE_TAG already exists; installers and release are skipped without overwriting it." >> "$GITHUB_STEP_SUMMARY"
+          elif grep -q 'HTTP 404' "$error_file"; then
+            if tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" \
+              --jq '.object.sha' 2>"$error_file"); then
+              if [[ "$tag_sha" != "$RELEASE_SHA" ]]; then
+                echo '::error::This tag already points to another commit. Update the version in dev.'
+                exit 1
+              fi
+            elif ! grep -q 'HTTP 404' "$error_file"; then
+              cat "$error_file" >&2
+              exit 1
+            fi
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
+          else
+            cat "$error_file" >&2
+            exit 1
+          fi
+
   build:
     name: Build ${{ matrix.platform }}
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     strategy:
@@ -38,17 +100,12 @@ jobs:
       - name: Preserve repository line endings
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - name: Match release branch to package version
-        run: |
-          version=$(node -p "require('./package.json').version")
-          if [[ "$GITHUB_REF_NAME" != "release/v$version" ]]; then
-            echo '::error::Select the release/v<package version> branch.'
-            exit 1
-          fi
       - run: npm ci
       - run: npm run lint
       - run: npm run book:release-check
@@ -79,13 +136,16 @@ jobs:
 
   publish:
     name: Publish verified installers
-    needs: build
+    needs: [prepare, build]
+    if: needs.prepare.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
       - uses: actions/download-artifact@v4
         with:
           pattern: installers-*
@@ -102,12 +162,21 @@ jobs:
       - name: Create preview release from the exact build commit
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
-          tag="v$(node -p "require('./package.json').version")"
+          node <<'NODE'
+          const fs = require('node:fs')
+          const path = require('node:path')
+          const template = fs.readFileSync('.github/release-notes.md', 'utf8')
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'release-notes.md'),
+            template.replaceAll('{{VERSION}}', process.env.RELEASE_VERSION))
+          NODE
+          tag="v$RELEASE_VERSION"
           gh release create "$tag" \
             installers/*.dmg installers/*.exe installers/SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
+            --target "$RELEASE_SHA" \
             --title "$tag Preview" \
             --prerelease \
-            --notes-file .github/release-notes.md
+            --notes-file "$RUNNER_TEMP/release-notes.md"

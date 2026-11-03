@@ -120,9 +120,26 @@ git push origin dev
 🚀 release: promote dev to main
 ```
 
+### 安装包自动发布
+
+新版本号在 `dev` 更新。例如发布下一个补丁版本时执行：
+
+```bash
+npm version patch --no-git-tag-version
+```
+
+该命令同时更新 package.json 和 package-lock.json，不创建本地标签。完成开发、检查并提交到 dev 后，再创建同仓库 `dev → main` PR；确认检查通过，选择 **Create a merge commit**。
+
+PR 合并后，`release-installers` 才会启动：核对版本、构建 macOS ARM64 DMG 与 Windows x64 EXE、校验 asar、生成 SHA256SUMS，再以该 PR 的精确 merge SHA 创建 `v<版本号>` 标签和 Preview Release。无需本地打包或手动上传；发布说明中的版本号由模板自动替换。
+
+普通 dev 推送、未合并而关闭的 PR、其他来源 PR、旧 release/v* 分支及手动按钮均不会启动安装包发布。已发布的版本会安全跳过构建和上传，不覆盖附件或标签；因此新版本必须先在 dev 更新版本号。残留草稿或 GitHub API 查询失败会报错，不能误判成新版本。
+
+失败时先查看 Actions 日志，在原合并事件上重跑相应任务；若已产生未完成草稿，需先核对处理。代码修复仍回到 dev，再经 PR 合入 main。
+
 ## 自动化与平台设置
 
 - 进 `dev`/`main` 的 PR 和对它们的推送，由 `.github/workflows/git-policy.yml` 校验分支方向和提交主题；直推 `dev` 的提交仍会过 Clean Commit 校验。
+- main 的推送通过关联 PR 和双亲提交核验：合法的同仓库 dev PR 合并通过，普通直推或 squash/rebase 合并标为失败；平台分支保护仍需按下文单独设置。
 - 同一个 workflow 在每次进 `dev`/`main` 的 PR 和推送上跑 `book:release-check`；索引过期或垃圾文件一进树就失败。
 - 每个 clone 跑一次 `git config core.hooksPath .githooks`，本地就有同样的 `commit-msg` 检查。
 - 在 GitHub 上保护 `main`：要求来自 `dev` 的 PR、状态检查、merge commit。直推 `dev` 保持允许，保单人速度；团队 PR 仍走 squash 合并。
