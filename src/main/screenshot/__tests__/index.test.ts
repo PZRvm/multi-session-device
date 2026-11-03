@@ -91,6 +91,7 @@ interface Harness {
   handlers: Map<string, (event: unknown, raw: unknown) => Promise<unknown>>
   run: ReturnType<typeof vi.fn>
   openEditor: ReturnType<typeof vi.fn>
+  bindings: Map<number, { deviceId: string; sessionId: string }>
   /** 编辑窗 sender 事件：id 10 = 设备 d1 的编辑窗，id 20 = 设备 d2 的编辑窗 */
   eventA: unknown
   eventB: unknown
@@ -113,7 +114,16 @@ const setup = (options?: { running?: boolean }): Harness => {
     stdout: PNG,
     stderr: ''
   }))
-  const openEditor = vi.fn<NonNullable<ScreenshotDeps['openEditor']>>(async () => undefined)
+  const bindings = new Map<number, { deviceId: string; sessionId: string }>()
+  const openEditor = vi.fn<NonNullable<ScreenshotDeps['openEditor']>>(
+    async (sessionId, deviceId) => {
+      if ([...bindings.values()].some((binding) => binding.sessionId === sessionId)) return
+      const base = deviceId === 'd1' ? 10 : 20
+      let senderId = base
+      while (bindings.has(senderId)) senderId += 1
+      bindings.set(senderId, { deviceId, sessionId })
+    }
+  )
   registerScreenshotIpc({
     adbPath: () => '/fake/adb',
     isMainSender: (sender) => (sender as { id: number }).id === 1,
@@ -122,10 +132,10 @@ const setup = (options?: { running?: boolean }): Harness => {
     isRunningDevice: () => options?.running !== false,
     downloadsDir: () => downloads,
     openEditor,
-    editorDeviceId: (sender) => {
+    editorSession: (sender) => {
       const id = (sender as { id: number }).id
-      if (id === 10) return 'd1'
-      if (id === 20) return 'd2'
+      if (bindings.has(id)) return bindings.get(id)!
+      if (id === 10 || id === 20) return { deviceId: id === 10 ? 'd1' : 'd2', sessionId: 'missing' }
       return null
     },
     run
@@ -135,6 +145,7 @@ const setup = (options?: { running?: boolean }): Harness => {
   const eventB = { sender: { id: 20 } }
   return {
     handlers,
+    bindings,
     run,
     openEditor,
     eventA,
@@ -205,7 +216,7 @@ describe('screenshot 域', () => {
       isRunningDevice: () => true,
       runningDevice: async () => ({ serial: 's', name: 'n' }),
       openEditor: async () => undefined,
-      editorDeviceId: () => null
+      editorSession: () => null
     })
     const captureMessage = await rejectMessage(
       handlers.get(IPC_CHANNELS.screenshotCapture)!({ sender: { id: 1 } }, { id: 'd1' })
@@ -229,7 +240,7 @@ describe('screenshot 域', () => {
       isRunningDevice: () => true,
       runningDevice: async () => ({ serial: 's', name: 'n' }),
       openEditor: async () => undefined,
-      editorDeviceId: () => null,
+      editorSession: () => null,
       run: (() =>
         new Promise<AdbBinaryResult>((resolve) => {
           release = () => resolve({ code: 0, stdout: PNG, stderr: '' })
@@ -254,7 +265,7 @@ describe('screenshot 域', () => {
       isRunningDevice: () => true,
       runningDevice: async () => ({ serial: 's', name: 'n' }),
       openEditor: async () => undefined,
-      editorDeviceId: () => null,
+      editorSession: () => null,
       run: (async () => ({
         code: 1,
         stdout: Buffer.from('nope'),
@@ -365,7 +376,7 @@ describe('screenshot 域', () => {
       isMainSender: () => true,
       runningDevice: async () => ({ serial: 's', name: 'n' }),
       openEditor: async () => undefined,
-      editorDeviceId: () => null,
+      editorSession: () => null,
       // 尾段复核（同步）：adb 返回后设备已停——拒绝且不回填
       isRunningDevice: () => false,
       run: (async () => ({ code: 0, stdout: PNG, stderr: '' })) as unknown as ScreenshotDeps['run']
@@ -456,21 +467,33 @@ describe('screenshot 编辑器域', () => {
   const getEditImage = async (
     h: Harness,
     event: unknown
-  ): Promise<{ captureId: string; dataUrl: string; width: number; height: number }> =>
-    (await h.callAs(IPC_CHANNELS.screenshotGetEditImage, undefined, event)) as {
+  ): Promise<{ captureId: string; dataUrl: string; width: number; height: number }> => {
+    const senderId = (event as { sender: { id: number } }).sender.id
+    if (!h.bindings.has(senderId))
+      await h.call(IPC_CHANNELS.screenshotOpenEditor, { id: senderId === 10 ? 'd1' : 'd2' })
+    return (await h.callAs(IPC_CHANNELS.screenshotGetEditImage, undefined, event)) as {
       captureId: string
       dataUrl: string
       width: number
       height: number
     }
+  }
 
   it('openEditor：主窗携缓存尺寸调用并等待就绪；空缓存不带尺寸', async () => {
     const h = setup()
     await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
     await h.call(IPC_CHANNELS.screenshotOpenEditor, { id: 'd1' })
-    expect(h.openEditor).toHaveBeenCalledWith('d1', { imageWidth: 1080, imageHeight: 2340 })
+    expect(h.openEditor).toHaveBeenCalledWith(expect.any(String), 'd1', {
+      imageWidth: 1080,
+      imageHeight: 2340,
+      onRelease: expect.any(Function)
+    })
     await h.call(IPC_CHANNELS.screenshotOpenEditor, { id: 'd2' })
-    expect(h.openEditor).toHaveBeenLastCalledWith('d2', undefined)
+    expect(h.openEditor).toHaveBeenLastCalledWith(expect.any(String), 'd2', {
+      imageWidth: undefined,
+      imageHeight: undefined,
+      onRelease: expect.any(Function)
+    })
   })
 
   it('openEditor：非主窗拒绝；载荷非法拒绝', async () => {
@@ -545,32 +568,188 @@ describe('screenshot 编辑器域', () => {
     expect(b.dataUrl).toBe(`data:image/png;base64,${PNG.toString('base64')}`)
   })
 
-  it('editCopy：同设备新截屏令旧 id 过期；错设备 id 报 stale', async () => {
+  it('新截图保留旧编辑会话，旧图导出不覆盖最新截图', async () => {
     const h = setup()
     await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
     const before = await getEditImage(h, h.eventA)
+    h.run.mockResolvedValueOnce({ code: 0, stdout: EDIT_PNG, stderr: '' })
     await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
-    const stale = await rejectMessage(
+    await h.callAs(
+      IPC_CHANNELS.screenshotEditCopy,
+      { captureId: before.captureId, dataUrl: `data:image/png;base64,${PNG.toString('base64')}` },
+      h.eventA
+    )
+    const old = await getEditImage(h, h.eventA)
+    expect(old.dataUrl).toBe(before.dataUrl)
+    const saved = (await h.call(IPC_CHANNELS.screenshotSave, { id: 'd1' })) as { fileName: string }
+    expect(await readFile(join(downloads, saved.fileName))).toEqual(EDIT_PNG)
+  })
+
+  it('同设备两张截图各自取图，同图重复打开复用，跨窗版本拒绝', async () => {
+    const h = setup()
+    await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
+    const a = await getEditImage(h, h.eventA)
+    const sessionA = h.openEditor.mock.calls[0][0]
+    await h.call(IPC_CHANNELS.screenshotOpenEditor, { id: 'd1' })
+    expect(h.openEditor.mock.calls[1][0]).toBe(sessionA)
+    h.run.mockResolvedValueOnce({ code: 0, stdout: EDIT_PNG, stderr: '' })
+    await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
+    await h.call(IPC_CHANNELS.screenshotOpenEditor, { id: 'd1' })
+    const eventC = { sender: { id: 11 } }
+    const b = await getEditImage(h, eventC)
+    expect(h.openEditor.mock.calls[2][0]).not.toBe(sessionA)
+    expect((await getEditImage(h, h.eventA)).dataUrl).toBe(a.dataUrl)
+    expect(b.dataUrl).toBe(EDIT_DATAURL)
+    const clipCalls = mocks.clipboard.writeImage.mock.calls.length
+    await expect(
       h.callAs(
         IPC_CHANNELS.screenshotEditCopy,
-        { captureId: before.captureId, dataUrl: EDIT_DATAURL },
-        h.eventA
+        { captureId: a.captureId, dataUrl: EDIT_DATAURL },
+        eventC
       )
+    ).rejects.toThrow('screenshotStale')
+    expect(mocks.clipboard.writeImage).toHaveBeenCalledTimes(clipCalls)
+    await h.callAs(
+      IPC_CHANNELS.screenshotEditCopy,
+      { captureId: b.captureId, dataUrl: EDIT_DATAURL },
+      eventC
     )
-    expect(stale).toBe('screenshotStale')
-    // B 编辑窗持 A 的旧 id：对账落 B 自己的缓存（先给 B 建缓存，走 id
-    // 不匹配分支而非空缓存分支）→ stale
-    await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd2' })
-    const bImage = await getEditImage(h, h.eventB)
-    expect(bImage.captureId).toBeTruthy()
-    const cross = await rejectMessage(
-      h.callAs(
-        IPC_CHANNELS.screenshotEditCopy,
-        { captureId: before.captureId, dataUrl: EDIT_DATAURL },
-        { sender: { id: 20 } }
-      )
+    await h.call(IPC_CHANNELS.screenshotOpenEditor, { id: 'd1' })
+    expect(h.openEditor.mock.calls.at(-1)![0]).toBe(h.openEditor.mock.calls[2][0])
+    const oldDownload = (await h.callAs(
+      IPC_CHANNELS.screenshotEditDownload,
+      { captureId: a.captureId, dataUrl: `data:image/png;base64,${PNG.toString('base64')}` },
+      h.eventA
+    )) as { fileName: string }
+    expect(await readFile(join(downloads, oldDownload.fileName))).toEqual(PNG)
+    expect((await getEditImage(h, eventC)).dataUrl).toBe(EDIT_DATAURL)
+  })
+
+  it('开窗尚未就绪时截新图，首窗仍取固定的首图', async () => {
+    const h = setup()
+    await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
+    let ready!: () => void
+    h.openEditor.mockImplementationOnce(
+      async () =>
+        new Promise<void>((resolve) => {
+          ready = resolve
+        })
     )
-    expect(cross).toBe('screenshotStale')
+    const opening = h.call(IPC_CHANNELS.screenshotOpenEditor, { id: 'd1' })
+    const id = h.openEditor.mock.calls[0][0] as string
+    h.bindings.set(10, { deviceId: 'd1', sessionId: id })
+    h.run.mockResolvedValueOnce({ code: 0, stdout: EDIT_PNG, stderr: '' })
+    await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
+    await h.call(IPC_CHANNELS.screenshotOpenEditor, { id: 'd1' })
+    expect((await getEditImage(h, h.eventA)).dataUrl).toBe(
+      `data:image/png;base64,${PNG.toString('base64')}`
+    )
+    ready()
+    await opening
+  })
+
+  it('关闭或开窗失败释放快照，迟到旧释放不影响重开', async () => {
+    const h = setup()
+    await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
+    await getEditImage(h, h.eventA)
+    const releaseOld = h.openEditor.mock.calls[0][2].onRelease as () => void
+    releaseOld()
+    await expect(
+      h.callAs(IPC_CHANNELS.screenshotGetEditImage, undefined, h.eventA)
+    ).rejects.toThrow('screenshotStale')
+    h.openEditor.mockRejectedValueOnce(new Error('load failure'))
+    await expect(h.call(IPC_CHANNELS.screenshotOpenEditor, { id: 'd1' })).rejects.toThrow(
+      'load failure'
+    )
+    const failedId = h.openEditor.mock.calls.at(-1)![0]
+    await h.call(IPC_CHANNELS.screenshotOpenEditor, { id: 'd1' })
+    expect(h.openEditor.mock.calls.at(-1)![0]).not.toBe(failedId)
+    releaseOld()
+    expect((await getEditImage(h, { sender: { id: 11 } })).dataUrl).toBe(
+      `data:image/png;base64,${PNG.toString('base64')}`
+    )
+  })
+
+  it('下载期间截新图：旧窗可续编，最近槽保留新图', async () => {
+    const h = setup()
+    await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
+    const before = await getEditImage(h, h.eventA)
+    linkFailures.blocked = true
+    const downloading = h.callAs(
+      IPC_CHANNELS.screenshotEditDownload,
+      { captureId: before.captureId, dataUrl: EDIT_DATAURL },
+      h.eventA
+    )
+    await vi.waitFor(() => expect(linkFailures.unblock).toBeTypeOf('function'))
+    await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
+    linkFailures.blocked = false
+    linkFailures.unblock!()
+    await downloading
+    expect((await getEditImage(h, h.eventA)).dataUrl).toBe(EDIT_DATAURL)
+    const result = (await h.call(IPC_CHANNELS.screenshotSave, { id: 'd1' })) as { fileName: string }
+    expect(await readFile(join(downloads, result.fileName))).toEqual(PNG)
+  })
+
+  it('空缓存错误页不接收后来的截图，新图另建会话', async () => {
+    const h = setup()
+    await h.call(IPC_CHANNELS.screenshotOpenEditor, { id: 'd1' })
+    const emptyId = h.openEditor.mock.calls[0][0]
+    await expect(
+      h.callAs(IPC_CHANNELS.screenshotGetEditImage, undefined, h.eventA)
+    ).rejects.toThrow('screenshotStale')
+    await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
+    await h.call(IPC_CHANNELS.screenshotOpenEditor, { id: 'd1' })
+    expect(h.openEditor.mock.calls[1][0]).not.toBe(emptyId)
+    await expect(
+      h.callAs(IPC_CHANNELS.screenshotGetEditImage, undefined, h.eventA)
+    ).rejects.toThrow('screenshotStale')
+    expect((await getEditImage(h, { sender: { id: 11 } })).dataUrl).toBe(
+      `data:image/png;base64,${PNG.toString('base64')}`
+    )
+  })
+
+  it('下载期间关窗不回填旧会话，已发布文件仍报告成功', async () => {
+    const h = setup()
+    await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
+    const before = await getEditImage(h, h.eventA)
+    linkFailures.hook = h.openEditor.mock.calls[0][2].onRelease as () => void
+    const result = (await h.callAs(
+      IPC_CHANNELS.screenshotEditDownload,
+      { captureId: before.captureId, dataUrl: EDIT_DATAURL },
+      h.eventA
+    )) as { fileName: string }
+    expect(await readFile(join(downloads, result.fileName))).toEqual(EDIT_PNG)
+    await expect(
+      h.callAs(IPC_CHANNELS.screenshotGetEditImage, undefined, h.eventA)
+    ).rejects.toThrow('screenshotStale')
+    const latest = (await h.call(IPC_CHANNELS.screenshotSave, { id: 'd1' })) as { fileName: string }
+    expect(await readFile(join(downloads, latest.fileName))).toEqual(PNG)
+  })
+
+  it('清理设备全部旧会话，重启后新会话不被旧释放删除', async () => {
+    const h = setup()
+    await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
+    const a = await getEditImage(h, h.eventA)
+    const releaseOld = h.openEditor.mock.calls[0][2].onRelease as () => void
+    await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
+    await h.call(IPC_CHANNELS.screenshotOpenEditor, { id: 'd1' })
+    clearScreenshotCache('d1')
+    for (const sender of [10, 11]) {
+      await expect(
+        h.callAs(IPC_CHANNELS.screenshotGetEditImage, undefined, { sender: { id: sender } })
+      ).rejects.toThrow('screenshotStale')
+      await expect(
+        h.callAs(
+          IPC_CHANNELS.screenshotEditCopy,
+          { captureId: a.captureId, dataUrl: EDIT_DATAURL },
+          { sender: { id: sender } }
+        )
+      ).rejects.toThrow('screenshotStale')
+    }
+    await h.call(IPC_CHANNELS.screenshotCapture, { id: 'd1' })
+    await h.call(IPC_CHANNELS.screenshotOpenEditor, { id: 'd1' })
+    releaseOld()
+    expect((await getEditImage(h, { sender: { id: 12 } })).captureId).not.toBe(a.captureId)
   })
 
   it('editCopy：非法载荷（前缀/超长/空 id/超长 id/空图）拒绝且不碰剪贴板不换 id', async () => {
@@ -717,7 +896,8 @@ describe('screenshot 编辑器域', () => {
       isRunningDevice: () => true,
       runningDevice: async () => ({ serial: 's', name: 'n' }),
       openEditor: async () => undefined,
-      editorDeviceId: (sender) => ((sender as { id: number }).id === 10 ? 'd1' : null),
+      editorSession: (sender) =>
+        (sender as { id: number }).id === 10 ? { deviceId: 'd1', sessionId: 'pending' } : null,
       run: (() =>
         new Promise<AdbBinaryResult>((resolve) => {
           release = () => resolve({ code: 0, stdout: PNG, stderr: '' })

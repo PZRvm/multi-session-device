@@ -34,7 +34,7 @@ import { registerSettingsIpc } from '../window/settings'
 import { registerLogcatIpc, isLogcatWindowSender } from '../window/logcat'
 import { registerReportIpc } from '../window/report'
 import { wirelessOwns, registerWirelessIpc } from '../window/wireless'
-import { openScreenshotEditorWindow, screenshotEditorDeviceId } from '../window/screenshotEditor'
+import { openScreenshotEditorWindow, screenshotEditorSession } from '../window/screenshotEditor'
 import { registerThemeIpc } from '../theme'
 import { registerLocaleIpc } from '../locale'
 import { getMainWindow } from '../window'
@@ -84,14 +84,14 @@ export function registerIpcHandlers(): void {
   // 真机适配（plan 2026-10-13-real-device-toolbar-parity）：注入换组合查询（外部 device
   // 态优先，miss 落 AVD running），AVD 行为不变。
   // 编辑窗注入（plan 2026-11-02-screenshot-editor T3）：开窗等待就绪与 sender 归属
-  // 都走窗口登记表（openScreenshotEditorWindow/screenshotEditorDeviceId）
+  // 都走窗口登记表（openScreenshotEditorWindow/screenshotEditorSession）
   registerScreenshotIpc({
     adbPath: adbBinaryPath,
     runningDevice: deviceRefOfId,
     isRunningDevice: isDeviceActiveOfId,
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id,
     openEditor: openScreenshotEditorWindow,
-    editorDeviceId: screenshotEditorDeviceId
+    editorSession: screenshotEditorSession
   })
   // 网络开关域（plan 2026-10-12）：注入同截屏域；句柄供桥启停轮询（running 起、停止收）。
   // 真机适配（plan 2026-10-13-real-device-toolbar-parity）：注入换组合查询
@@ -168,8 +168,8 @@ export function registerIpcHandlers(): void {
 
   // 真机跟踪（track-devices-l 长连接）+ 会话第二桥：外部设备没有 runner，track 事件
   // 直接驱动投屏会话（connected 建会话、removed 销毁）与网络轮询（connected 起、
-  // removed 收；startWatch 幂等——重连首帧全量重发不叠 timer）；截屏缓存无进程无需
-  // 接，日志在 S5 接。注册须在 scrcpy/network/logcat 创建之后（onSession 闭包引用它们）；
+  // removed 收；startWatch 幂等——重连首帧全量重发不叠 timer）；removed 同步清理
+  // 截图缓存及全部编辑会话。注册须在 scrcpy/network/logcat 创建之后（onSession 闭包引用它们）；
   // 变化广播默认发全部窗口（独立日志窗下拉跟随，对齐 devices:changed 语义）
   registerExternalIpc({
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id,
@@ -191,6 +191,7 @@ export function registerIpcHandlers(): void {
           serial: event.device.serial
         })
       } else {
+        clearScreenshotCache(event.id)
         void recording.stopDevice(event.id)
         void scrcpy.destroySession(event.id).catch(() => undefined)
         network.clearWatch(event.id)

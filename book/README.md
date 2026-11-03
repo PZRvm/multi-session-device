@@ -214,11 +214,13 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-02-windows-titlebar-narrow-window.md](notes/issue/2026-11/2026-11-02-windows-titlebar-narrow-window.md) — Windows 顶部宽左栏配合窄主窗时 Logcat 越界，已在独立修复轮次处理，三档缩放复验通过
 - [2026-11-02-worktree单实例锁互斥.md](notes/issue/2026-11/2026-11-02-worktree单实例锁互斥.md) — 多 worktree 并行开发时同包名 Electron 应用共享 userData，单实例锁先到先得——后启动的 dev 拿不到锁静默退出，人工验收被挡；create-worktree 只分配了端口未处理锁
 - [2026-11-03-actions-runtime-deprecation.md](notes/issue/2026-11/2026-11-03-actions-runtime-deprecation.md) — GitHub 提示 checkout 和 setup-node v4 使用已弃用的 Node 20 运行时，目前由平台强制切换到 Node 24 并构建成功
+- [2026-11-03-editor-refresh-comment.md](notes/issue/2026-11/2026-11-03-editor-refresh-comment.md) — 编辑器续编尺寸校验的单槽注释已于 2026-11-04 改为本窗会话的尺寸异常防御说明
 - [2026-11-03-logcat-subscription-test-flake.md](notes/issue/2026-11/2026-11-03-logcat-subscription-test-flake.md) — 全仓测试中日志 dock 展开后的订阅断言偶发失败，无代码改动复跑全部通过，等待时序需单独核查
 - [2026-11-03-low-core-default-settings.md](notes/issue/2026-11/2026-11-03-low-core-default-settings.md) — 少于四核的宿主会产生超出自身能力范围的默认模拟器 CPU 配置，首次发布 CI 暴露此问题
 - [2026-11-03-publication-review.md](notes/issue/2026-11/2026-11-03-publication-review.md) — 首次公开发布检查发现 Logcat 测试偶发失败、hook 未执行和旧产品说明待核对
 - [2026-11-03-screenshot-layout-review.md](notes/issue/2026-11/2026-11-03-screenshot-layout-review.md) — 已修复图片编辑页缩放后的三灯定位偏移，以及损坏的 worktree 元数据阻断端口覆盖与构建两项复审问题
 - [2026-11-03-wireless-unreachable-diagnostics.md](notes/issue/2026-11/2026-11-03-wireless-unreachable-diagnostics.md) — 无线连接把 macOS Local network prohibited 引发的 No route to host 统一提示为确认手机 Wi-Fi，原始 ADB 错误未传给用户
+- [2026-11-04-screenshot-per-capture-review.md](notes/issue/2026-11/2026-11-04-screenshot-per-capture-review.md) — 多截图编辑复审的真机断连清理和注释问题已修复，新增真实 IPC 装配回归，全仓 1570 项通过
 
 ### notes/learn/
 
@@ -321,6 +323,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-02-worktree-stash-checkout三重坑.md](notes/learn/2026-11/2026-11-02-worktree-stash-checkout三重坑.md) — worktree 里用 stash+checkout 对比基线有三重坑——stash 是仓库级共享（pop 到别的分支遗留条目）、untracked 文件冲突卡半途、切换分支会杀死运行中的 dev；基线对比只用只读方式
 - [2026-11-02-复刻验收压窗宽极值.md](notes/learn/2026-11/2026-11-02-复刻验收压窗宽极值.md) — 复刻带窗口自适应的源码功能时，视觉验收必须把窗口压到 MIN 宽高极值——典型尺寸（竖屏 551px）通过不代表 360px 极小窗通过；单行 flex 工具条在窄容器必溢出
 - [2026-11-03-adb-local-network-prohibited.md](notes/learn/2026-11/2026-11-03-adb-local-network-prohibited.md) — 手机 Wi-Fi 与 5555 端口正常仍报 No route to host 时，检查共享 ADB 服务的 macOS 本地网络权限；本次重启服务后恢复
+- [2026-11-03-editor-session-identity.md](notes/learn/2026-11/2026-11-03-editor-session-identity.md) — 多截图编辑需区分来源身份、图片版本与窗口代次；删登记还须清除被生命周期回调持有的图片引用
 - [2026-11-03-pull-request-release-badge-branch.md](notes/learn/2026-11/2026-11-03-pull-request-release-badge-branch.md) — 合并 PR 后发布的 badge 分支筛选不等于 checkout 分支，应使用实际运行与 merge SHA 核对
 - [2026-11-03-toolbar-centering-validation.md](notes/learn/2026-11/2026-11-03-toolbar-centering-validation.md) — 工具条居中要测实际内容；macOS 原生窗口按钮还需按工具栏高度定位，并用原生窗口截图核验
 
@@ -356,8 +359,10 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-03-readme-local-assets.md](notes/summary/2026-11/2026-11-03-readme-local-assets.md) — 设备与浏览器三语 README 的十二种 Shields 徽章改为仓库本地 SVG，设备首页使用带背景 logo
 - [2026-11-03-repository-tools-cleanup.md](notes/summary/2026-11/2026-11-03-repository-tools-cleanup.md) — 删除独立 e2e 与录屏实验脚本，保留六个必要工具，并在三语 README 中致谢 BoCode
 - [2026-11-03-screenshot-editor-layout.md](notes/summary/2026-11/2026-11-03-screenshot-editor-layout.md) — 图片编辑窗下限升至 720px，左右工具区与 macOS 原生三灯随高度居中、左侧工具组水平居中，截图气泡去掉复制成功文本
+- [2026-11-03-screenshot-editor-per-capture.md](notes/summary/2026-11/2026-11-03-screenshot-editor-per-capture.md) — 同设备不同截图各开独立编辑窗，保留旧图标注与产出能力；1568 项测试和真实 Electron 双窗口验证通过
 - [2026-11-03-screenshot-review-fixes.md](notes/summary/2026-11/2026-11-03-screenshot-review-fixes.md) — 修复页面缩放后的原生三灯偏移与工作区元数据异常；真实 Electron 缩放验证、配置加载及全仓 1560 项测试通过
 - [2026-11-03-wireless-runtime-investigation.md](notes/summary/2026-11/2026-11-03-wireless-runtime-investigation.md) — 三星手机转无线失败来自共享 ADB 服务被 macOS 禁止本地网络访问，手工重启服务后应用显示无线已连接，shell 实测通过
+- [2026-11-04-screenshot-disconnect-review-fixes.md](notes/summary/2026-11/2026-11-04-screenshot-disconnect-review-fixes.md) — 修复真机断连时截图会话未失效和续编注释过时；新增断连、重连与下载中断连的 IPC 装配回归
 
 ### notes/task/
 
@@ -478,6 +483,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-03-mit-license.md](plans/2026-11-03-mit-license.md) — 按用户选择为项目添加 MIT 许可证，版权署名为 PZRvm
 - [2026-11-03-repository-tools-cleanup.md](plans/2026-11-03-repository-tools-cleanup.md) — 清理 GitHub 上的 e2e 与脚本目录，同时保留必要构建和检查能力，并在三语 README 致谢 BoCode
 - [2026-11-03-screenshot-editor-layout.md](plans/2026-11-03-screenshot-editor-layout.md) — 图片编辑窗口最小宽度调为 720px，左右工具区居中，并移除截图气泡的复制成功文本
+- [2026-11-03-screenshot-editor-per-capture.md](plans/2026-11-03-screenshot-editor-per-capture.md) — 修复同设备新截图复用旧编辑页的问题，按截图建立编辑窗口并隔离取图、导出与缓存回写
 - [2026-11-03-screenshot-review-fixes.md](plans/2026-11-03-screenshot-review-fixes.md) — 修复图片编辑页缩放后的原生按钮定位，以及工作区端口元数据异常阻断配置的问题
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
@@ -492,4 +498,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 386 documents -->
+<!-- 392 documents -->
