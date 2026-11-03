@@ -1,0 +1,115 @@
+import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { IPC_CHANNELS } from '@shared/ipc-channels'
+import type { DialogOptions, DialogResult } from '@shared/types'
+import { appIcon } from '../app-icon'
+import { msg } from '../locale'
+import { resolve as resolvePath } from 'node:path'
+import { avdHomePath } from '../emulator/avdHomePath'
+
+/** 原生 MessageBox 没有滚动条：detail 行数直接撑高度，超长时按钮被挤出屏幕且
+ *  无法点击（用户实测对账明细弹窗，2026-10-12）。统一防线：超过预算行数截断
+ *  并附省略说明——所有 dialog:show 调用点（对账/卸载/迁移确认等）一并生效。 */
+const MAX_DETAIL_LINES = 40
+
+const clampDetail = (detail: string): string => {
+  const lines = detail.split('\n')
+  if (lines.length <= MAX_DETAIL_LINES) return detail
+  const omitted = lines.length - MAX_DETAIL_LINES
+  return (
+    lines.slice(0, MAX_DETAIL_LINES).join('\n') + '\n' + msg('dialogDetailTruncated', { omitted })
+  )
+}
+
+const isDialogOptions = (value: unknown): value is DialogOptions => {
+  if (typeof value !== 'object' || value === null) return false
+  const { title, message, detail, buttons, cancelId } = value as Record<string, unknown>
+  if (typeof title !== 'string' || typeof message !== 'string') return false
+  if (detail !== undefined && typeof detail !== 'string') return false
+  if (
+    !Array.isArray(buttons) ||
+    buttons.length === 0 ||
+    buttons.length > 3 ||
+    !buttons.every((button) => typeof button === 'string')
+  ) {
+    return false
+  }
+  if (
+    cancelId !== undefined &&
+    (typeof cancelId !== 'number' || cancelId < 0 || cancelId >= buttons.length)
+  ) {
+    return false
+  }
+  return true
+}
+
+/**
+ * 白名单前缀比对：win32 的 resolve 产反斜杠路径，`base + '/'` 恒不匹配会让
+ * avdHome 内文件全被拒（issue 2026-10-31-windows-dev-merge-integration-review P2）。
+ * 分隔符归一后比对——darwin 的 avdHome 路径不含反斜杠，行为逐字节不变。
+ */
+export const isPathInsideBase = (resolved: string, base: string): boolean => {
+  const key = (p: string): string => p.split('\\').join('/')
+  return key(resolved) === key(base) || key(resolved).startsWith(key(base) + '/')
+}
+
+export function registerDialogIpc(): void {
+  // 孤立组处置入口：打开所在目录（用户自行删改——保留「不自动清理」语义）。
+  // 路径白名单：只放行应用 avdHome 下的文件，拒绝任意路径探测。
+  ipcMain.handle(IPC_CHANNELS.shellShowItemInFolder, (_event, raw: unknown): void => {
+    if (
+      typeof raw !== 'object' ||
+      raw === null ||
+      typeof (raw as Record<string, unknown>).path !== 'string'
+    ) {
+      throw new Error(`${IPC_CHANNELS.shellShowItemInFolder}: ${msg('invalidDialogOptions')}`)
+    }
+    const target = (raw as Record<string, unknown>).path as string
+    if (target.includes('\0')) {
+      throw new Error(`${IPC_CHANNELS.shellShowItemInFolder}: ${msg('shellPathRejected')}`)
+    }
+    // 白名单按归一化绝对路径比对（issue review P1：未归一化前缀比对可被 `..` 穿越）；
+    // avdHome 走单源叶子模块（本地复算是第 5 处旁路——merge review P3-3 收编）
+    const base = resolvePath(avdHomePath())
+    const resolved = resolvePath(target)
+    if (!isPathInsideBase(resolved, base)) {
+      throw new Error(`${IPC_CHANNELS.shellShowItemInFolder}: ${msg('shellPathRejected')}`)
+    }
+    void shell.showItemInFolder(resolved)
+  })
+
+  // WHPX 缺失引导（plan 2026-10-22-windows-emulator-env 设计 4）：固定 URI 的受控深链，
+  // 仅 win32 放行、无 renderer 入参——非 win32 调用属异常路径（按钮由 whpx-missing code
+  // 驱动，该 code 仅 win32 收口产生），按通道拒绝即可。
+  ipcMain.handle(IPC_CHANNELS.shellOpenWindowsFeatures, (): void => {
+    if (process.platform !== 'win32') {
+      throw new Error(`${IPC_CHANNELS.shellOpenWindowsFeatures}: win32 only`)
+    }
+    void shell.openExternal('ms-settings:windows-optionalfeatures')
+  })
+
+  // 杀软白名单建议（plan 2026-10-23-windows-settings-finish 设计 2）：与上面同款
+  // 固定 URI 受控深链——仅 win32、无 renderer 入参，非 win32 按通道拒绝。
+  ipcMain.handle(IPC_CHANNELS.shellOpenWindowsDefender, (): void => {
+    if (process.platform !== 'win32') {
+      throw new Error(`${IPC_CHANNELS.shellOpenWindowsDefender}: win32 only`)
+    }
+    void shell.openExternal('ms-settings:windowsdefender')
+  })
+
+  ipcMain.handle(IPC_CHANNELS.dialogShow, async (event, raw: unknown): Promise<DialogResult> => {
+    // renderer 传来的 payload 不可信，先过运行时守卫再进业务
+    if (!isDialogOptions(raw)) {
+      throw new Error(`${IPC_CHANNELS.dialogShow}: ${msg('invalidDialogOptions')}`)
+    }
+    const window = BrowserWindow.fromWebContents(event.sender)
+    const options = {
+      ...raw,
+      detail: raw.detail === undefined ? undefined : clampDetail(raw.detail),
+      icon: appIcon
+    }
+    const result = window
+      ? await dialog.showMessageBox(window, options)
+      : await dialog.showMessageBox(options)
+    return { response: result.response, checkboxChecked: result.checkboxChecked }
+  })
+}

@@ -1,0 +1,76 @@
+# Git 政策——契约见 book/guidelines/git-workflow.md（Clean Commit + Clean Flow）。
+# 三件事：main 只收来自 dev 的 PR 且不许直推；进 dev/main 的提交主题过 Clean Commit
+# 校验；同一个触发面跑 book:release-check。历史提交不校验（规则只管新提交）。
+name: git-policy
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+jobs:
+  branch-direction:
+    runs-on: ubuntu-latest
+    steps:
+      # before 为零值 = 首次建仓推送，豁免（否则 main 第一次推上远端就吃红灯）
+      - name: main 只收来自 dev 的 PR，且不许直推
+        if: >-
+          (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.ref != 'dev') ||
+          (github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.before != '0000000000000000000000000000000000000000')
+        run: |
+          echo "::error::Clean Flow：main 只接收来自 dev 的 merge commit——直推 main 与非 dev 来源的 PR 都不允许"
+          exit 1
+
+  commit-subjects:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 校验提交主题
+        # `${{ }}` 只出现在 env 块、以数据身份进 shell——分支名再怪也只是字符串（防注入）
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_SHA: ${{ github.sha }}
+        run: |
+          set -e
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            range="origin/$PR_BASE_REF..$PR_HEAD_SHA"
+          else
+            before="$PUSH_BEFORE"
+            if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
+              echo "新分支首次推送——既有历史不重写、不校验，跳过"
+              exit 0
+            fi
+            if ! git rev-parse -q --verify "$before" >/dev/null; then
+              echo "无法定位推送前提交（疑似强推）——跳过主题校验"
+              exit 0
+            fi
+            range="$before..$PUSH_SHA"
+          fi
+          status=0
+          while IFS= read -r s; do
+            [ -z "$s" ] && continue
+            node scripts/check-commit-message.mjs "$s" || status=1
+          done < <(git log --no-merges --format=%s "$range")
+          exit $status
+
+  book-release-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # book:release-check 零依赖，node + git 即可，无需装依赖
+      - run: npm run book:release-check

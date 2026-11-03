@@ -1,0 +1,657 @@
+import { useState } from 'react'
+import styled from 'styled-components'
+import { Download, Loader2, Trash2 } from 'lucide-react'
+import type { CompatibilityVerdict } from '@shared/compatibility'
+import { WIZARD_COPY, format } from '@shared/i18n'
+import type { ImageEntry, ImageService } from '@shared/types'
+import { useCopy } from '../../hooks/useCopy'
+import { apiDisplay, formatSize, recommendedWindow, serviceLabel, serviceLabels } from './shared'
+
+/**
+ * 配置页「设备」标签的镜像表格：API/服务筛选 + 推荐/完整/Preview/扩展/不支持
+ * 开关 + 逐行兼容性与下载。兼容性用 main 同源的纯函数判定（创建守卫在 main，
+ * 展示开关不改变创建资格）。
+ */
+
+export interface ImageFilters {
+  service: 'all' | ImageService
+  showFullList: boolean
+  showPreview: boolean
+  showUnsupported: boolean
+}
+
+export interface ImageTableProps {
+  images: ImageEntry[]
+  filters: ImageFilters
+  onFiltersChange: (filters: ImageFilters) => void
+  /** 按画像预判定的兼容性（packageName → verdict） */
+  verdicts: Map<string, CompatibilityVerdict>
+  selectedPackageName: string | null
+  onSelect: (image: ImageEntry) => void
+  downloading: { packageName: string; percent: number } | null
+  onDownload: (image: ImageEntry) => void
+  /** 取消进行中的下载（与 onDownload 同一行内，仅下载中可见） */
+  onCancelDownload: (packageName: string) => void
+  downloadBusy: boolean
+  /** 卸载已装镜像（确认框在 DeviceWizard 层统一处理）；null = 未提供该能力 */
+  onUninstall: ((image: ImageEntry) => void) | null
+  /** 正在卸载的包名（该行显示 spinner，其余行禁用）；null = 无卸载任务 */
+  uninstallingPackage: string | null
+  /** 共享 Studio SDK 态（plan 2026-10-12）：仅列 已装∧supported 行，隐藏筛选
+   *  开关与下载/卸载按钮；仅一行时的自动选中由 DeviceWizard 层负责 */
+  sharedMode?: boolean
+}
+
+const ImageTable = ({
+  images,
+  filters,
+  onFiltersChange,
+  verdicts,
+  selectedPackageName,
+  onSelect,
+  downloading,
+  onDownload,
+  onCancelDownload,
+  downloadBusy,
+  onUninstall,
+  uninstallingPackage,
+  sharedMode = false
+}: ImageTableProps): React.JSX.Element => {
+  const copy = useCopy(WIZARD_COPY)
+  const window = recommendedWindow(images)
+  // roving tabindex（review 遗留精修）：整个表格一个 Tab 停留点——焦点行 0、
+  // 其余行 -1；行内操作钮只在焦点行可 Tab。↑↓ 行间移动，Tab 不再逐行穿越
+  const [rovingIndex, setRovingIndex] = useState(0)
+  const rows = sharedMode
+    ? images.filter(
+        (image) => image.installed && verdicts.get(image.packageName)?.status === 'supported'
+      )
+    : images.filter((image) => {
+        const verdict = verdicts.get(image.packageName)
+        const status = verdict?.status ?? 'unknown'
+        const formal = image.api.codename === null
+        if (status === 'unsupported' && !filters.showUnsupported) return false
+        if (!formal && !filters.showPreview) return false
+        if (filters.service !== 'all' && !image.services.includes(filters.service)) return false
+        // 推荐视图只看最近五个正式（非扩展）major；扩展平台与窗口外版本都走完整列表开关
+        if (
+          !filters.showFullList &&
+          formal &&
+          (image.api.extensionLevel !== null || !window.has(image.api.major ?? -1))
+        ) {
+          return false
+        }
+        return true
+      })
+  const safeRovingIndex = rows.length === 0 ? 0 : Math.min(rovingIndex, rows.length - 1)
+
+  const moveRovingFocus = (fromIndex: number, delta: number): void => {
+    const next = Math.min(Math.max(fromIndex + delta, 0), rows.length - 1)
+    setRovingIndex(next)
+    document
+      .querySelector<HTMLDivElement>(`[data-image-package="${rows[next].packageName}"]`)
+      ?.focus()
+  }
+
+  const serviceOptions: Array<{ value: ImageFilters['service']; label: string }> = [
+    { value: 'all', label: copy.filterAllServices },
+    { value: 'google_play', label: 'Google Play' },
+    { value: 'google_apis', label: 'Google APIs' },
+    { value: 'aosp', label: 'AOSP' },
+    { value: 'wear', label: 'Wear OS' },
+    { value: 'tv', label: 'Android TV' },
+    { value: 'automotive', label: 'Automotive' }
+  ]
+
+  return (
+    <Layout>
+      {sharedMode ? (
+        <p className="shared-hint">{format(copy.sharedModeImagesHint, { count: rows.length })}</p>
+      ) : (
+        <div className="toolbar">
+          <select
+            className="service-select"
+            value={filters.service}
+            aria-label={copy.serviceFilterAria}
+            onChange={(event) =>
+              onFiltersChange({
+                ...filters,
+                service: event.target.value as ImageFilters['service']
+              })
+            }
+          >
+            {serviceOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <div className="switch-row">
+            <div className="switch">
+              <input
+                id="wizard-images-full"
+                type="checkbox"
+                checked={filters.showFullList}
+                onChange={(event) =>
+                  onFiltersChange({ ...filters, showFullList: event.target.checked })
+                }
+              />
+              <label htmlFor="wizard-images-full">{copy.fullList}</label>
+            </div>
+            <div className="switch">
+              <input
+                id="wizard-images-preview"
+                type="checkbox"
+                checked={filters.showPreview}
+                onChange={(event) =>
+                  onFiltersChange({ ...filters, showPreview: event.target.checked })
+                }
+              />
+              <label htmlFor="wizard-images-preview">Preview</label>
+            </div>
+            <div className="switch">
+              <input
+                id="wizard-images-unsupported"
+                type="checkbox"
+                checked={filters.showUnsupported}
+                onChange={(event) =>
+                  onFiltersChange({ ...filters, showUnsupported: event.target.checked })
+                }
+              />
+              <label htmlFor="wizard-images-unsupported">{copy.unsupportedToggle}</label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="scroller">
+        <div className="head-row">
+          <div className="head-cell">API</div>
+          <div className="head-cell">{copy.headService}</div>
+          <div className="head-cell">ABI</div>
+          <div className="head-cell num">{copy.headSize}</div>
+          <div className="head-cell center">{copy.headStatus}</div>
+        </div>
+        {rows.map((image, index) => {
+          const verdict = verdicts.get(image.packageName)
+          const selected = image.packageName === selectedPackageName
+          const isDownloading = downloading?.packageName === image.packageName
+          const selectable = image.installed && verdict?.status === 'supported'
+          return (
+            <div
+              className="row"
+              key={image.packageName}
+              role="button"
+              tabIndex={index === safeRovingIndex ? 0 : -1}
+              aria-pressed={selected}
+              aria-disabled={!selectable}
+              data-image-package={image.packageName}
+              onFocus={() => setRovingIndex(index)}
+              onClick={() => {
+                if (selectable) onSelect(image)
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                  event.preventDefault()
+                  moveRovingFocus(index, event.key === 'ArrowDown' ? 1 : -1)
+                  return
+                }
+                if ((event.key === 'Enter' || event.key === ' ') && selectable) {
+                  event.preventDefault()
+                  onSelect(image)
+                }
+              }}
+            >
+              <div className="api-cell">
+                API {apiDisplay(image)}
+                {image.api.codename !== null ? (
+                  <span className="row-tag">{image.api.codename}</span>
+                ) : null}
+                {image.api.extensionLevel !== null ? (
+                  <span className="row-tag">
+                    {format(copy.extTag, { level: image.api.extensionLevel })}
+                  </span>
+                ) : null}
+                {image.featureTags.map((tag) => (
+                  <span className="row-tag" key={tag}>
+                    {tag === 'page_size_16kb' ? copy.tag16kb : tag}
+                  </span>
+                ))}
+              </div>
+              <div className="cell">{serviceLabels(image).join(' + ')}</div>
+              <div className="cell">{image.abi}</div>
+              <div className="cell num">
+                {image.installed ? '—' : formatSize(image.sizeBytes, copy)}
+              </div>
+              <div className="status-cell">
+                {image.installed ? (
+                  <>
+                    <span
+                      className="status-text"
+                      title={
+                        verdict?.status === 'supported'
+                          ? undefined
+                          : (verdict?.reasons.join('；') ?? '')
+                      }
+                    >
+                      {verdict?.status === 'supported'
+                        ? copy.installed
+                        : verdict?.status === 'unknown'
+                          ? copy.installedUnknownCompat
+                          : copy.installedIncompatible}
+                    </span>
+                    {onUninstall !== null && !sharedMode ? (
+                      <span
+                        className="uninstall-btn"
+                        role="button"
+                        tabIndex={index === safeRovingIndex ? 0 : -1}
+                        aria-disabled={uninstallingPackage !== null || downloadBusy}
+                        aria-busy={uninstallingPackage === image.packageName}
+                        aria-label={format(copy.uninstallInstalledAria, {
+                          api: apiDisplay(image),
+                          service: serviceLabel(image)
+                        })}
+                        title={copy.uninstallInstalledTitle}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          if (uninstallingPackage !== null || downloadBusy) return
+                          onUninstall(image)
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            if (uninstallingPackage !== null || downloadBusy) return
+                            onUninstall(image)
+                          }
+                        }}
+                      >
+                        {uninstallingPackage === image.packageName ? (
+                          <Loader2 size={14} aria-hidden="true" className="uninstall-spinner" />
+                        ) : (
+                          <Trash2 size={14} aria-hidden="true" />
+                        )}
+                      </span>
+                    ) : null}
+                  </>
+                ) : (
+                  <span
+                    className="download-btn"
+                    role="button"
+                    tabIndex={index === safeRovingIndex ? 0 : -1}
+                    aria-disabled={downloadBusy || uninstallingPackage !== null}
+                    aria-label={format(copy.downloadAria, {
+                      api: apiDisplay(image),
+                      service: serviceLabel(image)
+                    })}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      if (downloadBusy || uninstallingPackage !== null) return
+                      onDownload(image)
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        if (downloadBusy || uninstallingPackage !== null) return
+                        onDownload(image)
+                      }
+                    }}
+                  >
+                    {isDownloading ? (
+                      <>
+                        <span
+                          className="progress-fill"
+                          aria-hidden="true"
+                          style={{ width: `${downloading.percent}%` }}
+                        />
+                        <span className="percent-text">{downloading.percent}%</span>
+                      </>
+                    ) : (
+                      <Download size={13} />
+                    )}
+                  </span>
+                )}
+                {isDownloading ? (
+                  <button
+                    type="button"
+                    className="cancel-download-btn"
+                    aria-label={format(copy.cancelDownloadAria, {
+                      api: apiDisplay(image),
+                      service: serviceLabel(image)
+                    })}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onCancelDownload(image.packageName)
+                    }}
+                  >
+                    {copy.cancel}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          )
+        })}
+        {rows.length === 0 ? <p className="empty-hint">{copy.imagesEmptyFiltered}</p> : null}
+      </div>
+      <p className="legend">{copy.imagesFootnote}</p>
+    </Layout>
+  )
+}
+
+/** 全表唯一轨道定义（API 弹性吸收余宽；状态列定宽容纳进度钮+取消钮） */
+const GRID_COLUMNS = 'minmax(200px, 1.6fr) minmax(110px, 1fr) 84px 76px 132px'
+
+const Layout = styled.div`
+  /* 共享态提示行（plan 2026-10-12） */
+  .shared-hint {
+    margin: 0 0 10px;
+    font-size: 11px;
+    color: var(--board-ink-dim);
+  }
+
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  gap: 8px;
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex: none;
+    flex-wrap: wrap;
+  }
+
+  .service-select {
+    padding: 5px 8px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: var(--board-bg);
+    color: var(--board-ink);
+    font-size: 12px;
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+  }
+
+  .switch-row {
+    display: flex;
+    gap: 12px;
+  }
+
+  .switch {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--board-ink-dim);
+
+    label {
+      cursor: pointer;
+    }
+
+    input:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+  }
+
+  .scroller {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: var(--board-bg);
+    display: grid;
+    grid-template-columns: ${GRID_COLUMNS};
+    /* 行数少时（wear 推荐视图仅 3 行）阻止默认 stretch 把表头与行均匀拉高填满容器 */
+    align-content: start;
+  }
+
+  .head-row {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    background: var(--board-bg-raised);
+    border-bottom: 1px solid var(--board-hairline);
+  }
+
+  .head-cell {
+    padding: 7px 10px;
+    color: var(--board-ink-dim);
+    font-size: 11px;
+    font-weight: 500;
+
+    &.num {
+      text-align: right;
+    }
+
+    &.center {
+      text-align: center;
+    }
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.12s;
+
+    &:hover {
+      background: var(--board-hover-veil);
+    }
+
+    &[aria-pressed='true'] {
+      background: var(--board-segment-selected-bg);
+      box-shadow: inset 2px 0 0 var(--accent);
+    }
+
+    &[aria-disabled='true'] {
+      cursor: default;
+      opacity: 0.75;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+    }
+  }
+
+  .api-cell {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    padding: 7px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .cell {
+    padding: 7px 10px;
+    font-size: 12px;
+    color: var(--board-ink);
+
+    &.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  .status-cell {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    min-height: 34px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .status-text {
+    white-space: nowrap;
+  }
+
+  .row-tag {
+    margin-left: 6px;
+    padding: 1px 6px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--board-ink-dim);
+    flex: none;
+  }
+
+  .download-btn {
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 45px;
+    height: 24px;
+    padding: 0 6px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: var(--board-bg-raised);
+    color: var(--board-ink);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--board-hover-veil);
+    }
+
+    &[aria-disabled='true'] {
+      cursor: default;
+      opacity: 0.7;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+  }
+
+  .empty-hint {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 16px 12px;
+    font-size: 12px;
+    color: var(--board-ink-dim);
+  }
+
+  .legend {
+    margin: 0;
+    flex: none;
+    font-size: 11px;
+    color: var(--board-ink-dim);
+  }
+
+  .cancel-download-btn {
+    flex: none;
+    padding: 3px 10px;
+    border: 1px solid var(--board-hairline);
+    border-radius: 4px;
+    background: var(--board-bg-raised);
+    color: var(--board-ink-dim);
+    font-size: 11px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--board-hover-veil);
+      color: var(--board-ink);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+  }
+
+  /** 下载钮内的进度填充层：按百分比铺宽，视觉即「下载到哪了」 */
+  .progress-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: color-mix(in srgb, var(--loading) 28%, transparent);
+    transition: width 0.3s ease-out;
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  }
+
+  .percent-text {
+    position: relative;
+    z-index: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .uninstall-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--danger, #b3261e);
+    cursor: pointer;
+    transition: background-color 0.12s;
+
+    &:hover {
+      background: var(--board-hover-veil);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+
+    &[aria-disabled='true'] {
+      cursor: default;
+      opacity: 0.45;
+
+      &:hover {
+        background: transparent;
+      }
+    }
+  }
+
+  .uninstall-spinner {
+    color: var(--loading);
+    animation: uninstall-spin 1.2s linear infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
+
+    @keyframes uninstall-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  }
+`
+
+export default ImageTable

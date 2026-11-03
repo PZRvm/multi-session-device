@@ -1,0 +1,65 @@
+appId: com.foreunit.multi-session-device
+productName: 多开模拟器
+directories:
+  buildResources: build
+# 打包进 asar 的只留运行所需：package.json、out/、生产 node_modules、resources/。
+# book/e2e/scripts 等纯仓库内容曾把 asar 撑到 69MB（含大量中文文件名）。
+# !**/.*/** 排除一切隐藏目录是关键：.zcode/.workbuddy 等会话状态目录在打包
+# 期间被工具实时写入，"先扫描后写入"的打包方式会因此错位整个 asar 内容区。
+afterPack: scripts/adhoc-sign-mac.cjs
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!book/**'
+  - '!e2e/**'
+  - '!scripts/**'
+  - '!{AGENTS.md,DESIGN.md,PRODUCT.md}'
+  - '!tsconfig.node.tsbuildinfo'
+  - '!vitest.config.ts'
+  - '!**/.*'
+  - '!**/.*/**'
+asarUnpack:
+  - resources/**
+extraResources:
+  - from: resources/scrcpy-server-v3.3.3
+    to: scrcpy-server-v3.3.3
+  - from: node_modules/mediabunny/LICENSE
+    to: licenses/mediabunny-MPL-2.0.txt
+win:
+  icon: build/icon.ico
+  executableName: multi-session-device
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+mac:
+  icon: build/icon.icns
+  artifactName: ${name}-${version}-${arch}-mac.${ext}
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    NSCameraUsageDescription: 用于让 Android 模拟器使用本机摄像头进行测试。
+    NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  notarize: false
+dmg:
+  artifactName: ${name}-${version}.${ext}
+linux:
+  icon: build/icon.png
+  target:
+    - AppImage
+    - snap
+    - deb
+  maintainer: electronjs.org
+  category: Utility
+appImage:
+  artifactName: ${name}-${version}.${ext}
+npmRebuild: false
+publish:
+  provider: generic
+  url: https://example.com/auto-updates

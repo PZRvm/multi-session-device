@@ -1,0 +1,132 @@
+// @vitest-environment node
+import { describe, expect, it, vi } from 'vitest'
+import { EMULATOR_PORT_FIRST, PortAllocator, serialForPort } from '../ports'
+
+const makeDeps = ({
+  occupied = [] as number[],
+  serials = [] as string[]
+}: { occupied?: number[]; serials?: string[] } = {}): {
+  probeTcp: (port: number) => Promise<boolean>
+  adbSerials: () => Promise<Set<string>>
+} => ({
+  probeTcp: vi.fn(async (port: number) => occupied.includes(port)),
+  adbSerials: vi.fn(async () => new Set(serials))
+})
+
+describe('PortAllocator', () => {
+  it('探测在途取消释放预留，迟到探测不影响同设备的新预留', async () => {
+    let ready: (occupied: boolean) => void = () => {}
+    const deps = makeDeps()
+    vi.mocked(deps.probeTcp).mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          ready = resolve
+        })
+    )
+    const allocator = new PortAllocator(deps)
+    const abort = new AbortController()
+    const first = allocator.acquire('d1', abort.signal)
+    const rejected = expect(first).rejects.toThrow()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(allocator.reservedOf('d1')).toBe(5554)
+    abort.abort()
+    await rejected
+    expect(allocator.reservedOf('d1')).toBeUndefined()
+    expect(await allocator.acquire('d1')).toBe(5554)
+    ready(true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(allocator.reservedOf('d1')).toBe(5554)
+    expect(deps.probeTcp).toHaveBeenCalledTimes(3)
+  })
+
+  it('首台分配 5554，serial 规则 emulator-<偶数端口>', async () => {
+    const deps = makeDeps()
+    const allocator = new PortAllocator(deps)
+    const port = await allocator.acquire('d1')
+    expect(port).toBe(EMULATOR_PORT_FIRST)
+    expect(serialForPort(port)).toBe('emulator-5554')
+  })
+
+  it('进程内 reservation：并发两台不拿同一对端口', async () => {
+    const allocator = new PortAllocator(makeDeps())
+    const first = await allocator.acquire('d1')
+    const second = await allocator.acquire('d2')
+    expect(second).toBe(first + 2)
+  })
+
+  it('跳过外部 TCP 占用：偶数 console 口被占直接换对', async () => {
+    const deps = makeDeps({ occupied: [EMULATOR_PORT_FIRST] })
+    const allocator = new PortAllocator(deps)
+    const port = await allocator.acquire('d1')
+    expect(port).toBe(EMULATOR_PORT_FIRST + 2)
+    expect(deps.probeTcp).toHaveBeenCalledWith(EMULATOR_PORT_FIRST)
+  })
+
+  it('跳过外部 TCP 占用：奇数 adb 口被占也换对', async () => {
+    const deps = makeDeps({ occupied: [EMULATOR_PORT_FIRST + 1] })
+    const allocator = new PortAllocator(deps)
+    const port = await allocator.acquire('d1')
+    expect(port).toBe(EMULATOR_PORT_FIRST + 2)
+    expect(deps.probeTcp).toHaveBeenCalledWith(EMULATOR_PORT_FIRST + 1)
+  })
+
+  it('跳过 adb server 已登记的 serial（console 已关的窗口）', async () => {
+    const allocator = new PortAllocator(makeDeps({ serials: ['emulator-5554'] }))
+    const port = await allocator.acquire('d1')
+    expect(port).toBe(EMULATOR_PORT_FIRST + 2)
+  })
+
+  it('并发 acquire（同 tick 两台）：探测在途时后续调用拿下一对', async () => {
+    // 慢探测模拟真实 TCP 往返：第一次调用挂在探测上时，第二次必须看到预留
+    let resolveFirst = (): void => {}
+    let calls = 0
+    const allocator = new PortAllocator({
+      probeTcp: async (port) => {
+        calls += 1
+        if (calls === 1) {
+          await new Promise<void>((resolve) => {
+            resolveFirst = resolve
+          })
+        }
+        void port
+        return false
+      },
+      adbSerials: async () => new Set()
+    })
+    const first = allocator.acquire('d1')
+    const second = allocator.acquire('d2')
+    await new Promise((resolve) => setTimeout(resolve, 10)) // 让两次 acquire 推进到阻塞探测
+    resolveFirst()
+    const [a, b] = await Promise.all([first, second])
+    expect(b).toBe(a + 2)
+  })
+
+  it('release(deviceId) 只释放该设备的预留', async () => {
+    const allocator = new PortAllocator(makeDeps())
+    await allocator.acquire('d1')
+    await allocator.acquire('d2')
+    allocator.release('d1')
+    expect(await allocator.acquire('d3')).toBe(EMULATOR_PORT_FIRST)
+  })
+
+  it('释放被抢端口后重新分配：外部仍占用则跳过（runner 换端口路径）', async () => {
+    const occupied = new Set<number>()
+    const allocator = new PortAllocator({
+      probeTcp: async (port) => occupied.has(port),
+      adbSerials: async () => new Set()
+    })
+    const first = await allocator.acquire('d1')
+    occupied.add(first) // 外部抢注
+    allocator.releasePort(first)
+    const again = await allocator.acquire('d1')
+    expect(again).toBe(first + 2)
+  })
+
+  it('64 对耗尽抛可操作错误', async () => {
+    const allocator = new PortAllocator(makeDeps())
+    // 走满 64 对
+    const ids = Array.from({ length: 64 }, (_, index) => `d${index}`)
+    for (const id of ids) await allocator.acquire(id)
+    await expect(allocator.acquire('overflow')).rejects.toThrow('没有可用的模拟器端口')
+  })
+})

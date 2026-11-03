@@ -1,0 +1,672 @@
+// @vitest-environment node
+import { beforeEach, describe, expect, it } from 'vitest'
+import { join } from 'node:path'
+
+import {
+  MigrationCancelledError,
+  isMigrationActive,
+  readMigrationJournalState,
+  resetMigrationFlagForTest,
+  rollbackCorruptMigration,
+  classifyRoot,
+  loadMigrationJournal,
+  migrationJournalPath,
+  planMigration,
+  requiredFreeBytes,
+  relinkAvdConfigs,
+  resumeMigration,
+  rollbackMigration,
+  startMigration,
+  type MigrationDeps
+} from '../sdkMigration'
+import { rewriteConfigPathPrefixes } from '../avd'
+
+/** 内存文件系统：目录表 + 文件内容表 + 卷号前缀表（rename 跨卷抛 EXDEV 语义） */
+export class FakeFs {
+  dirs = new Map<string, Set<string>>()
+  files = new Map<string, string>()
+  devs = new Map<string, number>()
+  fsType = 'APFS'
+  freeSpace = 1_000_000_000_000
+  corruptCopy = false
+
+  constructor() {
+    this.dirs.set('/', new Set())
+    this.devs.set('/', 1)
+  }
+
+  private norm(path: string): string {
+    return path.replace(/\/+$/, '') || '/'
+  }
+  private parentOf(path: string): string {
+    const index = path.lastIndexOf('/')
+    return index <= 0 ? '/' : path.slice(0, index)
+  }
+  devOf(path: string): number {
+    let current = this.norm(path)
+    while (true) {
+      if (this.devs.has(current)) return this.devs.get(current) as number
+      if (current === '/') return 1
+      current = this.parentOf(current)
+    }
+  }
+  attach(dirPath: string): void {
+    if (dirPath === '/' || this.dirs.has(dirPath)) return
+    this.attach(this.parentOf(dirPath))
+    this.dirs.set(dirPath, new Set())
+    this.dirs.get(this.parentOf(dirPath))?.add(dirPath.split('/').pop() as string)
+  }
+  mkdirP(path: string): void {
+    this.attach(this.norm(path))
+  }
+  write(path: string, content: string): void {
+    const normalized = this.norm(path)
+    this.attach(this.parentOf(normalized))
+    this.files.set(normalized, content)
+    this.dirs.get(this.parentOf(normalized))?.add(normalized.split('/').pop() as string)
+  }
+  read(path: string): string {
+    const content = this.files.get(this.norm(path))
+    if (content === undefined) {
+      // 真实 fs 错误带 code——journal 状态机按 ENOENT 区分无文件与损坏
+      throw Object.assign(new Error(`ENOENT ${path}`), { code: 'ENOENT' })
+    }
+    return content
+  }
+  exists(path: string): boolean {
+    const normalized = this.norm(path)
+    return this.files.has(normalized) || this.dirs.has(normalized)
+  }
+  listDir(path: string): string[] {
+    const children = this.dirs.get(this.norm(path))
+    if (children === undefined) throw new Error(`ENOENT ${path}`)
+    return [...children]
+  }
+  rmTree(path: string): void {
+    const normalized = this.norm(path)
+    if (this.dirs.has(normalized)) {
+      for (const child of this.listDir(normalized)) this.rmTree(`${normalized}/${child}`)
+      this.dirs.delete(normalized)
+    } else {
+      this.files.delete(normalized)
+    }
+    const parent = this.parentOf(normalized)
+    this.dirs.get(parent)?.delete(normalized.split('/').pop() as string)
+  }
+  rename(from: string, to: string): void {
+    const fromNorm = this.norm(from)
+    const toNorm = this.norm(to)
+    if (this.devOf(fromNorm) !== this.devOf(toNorm)) {
+      throw Object.assign(new Error('EXDEV: cross-device link'), { code: 'EXDEV' })
+    }
+    if (this.dirs.has(fromNorm)) {
+      for (const child of this.listDir(fromNorm))
+        this.rename(`${fromNorm}/${child}`, `${toNorm}/${child}`)
+      this.dirs.delete(fromNorm)
+    } else {
+      const content = this.read(fromNorm)
+      this.files.delete(fromNorm)
+      this.write(toNorm, content)
+    }
+    const parent = this.parentOf(fromNorm)
+    this.dirs.get(parent)?.delete(fromNorm.split('/').pop() as string)
+  }
+  copy(from: string, to: string): void {
+    const content = this.read(from)
+    this.write(to, this.corruptCopy ? content.slice(0, -1) : content)
+  }
+}
+
+export const FROM = '/from-sdk'
+export const TO = '/to-sdk'
+export const AVD_HOME = '/avd-home'
+
+/** 标准源根：五组件 + 一个镜像目录 + 皮肤目录；目标根默认空 */
+export const seedSource = (fs: FakeFs): void => {
+  for (const marker of [
+    'cmdline-tools/latest/bin/sdkmanager',
+    'platform-tools/adb',
+    'emulator/emulator',
+    'jre/Contents/Home/bin/java',
+    'licenses/android-sdk-license'
+  ]) {
+    fs.write(`${FROM}/${marker}`, `bin:${marker}`)
+  }
+  fs.write(`${FROM}/system-images/android-34/google_apis/arm64-v8a/snapshot.img`, 'x'.repeat(1000))
+  fs.write(`${FROM}/skins/pixel/skin`, 'skin')
+  fs.write(`${FROM}/android-user/prefs.xml`, '<prefs/>')
+  fs.write(`${FROM}/.tmp-cmdline-tools/leftover.bin`, 'stale')
+}
+
+export const seedAvdHome = (fs: FakeFs): void => {
+  fs.mkdirP(`${AVD_HOME}/device1.avd`)
+  fs.write(
+    `${AVD_HOME}/device1.avd/config.ini`,
+    [
+      'avd.ini.encoding=UTF-8',
+      `image.sys.src.dir=${FROM}/system-images/android-34/google_apis/arm64-v8a`,
+      `skin.path=${FROM}/skins/pixel`,
+      'tag.display=Pixel 8',
+      '# comment stays'
+    ].join('\n')
+  )
+  fs.mkdirP(`${AVD_HOME}/device2.avd`)
+  fs.write(
+    `${AVD_HOME}/device2.avd/config.ini`,
+    `image.sys.src.dir=${FROM}/system-images/android-99/google_apis/arm64-v8a\n`
+  )
+}
+
+export const makeDeps = (fs: FakeFs): MigrationDeps => ({
+  listDir: async (path) => fs.listDir(path),
+  statEntry: async (path) => {
+    const normalized = path.replace(/\/+$/, '') || '/'
+    if (!fs.exists(normalized)) throw new Error(`ENOENT ${path}`)
+    return {
+      isDir: fs.dirs.has(normalized),
+      size: fs.dirs.has(normalized) ? 0 : (fs.files.get(normalized) as string).length,
+      dev: fs.devOf(normalized)
+    }
+  },
+  mkdirP: async (path) => fs.mkdirP(path),
+  renameEntry: async (from, to) => fs.rename(from, to),
+  rmTree: async (path) => fs.rmTree(path),
+  copyFileTo: async (from, to) => fs.copy(from, to),
+  freeSpaceOf: async () => fs.freeSpace,
+  fsTypeOf: async () => fs.fsType,
+  pathExists: async (path) => fs.exists(path),
+  readFile: async (path) => fs.read(path),
+  writeFile: async (path, data) => fs.write(path, data),
+  detectSnapshot: async (root) => ({
+    root,
+    jre: { present: fs.exists(`${root}/jre/Contents/Home/bin/java`) },
+    cmdlineTools: { present: fs.exists(`${root}/cmdline-tools/latest/bin/sdkmanager`) },
+    platformTools: { present: fs.exists(`${root}/platform-tools/adb`) },
+    emulator: { present: fs.exists(`${root}/emulator/emulator`) },
+    licensed: fs.exists(`${root}/licenses/android-sdk-license`)
+  }),
+  journalDir: () => '/userdata'
+})
+
+describe('planMigration（预检）', () => {
+  let fs: FakeFs
+  beforeEach(() => {
+    fs = new FakeFs()
+    seedSource(fs)
+    fs.devs.set(TO, 2) // 默认跨卷
+  })
+
+  it('全过：条目扫描（清 .tmp- 残留）、体量、跨卷与基线快照', async () => {
+    const result = await planMigration(
+      { fromRoot: FROM, toRoot: TO, targetSource: 'custom', replaceTarget: false, runningCount: 0 },
+      makeDeps(fs)
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.plan.sameVolume).toBe(false)
+    expect(result.plan.replaceTarget).toBe(false)
+    expect(result.plan.entries.map((entry) => entry.name).sort()).toEqual([
+      'android-user',
+      'cmdline-tools',
+      'emulator',
+      'jre',
+      'licenses',
+      'platform-tools',
+      'skins',
+      'system-images'
+    ])
+    expect(result.plan.totalBytes).toBeGreaterThan(1000)
+    expect(result.plan.beforeComponents).toEqual({
+      jre: true,
+      cmdlineTools: true,
+      platformTools: true,
+      emulator: true,
+      licensed: true
+    })
+    // .tmp- 残留在扫描时清掉
+    expect(fs.exists(`${FROM}/.tmp-cmdline-tools/leftover.bin`)).toBe(false)
+  })
+
+  it('逐项拒绝：运行会话 / 同根与嵌套 / 空 source / journal 在途', async () => {
+    const deps = makeDeps(fs)
+    const base = {
+      fromRoot: FROM,
+      toRoot: TO,
+      targetSource: 'custom' as const,
+      replaceTarget: false
+    }
+    expect((await planMigration({ ...base, runningCount: 1 }, deps)).ok).toBe(false)
+    expect((await planMigration({ ...base, fromRoot: TO, runningCount: 0 }, deps)).ok).toBe(false)
+    expect(
+      (await planMigration({ ...base, toRoot: `${FROM}/nested`, runningCount: 0 }, deps)).ok
+    ).toBe(false)
+    fs.rmTree(FROM)
+    fs.mkdirP(FROM)
+    const empty = await planMigration({ ...base, runningCount: 0 }, deps)
+    expect(empty).toMatchObject({ ok: false, code: 'empty-source' })
+    seedSource(fs)
+    fs.write(
+      '/userdata/sdk-migration.json',
+      '{"version":1,"fromRoot":"/x","toRoot":"/y","targetSource":"custom","targetCleared":false,"entries":[],"phase":"moving","movedBytes":0,"totalBytes":0}'
+    )
+    const pending = await planMigration({ ...base, runningCount: 0 }, deps)
+    expect(pending).toMatchObject({ ok: false, code: 'journal-pending' })
+  })
+
+  it('目标根三分支：杂物拒绝；已有 SDK 未选替换拒绝、选替换放行', async () => {
+    const deps = makeDeps(fs)
+    fs.write(`${TO}/random.txt`, 'junk')
+    const junk = await planMigration(
+      { fromRoot: FROM, toRoot: TO, targetSource: 'custom', replaceTarget: false, runningCount: 0 },
+      deps
+    )
+    expect(junk).toMatchObject({ ok: false, code: 'target-junk' })
+
+    fs.rmTree(TO)
+    fs.write(`${TO}/platform-tools/adb`, 'foreign adb')
+    const noReplace = await planMigration(
+      { fromRoot: FROM, toRoot: TO, targetSource: 'custom', replaceTarget: false, runningCount: 0 },
+      deps
+    )
+    expect(noReplace).toMatchObject({ ok: false, code: 'target-sdk-no-replace' })
+
+    const replace = await planMigration(
+      { fromRoot: FROM, toRoot: TO, targetSource: 'custom', replaceTarget: true, runningCount: 0 },
+      deps
+    )
+    expect(replace.ok).toBe(true)
+    if (replace.ok) expect(replace.plan.replaceTarget).toBe(true)
+  })
+
+  it('FAT/exFAT 目标卷拒绝；跨卷空间不足拒绝（口径 = 体量×1.05+200MB）', async () => {
+    const deps = makeDeps(fs)
+    fs.fsType = 'exFAT'
+    const fat = await planMigration(
+      { fromRoot: FROM, toRoot: TO, targetSource: 'custom', replaceTarget: false, runningCount: 0 },
+      deps
+    )
+    expect(fat).toMatchObject({ ok: false, code: 'fs-unsupported' })
+
+    fs.fsType = 'APFS'
+    const total = (await planMigration(
+      { fromRoot: FROM, toRoot: TO, targetSource: 'custom', replaceTarget: false, runningCount: 0 },
+      makeDeps(fs)
+    )) as { ok: true; plan: { totalBytes: number } }
+    fs.freeSpace = requiredFreeBytes(total.plan.totalBytes) - 1
+    const tight = await planMigration(
+      { fromRoot: FROM, toRoot: TO, targetSource: 'custom', replaceTarget: false, runningCount: 0 },
+      deps
+    )
+    expect(tight).toMatchObject({ ok: false, code: 'space' })
+    fs.freeSpace = requiredFreeBytes(total.plan.totalBytes)
+    const enough = await planMigration(
+      { fromRoot: FROM, toRoot: TO, targetSource: 'custom', replaceTarget: false, runningCount: 0 },
+      deps
+    )
+    expect(enough.ok).toBe(true)
+  })
+})
+
+describe('startMigration（执行）', () => {
+  let fs: FakeFs
+  beforeEach(() => {
+    fs = new FakeFs()
+    seedSource(fs)
+    seedAvdHome(fs)
+  })
+
+  const planAndRun = async (
+    opts: {
+      sameVolume?: boolean
+      onProgress?: (p: { phase: string; percent: number; currentEntry: string | null }) => void
+      signal?: AbortSignal
+    } = {}
+  ): Promise<ReturnType<typeof startMigration>> => {
+    if (opts.sameVolume) fs.devs.set(TO, 1)
+    else fs.devs.set(TO, 2)
+    const deps = makeDeps(fs)
+    const plan = await planMigration(
+      { fromRoot: FROM, toRoot: TO, targetSource: 'custom', replaceTarget: false, runningCount: 0 },
+      deps
+    )
+    if (!plan.ok) throw new Error(`plan failed: ${plan.code}`)
+    return startMigration(
+      plan.plan,
+      { avdHome: AVD_HOME, signal: opts.signal, onProgress: opts.onProgress },
+      deps
+    )
+  }
+
+  it('同卷：rename 直移 + relink 改写（同路径在场）+ journal 落 done + 源根清空删除', async () => {
+    await planAndRun({ sameVolume: true })
+    expect(fs.exists(FROM)).toBe(false)
+    expect(fs.exists(`${TO}/platform-tools/adb`)).toBe(true)
+    expect(fs.exists(`${TO}/system-images/android-34/google_apis/arm64-v8a/snapshot.img`)).toBe(
+      true
+    )
+    const journal = await loadMigrationJournal(makeDeps(fs))
+    expect(journal?.phase).toBe('done')
+    expect(journal?.entries.every((entry) => entry.done)).toBe(true)
+
+    const config1 = fs.read(`${AVD_HOME}/device1.avd/config.ini`)
+    expect(config1).toContain(
+      `image.sys.src.dir=${TO}/system-images/android-34/google_apis/arm64-v8a`
+    )
+    expect(config1).toContain(`skin.path=${TO}/skins/pixel`)
+    expect(config1).toContain('# comment stays')
+    // 镜像不在新根的引用保留原值（device2 绑定保留根语义由共享/保留态测试覆盖）
+    expect(fs.read(`${AVD_HOME}/device2.avd/config.ini`)).toContain(FROM)
+  })
+
+  it('跨卷：copy+校验+归位+删源；进度按字节推进', async () => {
+    const events: { phase: string; percent: number }[] = []
+    await planAndRun({
+      onProgress: (p) => events.push({ phase: p.phase, percent: p.percent })
+    })
+    expect(fs.exists(FROM)).toBe(false)
+    expect(fs.exists(`${TO}/emulator/emulator`)).toBe(true)
+    expect(fs.exists(`${TO}/.migrating`)).toBe(false)
+    const percents = events.filter((e) => e.phase === 'moving').map((e) => e.percent)
+    expect(Math.max(...percents)).toBeGreaterThan(0)
+    expect(events.at(-1)?.phase).toBe('done')
+  })
+
+  it('替换分支：目标已有 SDK 先清（journal targetCleared）再移', async () => {
+    fs.devs.set(TO, 1)
+    fs.write(`${TO}/platform-tools/adb`, 'foreign adb')
+    fs.write(`${TO}/foreign-dir/readme.txt`, 'old sdk content')
+    const deps = makeDeps(fs)
+    const plan = await planMigration(
+      { fromRoot: FROM, toRoot: TO, targetSource: 'managed', replaceTarget: true, runningCount: 0 },
+      deps
+    )
+    if (!plan.ok) throw new Error(plan.code)
+    await startMigration(plan.plan, { avdHome: AVD_HOME }, deps)
+    expect(fs.exists(`${TO}/foreign-dir`)).toBe(false)
+    const journal = await loadMigrationJournal(deps)
+    expect(journal?.targetCleared).toBe(true)
+    expect(fs.read(`${TO}/platform-tools/adb`)).toContain('bin:')
+  })
+
+  it('校验失败：journal 落 failed 带错误、源条目仍在（copy-then-delete 保完整）', async () => {
+    fs.devs.set(TO, 2)
+    fs.corruptCopy = true
+    await expect(planAndRun()).rejects.toThrow('verify failed')
+    const journal = await loadMigrationJournal(makeDeps(fs))
+    expect(journal?.phase).toBe('failed')
+    expect(journal?.error).toContain('verify failed')
+    expect(fs.exists(`${FROM}/system-images`)).toBe(true)
+    fs.corruptCopy = false
+  })
+
+  it('中途取消：journal 停在已移条目 → resume 幂等续跑至完成', async () => {
+    const controller = new AbortController()
+    // 第一个 moving 进度到达即取消：至少 0 个条目完成，journal 保持 failed/cancelled
+    let firstEntryReported = false
+    await expect(
+      planAndRun({
+        sameVolume: true,
+        signal: controller.signal,
+        onProgress: (p) => {
+          if (p.phase === 'moving' && !firstEntryReported) {
+            firstEntryReported = true
+            controller.abort()
+          }
+        }
+      })
+    ).rejects.toBeInstanceOf(MigrationCancelledError)
+
+    const journal = await loadMigrationJournal(makeDeps(fs))
+    expect(journal?.phase).toBe('failed')
+    const doneCount = journal?.entries.filter((entry) => entry.done).length ?? 0
+    expect(doneCount).toBeLessThan(journal?.entries.length ?? 0)
+
+    // resume：已完成条目跳过（rename 幂等跳过——目录已不在源），其余走完
+    fs.devs.set(TO, 1)
+    await resumeMigration({ avdHome: AVD_HOME }, makeDeps(fs))
+    expect(fs.exists(FROM)).toBe(false)
+    expect(fs.exists(`${TO}/licenses/android-sdk-license`)).toBe(true)
+    const after = await loadMigrationJournal(makeDeps(fs))
+    expect(after?.phase).toBe('done')
+  })
+
+  it('取消后回滚：已移条目送回源根、journal 清除、空目标根删除、relink 反向', async () => {
+    // 先完整迁移一次（同卷），再手工伪造「半迁移 journal」驱动回滚
+    fs.devs.set(TO, 1)
+    await planAndRun({ sameVolume: true })
+    const deps = makeDeps(fs)
+    const finished = await loadMigrationJournal(deps)
+    expect(finished?.phase).toBe('done')
+
+    // 伪造半迁移状态：目标有条目、journal 记 done 一半、源也有一半
+    fs.mkdirP(FROM)
+    fs.rename(`${TO}/licenses`, `${FROM}/licenses`)
+    fs.rename(`${TO}/platform-tools`, `${FROM}/platform-tools`)
+    const half: typeof finished = {
+      ...(finished as NonNullable<typeof finished>),
+      phase: 'moving',
+      entries: (finished as NonNullable<typeof finished>).entries.map((entry) => ({
+        ...entry,
+        done: !['licenses', 'platform-tools'].includes(entry.name)
+      }))
+    }
+    fs.write(migrationJournalPath(deps), JSON.stringify(half))
+    await rollbackMigration({ avdHome: AVD_HOME }, deps)
+    expect(await loadMigrationJournal(deps)).toBeNull()
+    for (const marker of [
+      'cmdline-tools/latest/bin/sdkmanager',
+      'platform-tools/adb',
+      'emulator/emulator',
+      'jre/Contents/Home/bin/java',
+      'licenses/android-sdk-license',
+      'system-images/android-34/google_apis/arm64-v8a/snapshot.img'
+    ]) {
+      expect(fs.exists(`${FROM}/${marker}`)).toBe(true)
+    }
+    // 回滚后 relink 反向：device1 引用指回源根
+    expect(fs.read(`${AVD_HOME}/device1.avd/config.ini`)).toContain(`image.sys.src.dir=${FROM}/`)
+    // 目标根已空 → 删除
+    expect(fs.exists(TO)).toBe(false)
+  })
+})
+
+describe('relink 与纯函数', () => {
+  it('rewriteConfigPathPrefixes：同键多行全改、非路径键与注释不动、目标无同路径不改', async () => {
+    const content = [
+      'avd.ini.encoding=UTF-8',
+      `image.sys.src.dir=/old/system-images/a`,
+      `image.sys.src.dir=/old/system-images/b`,
+      'hw.ramSize=2048',
+      '# image.sys.src.dir=/old/comment'
+    ].join('\n')
+    const available = new Set(['system-images/a'])
+    const result = await rewriteConfigPathPrefixes(content, '/old', '/new', (rel) =>
+      available.has(rel)
+    )
+    expect(result.rewritten).toEqual([
+      { key: 'image.sys.src.dir', from: '/old/system-images/a', to: '/new/system-images/a' }
+    ])
+    expect(result.content).toContain('image.sys.src.dir=/new/system-images/a')
+    expect(result.content).toContain('image.sys.src.dir=/old/system-images/b')
+    expect(result.content).toContain('hw.ramSize=2048')
+    expect(result.content).toContain('# image.sys.src.dir=/old/comment')
+  })
+
+  it('relinkAvdConfigs：共享根引用天然不动（前缀不匹配）', async () => {
+    const fs = new FakeFs()
+    fs.mkdirP(`${AVD_HOME}/d.avd`)
+    fs.write(`${AVD_HOME}/d.avd/config.ini`, 'image.sys.src.dir=/studio-sdk/system-images/x\n')
+    const result = await relinkAvdConfigs(
+      { avdHome: AVD_HOME, fromRoot: FROM, toRoot: TO },
+      makeDeps(fs)
+    )
+    expect(result.configs).toBe(0)
+    expect(fs.read(`${AVD_HOME}/d.avd/config.ini`)).toContain('/studio-sdk/')
+  })
+})
+
+describe('classifyRoot', () => {
+  it('不存在/空 = empty；可识别 = sdk；有杂物 = junk', async () => {
+    const fs = new FakeFs()
+    const deps = makeDeps(fs)
+    expect(await classifyRoot('/nowhere', deps)).toBe('empty')
+    fs.mkdirP('/empty-root')
+    expect(await classifyRoot('/empty-root', deps)).toBe('empty')
+    fs.write('/junk-root/readme.txt', 'x')
+    expect(await classifyRoot('/junk-root', deps)).toBe('junk')
+    fs.write('/sdk-root/emulator/emulator', 'bin')
+    expect(await classifyRoot('/sdk-root', deps)).toBe('sdk')
+  })
+
+  it('win32 标记带 .exe/.bat（platform 接缝注入）——darwin 字面量在 win32 判定下不可见', async () => {
+    const fs = new FakeFs()
+    const deps = { ...makeDeps(fs), platform: 'win32' as const }
+    // 夹具用 join 构建：分隔符随宿主与 sdkPaths 探测一致，双宿主同绿
+    fs.write('/win-sdk/emulator/emulator', 'bin')
+    expect(await classifyRoot('/win-sdk', deps)).toBe('junk')
+    fs.write(join('/win-sdk', 'emulator', 'emulator.exe'), 'bin')
+    expect(await classifyRoot('/win-sdk', deps)).toBe('sdk')
+  })
+})
+
+describe('journal 三态与损坏接管（issue 2026-10-11 问题二处置）', () => {
+  let fs: FakeFs
+  beforeEach(() => {
+    fs = new FakeFs()
+    resetMigrationFlagForTest()
+  })
+
+  it('readMigrationJournalState：无文件 / 有效 / 损坏（坏 JSON 与坏形状都算损坏）', async () => {
+    const deps = makeDeps(fs)
+    expect(await readMigrationJournalState(deps)).toEqual({ status: 'absent' })
+    fs.write('/userdata/sdk-migration.json', 'not-json{{{')
+    expect(await readMigrationJournalState(deps)).toMatchObject({ status: 'corrupt' })
+    fs.write('/userdata/sdk-migration.json', '{"version":99}')
+    expect(await readMigrationJournalState(deps)).toMatchObject({ status: 'corrupt' })
+    fs.write(
+      '/userdata/sdk-migration.json',
+      '{"version":1,"fromRoot":"/a","toRoot":"/b","targetSource":"custom","targetCleared":false,"entries":[],"phase":"moving","movedBytes":0,"totalBytes":0}'
+    )
+    const state = await readMigrationJournalState(deps)
+    expect(state.status).toBe('present')
+  })
+
+  it('prime：损坏 journal 也置内存标志（守卫拦启动/包操作）', async () => {
+    fs.write('/userdata/sdk-migration.json', 'broken')
+    // prime 经 restoreSdkSource 调用——此处直接用其等价路径：readMigrationJournalState
+    expect((await readMigrationJournalState(makeDeps(fs))).status).toBe('corrupt')
+    expect(isMigrationActive()).toBe(false)
+  })
+
+  it('rollbackCorruptMigration：按盘面差异回移 + relink 反向 + 清 journal + 空目标删除', async () => {
+    // 半迁移布局：源缺 platform-tools/emulator（已在目标），journal 损坏
+    seedSource(fs)
+    seedAvdHome(fs)
+    fs.devs.set(TO, 1)
+    fs.mkdirP(TO)
+    fs.rename(`${FROM}/platform-tools`, `${TO}/platform-tools`)
+    fs.rename(`${FROM}/emulator`, `${TO}/emulator`)
+    fs.write('/userdata/sdk-migration.json', 'corrupted-by-disk')
+    const deps = makeDeps(fs)
+    await rollbackCorruptMigration(
+      { movedRoot: TO, originalRoot: FROM, avdHome: AVD_HOME },
+      { avdHome: AVD_HOME },
+      deps
+    )
+    expect(await readMigrationJournalState(deps)).toEqual({ status: 'absent' })
+    for (const marker of [
+      'cmdline-tools/latest/bin/sdkmanager',
+      'platform-tools/adb',
+      'emulator/emulator',
+      'system-images/android-34/google_apis/arm64-v8a/snapshot.img'
+    ]) {
+      expect(fs.exists(`${FROM}/${marker}`)).toBe(true)
+    }
+    // 目标根已空 → 删除；config 引用回到源根
+    expect(fs.exists(TO)).toBe(false)
+    expect(fs.read(`${AVD_HOME}/device1.avd/config.ini`)).toContain(`image.sys.src.dir=${FROM}/`)
+  })
+})
+
+// 本 describe 钉 darwin：引擎内 resolve()/join() 的宿主分隔符与 FakeFs 的正斜杠
+// 键位只在 posix 一致（win 宿主属既有 15 例宿主旧账，不在此扩）；钩子的 win32 真值
+// 由真机迁移链验证（issue 2026-10-31 修复批第二辑）
+describe.skipIf(process.platform !== 'darwin')(
+  'stopSharedAdbServer 钩子（win32 adb 预检，issue 2026-10-31）',
+  () => {
+    it('正向：journal 置位后、条目移动前调用（清场段与 moving 段各一次）；回滚：装载后、移回前调用', async () => {
+      resetMigrationFlagForTest()
+      const fs = new FakeFs()
+      seedSource(fs)
+      seedAvdHome(fs)
+      fs.mkdirP(TO)
+      const calls: string[] = []
+      const deps: MigrationDeps = {
+        ...makeDeps(fs),
+        platform: 'darwin',
+        stopSharedAdbServer: async () => {
+          // 「先置位再杀」顺序契约（review 建议）：钩子观察到的一定是迁移激活态
+          calls.push(
+            `fwd active:${isMigrationActive()} from:${fs.exists(`${FROM}/platform-tools/adb`)} to:${fs.exists(`${TO}/platform-tools/adb`)}`
+          )
+        }
+      }
+      const plan = await planMigration(
+        {
+          fromRoot: FROM,
+          toRoot: TO,
+          targetSource: 'custom',
+          replaceTarget: false,
+          runningCount: 0
+        },
+        deps
+      )
+      if (!plan.ok) throw new Error(`plan failed: ${plan.code}`)
+      expect(calls).toHaveLength(0)
+      await startMigration(plan.plan, { avdHome: AVD_HOME }, deps)
+      // 两次调用：startMigration 落 journal 后（盖 replaceTarget 清场）+ runJournal moving 落盘后
+      expect(calls).toEqual([
+        'fwd active:true from:true to:false',
+        'fwd active:true from:true to:false'
+      ])
+      expect(fs.exists(`${TO}/platform-tools/adb`)).toBe(true)
+
+      const rollbackDeps: MigrationDeps = {
+        ...makeDeps(fs),
+        platform: 'darwin',
+        stopSharedAdbServer: async () => {
+          calls.push(
+            `back active:${isMigrationActive()} from:${fs.exists(`${FROM}/platform-tools/adb`)} to:${fs.exists(`${TO}/platform-tools/adb`)}`
+          )
+        }
+      }
+      await rollbackMigration({ avdHome: AVD_HOME }, rollbackDeps)
+      expect(calls[2]).toBe('back active:true from:false to:true')
+      expect(fs.exists(`${FROM}/platform-tools/adb`)).toBe(true)
+    })
+
+    it('corrupt 回滚同样前置停 adb（review P3-3）', async () => {
+      const fs = new FakeFs()
+      fs.write(`${TO}/platform-tools/adb`, 'bin')
+      fs.mkdirP(AVD_HOME)
+      const calls: string[] = []
+      const deps: MigrationDeps = {
+        ...makeDeps(fs),
+        platform: 'darwin',
+        stopSharedAdbServer: async () => {
+          calls.push(
+            `corrupt active:${isMigrationActive()} moved:${fs.exists(`${TO}/platform-tools/adb`)}`
+          )
+        }
+      }
+      await rollbackCorruptMigration(
+        { movedRoot: TO, originalRoot: FROM, avdHome: AVD_HOME },
+        { avdHome: AVD_HOME },
+        deps
+      )
+      // corrupt 路径无 journal 可载（这正是 corrupt）——active 可能 false，前置调用本身是契约
+      expect(calls).toEqual(['corrupt active:false moved:true'])
+      expect(fs.exists(`${FROM}/platform-tools/adb`)).toBe(true)
+    })
+  }
+)

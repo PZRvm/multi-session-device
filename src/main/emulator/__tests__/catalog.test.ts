@@ -1,0 +1,394 @@
+// @vitest-environment node
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
+import type { ImageApiVersion, ImageEntry } from '@shared/types'
+import {
+  classifyTags,
+  compareApiVersions,
+  fetchImageCatalog,
+  MANIFEST_SOURCES,
+  mergeCatalog,
+  parseApiVersion,
+  parseSysImgManifest,
+  scanLocalImages,
+  splitPackageName,
+  type LocalImageRecord
+} from '../catalog'
+
+/** 真实 manifest（批次 1/3 提取自 dl.google.com，2026-10） */
+const fixtureDir = join(__dirname, 'fixtures')
+const readManifest = (name: string): string =>
+  readFileSync(join(fixtureDir, 'manifests', `${name}.xml`), 'utf8')
+
+const playstoreEntries = parseSysImgManifest(readManifest('google_apis_playstore'))
+const wearEntries = parseSysImgManifest(readManifest('android-wear'))
+const automotiveEntries = parseSysImgManifest(readManifest('android-automotive'))
+
+describe('parseSysImgManifest（真实 manifest，结构化解析）', () => {
+  it('六源清单都能解析出条目', () => {
+    for (const source of MANIFEST_SOURCES) {
+      const entries = parseSysImgManifest(readManifest(source))
+      expect(entries.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('android-36.1 小版本：major/minor/extension 分开存，不转浮点', () => {
+    const entry = playstoreEntries.find(
+      (pkg) => pkg.packageName === 'system-images;android-36.1;google_apis_playstore;arm64-v8a'
+    )
+    expect(entry).toBeDefined()
+    expect(entry?.apiLevelText).toBe('36.1')
+    expect(entry?.extensionLevel).toBe(20)
+    expect(entry?.tagIds).toEqual(['google_apis_playstore'])
+  })
+
+  it('zip 下载三元组：size/sha1/相对 url 从 archives.complete 透出（直连下载的数据源）', () => {
+    const entry = playstoreEntries.find(
+      (pkg) => pkg.packageName === 'system-images;android-36.1;google_apis_playstore;arm64-v8a'
+    )
+    expect(entry?.sizeBytes).toBeGreaterThan(1_000_000_000)
+    expect(entry?.zipSha1).toMatch(/^[0-9a-f]{40}$/)
+    expect(entry?.zipUrl).toMatch(/^arm64-v8a-36\.1_r\d+\.zip$/)
+  })
+
+  it('同 API 的 ps16k 变体是独立包：服务相同、特征标签不同、包名不合并', () => {
+    const plain = playstoreEntries.find(
+      (pkg) => pkg.packageName === 'system-images;android-36;google_apis_playstore;arm64-v8a'
+    )
+    const ps16k = playstoreEntries.find(
+      (pkg) => pkg.packageName === 'system-images;android-36;google_apis_playstore_ps16k;arm64-v8a'
+    )
+    expect(plain).toBeDefined()
+    expect(ps16k).toBeDefined()
+    expect(ps16k?.tagIds).toContain('page_size_16kb')
+    expect(ps16k?.tagIds).toContain('google_apis_playstore')
+    expect(classifyTags(ps16k?.tagIds ?? []).services).toEqual(['google_play'])
+    expect(classifyTags(ps16k?.tagIds ?? []).featureTags).toEqual(['page_size_16kb'])
+  })
+
+  it('canary 条目带 codename（Preview 信号）', () => {
+    const canary = playstoreEntries.find((pkg) => /canary/.test(pkg.packageName))
+    if (canary !== undefined) {
+      expect(canary.codename).not.toBeNull()
+    }
+  })
+
+  it('wear 源：目录段带 -signed 后缀，服务标签是 android-wear', () => {
+    const wear = wearEntries.find((pkg) =>
+      pkg.packageName.includes('android-wear-signed;arm64-v8a')
+    )
+    expect(wear).toBeDefined()
+    expect(wear?.tagIds).toContain('android-wear')
+    expect(classifyTags(wear?.tagIds ?? []).services).toEqual(['wear'])
+  })
+
+  it('automotive 源：扩展平台 35x + 双服务标签', () => {
+    const auto = automotiveEntries.find((pkg) =>
+      pkg.packageName.startsWith('system-images;android-35-ext15;android-automotive;arm64-v8a')
+    )
+    expect(auto).toBeDefined()
+    expect(auto?.apiLevelText).toBe('35x')
+    const { services } = classifyTags(auto?.tagIds ?? [])
+    expect(services).toContain('automotive')
+    expect(services).toContain('google_apis')
+  })
+
+  it('x86_64 / x86 ABI 条目保留（进入不支持视图，不丢弃）', () => {
+    expect(playstoreEntries.some((pkg) => pkg.abi === 'x86_64')).toBe(true)
+    expect(parseSysImgManifest(readManifest('android-tv')).some((pkg) => pkg.abi === 'x86')).toBe(
+      true
+    )
+  })
+})
+
+describe('parseApiVersion / splitPackageName / compareApiVersions', () => {
+  it('整数、小版本、扩展平台（35x）、未知', () => {
+    expect(parseApiVersion('36')).toEqual({ major: 36, minor: null })
+    expect(parseApiVersion('36.1')).toEqual({ major: 36, minor: 1 })
+    expect(parseApiVersion('35x')).toEqual({ major: 35, minor: null })
+    expect(parseApiVersion(null)).toEqual({ major: null, minor: null })
+  })
+
+  it('包名四段拆解；非法包名 null', () => {
+    expect(splitPackageName('system-images;android-36.1;google_apis_playstore;arm64-v8a')).toEqual({
+      platformSegment: 'android-36.1',
+      tagSegment: 'google_apis_playstore',
+      abi: 'arm64-v8a'
+    })
+    expect(splitPackageName('platform-tools')).toBeNull()
+    expect(splitPackageName('system-images;android-36')).toBeNull()
+  })
+
+  it('API 结构化降序：36.1 > 36 > 35x(ext15) > 34', () => {
+    const at = (
+      platformSegment: string,
+      major: number | null,
+      minor: number | null,
+      ext: number | null = null
+    ): ImageApiVersion => ({
+      platformSegment,
+      major,
+      minor,
+      codename: null,
+      extensionLevel: ext,
+      baseExtension: null
+    })
+    const versions = [
+      at('android-34', 34, null),
+      at('android-35-ext15', 35, null, 15),
+      at('android-36', 36, null),
+      at('android-36.1', 36, 1)
+    ]
+    const sorted = [...versions].sort(compareApiVersions)
+    expect(sorted.map((v) => v.platformSegment)).toEqual([
+      'android-36.1',
+      'android-36',
+      'android-35-ext15',
+      'android-34'
+    ])
+  })
+})
+
+describe('scanLocalImages（点前缀免疫，review P2a）', () => {
+  const localDeps = {
+    readdir: async (dir: string): Promise<string[]> => {
+      if (dir.endsWith('system-images')) {
+        return ['android-36.1', '.download-foo.zip']
+      }
+      if (dir.endsWith('android-36.1')) {
+        return ['google_apis_playstore', 'google_apis_playstore.install-bak']
+      }
+      return ['arm64-v8a', '.unzipping']
+    },
+    readFile: async (): Promise<string> => {
+      throw new Error('不应读取任何点前缀条目')
+    },
+    exists: async () => true
+  }
+
+  it('点前缀的备份/临时目录不被扫描（即使含 package.xml 也不读）', async () => {
+    const local = await scanLocalImages('/sdk', localDeps)
+    expect(local.size).toBe(0)
+  })
+})
+
+describe('scanLocalImages（注入接缝）与 mergeCatalog', () => {
+  const PACKAGE_XML = readFileSync(
+    join(fixtureDir, 'system-images', 'android-36.1-playstore-package.xml'),
+    'utf8'
+  )
+
+  const localDeps = {
+    readdir: async (dir: string): Promise<string[]> => {
+      if (dir.endsWith('system-images')) return ['android-36.1']
+      if (dir.endsWith('android-36.1')) return ['google_apis_playstore']
+      return ['arm64-v8a']
+    },
+    readFile: async (path: string): Promise<string> => {
+      if (path.endsWith('package.xml')) return PACKAGE_XML
+      throw new Error('not found')
+    },
+    exists: async (path: string): Promise<boolean> => !path.endsWith('source.properties')
+  }
+
+  it('缺 source.properties / system.img 的半安装不算 installed', async () => {
+    const local = await scanLocalImages('/sdk', localDeps)
+    expect(local.size).toBe(1)
+    const record = local.get('system-images;android-36.1;google_apis_playstore;arm64-v8a')
+    expect(record?.verified).toBe(false)
+  })
+
+  it('完整安装（三件套齐）核验通过', async () => {
+    const local = await scanLocalImages('/sdk', {
+      ...localDeps,
+      exists: async () => true
+    })
+    expect(local.get('system-images;android-36.1;google_apis_playstore;arm64-v8a')?.verified).toBe(
+      true
+    )
+  })
+
+  it('合并：远端条目取本地核验标记；本地独有条目补进目录（local-only）', () => {
+    const remoteEntry = (pkg: (typeof playstoreEntries)[number]): ImageEntry => ({
+      packageName: pkg.packageName,
+      displayName: pkg.displayName ?? pkg.packageName,
+      api: {
+        platformSegment: splitPackageName(pkg.packageName)?.platformSegment ?? '',
+        major: parseApiVersion(pkg.apiLevelText).major,
+        minor: parseApiVersion(pkg.apiLevelText).minor,
+        codename: pkg.codename,
+        extensionLevel: pkg.extensionLevel,
+        baseExtension: pkg.baseExtension
+      },
+      services: classifyTags(pkg.tagIds).services,
+      featureTags: classifyTags(pkg.tagIds).featureTags,
+      tagIds: pkg.tagIds,
+      abi: pkg.abi,
+      channel: pkg.channel,
+      revision: pkg.revision,
+      sizeBytes: pkg.sizeBytes,
+      zipUrl: pkg.zipUrl,
+      zipSha1: pkg.zipSha1,
+      installed: false,
+      source: 'remote+local' as const
+    })
+    const remote = playstoreEntries.filter((pkg) => pkg.abi === 'arm64-v8a').map(remoteEntry)
+    const verified: LocalImageRecord = {
+      packageName: 'system-images;android-36.1;google_apis_playstore;arm64-v8a',
+      displayName: null,
+      apiLevelText: '36.1',
+      extensionLevel: 20,
+      tagIds: ['google_apis_playstore'],
+      abi: 'arm64-v8a',
+      revision: null,
+      verified: true
+    }
+    const ghost: LocalImageRecord = {
+      ...verified,
+      packageName: 'system-images;android-33;default;arm64-v8a'
+    }
+    const merged = mergeCatalog(
+      remote,
+      new Map([
+        [verified.packageName, verified],
+        [ghost.packageName, ghost]
+      ])
+    )
+    expect(merged.find((e) => e.packageName === verified.packageName)?.installed).toBe(true)
+    const localOnly = merged.find((e) => e.packageName === ghost.packageName)
+    expect(localOnly?.source).toBe('local-only')
+    expect(localOnly?.installed).toBe(true)
+  })
+})
+
+describe('fetchImageCatalog（离线与部分失败）', () => {
+  it('全部源失败：offline + 空目录', async () => {
+    const result = await fetchImageCatalog('/sdk', {
+      fetcher: async () => {
+        throw new Error('network down')
+      },
+      readdir: async () => {
+        throw new Error('no dir')
+      }
+    })
+    expect(result.offline).toBe(true)
+    expect(result.sourceWarnings).toHaveLength(MANIFEST_SOURCES.length)
+    expect(result.images).toEqual([])
+  })
+
+  it('部分源失败：其余来源保留 + 警告', async () => {
+    const result = await fetchImageCatalog('/sdk', {
+      fetcher: async (url: string) => {
+        if (url.includes('android-wear')) throw new Error('503')
+        return readManifest(
+          url.includes('google_apis_playstore') ? 'google_apis_playstore' : 'android'
+        )
+      },
+      readdir: async () => {
+        throw new Error('no dir')
+      }
+    })
+    expect(result.offline).toBe(false)
+    expect(result.sourceWarnings.some((w) => w.includes('android-wear'))).toBe(true)
+    expect(result.images.length).toBeGreaterThan(0)
+  })
+})
+
+describe('fetchImageCatalog localOnly（共享只读态，plan 2026-10-12）', () => {
+  const localImage: LocalImageRecord = {
+    packageName: 'system-images;android-34;google_apis;arm64-v8a',
+    apiLevelText: '34',
+    extensionLevel: null,
+    tagIds: ['google_apis'],
+    abi: 'arm64-v8a',
+    displayName: 'Android 34 (Google APIs)',
+    revision: null,
+    verified: true
+  }
+
+  it('不触 manifest fetcher（离线可用）；结果只含本地核验条目且 installed 取核验值', async () => {
+    const fetcher = vi.fn(async () => {
+      throw new Error('should not fetch')
+    })
+    const dirs = new Map<string, string[]>([
+      ['/sdk/system-images', ['android-34']],
+      ['/sdk/system-images/android-34', ['google_apis']],
+      ['/sdk/system-images/android-34/google_apis', ['arm64-v8a']]
+    ])
+    const result = await fetchImageCatalog(
+      '/sdk',
+      {
+        fetcher,
+        readdir: async (path: string) => {
+          const names = dirs.get(path)
+          if (names === undefined) throw new Error('no dir')
+          return names
+        },
+        readFile: async (path: string) => {
+          if (!path.endsWith('package.xml')) throw new Error('no file')
+          return `<repository><localPackage path="system-images;android-34;google_apis;arm64-v8a"><display-name>Android 34 (Google APIs)</display-name><type-details><api-level>34</api-level><tag><id>google_apis</id></tag></type-details></localPackage></repository>`
+        },
+        exists: async (path: string) =>
+          path.endsWith('system.img') || path.endsWith('source.properties')
+      },
+      { localOnly: true }
+    )
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(result.offline).toBe(false)
+    expect(result.sourceWarnings).toEqual([])
+    expect(result.images.map((entry) => entry.packageName)).toEqual([localImage.packageName])
+    expect(result.images[0].installed).toBe(true)
+  })
+})
+
+describe('win32 目录过滤（plan 2026-10-22-windows-emulator-env）', () => {
+  // 两 ABI 并存的本地扫描桩：system-images/android-34/google_apis/{arm64-v8a,x86_64}
+  const dirs = new Map<string, string[]>([
+    ['/sdk/system-images', ['android-34']],
+    ['/sdk/system-images/android-34', ['google_apis']],
+    ['/sdk/system-images/android-34/google_apis', ['arm64-v8a', 'x86_64']]
+  ])
+  const readFile = async (path: string): Promise<string> => {
+    if (!path.endsWith('package.xml')) throw new Error('no file')
+    const abi = path.includes('x86_64') ? 'x86_64' : 'arm64-v8a'
+    return `<repository><localPackage path="system-images;android-34;google_apis;${abi}"><display-name>Android 34 (Google APIs)</display-name><type-details><api-level>34</api-level><tag><id>google_apis</id></tag></type-details></localPackage></repository>`
+  }
+  const scanDeps = {
+    readdir: async (path: string) => {
+      const names = dirs.get(path)
+      if (names === undefined) throw new Error('no dir')
+      return names
+    },
+    readFile,
+    exists: async (path: string) =>
+      path.endsWith('system.img') || path.endsWith('source.properties')
+  }
+
+  it('win32 localOnly：合并结果只留 x86_64（本地扫描两 ABI 并存）', async () => {
+    const result = await fetchImageCatalog(
+      '/sdk',
+      { ...scanDeps, platform: 'win32' },
+      { localOnly: true }
+    )
+    expect(result.images).toHaveLength(1)
+    expect(result.images[0].abi).toBe('x86_64')
+  })
+
+  it('win32 全量路径（源失败保留本地）：同样过滤——远端 manifest 不可达不改变政策', async () => {
+    const result = await fetchImageCatalog('/sdk', {
+      ...scanDeps,
+      platform: 'win32',
+      fetcher: async () => {
+        throw new Error('network down')
+      }
+    })
+    expect(result.images).toHaveLength(1)
+    expect(result.images[0].abi).toBe('x86_64')
+  })
+
+  it('缺省平台（mac 现状回归）：两 ABI 全量列出，不过滤', async () => {
+    const result = await fetchImageCatalog('/sdk', scanDeps, { localOnly: true })
+    expect(result.images.map((entry) => entry.abi).sort()).toEqual(['arm64-v8a', 'x86_64'])
+  })
+})

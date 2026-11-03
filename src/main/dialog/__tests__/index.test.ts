@@ -1,0 +1,205 @@
+// @vitest-environment node
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolve } from 'node:path'
+
+const mocks = vi.hoisted(() => ({
+  handle: vi.fn(),
+  showMessageBox: vi.fn<
+    (
+      windowOrOptions: unknown,
+      options?: unknown
+    ) => Promise<{
+      response: number
+      checkboxChecked: boolean
+    }>
+  >(async () => ({
+    response: 0,
+    checkboxChecked: false
+  })),
+  fromWebContents: vi.fn(() => null),
+  showItemInFolder: vi.fn(async () => undefined),
+  openExternal: vi.fn(async () => undefined),
+  appGetPath: vi.fn(() => '/userdata')
+}))
+vi.mock('electron', () => ({
+  ipcMain: { handle: mocks.handle },
+  dialog: { showMessageBox: mocks.showMessageBox },
+  BrowserWindow: { fromWebContents: mocks.fromWebContents },
+  shell: { showItemInFolder: mocks.showItemInFolder, openExternal: mocks.openExternal },
+  app: { getPath: mocks.appGetPath }
+}))
+vi.mock('../../app-icon', () => ({ appIcon: undefined }))
+vi.mock('../../locale', () => ({
+  msg: (key: string, params?: Record<string, unknown>): string =>
+    key === 'dialogDetailTruncated'
+      ? `TRUNC(${params?.omitted})`
+      : key === 'invalidDialogOptions'
+        ? 'INVALID'
+        : `MSG(${key})`
+}))
+
+import { isPathInsideBase, registerDialogIpc } from '../index'
+
+const fakeEvent = { sender: { id: 7 } }
+const handlerOf =
+  (channel: string): ((payload: unknown) => Promise<unknown>) =>
+  (payload: unknown) =>
+    mocks.handle.mock.calls.find(([name]) => name === channel)![1](fakeEvent, payload)
+
+const shownOptions = (): { detail?: string } =>
+  (mocks.showMessageBox.mock.calls[0][0] ??
+    (mocks.showMessageBox.mock.calls[0][1] as { detail?: string })) as { detail?: string }
+
+describe('dialog:show detail 行数预算（超长弹窗截断，2026-10-12 用户报障）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // clearAllMocks 清掉 getPath 的实现——shell 白名单依赖它，逐用例重设
+    mocks.appGetPath.mockImplementation(() => '/userdata')
+    registerDialogIpc()
+  })
+
+  const base = {
+    title: 't',
+    message: 'm',
+    buttons: ['ok'],
+    cancelId: 0
+  }
+
+  it('40 行以内原样透传；无 detail 不添加', async () => {
+    await handlerOf('dialog:show')({ ...base, detail: 'a\nb\nc' })
+    expect(shownOptions().detail).toBe('a\nb\nc')
+    mocks.showMessageBox.mockClear()
+    await handlerOf('dialog:show')(base)
+    expect(shownOptions().detail).toBeUndefined()
+  })
+
+  it('超过 40 行：截到 40 行并附省略说明（按钮回到屏内）', async () => {
+    const detail = Array.from({ length: 120 }, (_, i) => `line-${i}`).join('\n')
+    await handlerOf('dialog:show')({ ...base, detail })
+    const shown = shownOptions().detail as string
+    const lines = shown.split('\n')
+    expect(lines).toHaveLength(41)
+    expect(lines[39]).toBe('line-39')
+    expect(lines[40]).toBe('TRUNC(80)')
+  })
+})
+
+describe('shell:show-item-in-folder 白名单（review P1）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.appGetPath.mockImplementation(() => '/userdata')
+    registerDialogIpc()
+  })
+
+  const show = (payload: unknown): Promise<unknown> =>
+    mocks.handle.mock.calls
+      .filter(([name]) => name === 'shell:show-item-in-folder')
+      .at(-1)![1](fakeEvent, payload)
+
+  it('avdHome 内放行；avdHome 外拒绝', async () => {
+    // 断言按 resolve 计算期望：win 宿主会补盘符（分隔符归一修复后本用例在 win 也绿）
+    await show({ path: '/userdata/avd-home/x.ini' })
+    expect(mocks.showItemInFolder).toHaveBeenCalledWith(resolve('/userdata/avd-home/x.ini'))
+
+    mocks.showItemInFolder.mockClear()
+    await expectShellReject(() => show({ path: '/etc/passwd' }))
+    expect(mocks.showItemInFolder).not.toHaveBeenCalled()
+  })
+
+  it('isPathInsideBase：win32 反斜杠路径界内放行、跨界拒绝——分隔符归一（merge review P2，双宿主纯函数）', () => {
+    expect(isPathInsideBase('C:\\avd-home\\a\\x.ini', 'C:\\avd-home')).toBe(true)
+    expect(isPathInsideBase('C:\\avd-home', 'C:\\avd-home')).toBe(true)
+    // 同前缀不同目录不算界内
+    expect(isPathInsideBase('C:\\avd-home-evil\\x', 'C:\\avd-home')).toBe(false)
+    expect(isPathInsideBase('C:\\Windows\\system32', 'C:\\avd-home')).toBe(false)
+    // darwin 形态行为不变
+    expect(isPathInsideBase('/userdata/avd-home/x.ini', '/userdata/avd-home')).toBe(true)
+    expect(isPathInsideBase('/etc/passwd', '/userdata/avd-home')).toBe(false)
+  })
+
+  it('`..` 穿越被归一化后拒绝（review P1 主场景）', async () => {
+    await expectShellReject(() => show({ path: '/userdata/avd-home/a/../../secrets.txt' }))
+    expect(mocks.showItemInFolder).not.toHaveBeenCalled()
+  })
+
+  it('NUL 字节拒绝', async () => {
+    await expectShellReject(() => show({ path: '/userdata/avd-home/a\0b' }))
+  })
+})
+
+/** rejects.toThrow 修饰符在本文件的 electron mock 组合下不稳定——显式 try/catch 断言 */
+async function expectShellReject(run: () => Promise<unknown>): Promise<void> {
+  let threw = false
+  try {
+    await run()
+  } catch (error) {
+    threw = true
+    expect(error instanceof Error ? error.message : String(error)).toMatch(/shellPathRejected/)
+  }
+  expect(threw).toBe(true)
+}
+
+/** process.platform 覆写助手（深链通道的 win32 门测试共用） */
+const withPlatform = async <T>(platform: string, run: () => Promise<T>): Promise<T> => {
+  const original = process.platform
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+  try {
+    return await run()
+  } finally {
+    Object.defineProperty(process, 'platform', { value: original, configurable: true })
+  }
+}
+
+describe('shell:open-windows-features 深链（plan 2026-10-22-windows-emulator-env）', () => {
+  beforeEach(() => {
+    mocks.handle.mockClear()
+    mocks.openExternal.mockClear()
+    registerDialogIpc()
+  })
+
+  it('win32：放行且 URI 固定为 Windows 功能页（无 renderer 入参面）', async () => {
+    await withPlatform(
+      'win32',
+      () => handlerOf('shell:open-windows-features')(undefined) as Promise<void>
+    )
+    expect(mocks.openExternal).toHaveBeenCalledTimes(1)
+    expect(mocks.openExternal).toHaveBeenCalledWith('ms-settings:windows-optionalfeatures')
+  })
+
+  it('非 win32：按通道拒绝（异常路径——该 code 仅 win32 收口产生）', async () => {
+    await expect(
+      withPlatform(
+        'darwin',
+        () => handlerOf('shell:open-windows-features')(undefined) as Promise<void>
+      )
+    ).rejects.toThrow('win32 only')
+    expect(mocks.openExternal).not.toHaveBeenCalled()
+  })
+})
+
+describe('shell:open-windows-defender 深链（plan 2026-10-23-windows-settings-finish）', () => {
+  beforeEach(() => {
+    mocks.handle.mockClear()
+    mocks.openExternal.mockClear()
+    registerDialogIpc()
+  })
+
+  it('win32：放行且 URI 固定为 Windows 安全中心（无 renderer 入参面）', async () => {
+    await withPlatform(
+      'win32',
+      () => handlerOf('shell:open-windows-defender')(undefined) as Promise<void>
+    )
+    expect(mocks.openExternal).toHaveBeenCalledTimes(1)
+    expect(mocks.openExternal).toHaveBeenCalledWith('ms-settings:windowsdefender')
+  })
+
+  it('非 win32：按通道拒绝', async () => {
+    await expect(
+      withPlatform(
+        'darwin',
+        () => handlerOf('shell:open-windows-defender')(undefined) as Promise<void>
+      )
+    ).rejects.toThrow('win32 only')
+    expect(mocks.openExternal).not.toHaveBeenCalled()
+  })
+})
