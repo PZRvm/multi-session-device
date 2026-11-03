@@ -17,7 +17,7 @@ created: 2026-10-16
 - 两台专用临时 AVD：API 36 google_apis arm64，1080×2400，host GPU、2 核/2048MiB、无头冷启动，独立 AVD_HOME。
 - 真机：同一台荣耀 EBG_AN00，SDK 31；USB 与 Wi-Fi serial 对应同一实体，实测物理标识一致。只持久化能力与格式，不保存真机屏幕像素。
 - 测试源为自建 `com.foreunit.recordingpoc`：移动色条、20 秒横竖屏轮换、2 秒周期闪光与短音；闪光以 AudioTimestamp 的实际播放时钟校准。
-- ffmpeg/ffprobe 仅为独立测试仪器，不成为应用依赖。同步结果以 10ms 分辨率采样闪光/脉冲，测量脚本与测试源都在 [探针目录](../../../scripts/recording-poc/README.md)。
+- ffmpeg/ffprobe 仅为独立测试仪器，不成为应用依赖。同步结果以 10ms 分辨率采样闪光/脉冲，测量脚本与测试源见[历史探针目录](https://github.com/PZRvm/multi-session-device/tree/0e1b24a4d8bbf077c7ce12afbd743fc12f71c5c0/scripts/recording-poc)。该目录于 2026-11-03 按用户要求从当前树移除，历史实验结果保持原样。
 
 ## 结果
 

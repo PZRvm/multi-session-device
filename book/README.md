@@ -349,6 +349,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-03-github-publication.md](notes/summary/2026-11/2026-11-03-github-publication.md) — 将含 MIT 许可的 472 文件快照首次发布到 GitHub dev，保留本地历史并排除 book
 - [2026-11-03-mit-license.md](notes/summary/2026-11/2026-11-03-mit-license.md) — 项目根目录新增标准 MIT 许可证，版权署名为 2026 PZRvm
 - [2026-11-03-readme-local-assets.md](notes/summary/2026-11/2026-11-03-readme-local-assets.md) — 设备与浏览器三语 README 的十二种 Shields 徽章改为仓库本地 SVG，设备首页使用带背景 logo
+- [2026-11-03-repository-tools-cleanup.md](notes/summary/2026-11/2026-11-03-repository-tools-cleanup.md) — 删除独立 e2e 与录屏实验脚本，保留六个必要工具，并在三语 README 中致谢 BoCode
 - [2026-11-03-screenshot-editor-layout.md](notes/summary/2026-11/2026-11-03-screenshot-editor-layout.md) — 图片编辑窗下限升至 720px，左右工具区与 macOS 原生三灯随高度居中、左侧工具组水平居中，截图气泡去掉复制成功文本
 - [2026-11-03-screenshot-review-fixes.md](notes/summary/2026-11/2026-11-03-screenshot-review-fixes.md) — 修复页面缩放后的原生三灯偏移与工作区元数据异常；真实 Electron 缩放验证、配置加载及全仓 1560 项测试通过
 - [2026-11-03-wireless-runtime-investigation.md](notes/summary/2026-11/2026-11-03-wireless-runtime-investigation.md) — 三星手机转无线失败来自共享 ADB 服务被 macOS 禁止本地网络访问，手工重启服务后应用显示无线已连接，shell 实测通过
@@ -468,6 +469,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-03-github-history-sync.md](plans/2026-11-03-github-history-sync.md) — 将含 book 的完整本地 dev 历史与公开仓库对齐，保留所有原提交并通过普通推送同步
 - [2026-11-03-github-publication.md](plans/2026-11-03-github-publication.md) — 为 GitHub 发布准备三语 README，并确保发布内容和历史均不含 book
 - [2026-11-03-mit-license.md](plans/2026-11-03-mit-license.md) — 按用户选择为项目添加 MIT 许可证，版权署名为 PZRvm
+- [2026-11-03-repository-tools-cleanup.md](plans/2026-11-03-repository-tools-cleanup.md) — 清理 GitHub 上的 e2e 与脚本目录，同时保留必要构建和检查能力，并在三语 README 致谢 BoCode
 - [2026-11-03-screenshot-editor-layout.md](plans/2026-11-03-screenshot-editor-layout.md) — 图片编辑窗口最小宽度调为 720px，左右工具区居中，并移除截图气泡的复制成功文本
 - [2026-11-03-screenshot-review-fixes.md](plans/2026-11-03-screenshot-review-fixes.md) — 修复图片编辑页缩放后的原生按钮定位，以及工作区端口元数据异常阻断配置的问题
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
@@ -483,4 +485,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 377 documents -->
+<!-- 379 documents -->

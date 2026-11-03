@@ -126,6 +126,7 @@ scripts/        # 建置、檢查與維護工具
 
 ## 致謝
 
+- [BoCode](https://github.com/Focus695/BoCode/) — 開發工作流程、文件範本與知識庫維護腳本。
 - [scrcpy](https://github.com/Genymobile/scrcpy) / [Tango](https://github.com/yume-chan/ya-webadb) — Android 通訊與畫面鏡像基礎。
 - [Electron](https://github.com/electron/electron) / [electron-vite](https://github.com/alex8088/electron-vite) — 桌面執行環境與建置工具。
 - [React](https://github.com/facebook/react) / [Konva](https://github.com/konvajs/konva) / [Mediabunny](https://github.com/Vanilagy/mediabunny) — 介面、截圖編輯與媒體處理。

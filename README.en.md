@@ -126,6 +126,7 @@ For feature requests, describe the testing scenario. Run type checks, lint, and 
 
 ## Acknowledgments
 
+- [BoCode](https://github.com/Focus695/BoCode/) — Development workflows, documentation templates, and knowledge base maintenance scripts.
 - [scrcpy](https://github.com/Genymobile/scrcpy) / [Tango](https://github.com/yume-chan/ya-webadb) — Android communication and mirroring foundations.
 - [Electron](https://github.com/electron/electron) / [electron-vite](https://github.com/alex8088/electron-vite) — Desktop runtime and build tooling.
 - [React](https://github.com/facebook/react) / [Konva](https://github.com/konvajs/konva) / [Mediabunny](https://github.com/Vanilagy/mediabunny) — UI, screenshot editing, and media processing.
