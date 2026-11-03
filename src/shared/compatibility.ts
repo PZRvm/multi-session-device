@@ -1,0 +1,129 @@
+import type { DeviceFormFactor, DeviceProfile, ImageEntry } from './types'
+import { ERRORS_COPY, format, type SettingsLocale } from './i18n'
+
+/**
+ * 镜像兼容性判定（plan 设计 2）：supported | unsupported | unknown + 中文原因。
+ * 判定维度：宿主 ABI（win32 → x86_64，其余 → arm64-v8a，单源 hostImageAbi）、
+ * 形态与镜像服务匹配、画像 API 范围、Preview 开放策略。
+ * 不支持项的展示开关无法改变创建资格——守卫独立于此模块。
+ */
+
+/** 宿主可运行的镜像 ABI 单源（plan 2026-10-22-windows-emulator-env 设计 1）：
+ *  win32 宿主是 x86_64，Apple Silicon 是 arm64；未知平台随 mac 缺省。 */
+export const hostImageAbi = (platform: NodeJS.Platform): string =>
+  platform === 'win32' ? 'x86_64' : 'arm64-v8a'
+
+export interface CompatibilityVerdict {
+  status: 'supported' | 'unsupported' | 'unknown'
+  reasons: string[]
+}
+
+const supported = (reasons: string[] = []): CompatibilityVerdict => ({
+  status: 'supported',
+  reasons
+})
+
+const unsupported = (...reasons: string[]): CompatibilityVerdict => ({
+  status: 'unsupported',
+  reasons
+})
+
+const unknown = (...reasons: string[]): CompatibilityVerdict => ({
+  status: 'unknown',
+  reasons
+})
+
+/** 形态 ↔ 镜像服务匹配矩阵（desktop 本期无官方镜像源；unknown 形态不猜） */
+const FORM_FACTOR_SERVICES: Partial<Record<DeviceFormFactor, Set<string>>> = {
+  phone: new Set(['aosp', 'google_apis', 'google_play']),
+  tablet: new Set(['aosp', 'google_apis', 'google_play']),
+  wear: new Set(['wear']),
+  tv: new Set(['tv']),
+  automotive: new Set(['automotive'])
+}
+
+/**
+ * 画像 × 镜像兼容性。emulator 最低版本依赖由安装核验侧（source.properties
+ * 的 Pkg.Dependencies）在创建时核对，不在此重复。
+ */
+export const assessImageCompatibility = (
+  profile: Pick<DeviceProfile, 'formFactor' | 'apiMin' | 'apiMax' | 'creatable'>,
+  image: Pick<ImageEntry, 'abi' | 'services' | 'api'>,
+  locale: SettingsLocale = 'zh-CN',
+  hostAbi: string = 'arm64-v8a'
+): CompatibilityVerdict => {
+  const reasons: string[] = []
+  const m = ERRORS_COPY[locale]
+
+  if (image.abi !== hostAbi) {
+    reasons.push(format(m.compatCrossArch, { abi: image.abi }))
+    return unsupported(...reasons)
+  }
+
+  if (image.api.codename !== null) {
+    reasons.push(format(m.compatPreview, { codename: image.api.codename }))
+    return unsupported(...reasons)
+  }
+
+  if (!profile.creatable) {
+    reasons.push(m.compatNotCreatable)
+    return unsupported(...reasons)
+  }
+
+  const allowed = FORM_FACTOR_SERVICES[profile.formFactor]
+  if (allowed === undefined) {
+    if (profile.formFactor === 'unknown') {
+      reasons.push(m.compatUnknownForm)
+    } else if (profile.formFactor === 'desktop') {
+      reasons.push(m.compatDesktopForm)
+    }
+    return unknown(...reasons)
+  }
+
+  const matched = image.services.find((service) => allowed.has(service))
+  if (matched === undefined) {
+    const need = [...allowed].join(' / ')
+    const has = image.services.length > 0 ? image.services.join(' / ') : m.compatNoServiceTag
+    reasons.push(format(m.compatServiceMismatch, { has, need }))
+    return unsupported(...reasons)
+  }
+
+  const { major, minor } = image.api
+  if (profile.apiMin !== null && major !== null) {
+    if (major < profile.apiMin) {
+      reasons.push(format(m.compatApiBelowMin, { major, min: profile.apiMin }))
+      return unsupported(...reasons)
+    }
+  } else if (profile.apiMin !== null && major === null) {
+    reasons.push(m.compatApiUnparsed)
+  }
+  if (profile.apiMax !== null && major !== null && major > profile.apiMax) {
+    reasons.push(format(m.compatApiAboveMax, { major, max: profile.apiMax }))
+    return unsupported(...reasons)
+  }
+  if (major === null) {
+    return unknown(...reasons, m.compatApiUnparsedShort)
+  }
+  if (minor !== null) {
+    reasons.push(format(m.compatMinorNote, { major, minor }))
+  }
+
+  return supported(reasons)
+}
+
+/**
+ * 共享态画像可用性（plan 2026-10-12-shared-mode-wizard-installed-only）：
+ * 存在「已装 ∧ 兼容 supported」的镜像——向导画像页据此收窄（managed/custom
+ * 全量展示不走此判定）。判定与逐镜像 assessImageCompatibility 同源，不另造语义。
+ */
+export const profileHasSupportedImage = (
+  profile: Pick<DeviceProfile, 'formFactor' | 'apiMin' | 'apiMax' | 'creatable'>,
+  images: Array<Pick<ImageEntry, 'abi' | 'services' | 'api' | 'installed'>>,
+  locale: SettingsLocale = 'zh-CN',
+  hostAbi: string = 'arm64-v8a'
+): boolean =>
+  images.some(
+    (image) =>
+      image.installed === true &&
+      assessImageCompatibility(profile, image, locale, hostAbi).status === 'supported'
+  )

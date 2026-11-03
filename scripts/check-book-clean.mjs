@@ -12,6 +12,7 @@
  * 有任何违规：打印清单，退出码 1。零依赖，需要 git（只读，不改任何东西）。
  */
 import { spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -31,6 +32,12 @@ if (junk.length > 0) {
   for (const f of junk) console.error(`  - ${f}`)
   console.error('处理：git rm --cached <文件>，并确认 .gitignore 覆盖它。')
   process.exit(1)
+}
+
+// 公开发布副本不携带 book，仍保留上面的 git 垃圾文件检查。
+if (!existsSync(join(ROOT, 'book'))) {
+  console.log('git 树无垃圾文件；当前发布副本不含 book，跳过索引检查。')
+  process.exit(0)
 }
 
 const index = spawnSync(process.execPath, [GEN, '--check'], { cwd: ROOT, stdio: 'inherit' })

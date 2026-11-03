@@ -1,0 +1,1334 @@
+// @vitest-environment node
+import { EventEmitter } from 'node:events'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { BrowserWindow } from 'electron'
+import { AdbScrcpyOptionsLatest } from '@yume-chan/adb-scrcpy'
+import { ScrcpyInstanceId } from '@yume-chan/scrcpy'
+import { IPC_CHANNELS } from '@shared/ipc-channels'
+import type { ScrcpyMediaStreamPacket } from '@yume-chan/scrcpy'
+import type { ScreenInput, ScreenPacketMessage, ScreenStateMessage } from '@shared/types'
+import { createScrcpyManager, MAX_UNACKED_PACKETS } from '../index'
+import type { Transport, TransportDeps } from '../transport'
+import { SafeControlMessageWriter } from '../controlWriter'
+
+class FakeSocket extends EventEmitter {
+  written: Buffer[] = []
+  destroyed = false
+  write = (chunk: Buffer, cb?: (error?: Error) => void): boolean => {
+    this.written.push(chunk)
+    cb?.()
+    return true
+  }
+  end = (cb?: () => void): void => {
+    cb?.()
+  }
+  destroy = (): void => {
+    this.destroyed = true
+    this.emit('close')
+  }
+}
+
+interface PushableTransport extends Transport {
+  __push: (packet: ScrcpyMediaStreamPacket) => void
+}
+
+const mocks = vi.hoisted(() => ({
+  app: { isPackaged: false, getAppPath: () => '/app' },
+  handle: vi.fn(),
+  windowRef: { current: null as BrowserWindow | null }
+}))
+
+vi.mock('electron', () => ({
+  app: mocks.app,
+  ipcMain: { handle: mocks.handle },
+  BrowserWindow: {}
+}))
+vi.mock('../../emulator/adb', () => ({ scrubAdbEnv: (env: NodeJS.ProcessEnv) => env }))
+
+interface Harness {
+  manager: ReturnType<typeof createScrcpyManager>
+  transportOf: (serial: string) => PushableTransport
+  adbRun: ReturnType<typeof vi.fn>
+  setHost: (text: string | null) => void
+  writeHost: ReturnType<typeof vi.fn>
+  clipboardError: ReturnType<typeof vi.fn>
+}
+
+const importManager = async (): Promise<Harness> => {
+  const { createScrcpyManager } = await import('../index')
+
+  const transportsBySerial = new Map<string, PushableTransport>()
+  const fakeEstablish = vi.fn(async (deps: TransportDeps): Promise<Transport> => {
+    let pushController: ReadableStreamDefaultController<ScrcpyMediaStreamPacket> | null = null
+    const mediaStream = new ReadableStream<ScrcpyMediaStreamPacket>({
+      start: (controller) => {
+        pushController = controller
+      }
+    })
+    const options = new AdbScrcpyOptionsLatest<true>({
+      scid: new ScrcpyInstanceId(1),
+      audio: false,
+      tunnelForward: true,
+      clipboardAutosync: true
+    })
+    const transport: Transport = {
+      scid: '00000001',
+      serverProc: new EventEmitter() as Transport['serverProc'],
+      forwardSpec: 'tcp:12345',
+      videoSocket: new FakeSocket() as unknown as Transport['videoSocket'],
+      controlSocket: new FakeSocket() as unknown as Transport['controlSocket'],
+      mediaStream,
+      options: options as unknown as Transport['options'],
+      videoSize: { width: 1080, height: 2400 },
+      teardown: async () => {
+        try {
+          pushController?.close()
+        } catch {
+          // 已关
+        }
+      }
+    }
+    const pushable = transport as PushableTransport
+    pushable['__push'] = (packet) => {
+      pushController?.enqueue(packet)
+    }
+    transportsBySerial.set(deps.serial, pushable)
+    return transport
+  })
+
+  const adbRun = vi.fn(async () => ({ code: 0, stdout: '', stderr: '' }))
+  let hostText: string | null = null
+  const writeHost = vi.fn((text: string) => {
+    hostText = text
+  })
+  const clipboardError = vi.fn()
+  const manager = createScrcpyManager({
+    clipboard: {
+      readSnapshot: () => ({ text: hostText, formats: hostText === null ? [] : ['text/plain'] }),
+      writeText: writeHost,
+      reportError: clipboardError
+    },
+    adbPath: () => '/adb',
+    toolEnv: () => ({}),
+    getMainWindow: () => mocks.windowRef.current,
+    isMainSender: () => true,
+    runAdb: adbRun,
+    establish: fakeEstablish as unknown as (typeof import('../transport'))['establishTransport']
+  })
+  manager.registerIpc()
+  return {
+    manager,
+    adbRun,
+    writeHost,
+    clipboardError,
+    setHost: (text) => {
+      hostText = text
+    },
+    transportOf: (serial: string) => {
+      const transport = transportsBySerial.get(serial)
+      if (!transport) throw new Error(`无 transport：${serial}`)
+      return transport
+    }
+  }
+}
+
+const handlerFor = async (
+  channel: string
+): Promise<(event: unknown, raw: unknown) => Promise<unknown>> => {
+  const call = mocks.handle.mock.calls.find(([name]) => name === channel)
+  if (!call) throw new Error(`handler 未注册：${channel}`)
+  return call[1] as (event: unknown, raw: unknown) => Promise<unknown>
+}
+
+describe('ScrcpyManager（fake transport）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.windowRef.current = {
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    } as unknown as BrowserWindow
+  })
+
+  const collect = (): { states: ScreenStateMessage[]; packets: ScreenPacketMessage[] } => {
+    const send = (
+      mocks.windowRef.current!.webContents as unknown as { send: ReturnType<typeof vi.fn> }
+    ).send
+    const calls = send.mock.calls as Array<[string, unknown]>
+    return {
+      states: calls
+        .filter(([channel]) => channel === IPC_CHANNELS.screenState)
+        .map(([, payload]) => payload as ScreenStateMessage),
+      packets: calls
+        .filter(([channel]) => channel === IPC_CHANNELS.screenPacket)
+        .map(([, payload]) => payload as ScreenPacketMessage)
+    }
+  }
+
+  it('建会话：connecting → ready 状态推送；未激活视图不收包（后台只缓存）', async () => {
+    const { manager, transportOf } = await importManager()
+    await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+    await vi.waitFor(() => {
+      expect(collect().states.some((state) => state.status === 'ready')).toBe(true)
+    })
+    const ready = collect().states.find((state) => state.status === 'ready')!
+    expect(ready.format).toEqual({ codec: 'h264', width: 1080, height: 2400 })
+
+    transportOf('emulator-5554').__push({ type: 'configuration', data: new Uint8Array([1]) })
+    transportOf('emulator-5554').__push({
+      type: 'data',
+      pts: 0n,
+      keyframe: true,
+      data: new Uint8Array(10)
+    })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(collect().packets).toHaveLength(0)
+    await manager.destroyAll()
+  })
+
+  it('激活 → 突发回放（配置+链，带 viewToken）；实时包衔接 seq', async () => {
+    const { manager, transportOf } = await importManager()
+    await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+    const transport = transportOf('emulator-5554')
+    await vi.waitFor(() =>
+      expect(collect().states.some((state) => state.status === 'ready')).toBe(true)
+    )
+    transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+    transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+    transport.__push({ type: 'data', pts: 33n, keyframe: false, data: new Uint8Array(10) })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(collect().packets).toHaveLength(0) // 后台不转发
+
+    const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+    const state = (await activate({}, { id: 'd1', viewToken: 'vt-1' })) as ScreenStateMessage
+    expect(state.status).toBe('ready')
+
+    const burst = collect().packets
+    expect(burst).toHaveLength(3)
+    expect(burst.every((packet) => packet.viewToken === 'vt-1')).toBe(true)
+    expect(burst[0].type).toBe('configuration')
+
+    transport.__push({ type: 'data', pts: 66n, keyframe: false, data: new Uint8Array(10) })
+    await vi.waitFor(() => expect(collect().packets).toHaveLength(4))
+    expect(collect().packets[3].seq).toBe(collect().packets[2].seq + 1)
+    expect(collect().packets[3].viewToken).toBe('vt-1')
+    await manager.destroyAll()
+  })
+
+  it('ACK 清发送窗；超预算触发重同步突发；旧 token ACK 忽略', async () => {
+    const { manager, transportOf } = await importManager()
+    await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+    const transport = transportOf('emulator-5554')
+    await vi.waitFor(() =>
+      expect(collect().states.some((state) => state.status === 'ready')).toBe(true)
+    )
+    transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+    transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+    await new Promise((resolve) => setTimeout(resolve, 20)) // 等 reader 消化入缓存
+    const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+    await activate({}, { id: 'd1', viewToken: 'vt-1' })
+    const burst = collect().packets
+    expect(burst).toHaveLength(2)
+    const generation = burst[0].generation
+    const lastSeq = burst[1].seq
+
+    const ack = await handlerFor(IPC_CHANNELS.screenAck)
+    ack({}, { viewToken: 'vt-old', generation, throughSeq: lastSeq }) // 旧 token 忽略
+    ack({}, { viewToken: 'vt-1', generation, throughSeq: lastSeq }) // 合法清窗
+
+    const before = collect().packets.length
+    for (let index = 0; index < MAX_UNACKED_PACKETS + 2; index += 1) {
+      transport.__push({
+        type: 'data',
+        pts: BigInt(1_000 + index),
+        keyframe: false,
+        data: new Uint8Array(10)
+      })
+    }
+    await vi.waitFor(() => {
+      const sent = collect().packets.slice(before)
+      expect(sent.some((packet) => packet.type === 'configuration')).toBe(true)
+    })
+    await manager.destroyAll()
+  })
+
+  it('renderer 请求重同步：合法视图立即丢弃可回放链并重建；旧归属/伪造标志忽略，等待期间去重', async () => {
+    const { manager, transportOf } = await importManager()
+    try {
+      const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+      await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+      await flush()
+      const transport = transportOf('emulator-5554')
+      transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+      transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+      await flush()
+      const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+      const ack = await handlerFor(IPC_CHANNELS.screenAck)
+      await activate({}, { id: 'd1', viewToken: 'active' })
+      const control = transport.controlSocket as unknown as FakeSocket
+      const before = control.written.length
+      const request = { viewToken: 'active', generation: 1, throughSeq: 1, resync: true }
+      await ack({}, { ...request, viewToken: 'old' })
+      await ack({}, { ...request, generation: 0 })
+      await ack({}, { ...request, throughSeq: 1000 })
+      for (const throughSeq of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2]) {
+        await ack({}, { ...request, throughSeq })
+      }
+      await ack({}, { ...request, resync: 'yes' })
+      expect(control.written).toHaveLength(before)
+      await ack({}, request)
+      await ack({}, request)
+      await flush()
+      expect(control.written).toHaveLength(before + 1)
+      const sent = collect().packets.length
+      transport.__push({ type: 'data', pts: 33_000n, keyframe: false, data: new Uint8Array(10) })
+      await flush()
+      expect(collect().packets).toHaveLength(sent)
+      transport.__push({ type: 'configuration', data: new Uint8Array([2]) })
+      transport.__push({ type: 'data', pts: 66_000n, keyframe: true, data: new Uint8Array(10) })
+      await flush()
+      expect(collect().packets.at(-1)).toMatchObject({ generation: 2, keyframe: true })
+    } finally {
+      await manager.destroyAll()
+    }
+  })
+
+  it.each(['silent', 'write-failed'] as const)(
+    '恢复无视频包（%s）：独立重试 3 次后报错，用户重试保留活动视图',
+    async (failure) => {
+      const reset = vi.spyOn(SafeControlMessageWriter.prototype, 'resetVideo')
+      const { manager, transportOf } = await importManager()
+      const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+      try {
+        await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+        await flush()
+        const transport = transportOf('emulator-5554')
+        transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+        transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+        await flush()
+        const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+        const ack = await handlerFor(IPC_CHANNELS.screenAck)
+        const retry = await handlerFor(IPC_CHANNELS.screenRetry)
+        await activate({}, { id: 'd1', viewToken: 'active' })
+        const control = transport.controlSocket as unknown as FakeSocket
+        if (failure === 'write-failed')
+          control.write = (_chunk, callback) => {
+            callback?.(new Error('write failed'))
+            return false
+          }
+        vi.useFakeTimers()
+        await ack({}, { viewToken: 'active', generation: 1, throughSeq: 1, resync: true })
+        await vi.advanceTimersByTimeAsync(9_000)
+        expect(reset).toHaveBeenCalledTimes(3)
+        expect(collect().states.at(-1)).toMatchObject({ status: 'error', viewToken: 'active' })
+        expect(collect().states.at(-1)?.error).toMatch(/恢复|recovery/i)
+        transport.__push({ type: 'configuration', data: new Uint8Array([2]) })
+        transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+        await vi.advanceTimersByTimeAsync(0)
+        expect(collect().states.at(-1)?.status).toBe('error')
+        expect(collect().packets.at(-1)?.generation).toBe(1)
+        await vi.advanceTimersByTimeAsync(20_000)
+        expect(reset).toHaveBeenCalledTimes(3)
+        expect(vi.getTimerCount()).toBe(0)
+        vi.useRealTimers()
+        // 错误会话保留重试入口；重建仍绑定当前视图，不能等用户切走切回。
+        await retry({}, { id: 'd1', runId: 'r1' })
+        await flush()
+        const replacement = transportOf('emulator-5554')
+        expect(replacement).not.toBe(transport)
+        replacement.__push({ type: 'configuration', data: new Uint8Array([2]) })
+        replacement.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+        await flush()
+        expect(manager.activeDeviceId()).toBe('d1')
+        expect(collect().packets.at(-1)).toMatchObject({ viewToken: 'active', keyframe: true })
+      } finally {
+        reset.mockRestore()
+        vi.useRealTimers()
+        await manager.destroyAll()
+      }
+    }
+  )
+
+  it.each(['switch', 'deactivate'] as const)(
+    '重试清理期间 %s：旧会话重建不覆盖用户的新归属',
+    async (action) => {
+      const { manager, transportOf } = await importManager()
+      const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+      let finishTeardown: (() => void) | undefined
+      try {
+        await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+        await manager.ensureSession({ id: 'd2', runId: 'r2', serial: 'emulator-5556' })
+        await flush()
+        for (const serial of ['emulator-5554', 'emulator-5556']) {
+          const transport = transportOf(serial)
+          transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+          transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+        }
+        await flush()
+        const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+        const retry = await handlerFor(IPC_CHANNELS.screenRetry)
+        await activate({}, { id: 'd1', viewToken: 'old' })
+        const old = transportOf('emulator-5554')
+        const teardown = old.teardown
+        old.teardown = async () => {
+          await new Promise<void>((resolve) => {
+            finishTeardown = resolve
+          })
+          await teardown()
+        }
+        const retrying = retry({}, { id: 'd1', runId: 'r1' })
+        expect(finishTeardown).toBeDefined()
+        const nextId = action === 'switch' ? 'd2' : null
+        await activate({}, { id: nextId, viewToken: 'next' })
+        finishTeardown!()
+        await retrying
+        await flush()
+        const replacement = transportOf('emulator-5554')
+        replacement.__push({ type: 'configuration', data: new Uint8Array([2]) })
+        replacement.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+        await flush()
+        expect(manager.activeDeviceId()).toBe(nextId)
+        expect(
+          collect().packets.some((packet) => packet.deviceId === 'd1' && packet.data[0] === 2)
+        ).toBe(false)
+      } finally {
+        finishTeardown?.()
+        await manager.destroyAll()
+      }
+    }
+  )
+
+  it.each(['configuration', 'view-change', 'switch', 'destroy'] as const)(
+    '恢复计时器在 %s 后取消，不影响后续视图/会话',
+    async (stop) => {
+      const { manager, transportOf } = await importManager()
+      const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+      try {
+        await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+        await flush()
+        const transport = transportOf('emulator-5554')
+        transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+        transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+        await flush()
+        const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+        const ack = await handlerFor(IPC_CHANNELS.screenAck)
+        if (stop === 'switch') {
+          await manager.ensureSession({ id: 'd2', runId: 'r2', serial: 'emulator-5556' })
+          await flush()
+          const second = transportOf('emulator-5556')
+          second.__push({ type: 'configuration', data: new Uint8Array([1]) })
+          second.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+          await flush()
+        }
+        await activate({}, { id: 'd1', viewToken: 'old' })
+        const control = transport.controlSocket as unknown as FakeSocket
+        const before = control.written.length
+        vi.useFakeTimers()
+        await ack({}, { viewToken: 'old', generation: 1, throughSeq: 1, resync: true })
+        expect(vi.getTimerCount()).toBe(1)
+        if (stop === 'configuration') {
+          transport.__push({ type: 'configuration', data: new Uint8Array([2]) })
+          transport.__push({ type: 'data', pts: 33_000n, keyframe: true, data: new Uint8Array(10) })
+          await vi.advanceTimersByTimeAsync(0)
+        } else if (stop === 'view-change') {
+          await activate({}, { id: null, viewToken: 'old' })
+        } else if (stop === 'switch') {
+          await activate({}, { id: 'd2', viewToken: 'second' })
+        } else await manager.destroyAll()
+        expect(vi.getTimerCount()).toBe(stop === 'switch' ? 1 : 0) // 第二视图只有剪贴板检测
+        await vi.advanceTimersByTimeAsync(12_000)
+        expect(control.written.length).toBe(before + 1)
+        expect(collect().states.some((state) => state.status === 'error')).toBe(false)
+      } finally {
+        vi.useRealTimers()
+        await manager.destroyAll()
+      }
+    }
+  )
+
+  it('输入守卫：未激活拒绝；归属过期与尺寸不符拒绝', async () => {
+    const { manager } = await importManager()
+    await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+    const input = await handlerFor(IPC_CHANNELS.screenInput)
+    const request = {
+      deviceId: 'd1',
+      runId: 'r1',
+      streamId: 'whatever',
+      generation: 0,
+      viewToken: 'vt',
+      width: 1080,
+      height: 2400,
+      input: { kind: 'rotate' }
+    }
+    await expect(input({}, request)).rejects.toThrow('当前没有活动视图')
+
+    const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+    await activate({}, { id: 'd1', viewToken: 'vt-1' })
+    const ready = collect()
+      .states.filter((state) => state.status === 'ready')
+      .at(-1)!
+    const live = {
+      ...request,
+      streamId: ready.streamId,
+      generation: ready.generation,
+      viewToken: 'vt-1'
+    }
+    await expect(input({}, { ...live, viewToken: 'stale' })).rejects.toThrow('归属过期')
+    await expect(input({}, { ...live, width: 999 })).rejects.toThrow('画面尺寸')
+    await manager.destroyAll()
+  })
+
+  it.each(['success', 'nonzero', 'spawn-error', 'view-changed', 'session-stopped'])(
+    '旋转锁定绑定活动设备，失败或等待期间归属变化不发控制消息：%s',
+    async (outcome) => {
+      const { manager, transportOf, adbRun } = await importManager()
+      await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5556' })
+      const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+      await activate({}, { id: 'd1', viewToken: 'vt-1' })
+      const ready = collect()
+        .states.filter((state) => state.status === 'ready')
+        .at(-1)!
+      const input = await handlerFor(IPC_CHANNELS.screenInput)
+      const transport = transportOf('emulator-5556')
+      const socket = transport.controlSocket as unknown as FakeSocket
+      socket.written.length = 0
+      let finish!: (result: { code: number; stdout: string; stderr: string }) => void
+      let fail!: (error: Error) => void
+      adbRun.mockImplementationOnce(
+        () =>
+          new Promise((resolve, reject) => {
+            finish = resolve
+            fail = reject
+          })
+      )
+      const pending = input(
+        {},
+        {
+          deviceId: 'd1',
+          runId: 'r1',
+          streamId: ready.streamId,
+          generation: ready.generation,
+          viewToken: 'vt-1',
+          width: 1080,
+          height: 2400,
+          input: { kind: 'rotate' }
+        }
+      )
+      const result = pending.then(
+        () => null,
+        (error: Error) => error
+      )
+      await vi.waitFor(() => expect(adbRun).toHaveBeenCalledOnce())
+      expect(adbRun).toHaveBeenCalledWith(
+        '/adb',
+        ['-s', 'emulator-5556', 'shell', 'wm', 'user-rotation', 'lock'],
+        10_000
+      )
+      expect(socket.written).toHaveLength(0)
+      if (outcome === 'view-changed') await activate({}, { id: null, viewToken: 'inactive' })
+      if (outcome === 'session-stopped') await manager.destroySession('d1')
+      if (outcome === 'spawn-error') fail(new Error('adb unavailable'))
+      else finish({ code: outcome === 'nonzero' ? 1 : 0, stdout: '', stderr: 'permission denied' })
+      if (outcome === 'success') {
+        expect(await result).toBeNull()
+        expect(socket.written).toEqual([new Uint8Array([11])])
+      } else {
+        expect((await result)?.message).toContain(
+          outcome === 'nonzero'
+            ? 'permission denied'
+            : outcome === 'spawn-error'
+              ? 'adb unavailable'
+              : '归属过期'
+        )
+        expect(socket.written).toHaveLength(0)
+      }
+      await manager.destroyAll()
+    }
+  )
+
+  it.each([0, 1])(
+    '旋转先释放旧键和触点，等待期间丢弃所有输入且不补发，成功/失败后恢复：code=%s',
+    async (code) => {
+      const { manager, transportOf, adbRun } = await importManager()
+      await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+      const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+      const ready = (await activate({}, { id: 'd1', viewToken: 'vt-1' })) as ScreenStateMessage
+      const input = await handlerFor(IPC_CHANNELS.screenInput)
+      const live = {
+        deviceId: 'd1',
+        runId: 'r1',
+        streamId: ready.streamId,
+        generation: ready.generation,
+        viewToken: 'vt-1',
+        width: 1080,
+        height: 2400
+      }
+      const touch = { kind: 'touch', action: 'down', pointerId: 0, x: 0.5, y: 0.5, pressure: 1 }
+      const socket = transportOf('emulator-5554').controlSocket as unknown as FakeSocket
+      socket.written.length = 0
+      let finish!: (result: { code: number; stdout: string; stderr: string }) => void
+      adbRun.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          })
+      )
+      await input({}, { ...live, input: touch })
+      await input({}, { ...live, input: { kind: 'keycode', key: 'arrow-down', down: true } })
+      const pending = input({}, { ...live, input: { kind: 'rotate' } }).then(
+        () => null,
+        (error: Error) => error
+      )
+      await vi.waitFor(() => expect(adbRun).toHaveBeenCalledOnce())
+      try {
+        const dropped: ScreenInput[] = [
+          { kind: 'touch', action: 'down', pointerId: 1, x: 0.5, y: 0.5, pressure: 1 },
+          { kind: 'touch', action: 'move', pointerId: 0, x: 0.7, y: 0.7, pressure: 1 },
+          { kind: 'touch', action: 'up', pointerId: 0, x: 0.7, y: 0.7, pressure: 0 },
+          { kind: 'touch', action: 'cancel', pointerId: 0, x: 0, y: 0, pressure: 0 },
+          { kind: 'keycode', key: 'enter', down: true },
+          { kind: 'keycode', key: 'arrow-down', down: false },
+          { kind: 'button', button: 'home' },
+          { kind: 'text', text: 'dropped', ime: false },
+          { kind: 'text', text: '丢弃', ime: true },
+          { kind: 'release-all' },
+          { kind: 'rotate' }
+        ]
+        for (const entry of dropped)
+          await expect(input({}, { ...live, input: entry })).resolves.toBeUndefined()
+        await expect(
+          input({}, { ...live, viewToken: 'old', input: { kind: 'rotate' } })
+        ).rejects.toThrow('归属过期')
+        await expect(input({}, { ...live, input: { kind: 'unknown' } })).rejects.toThrow(
+          '非法的入参'
+        )
+        expect(adbRun).toHaveBeenCalledOnce()
+        finish({ code, stdout: '', stderr: code ? 'permission denied' : '' })
+        expect((await pending)?.message ?? null).toBe(
+          code ? '锁定屏幕旋转失败：permission denied' : null
+        )
+        const messages = socket.written.map((message) =>
+          message[0] === 2
+            ? `touch:${message[1]}`
+            : message[0] === 0
+              ? `key:${message[1]}`
+              : `type:${message[0]}`
+        )
+        expect(messages).toEqual(
+          code
+            ? ['touch:0', 'key:0', 'touch:1', 'key:1']
+            : ['touch:0', 'key:0', 'touch:1', 'key:1', 'type:11']
+        )
+        await expect(input({}, { ...live, input: touch })).resolves.toBeUndefined()
+        await expect(input({}, { ...live, input: { kind: 'rotate' } })).resolves.toBeUndefined()
+        expect(adbRun).toHaveBeenCalledTimes(2)
+      } finally {
+        finish({ code: 0, stdout: '', stderr: '' })
+        await pending
+        await manager.destroyAll()
+      }
+    }
+  )
+
+  it('destroySession 幂等；retry 校验代次后重建', async () => {
+    const { manager } = await importManager()
+    await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+    await manager.destroySession('d1')
+    await manager.destroySession('d1')
+    expect(manager.activeDeviceId()).toBeNull()
+
+    await manager.ensureSession({ id: 'd2', runId: 'r2', serial: 'emulator-5556' })
+    const retry = await handlerFor(IPC_CHANNELS.screenRetry)
+    await expect(retry({}, { id: 'd2', runId: 'stale' })).rejects.toThrow('代次过期')
+    await retry({}, { id: 'd2', runId: 'r2' })
+    await manager.destroyAll()
+  })
+
+  describe('设备控制回包（scrcpy 3.x 真实线格式）', () => {
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    const ackMessage = (sequence: bigint): Buffer => {
+      const message = Buffer.alloc(9)
+      message[0] = 1
+      message.writeBigUInt64BE(sequence, 1)
+      return message
+    }
+    const clipboardMessage = (text: string): Buffer => {
+      const content = Buffer.from(text, 'utf8')
+      const message = Buffer.alloc(5 + content.length)
+      message.writeUInt32BE(content.length, 1)
+      content.copy(message, 5)
+      return message
+    }
+    const flush = async (): Promise<void> => {
+      await vi.advanceTimersByTimeAsync(0)
+    }
+    const openClipboardView = async (
+      harness: Harness,
+      id: string,
+      serial: string
+    ): Promise<{
+      socket: FakeSocket
+      paste: (text?: string) => Promise<unknown>
+      sequence: () => bigint
+    }> => {
+      const runId = `${id}-run`
+      await harness.manager.ensureSession({ id, runId, serial })
+      await vi.waitFor(() => {
+        expect(
+          collect().states.some((state) => state.deviceId === id && state.status === 'ready')
+        ).toBe(true)
+      })
+      const transport = harness.transportOf(serial)
+      transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+      transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+      await flush()
+      const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+      const ready = (await activate({}, { id, viewToken: `${id}-view` })) as ScreenStateMessage
+      const input = await handlerFor(IPC_CHANNELS.screenInput)
+      const socket = harness.transportOf(serial).controlSocket as unknown as FakeSocket
+      const paste = (text = '中文 😀 clipboard'): Promise<unknown> =>
+        input(
+          {},
+          {
+            deviceId: id,
+            runId,
+            streamId: ready.streamId,
+            generation: ready.generation,
+            viewToken: `${id}-view`,
+            width: 1080,
+            height: 2400,
+            input: { kind: 'text', text, ime: true }
+          }
+        )
+      const sequence = (): bigint => {
+        const packet = socket.written.findLast((message) => message[0] === 9)
+        if (!packet) throw new Error('SET_CLIPBOARD 未写入')
+        return Buffer.from(packet).readBigUInt64BE(1)
+      }
+      return { socket, paste, sequence }
+    }
+    const observe = (
+      pending: Promise<unknown>
+    ): { settled: ReturnType<typeof vi.fn>; result: Promise<unknown> } => {
+      const settled = vi.fn()
+      const result = pending.then(
+        (value) => {
+          settled()
+          return value
+        },
+        (error: Error) => {
+          settled()
+          return error
+        }
+      )
+      return { settled, result }
+    }
+
+    it.each(['immediate', 'deferred'] as const)(
+      '%s socket.write callback 失败关闭会话、清 ACK，迟到回包无效',
+      async (mode) => {
+        const harness = await importManager()
+        try {
+          const view = await openClipboardView(harness, 'd1', 'emulator-5554')
+          const failure = new Error('synthetic socket write failed')
+          view.socket.write = (chunk, callback) => {
+            view.socket.written.push(chunk)
+            if (mode === 'immediate') callback?.(failure)
+            else setTimeout(() => callback?.(failure), 0)
+            return true
+          }
+          const pending = observe(view.paste())
+          await flush()
+          expect(await pending.result).toBe(failure)
+          expect(pending.settled).toHaveBeenCalledOnce()
+          expect(harness.manager.activeDeviceId()).toBeNull()
+          expect(
+            collect().states.some((state) => state.error?.includes('synthetic socket write failed'))
+          ).toBe(true)
+          expect(vi.getTimerCount()).toBe(0)
+          expect(view.socket.listenerCount('data')).toBe(0)
+          view.socket.emit('data', ackMessage(view.sequence()))
+          await harness.manager.destroySession('d1')
+          await vi.advanceTimersByTimeAsync(2000)
+          expect(pending.settled).toHaveBeenCalledOnce()
+        } finally {
+          await harness.manager.destroyAll()
+        }
+      }
+    )
+
+    it('UTF-8 SET_CLIPBOARD 与逐字节 ACK 提前完成，未知/迟到 ACK 不误报', async () => {
+      const harness = await importManager()
+      try {
+        const view = await openClipboardView(harness, 'd1', 'emulator-5554')
+        view.socket.emit('data', ackMessage(99n))
+        await flush()
+        const text = '中文 😀 clipboard'
+        const pending = observe(view.paste(text))
+        await flush()
+        const packet = Buffer.from(view.socket.written.findLast((message) => message[0] === 9)!)
+        expect(packet.readUInt32BE(10)).toBe(Buffer.byteLength(text, 'utf8'))
+        expect(packet.subarray(14).toString('utf8')).toBe(text)
+        const sequence = view.sequence()
+        for (const byte of ackMessage(sequence)) {
+          view.socket.emit('data', Buffer.from([byte]))
+          await flush()
+        }
+        expect(pending.settled).toHaveBeenCalledOnce()
+        expect(await pending.result).toBeUndefined()
+        view.socket.emit('data', ackMessage(sequence))
+        await flush()
+        expect(collect().states.some((state) => state.status === 'error')).toBe(false)
+      } finally {
+        await harness.manager.destroyAll()
+      }
+    })
+
+    it('剪贴板同步与 ACK 分片/粘连正确消费，设备复制自动写入宿主', async () => {
+      const harness = await importManager()
+      try {
+        const view = await openClipboardView(harness, 'd1', 'emulator-5554')
+        const pending = observe(view.paste())
+        await flush()
+        const packet = Buffer.concat([
+          clipboardMessage('设备剪贴板 😀'),
+          ackMessage(view.sequence()),
+          clipboardMessage('second')
+        ])
+        view.socket.emit('data', packet.subarray(0, 3))
+        await flush()
+        expect(pending.settled).not.toHaveBeenCalled()
+        view.socket.emit('data', packet.subarray(3, 12))
+        await flush()
+        expect(pending.settled).not.toHaveBeenCalled()
+        view.socket.emit('data', packet.subarray(12))
+        await flush()
+        expect(pending.settled).toHaveBeenCalledOnce()
+        expect(await pending.result).toBeUndefined()
+        expect(harness.writeHost.mock.calls).toEqual([['设备剪贴板 😀'], ['second']])
+        expect(collect().states.some((state) => state.status === 'error')).toBe(false)
+      } finally {
+        await harness.manager.destroyAll()
+      }
+    })
+
+    it('ACK 使用完整 64 位序列号，高 32 位碰巧相同不能匹配', async () => {
+      const harness = await importManager()
+      try {
+        const view = await openClipboardView(harness, 'd1', 'emulator-5554')
+        const pending = observe(view.paste())
+        await flush()
+        const sequence = view.sequence()
+        view.socket.emit('data', ackMessage((sequence << 32n) | 0xdeadn))
+        await flush()
+        expect(pending.settled).not.toHaveBeenCalled()
+        view.socket.emit('data', ackMessage(sequence))
+        await flush()
+        expect(pending.settled).toHaveBeenCalledOnce()
+        expect(await pending.result).toBeUndefined()
+      } finally {
+        await harness.manager.destroyAll()
+      }
+    })
+
+    it('两会话相同序列号仍隔离，切换不让另一 socket 结算旧请求', async () => {
+      const harness = await importManager()
+      try {
+        const first = await openClipboardView(harness, 'd1', 'emulator-5554')
+        const firstPending = observe(first.paste())
+        await flush()
+        const second = await openClipboardView(harness, 'd2', 'emulator-5556')
+        const secondPending = observe(second.paste())
+        await flush()
+        expect(first.sequence()).toBe(second.sequence())
+        second.socket.emit('data', ackMessage(second.sequence()))
+        await flush()
+        expect(secondPending.settled).toHaveBeenCalledOnce()
+        expect(firstPending.settled).not.toHaveBeenCalled()
+        first.socket.emit('data', ackMessage(first.sequence()))
+        await flush()
+        expect(firstPending.settled).toHaveBeenCalledOnce()
+        expect(await firstPending.result).toBeUndefined()
+        expect(await secondPending.result).toBeUndefined()
+      } finally {
+        await harness.manager.destroyAll()
+      }
+    })
+
+    it.each(['close', 'end', 'socket-error', 'stop'] as const)(
+      '%s 立即拒绝等待中的粘贴，取消宽限计时器',
+      async (mode) => {
+        const harness = await importManager()
+        try {
+          const view = await openClipboardView(harness, 'd1', 'emulator-5554')
+          const pending = observe(view.paste())
+          await flush()
+          if (mode === 'stop') await harness.manager.destroySession('d1')
+          else if (mode === 'socket-error') view.socket.emit('error', new Error('connection reset'))
+          else view.socket.emit(mode)
+          await flush()
+          expect(pending.settled).toHaveBeenCalledOnce()
+          expect(await pending.result).toBeInstanceOf(Error)
+          expect(harness.manager.activeDeviceId()).toBeNull()
+          if (mode !== 'stop')
+            expect(collect().states.some((state) => state.status === 'error')).toBe(true)
+          const count = pending.settled.mock.calls.length
+          await vi.advanceTimersByTimeAsync(2000)
+          expect(pending.settled).toHaveBeenCalledTimes(count)
+        } finally {
+          await harness.manager.destroyAll()
+        }
+      }
+    )
+
+    it.each(['unknown-type', 'oversize-message', 'oversize-buffer'] as const)(
+      '%s 失败清理并拒绝 pending，而不等待超时',
+      async (mode) => {
+        const harness = await importManager()
+        try {
+          const view = await openClipboardView(harness, 'd1', 'emulator-5554')
+          const pending = observe(view.paste())
+          await flush()
+          let payload: Buffer
+          if (mode === 'unknown-type') payload = Buffer.from([255])
+          else if (mode === 'oversize-message') {
+            payload = Buffer.alloc(5)
+            payload.writeUInt32BE(1024 * 1024 + 1, 1)
+          } else payload = Buffer.alloc(2 * 1024 * 1024 + 1)
+          view.socket.emit('data', payload)
+          await flush()
+          expect(pending.settled).toHaveBeenCalledOnce()
+          expect(await pending.result).toBeInstanceOf(Error)
+          expect(collect().states.some((state) => state.status === 'error')).toBe(true)
+          expect(harness.manager.activeDeviceId()).toBeNull()
+        } finally {
+          await harness.manager.destroyAll()
+        }
+      }
+    )
+
+    it('无 ACK 时等足 2 秒后按已派发收口，迟到 ACK 不重复结算', async () => {
+      const harness = await importManager()
+      try {
+        const view = await openClipboardView(harness, 'd1', 'emulator-5554')
+        const pending = observe(view.paste())
+        await flush()
+        await vi.advanceTimersByTimeAsync(1999)
+        expect(pending.settled).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(1)
+        expect(pending.settled).toHaveBeenCalledOnce()
+        expect(await pending.result).toBeUndefined()
+        view.socket.emit('data', ackMessage(view.sequence()))
+        await flush()
+        expect(pending.settled).toHaveBeenCalledOnce()
+        expect(collect().states.some((state) => state.status === 'error')).toBe(false)
+      } finally {
+        await harness.manager.destroyAll()
+      }
+    })
+
+    it('无 ACK 不积压第二次写：2s 降级，5s 故障关闭并拒绝队列', async () => {
+      const harness = await importManager()
+      try {
+        const view = await openClipboardView(harness, 'd1', 'emulator-5554')
+        const first = observe(view.paste('unacked'))
+        await flush()
+        const second = observe(view.paste('queued'))
+        await vi.advanceTimersByTimeAsync(2000)
+        expect(await first.result).toBeUndefined()
+        expect(view.socket.written.filter((message) => message[0] === 9)).toHaveLength(1)
+        expect(second.settled).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(3000)
+        expect(await second.result).toBeInstanceOf(Error)
+        expect(harness.manager.activeDeviceId()).toBeNull()
+        expect(vi.getTimerCount()).toBe(0)
+        view.socket.emit('data', ackMessage(view.sequence()))
+        await flush()
+        expect(view.socket.written.filter((message) => message[0] === 9)).toHaveLength(1)
+      } finally {
+        await harness.manager.destroyAll()
+      }
+    })
+
+    it('host 300ms 同步不粘贴，IME 保持 paste=true，旧排队输入切走失效', async () => {
+      const harness = await importManager()
+      try {
+        harness.setHost('initial')
+        const first = await openClipboardView(harness, 'd1', 'emulator-5554')
+        expect(first.socket.written.filter((message) => message[0] === 9)).toHaveLength(0)
+        harness.setHost('host 中文😀')
+        await vi.advanceTimersByTimeAsync(300)
+        const packet = first.socket.written.findLast((message) => message[0] === 9)!
+        expect(packet[9]).toBe(0)
+        expect(Buffer.from(packet.subarray(14)).toString()).toBe('host 中文😀')
+        const pending = observe(first.paste('queued IME'))
+        const second = await openClipboardView(harness, 'd2', 'emulator-5556')
+        first.socket.emit('data', ackMessage(first.sequence()))
+        await flush()
+        expect(await pending.result).toBeInstanceOf(Error)
+        expect(first.socket.written.filter((message) => message[0] === 9)).toHaveLength(1)
+        first.socket.emit('data', clipboardMessage('background'))
+        await flush()
+        expect(harness.writeHost).not.toHaveBeenCalled()
+        const ime = observe(second.paste('新组合'))
+        await flush()
+        expect(second.socket.written.findLast((message) => message[0] === 9)![9]).toBe(1)
+        second.socket.emit('data', clipboardMessage('新组合'))
+        second.socket.emit('data', ackMessage(second.sequence()))
+        await flush()
+        expect(await ime.result).toBeUndefined()
+        expect(harness.writeHost).not.toHaveBeenCalled()
+      } finally {
+        await harness.manager.destroyAll()
+      }
+    })
+  })
+})
+
+describe('息屏唤醒冻结回归（2026-10-15 真机 Wi-Fi 投屏调查）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.windowRef.current = {
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    } as unknown as BrowserWindow
+  })
+
+  const collect = (): { states: ScreenStateMessage[]; packets: ScreenPacketMessage[] } => {
+    const send = (
+      mocks.windowRef.current!.webContents as unknown as { send: ReturnType<typeof vi.fn> }
+    ).send
+    const calls = send.mock.calls as Array<[string, unknown]>
+    return {
+      states: calls
+        .filter(([channel]) => channel === IPC_CHANNELS.screenState)
+        .map(([, payload]) => payload as ScreenStateMessage),
+      packets: calls
+        .filter(([channel]) => channel === IPC_CHANNELS.screenPacket)
+        .map(([, payload]) => payload as ScreenPacketMessage)
+    }
+  }
+  it.each(['packets', 'bytes'] as const)(
+    '解锁首滑超 %s 预算且无回放：立即 resetVideo，不等 3s；新配置恢复连续视频',
+    async (budget) => {
+      const { manager, transportOf } = await importManager()
+      try {
+        const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+        const ack = await handlerFor(IPC_CHANNELS.screenAck)
+        await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+        await new Promise<void>((resolve) => setImmediate(resolve))
+        await activate({}, { id: 'd1', viewToken: 'unlock' })
+        const transport = transportOf('emulator-5554')
+        const control = transport.controlSocket as unknown as FakeSocket
+        const push = transport.__push
+        const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+        push({ type: 'configuration', data: new Uint8Array([1]) })
+        push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+        await flush()
+        await ack({}, { viewToken: 'unlock', generation: 1, throughSeq: 1 })
+        const resetsBefore = control.written.length
+        const count = budget === 'packets' ? MAX_UNACKED_PACKETS + 1 : 1
+        for (let i = 0; i < count; i++) {
+          push({
+            type: 'data',
+            pts: 10_000_000n + BigInt(i * 33_000),
+            keyframe: false,
+            data: new Uint8Array(budget === 'bytes' ? 2 * 1024 * 1024 + 1 : 10)
+          })
+        }
+        await flush()
+        expect(control.written.length).toBe(resetsBefore + 1)
+
+        // 已在等新配置：迟到 ACK 与持续增量都不能引发逐包重置风暴。
+        const lastSent = collect().packets.at(-1)!
+        await ack({}, { viewToken: 'unlock', generation: 1, throughSeq: lastSent.seq })
+        const sentBefore = collect().packets.length
+        for (let i = 0; i < 30; i++) {
+          push({
+            type: 'data',
+            pts: 11_000_000n + BigInt(i * 33_000),
+            keyframe: false,
+            data: new Uint8Array(10)
+          })
+        }
+        await flush()
+        expect(collect().packets).toHaveLength(sentBefore)
+        expect(control.written.length).toBe(resetsBefore + 1)
+
+        push({ type: 'configuration', data: new Uint8Array([2]) })
+        push({ type: 'data', pts: 12_000_000n, keyframe: true, data: new Uint8Array(10) })
+        push({ type: 'data', pts: 12_033_000n, keyframe: false, data: new Uint8Array(10) })
+        await flush()
+        const recovered = collect().packets.slice(sentBefore)
+        expect(recovered.map((packet) => packet.type)).toEqual(['configuration', 'data', 'data'])
+        expect(recovered.map((packet) => packet.generation)).toEqual([2, 2, 2])
+        expect(recovered.map((packet) => packet.seq)).toEqual([
+          recovered[0].seq,
+          recovered[0].seq + 1,
+          recovered[0].seq + 2
+        ])
+      } finally {
+        await manager.destroyAll()
+      }
+    }
+  )
+
+  it('静置尾包不足 8 个 ACK 批次：长空档后的首帧触发停滞时也立即恢复', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    const { manager, transportOf } = await importManager()
+    try {
+      const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+      const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+      await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+      await flush()
+      await activate({}, { id: 'd1', viewToken: 'idle' })
+      const transport = transportOf('emulator-5554')
+      const control = transport.controlSocket as unknown as FakeSocket
+      transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+      transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+      await flush()
+      const resetsBefore = control.written.length
+      // 只有一个尾包，renderer 按 8 包批次 ACK，静态/息屏期间没有回执属正常情况。
+      clock.mockReturnValue(11_000)
+      transport.__push({
+        type: 'data',
+        pts: 10_000_000n,
+        keyframe: false,
+        data: new Uint8Array(10)
+      })
+      await flush()
+      expect(control.written.length).toBe(resetsBefore + 1)
+      transport.__push({ type: 'configuration', data: new Uint8Array([2]) })
+      transport.__push({ type: 'data', pts: 10_033_000n, keyframe: true, data: new Uint8Array(10) })
+      await flush()
+      expect(collect().packets.at(-1)).toMatchObject({
+        type: 'data',
+        keyframe: true,
+        generation: 2
+      })
+    } finally {
+      clock.mockRestore()
+      await manager.destroyAll()
+    }
+  })
+
+  it('PTS 跨度清链 + 突发超预算：waitingResync 悬空后看门狗必须自救（resetVideo）', async () => {
+    const { manager, transportOf } = await importManager()
+    const ctl = (): number =>
+      (transportOf('emulator-5554').controlSocket as unknown as FakeSocket).written.length
+    const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+    const ack = await handlerFor(IPC_CHANNELS.screenAck)
+
+    await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+    await vi.waitFor(() => {
+      expect(collect().states.some((state) => state.status === 'ready')).toBe(true)
+    })
+    await activate({ sender: {} }, { id: 'd1', viewToken: 'vt1' })
+
+    const push = transportOf('emulator-5554').__push
+    // 建链：配置 + 关键帧 + 静态增量，全量 ACK（resyncArmed 重挂、outbox 清空）
+    push({ type: 'configuration', data: new Uint8Array([1]) })
+    push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+    for (let i = 1; i <= 3; i++) {
+      push({ type: 'data', pts: BigInt(33_000 * i), keyframe: false, data: new Uint8Array(10) })
+    }
+    await vi.waitFor(() => {
+      expect(collect().packets).toHaveLength(5)
+    })
+    await ack({ sender: {} }, { viewToken: 'vt1', generation: 1, throughSeq: 4 })
+
+    // 「息屏」后唤醒：增量帧 PTS 跨过睡眠间隔（10s ≫ 1.5s 预算）→ GopCache 清链
+    // 等关键帧；紧接着无关键帧突发 >16 包 → 超预算 → sendResync 空手而归 →
+    // waitingResync=true 开始丢包（渲染端画面就此冻结）
+    const beforeFreeze = collect().packets.length
+    for (let i = 0; i < 20; i++) {
+      push({
+        type: 'data',
+        pts: 10_000_000n + BigInt(33_000 * i),
+        keyframe: false,
+        data: new Uint8Array(10)
+      })
+    }
+    // 渲染端如实 ACK 已收到的包（ACK 只看收到不看画面）→ outbox 归零
+    await vi.waitFor(() => {
+      expect(collect().packets.length).toBeGreaterThan(beforeFreeze)
+    })
+    await ack(
+      { sender: {} },
+      { viewToken: 'vt1', generation: 1, throughSeq: collect().packets.at(-1)!.seq }
+    )
+
+    // 冻结期：持续有新帧到达（唤醒后的锁屏动画/用户滑动）但全部被丢
+    const frozenAt = collect().packets.length
+    expect(frozenAt).toBeGreaterThan(beforeFreeze)
+    // 看门狗（ACK_STALL_MS=3s）应识别「waitingResync 悬空」并重试：nullReplayStalls
+    // 自增到 2 → resetVideo 下发编码器重置 → 死锁解除。无此分支则永不恢复。
+    const ctlBefore = ctl()
+    const deadline = Date.now() + 8_000
+    for (;;) {
+      push({
+        type: 'data',
+        pts: 10_700_000n + BigInt((Math.random() * 1_000_000) | 0),
+        keyframe: false,
+        data: new Uint8Array(10)
+      })
+      if (ctl() > ctlBefore) break
+      if (Date.now() > deadline) throw new Error('看门狗未在 8s 内自救——waitingResync 死锁仍在')
+      await new Promise((resolve) => setTimeout(resolve, 400))
+    }
+
+    // resetVideo → 编码器重置 → 新配置包 → 解除悬空，帧恢复流动
+    push({ type: 'configuration', data: new Uint8Array([2]) })
+    push({ type: 'data', pts: 20_000_000n, keyframe: true, data: new Uint8Array(10) })
+    await vi.waitFor(() => {
+      const packets = collect().packets
+      expect(packets.length).toBeGreaterThan(frozenAt)
+    })
+  }, 20_000)
+
+  it('P3-7：独立恢复节拍在 fake timers 下确定性收敛，持续推帧不重复请求', async () => {
+    const { manager, transportOf } = await importManager()
+    const ctl = (): number =>
+      (transportOf('emulator-5554').controlSocket as unknown as FakeSocket).written.length
+    const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+    const ack = await handlerFor(IPC_CHANNELS.screenAck)
+
+    await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+    await vi.waitFor(() => {
+      expect(collect().states.some((state) => state.status === 'ready')).toBe(true)
+    })
+    await activate({ sender: {} }, { id: 'd1', viewToken: 'vt2' })
+
+    const push = transportOf('emulator-5554').__push
+    push({ type: 'configuration', data: new Uint8Array([1]) })
+    push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+    for (let i = 1; i <= 3; i++) {
+      push({ type: 'data', pts: BigInt(33_000 * i), keyframe: false, data: new Uint8Array(10) })
+    }
+    await vi.waitFor(() => {
+      expect(collect().packets).toHaveLength(5)
+    })
+    await ack({ sender: {} }, { viewToken: 'vt2', generation: 1, throughSeq: 4 })
+
+    // 在创建恢复计时器前切到 fake clock，避免推进 fake 时间却等待真实定时器。
+    vi.useFakeTimers()
+    try {
+      // 冻结条件与上一测同构：PTS 跨度清链 + 超预算突发
+      for (let i = 0; i < 20; i++) {
+        push({
+          type: 'data',
+          pts: 10_000_000n + BigInt(33_000 * i),
+          keyframe: false,
+          data: new Uint8Array(10)
+        })
+      }
+      await vi.waitFor(() => {
+        expect(collect().packets.length).toBeGreaterThan(5)
+      })
+      await ack(
+        { sender: {} },
+        { viewToken: 'vt2', generation: 1, throughSeq: collect().packets.at(-1)!.seq }
+      )
+
+      // 恢复节拍由独立定时器驱动，持续视频包不额外叠加重试。
+      const deadline = Date.now() + 10_000
+      const ctlBefore = ctl()
+      let resetSeen = false
+      for (;;) {
+        push({
+          type: 'data',
+          pts: 10_700_000n + BigInt(Math.floor(Math.random() * 1_000_000)),
+          keyframe: false,
+          data: new Uint8Array(10)
+        })
+        await vi.advanceTimersByTimeAsync(400)
+        if (ctl() > ctlBefore) {
+          resetSeen = true
+          break
+        }
+        if (Date.now() > deadline) break
+      }
+      expect(resetSeen).toBe(true)
+    } finally {
+      await manager.destroyAll()
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('recording source subscriptions', () => {
+  it('delivers raw timestamps while no view is active, isolates observers and ends exactly once', async () => {
+    vi.clearAllMocks()
+    mocks.windowRef.current = null
+    const { manager, transportOf } = await importManager()
+    await manager.ensureSession({ id: 'r', runId: 'run', serial: 'emulator-5580' })
+    await vi.waitFor(() => expect(manager.getRecordingSource('r')).not.toBeNull())
+    const source = manager.getRecordingSource('r')!
+    const packets: ScrcpyMediaStreamPacket[] = []
+    const ended = vi.fn()
+    manager.subscribeRecordingSource(source, {
+      packet: () => {
+        throw new Error('consumer failed')
+      },
+      ended: vi.fn()
+    })
+    manager.subscribeRecordingSource(source, { packet: (packet) => packets.push(packet), ended })
+    const packet = {
+      type: 'data' as const,
+      pts: 12_345_678_901n,
+      keyframe: true,
+      data: Uint8Array.of(7)
+    }
+    transportOf('emulator-5580').__push(packet)
+    await vi.waitFor(() => expect(packets).toEqual([packet]))
+    expect(manager.activeDeviceId()).toBeNull()
+    await manager.destroySession('r')
+    await manager.destroySession('r')
+    expect(ended).toHaveBeenCalledTimes(1)
+    expect(() =>
+      manager.subscribeRecordingSource(source, { packet: vi.fn(), ended: vi.fn() })
+    ).toThrow()
+    await expect(manager.requestRecordingKeyFrame(source)).rejects.toThrow()
+  })
+
+  it('clipboard queue failure destroys the session and interrupts recording subscriptions', async () => {
+    vi.clearAllMocks()
+    const { manager, transportOf } = await importManager()
+    await manager.ensureSession({ id: 'r', runId: 'run', serial: 'emulator-5580' })
+    await vi.waitFor(() => expect(manager.getRecordingSource('r')).not.toBeNull())
+    const source = manager.getRecordingSource('r')!
+    const ended = vi.fn()
+    manager.subscribeRecordingSource(source, { packet: vi.fn(), ended })
+    const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+    const ready = (await activate({}, { id: 'r', viewToken: 'r-view' })) as ScreenStateMessage
+    // 控制 socket 下一次写入失败 → 剪贴板单飞队列 write 拒绝 → onFailure 销毁会话
+    const socket = transportOf('emulator-5580').controlSocket as unknown as FakeSocket
+    const originalWrite = socket.write
+    socket.write = (_chunk: Buffer, cb?: (error?: Error) => void): boolean => {
+      socket.write = originalWrite
+      cb?.(new Error('control write failed'))
+      return false
+    }
+    const input = await handlerFor(IPC_CHANNELS.screenInput)
+    await expect(
+      input(
+        {},
+        {
+          deviceId: 'r',
+          runId: 'run',
+          streamId: ready.streamId,
+          generation: ready.generation,
+          viewToken: 'r-view',
+          width: 1080,
+          height: 2400,
+          input: { kind: 'text', text: '中文', ime: true }
+        }
+      )
+    ).rejects.toBeTruthy()
+    // 会话销毁必须恰好通知录制订阅一次，且携带失败原因；源随之失效
+    await vi.waitFor(() => expect(ended).toHaveBeenCalledTimes(1))
+    expect(ended.mock.calls[0][0]).toBeTruthy()
+    await vi.waitFor(() => expect(manager.getRecordingSource('r')).toBeNull())
+  })
+})

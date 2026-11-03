@@ -1,0 +1,149 @@
+{
+  "ref": "c500183b708aedf521b05e304e0e7f8d771d22b1",
+  "names": [
+    "automotive_1024",
+    "automotive_landscape",
+    "automotive_large_portrait",
+    "automotive_ultrawide_cutout",
+    "galaxy_nexus",
+    "nexus_10",
+    "nexus_4",
+    "nexus_5",
+    "nexus_5x",
+    "nexus_6",
+    "nexus_6p",
+    "nexus_7",
+    "nexus_7_2013",
+    "nexus_9",
+    "nexus_one",
+    "nexus_s",
+    "pixel",
+    "pixel_10",
+    "pixel_10_pro",
+    "pixel_10_pro_xl",
+    "pixel_10a",
+    "pixel_2",
+    "pixel_2_xl",
+    "pixel_3",
+    "pixel_3_xl",
+    "pixel_3a",
+    "pixel_3a_xl",
+    "pixel_4",
+    "pixel_4_xl",
+    "pixel_4a",
+    "pixel_4a_5g",
+    "pixel_5",
+    "pixel_6",
+    "pixel_6_pro",
+    "pixel_6a",
+    "pixel_7",
+    "pixel_7_pro",
+    "pixel_7a",
+    "pixel_8",
+    "pixel_8_pro",
+    "pixel_8a",
+    "pixel_9",
+    "pixel_9_pro",
+    "pixel_9_pro_xl",
+    "pixel_9a",
+    "pixel_c",
+    "pixel_silver",
+    "pixel_tablet",
+    "pixel_xl",
+    "pixel_xl_silver",
+    "tv_1080p",
+    "tv_4k",
+    "tv_720p",
+    "wearos_large_round",
+    "wearos_rect",
+    "wearos_small_round",
+    "wearos_square",
+    "wearos_xl_round"
+  ],
+  "aliases": [
+    {
+      "profileId": "Nexus One",
+      "name": "nexus_one",
+      "screenWidth": 480,
+      "screenHeight": 800
+    },
+    {
+      "profileId": "Nexus S",
+      "name": "nexus_s",
+      "screenWidth": 480,
+      "screenHeight": 800
+    },
+    {
+      "profileId": "Galaxy Nexus",
+      "name": "galaxy_nexus",
+      "screenWidth": 720,
+      "screenHeight": 1280
+    },
+    {
+      "profileId": "Nexus 7",
+      "name": "nexus_7",
+      "screenWidth": 800,
+      "screenHeight": 1280
+    },
+    {
+      "profileId": "Nexus 4",
+      "name": "nexus_4",
+      "screenWidth": 768,
+      "screenHeight": 1280
+    },
+    {
+      "profileId": "Nexus 10",
+      "name": "nexus_10",
+      "screenWidth": 2560,
+      "screenHeight": 1600
+    },
+    {
+      "profileId": "Nexus 7 2013",
+      "name": "nexus_7_2013",
+      "screenWidth": 1200,
+      "screenHeight": 1920
+    },
+    {
+      "profileId": "Nexus 5",
+      "name": "nexus_5",
+      "screenWidth": 1080,
+      "screenHeight": 1920
+    },
+    {
+      "profileId": "Nexus 6",
+      "name": "nexus_6",
+      "screenWidth": 1440,
+      "screenHeight": 2560
+    },
+    {
+      "profileId": "Nexus 9",
+      "name": "nexus_9",
+      "screenWidth": 2048,
+      "screenHeight": 1536
+    },
+    {
+      "profileId": "Nexus 5X",
+      "name": "nexus_5x",
+      "screenWidth": 1080,
+      "screenHeight": 1920
+    },
+    {
+      "profileId": "Nexus 6P",
+      "name": "nexus_6p",
+      "screenWidth": 1440,
+      "screenHeight": 2560
+    },
+    {
+      "profileId": "automotive_1080p_landscape",
+      "name": "automotive_landscape",
+      "screenWidth": 1080,
+      "screenHeight": 600
+    },
+    {
+      "profileId": "automotive_ultrawide",
+      "name": "automotive_ultrawide_cutout",
+      "screenWidth": 3904,
+      "screenHeight": 1320
+    }
+  ]
+}

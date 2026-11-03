@@ -62,7 +62,8 @@ jobs:
           while IFS= read -r s; do
             [ -z "$s" ] && continue
             node scripts/check-commit-message.mjs "$s" || status=1
-          done < <(git log --no-merges --format=%s "$range")
+          # 首次迁入的本地历史截至此提交；保留原 ID，只校验基线之后的新提交。
+          done < <(git log --no-merges --format=%s "$range" --not 3d6f32b8bbc4c6572173f0d01abdaec75237f74b)
           exit $status
 
   book-release-check:

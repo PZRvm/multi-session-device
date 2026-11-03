@@ -10,7 +10,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 ## 怎么用这本 book
 
 - **AI agent**：先读本文件拿全书地图，再顺着链接去要去的目录。动笔写 book 文档前，先读 `guidelines/writing-style.md`。
-- **人**：按下面的目录表浏览。规则在 `guidelines/`，进度在 `stage/`，施工图在 `plans/`，经验在 `notes/learn/`，决策在 `docs/decisions/`。
+- **人**：按下面的目录表浏览。规则在 `guidelines/`，功能总结在 `notes/summary/`，施工图在 `plans/`，经验在 `notes/learn/`，决策在 `docs/decisions/`。
 - **按时间**：`notes/{learn,issue}/` 按 `YYYY-MM/` 归档——月份只是物理分组，别按功能嵌套更深。变更记录不设 changelog，看 git log。
 - **按功能**：在本索引里搜功能名、关键词或 frontmatter 摘要；`notes/learn/` 的条目还能按 `tags` 搜。
 - **Obsidian**：把 `book/` 直接当 vault 打开。链接都是普通相对 Markdown；挪了文件就重跑索引。
@@ -23,14 +23,23 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 | `docs/api/` | 接口契约：对外/模块间接口长什么样 |
 | `docs/architecture/` | 架构快照：模块划分与数据流的当前状态 |
 | `docs/decisions/` | ADR 决策记录：一条记一个选择及其理由 |
+| `docs/poc/` | PoC 实测报告：闸门验收的原始数据、方法与结论 |
 | `guidelines/` | 规则书：人和 agent 永远怎么工作，长期稳定 |
 | `notes/` | 过程笔记：开发中发生了什么，只增不改 |
+| `notes/issue/` | 发现但不修的问题——只记录，修复是另一份工作 |
 | `notes/issue/2026-10/` | 归档于 notes/issue/，按月份分组 |
+| `notes/issue/2026-11/` | 2026 年 11 月发现但未修的问题 |
+| `notes/learn/` | 经验与教训，写码前后按 tags 检索，按月份归档 |
 | `notes/learn/2026-09/` | 归档于 notes/learn/，按月份分组 |
 | `notes/learn/2026-10/` | 归档于 notes/learn/，按月份分组 |
+| `notes/learn/2026-11/` | 2026 年 11 月开发经验与教训 |
+| `notes/summary/2026-10/` | 归档于 notes/summary/，按月份分组 |
+| `notes/summary/2026-11/` | 2026 年 11 月功能报告 |
+| `notes/task/` | 任务跟踪与拆解的检查清单 |
+| `notes/think-report/` | 功能可行性调研：配置能力、候选方案、落地路径与待确认边界 |
 | `plans/` | 施工图：一个功能一篇，Phase 2 设计确认后落盘，agent 照着施工 |
-| `stage/` | 开发阶段：项目接下来走哪、每步做完没；人定阶段和步骤，勾选附一行结果（替代原 summary 机制） |
 | `think-report/` | 可行性调研报告：立项前的调研结论（本仓库自定义分类） |
+| `todos/` | 待办清单：跨计划/跨功能的执行清单与状态跟踪，勾完即档 |
 
 ## 全部文件
 
@@ -41,10 +50,15 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 ### docs/api/
 
+- [2026-10-16-recording.md](docs/api/2026-10-16-recording.md) — 录屏 IPC 实际契约——主窗任务快照、设置窗恢复提示、原生选择/结果与隐藏处理页专属 job 通道的权限边界
 - [README.md](docs/api/README.md) — API 设计文档——接口契约在实现之前和之中写下来的地方
 
 ### docs/architecture/
 
+- [2026-10-08-android-runtime.md](docs/architecture/2026-10-08-android-runtime.md) — 阶段 4 收尾时的 Android 运行快照：模块、SDK/AVD 隔离、启停与投屏输入契约、操作和排查入口及未验边界
+- [2026-10-13-main-module-split.md](docs/architecture/2026-10-13-main-module-split.md) — main 进程模块拆分快照——devices 域从 2603 行单文件拆为薄 index + 10 个域模块、emulator/index.ts 拆为装配层 + 4 个 sdkIpc 分组；分层 DAG 与状态访问器规则
+- [2026-10-13-scrcpy-module-split.md](docs/architecture/2026-10-13-scrcpy-module-split.md) — scrcpy 域拆分快照——758 行工厂 index.ts 拆为 19 行装配 + 8 个域文件；闭包状态显式化为 ManagerContext 首参传递，分层 DAG 与错误路径向下调 destroySession 的规则
+- [2026-10-16-recording.md](docs/architecture/2026-10-16-recording.md) — 录屏模块的实际落点——主进程媒体订阅/任务/临时段，独立处理页，下载目录发布与全局 UI 镜像；真机音频验收后移
 - [README.md](docs/architecture/README.md) — 架构快照——带日期的文档，描述模块和数据流在当时的真实状态
 - [项目骨架.md](docs/architecture/项目骨架.md) — 多会话模拟器的项目骨架——技术栈、三进程结构、目录职责与规划模块落点（stage 01 改造后快照）
 
@@ -53,7 +67,17 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [ADR-001-adopt-bocode.md](docs/decisions/ADR-001-adopt-bocode.md) — 本仓库运行在 BoCode 工作流上——book 驱动 code，code 回写 book，六阶段关卡守住每个功能
 - [ADR-002-adopt-bowrite.md](docs/decisions/ADR-002-adopt-bowrite.md) — 我们把 shuorenhua 加上自己的 review 模式蒸馏成 bowrite（薄写）——一个仓库内的写作 skill：写薄，写好
 - [ADR-003-intent-gates-vs-distrust-gates.md](docs/decisions/ADR-003-intent-gates-vs-distrust-gates.md) — 我们按理由给工作流关卡分类——意图关卡保持硬，不信任关卡随模型改进而软化；Phase 2 的确认制改为缺口制停车
+- [ADR-004-recording-media-pipeline.md](docs/decisions/ADR-004-recording-media-pipeline.md) — 录屏采用 Mediabunny 1.61.5 封装 MP4、独立 WebCodecs renderer 处理画布；设备音频独立采集与采样时钟，真机验收后移
+- [ADR-005-screenshot-editor-reuse.md](docs/decisions/ADR-005-screenshot-editor-reuse.md) — 截图编辑器直接迁入多会话浏览器实现——Konva/react-konva 是复用源编辑器的绘图依赖而非新 UI 栈；图标、窗口、缓存与文件发布按本项目差异适配
 - [README.md](docs/decisions/README.md) — 这里怎么写 ADR——章节、命名、编号，以及什么决定需要一份记录
+
+### docs/poc/
+
+- [2026-10-04-投屏链路PoC报告.md](docs/poc/2026-10-04-投屏链路PoC报告.md) — stage04 步骤 1 PoC 实测报告——Tango + scrcpy-server 3.3.3 + WebCodecs 全链路在 host GPU 下交互 59fps / 触摸延迟中位 75ms，过验收线
+- [2026-10-16-clipboard-sync-validation.md](docs/poc/2026-10-16-clipboard-sync-validation.md) — 双向剪贴板真实链路、解码与连续内存样本，用户人工验收通过；含 P2 修复前后微基准与最终验证结果
+- [2026-10-16-recording-implementation.md](docs/poc/2026-10-16-recording-implementation.md) — 录屏正式实现验证——独立 MP4、暂停旋转、后台与打包产物已跑通；1282 项测试通过，十分钟同步 112/106ms 未过，真机声音与交互性能待验
+- [2026-10-16-recording-p0.md](docs/poc/2026-10-16-recording-p0.md) — 录屏先行 P0——双 AVD、最大画布与 MP4 可行；原始 AAC PTS 漂移，修订仪器后候选 46/120ms，真机音频验收后移
+- [2026-11-02-screenshot-editor.md](docs/poc/2026-11-02-screenshot-editor.md) — 截图编辑器 T6 验收记录——自动门禁摘要 + V1—V9 人工画布验收结论（全部通过）
 
 ### guidelines/
 
@@ -61,13 +85,18 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [architecture.md](guidelines/architecture.md) — multi-session-device 的长期架构规则——边界不变量、模块地图、技术基线、数据归属
 - [coding-style.md](guidelines/coding-style.md) — 编码基线——目录与组件结构、命名、样式与图标、IPC 纪律、错误处理、依赖政策
 - [git-workflow.md](guidelines/git-workflow.md) — Clean Commit 提交信息格式与 Clean Flow 分支、PR、合并规则（单人及团队开发）
-- [review-checklist.md](guidelines/review-checklist.md) — 每个改动必须通过的八项 code review 检查——发现只记录，绝不顺手修
-- [workflow.md](guidelines/workflow.md) — 六阶段关卡工作流、八条 code↔book 交互规则与文档路由表
+- [review-checklist.md](guidelines/review-checklist.md) — 每次改动都必须通过的八项代码评审检查——发现的问题只记录，绝不顺手修
+- [workflow.md](guidelines/workflow.md) — 六阶段门禁工作流，附八条 code↔book 交互规则和文档去向表
 - [writing-style.md](guidelines/writing-style.md) — 所有 book 文档的说人话书写标准——忠实契约优先，然后是极简风格规则、强度分级与回读检查
 
 ### notes/
 
 - [README.md](notes/README.md) — 三类笔记（learn、task、issue）、各自何时写、检索顺序，以及每类的模板
+
+### notes/issue/
+
+- [2026-10-06-向导独立窗口-review.md](notes/issue/2026-10-06-向导独立窗口-review.md) — 向导独立窗口分支（5 提交）的 code review 发现——两处注释腐化、span 嵌 h3 不合法、dead CSS、非 darwin 标题双显与两条备查信息
+- [2026-10-10-styled-refactor-review.md](notes/issue/2026-10-10-styled-refactor-review.md) — styled 单 Wrapper 重排过程中发现的既有问题——发丝线隐式 DOM 契约、选中态状态点对比度、重复 CSS 与死钩子等（只记录，未修复）
 
 ### notes/issue/2026-10/
 
@@ -77,6 +106,123 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-01-preload-sandbox-false.md](notes/issue/2026-10/2026-10-01-preload-sandbox-false.md) — preload 沿用模板的 sandbox: false；白名单 api 已就绪，具备评估开启 sandbox 的条件
 - [2026-10-02-commit-msg-hook-comment-lines.md](notes/issue/2026-10/2026-10-02-commit-msg-hook-comment-lines.md) — commit-msg hook 直接取消息首行，不跳过空行与 # 注释行——模板残留或前导空行会以莫名的结构错误拦下提交
 - [2026-10-02-git-policy-yml-hardening.md](notes/issue/2026-10/2026-10-02-git-policy-yml-hardening.md) — git-policy.yml 两处待加固：GitHub 表达式直接内插进 shell 有注入面，首推 main 会被方向守卫误伤
+- [2026-10-03-delete-running-device-no-stop.md](notes/issue/2026-10/2026-10-03-delete-running-device-no-stop.md) — 删除运行中设备不先停机、不做运行态拦截——mock 阶段合理，stage 04 接真实 emulator 前必须补
+- [2026-10-03-device-rename-no-keyboard-path.md](notes/issue/2026-10/2026-10-03-device-rename-no-keyboard-path.md) — DeviceRow 行内重命名只有鼠标双击一条入口，键盘用户（F2/Enter 二次）无法发起重命名
+- [2026-10-03-devices-ensure-loaded-concurrent-double-read.md](notes/issue/2026-10/2026-10-03-devices-ensure-loaded-concurrent-double-read.md) — devices 域 ensureLoaded 无互斥——首个命令与并发 IPC 同窗口时可能双读落盘文件，后者覆盖前者
+- [2026-10-03-devices-persist-failure-divergence.md](notes/issue/2026-10/2026-10-03-devices-persist-failure-divergence.md) — devices 变更先改内存再落盘，写盘失败时内存与磁盘分叉且 renderer 无感知——零部分成功在该路径不成立
+- [2026-10-03-segmented-roving-focus.md](notes/issue/2026-10/2026-10-03-segmented-roving-focus.md) — SegmentedControl 方向键切换后 DOM 焦点未随 roving tabindex 移到新选中瓣——键盘用户连按方向键无效
+- [2026-10-04-avdmanager-sdk-root-null.md](notes/issue/2026-10/2026-10-04-avdmanager-sdk-root-null.md) — avdmanager create avd 报 "Valid system image paths are: null"——根因是 SDK 的 cmdline-tools 符号链接把根推断带到了 Homebrew 空壳目录（2026-10-05 已修复并更正根因）
+- [2026-10-04-emulator-snapshot-resume-crash.md](notes/issue/2026-10/2026-10-04-emulator-snapshot-resume-crash.md) — 手写 config 的 AVD 在快照恢复路径原生崩溃（SIGABRT）——PoC 固定 -no-snapshot 冷启动，快照加速在 v1.1 前需先解决
+- [2026-10-04-messageport-bridge-no-delivery.md](notes/issue/2026-10/2026-10-04-messageport-bridge-no-delivery.md) — MessagePortMain 经 contextBridge 回传后 port 对象可达但不投递消息——视频包通道退回 webContents.send（每帧拷贝），产品化时可再评估
+- [2026-10-04-wizard-create-no-double-click-guard.md](notes/issue/2026-10/2026-10-04-wizard-create-no-double-click-guard.md) — 向导窗创建按钮无创建中禁用/防连击——双击可建出两台同名设备，stage 04 真实创建变慢后会被放大
+- [2026-10-04-wizard-window-singleton-race.md](notes/issue/2026-10/2026-10-04-wizard-window-singleton-race.md) — openWizardWindow 单例判断无互斥——极窄窗口内两次 wizard:open 可开两扇模态窗且第一扇引用被覆盖
+- [2026-10-05-baseline-lint-debt.md](notes/issue/2026-10/2026-10-05-baseline-lint-debt.md) — 基线 4e01b09 自带 10 个 eslint error（scrcpy 测试与 index 的显式返回类型、renderer 的 react-hooks refs/setState 纪律）与 7 个 warning——已被基上 3f0a977 全部清空，见姊妹 issue
+- [2026-10-05-baseline-lint-errors-stage04-files.md](notes/issue/2026-10/2026-10-05-baseline-lint-errors-stage04-files.md) — stage04 基线上 npm run lint 有存量 10 errors / 7 warnings（react-hooks 渲染纪律 + 显式返回类型），全部位于已提交的 scrcpy 与投屏 renderer 文件
+- [2026-10-05-canvas-ready-before-layout.md](notes/issue/2026-10/2026-10-05-canvas-ready-before-layout.md) — 投屏 status 可先于 layout 就绪（format 与 ResizeObserver 的 containerSize 双异步入参有竞态窗口），期间画布槽 0×0 画面不可见且输入被几何拒收；屏幕休眠节流下窗口可拉长到秒级以上
+- [2026-10-05-console-token-escapes-avd-isolation.md](notes/issue/2026-10/2026-10-05-console-token-escapes-avd-isolation.md) — emulator 37.2.12 的 console token 恒读写宿主 ~/.emulator_console_auth_token，ANDROID_EMULATOR_HOME 重定向不覆盖——全新机器上首次启动会向宿主 home 写入新 token
+- [2026-10-05-device-store-read-error-as-empty.md](notes/issue/2026-10/2026-10-05-device-store-read-error-as-empty.md) — store v2 已保护坏 JSON 和未知版本，IO 错误、坏条目过滤及副作用前守卫仍缺，后续写入可能丢失原记录
+- [2026-10-05-forward-tunnel-control-read-silent.md](notes/issue/2026-10/2026-10-05-forward-tunnel-control-read-silent.md) — 历史控制读侧零收包观察；2026-10-09 当前链路证实收到 ACK，协议字段及库 resolver 接线错误已修复
+- [2026-10-05-lint-baseline-unclean.md](notes/issue/2026-10/2026-10-05-lint-baseline-unclean.md) — npm run lint 存量 17 项未清（10 errors / 7 warnings）——react-hooks/set-state-in-effect 为主，集中在 DeviceCanvas 等既有效应
+- [2026-10-05-phone-avd-rotation-refused.md](notes/issue/2026-10/2026-10-05-phone-avd-rotation-refused.md) — 手办画像（pixel_8）的 AVD 在系统层拒绝一切旋转：settings user_rotation、emu rotate、虚拟加速度计、相机应用均不改画面方向；手机横屏的真机视觉验证待强制横屏应用或日常人工使用覆盖
+- [2026-10-05-wizard-download-no-tick-guard.md](notes/issue/2026-10/2026-10-05-wizard-download-no-tick-guard.md) — DeviceWizard download() 跨 tick 无互斥守卫——下载按钮是 disabled 行内的 span，jsdom 与极端竞速可穿透，两次并发 download 互相覆盖进度状态
+- [2026-10-06-download-cancel-review.md](notes/issue/2026-10/2026-10-06-download-cancel-review.md) — 下载取消分支 code review 发现——P1 两项（sha1 前取消检查点绕过清理域致 tmp 残留、空态提示被挤入第一轨）、P2 两项（互斥释放时序窗、解压取消真机缺口）、P3 两项（死代码、记录表述过强）
+- [2026-10-06-download-direct-review-findings.md](notes/issue/2026-10/2026-10-06-download-direct-review-findings.md) — 下载进度修复（fix/download-progress-zero）的 Phase 5 code review 发现——写流错误未监听可致 main 崩溃（P1）、.install-bak 可被清单扫描误读（P2）、自生成 package.xml 元素顺序与官方 XSD 不一致（P2）；按纪律只记录不修复
+- [2026-10-06-image-uninstall-review-findings.md](notes/issue/2026-10/2026-10-06-image-uninstall-review-findings.md) — 系统镜像删除功能 code review 发现——P1 卸载/下载互斥单向、P2 引用守卫 TOCTOU 与残留复核盲区，及 7 项 P3
+- [2026-10-06-real-machine-acceptance-findings.md](notes/issue/2026-10/2026-10-06-real-machine-acceptance-findings.md) — 直连 package.xml 的官方创建兼容性已修复并实测；Android 相机取景与签名版权限验收仍待完成
+- [2026-10-06-skin-camera-integration-findings.md](notes/issue/2026-10/2026-10-06-skin-camera-integration-findings.md) — 皮肤和摄像头后续调研发现——37.2 webcam 输出不被旧正则解析；Pixel 7 屏幕偏移取错 part；横屏首布局被拒，rotation 单位测试也偏离官方格式
+- [2026-10-06-theme-no-cross-window-sync.md](notes/issue/2026-10/2026-10-06-theme-no-cross-window-sync.md) — 主窗切换主题不广播，已打开的向导窗页面外观不跟随——两窗各自只在 preload 时取一次初值（存量问题）
+- [2026-10-06-theme-persist-concurrent-tmp-clash.md](notes/issue/2026-10/2026-10-06-theme-persist-concurrent-tmp-clash.md) — theme.json 落盘的 tmp 文件名固定，两次快速切换的 persist 交错会互相覆盖 tmp——假失败日志且写入顺序无保证
+- [2026-10-06-wizard-category-settings-review-findings.md](notes/issue/2026-10/2026-10-06-wizard-category-settings-review-findings.md) — 向导分类与附加设置分支合并结果（feature/wizard-category-settings @220f298，含 image-uninstall 与独立窗两支并入）的总体 code review 发现——P1 能力构建双路径分叉致皮肤/摄像头选择创建必拒、P2 四项、P3 十二项
+- [2026-10-06-wizard-plan-remaining-acceptance.md](notes/issue/2026-10/2026-10-06-wizard-plan-remaining-acceptance.md) — 向导扩展验收遗留：官方皮肤获取与投屏已接通，Quick 稳定性、摄像头取景、六类设备及部分真机验证仍未完成
+- [2026-10-07-api32-start-repro-procedure.md](notes/issue/2026-10/2026-10-07-api32-start-repro-procedure.md) — 启动挂起报告的可执行复现附录：临时 ADB 分段应答注入、完整应答对照与生产探测函数验证
+- [2026-10-07-api32-start-smoke-blocked.md](notes/issue/2026-10/2026-10-07-api32-start-smoke-blocked.md) — 已修复 P2 启动挂起：ADB 分段/断开有界收口，启动准备可取消；受控窗口及回归验证通过
+- [2026-10-07-fixture-readme-format-baseline.md](notes/issue/2026-10/2026-10-07-fixture-readme-format-baseline.md) — fixtures README 格式基线问题已解决——对账提交中格式化，全仓 prettier --check 复验退出码 0
+- [2026-10-07-manual-rotation-code-review.md](notes/issue/2026-10/2026-10-07-manual-rotation-code-review.md) — 旋转 review 的两项 P2 已修复；电源按用户要求改为停止模拟器并只从左侧启动
+- [2026-10-07-rotation-input-pause-review.md](notes/issue/2026-10/2026-10-07-rotation-input-pause-review.md) — 旋转暂停丢失 KeyUp 的 P2 已修复：main 释放旧键，暂停期间新输入直接丢弃
+- [2026-10-07-skin-camera-code-review-findings.md](notes/issue/2026-10/2026-10-07-skin-camera-code-review-findings.md) — 皮肤/摄像头集成（feature/wizard-category-settings 未提交轮）的 Phase 5 code review——无阻塞项；P3 三项（主动取消被当失败警示、无背景图皮肤可入库但投屏必报错、启动核验文案叠加），另含门禁复核与安全/几何核对结论
+- [2026-10-08-avd-reconciliation-code-review.md](notes/issue/2026-10/2026-10-08-avd-reconciliation-code-review.md) — 对账功能 code review 记录——四切片并行审查：6 项 P2（skin symlink 绕过判定、事务半成品误报弹窗、loadError 无消费、v1 id 校验不对称等）与约 18 项 P3，全部只记录不修复
+- [2026-10-08-avd-reconciliation-implementation-review.md](notes/issue/2026-10/2026-10-08-avd-reconciliation-implementation-review.md) — 持久化对账实现轮的自查记录——三项观察（重扫放弃时 availability 陈旧、root 环境下 EACCES 用例降级、弹窗前关窗会重弹一次），均按只记录不修复处理
+- [2026-10-08-deprecated-skin-display-args.md](notes/issue/2026-10/2026-10-08-deprecated-skin-display-args.md) — 已提供隔离 SDK 升级回归并在当前版本通过；-skin 的官方弃用风险继续监测
+- [2026-10-08-device-commit-baseline-findings.md](notes/issue/2026-10/2026-10-08-device-commit-baseline-findings.md) — 创建临时行被无关提交持久化与 startedAt 遗漏均已修复，2026-10-09 关闭
+- [2026-10-08-device-config-edit-audit.md](notes/issue/2026-10/2026-10-08-device-config-edit-audit.md) — 配置编辑审查发现恢复覆盖外部配置、目录 symlink 越界、全量旧值校验及 legacy 行为变化；黑屏另已修复
+- [2026-10-08-runner-test-unhandled-cancel-rejection.md](notes/issue/2026-10/2026-10-08-runner-test-unhandled-cancel-rejection.md) — runner.test.ts「disposeAll 打断挂起的 beforeStart」用例遗留一条 unhandled rejection（启动已取消），测试仍全绿但污染全量输出
+- [2026-10-08-skin-cutout-overlay-residue.md](notes/issue/2026-10/2026-10-08-skin-cutout-overlay-residue.md) — 皮肤不再改变安卓显示尺寸；历史挖孔残留可在编辑页明确请求恢复，隔离选择移除重启回归通过
+- [2026-10-09-config-mismatch-warning.md](notes/issue/2026-10/2026-10-09-config-mismatch-warning.md) — 配置偏差提示已支持逐项采用文件值；未采用时保存按表单同步差异，等价容量单位不再误报
+- [2026-10-09-config-safety-followup-audit.md](notes/issue/2026-10/2026-10-09-config-safety-followup-audit.md) — 复查确认创建临时行落盘、残留事务后改名误冻结、旧设备摄像头漏计和相机编号重排误拦截四项缺口
+- [2026-10-09-profiles-clean-machine-no-java.md](notes/issue/2026-10/2026-10-09-profiles-clean-machine-no-java.md) — profiles.ts 以宿主环境启动 avdmanager 未注入自带 JRE；从未装过 Java 的干净 Mac 上向导画像枚举失败，新建设备被挡在第一步，违背 PRD E 零依赖
+- [2026-10-09-remaining-fixes-review-findings.md](notes/issue/2026-10/2026-10-09-remaining-fixes-review-findings.md) — 五项修复 review 新发现：布局归零漏释放已有按下状态，控制写失败后关闭 parser 触发未观察 ACK rejection
+- [2026-10-09-sdk-image-download-system-proxy.md](notes/issue/2026-10/2026-10-09-sdk-image-download-system-proxy.md) — SDK、镜像清单与镜像字节下载仍使用 Node fetch，代理可用但直连不可用时可能失败；本轮只修官方皮肤，其他路径另立任务
+- [2026-10-10-apk-install-busy-unreachable.md](notes/issue/2026-10/2026-10-10-apk-install-busy-unreachable.md) — P2（已修复）：安装中再拖 APK 时 onDragEnter 无 phase 守卫，把 installing 打回 dragging——busyNote 分支真实会话不可达，忙被呈现为红色失败卡
+- [2026-10-10-boardhead-toggle-review-p3s.md](notes/issue/2026-10/2026-10-10-boardhead-toggle-review-p3s.md) — 主窗左上亮暗切换钮 review 两项 P3——matchMedia 订阅与 provider 重复、切换钮用动作标签而非 aria-pressed
+- [2026-10-10-devices-test-mock-leak.md](notes/issue/2026-10/2026-10-10-devices-test-mock-leak.md) — P3（已修复）：devices 测试 Quick Boot 组的 readAvdConfigRaw.mockRejectedValue 未恢复，clearAllMocks 不清实现，后追加的 describe 被渗入导致顺序敏感
+- [2026-10-10-logcat-resize-hook-window-recreate.md](notes/issue/2026-10/2026-10-10-logcat-resize-hook-window-recreate.md) — 日志面板 review P2——主窗关闭后重开，dock 宽度钳制钩子不随新窗口挂载，will-resize 拦截失效
+- [2026-10-10-logcat-review-p3-misc.md](notes/issue/2026-10/2026-10-10-logcat-review-p3-misc.md) — 日志面板 review P3 备忘——主窗宽度注释过时、快照导出面扩大、日志窗 URL 参数重复解析
+- [2026-10-10-logcat-spawn-fail-silent.md](notes/issue/2026-10/2026-10-10-logcat-spawn-fail-silent.md) — 日志域 adb 进程 spawn 同步失败时保留空会话，订阅者只见「暂无日志」空态，无任何错误提示
+- [2026-10-10-screenshot-review-p3s.md](notes/issue/2026-10/2026-10-10-screenshot-review-p3s.md) — 截屏批 review P3 共十项——首轮五项（save TOCTOU、缓存竞态、0×0 PNG、错误气泡时效、动画重复）+ 独立 review 追加五项（stderr 无界、oversized 绕 i18n、通道名错位、过期回调覆盖、runner 直测缺口）
+- [2026-10-10-settings-copy-dead-keys-and-learn-stale.md](notes/issue/2026-10/2026-10-10-settings-copy-dead-keys-and-learn-stale.md) — 已修复：设置窗三语字典的 title/preview 死键已删，learn 笔记「open/close 桥」表述已更正为仅 open
+- [2026-10-10-settings-window-crash-reopen.md](notes/issue/2026-10/2026-10-10-settings-window-crash-reopen.md) — P2：设置窗就绪后 renderer 崩溃未释放单例，主窗齿轮再次打开只聚焦故障窗；静态前端 review 发现，待独立修复
+- [2026-10-10-three-features-merge-code-review.md](notes/issue/2026-10/2026-10-10-three-features-merge-code-review.md) — 一期收尾三功能（APK 拖拽安装/截屏/日志面板）合并 dev 复核 review——4 项 P2、7 项 P3；同日修复批全量处置
+- [2026-10-11-sdk-source-shared-wizard-guide-and-journal-corruption.md](notes/issue/2026-10/2026-10-11-sdk-source-shared-wizard-guide-and-journal-corruption.md) — 共享 Studio SDK 模式四个遗留——向导缺包引导 UI 未做、journal 损坏无接管、ANDROID_USER_HOME/EMULATOR_HOME 落共享根内、source-adopt/source-migrate 缺 Studio 路径服务端复验（伪造载荷可把 Studio 根当可写自选根）
+- [2026-10-12-devicewizard-setstate-in-effect-lint.md](notes/issue/2026-10/2026-10-12-devicewizard-setstate-in-effect-lint.md) — DeviceWizard.tsx:458 存量 lint error——react-hooks 规则报 effect 内同步 setState 可触发级联渲染；dev 基线即有，非断网开关批引入
+- [2026-10-12-network-switch-code-review.md](notes/issue/2026-10/2026-10-12-network-switch-code-review.md) — 断网开关批 code review（八项清单）——总体 pass；3 项 P3 已修复（解析降级/networkGet 刷新初值/mock helper）、2 项批复语义不修，处置记录在内
+- [2026-10-12-no-single-instance-lock.md](notes/issue/2026-10/2026-10-12-no-single-instance-lock.md) — 全仓库缺 requestSingleInstanceLock——主仓库与 worktree 的 dev 构建同包名共享同一 userData，双实例并行互踩 devices.json/avd-home（删除被复活、互相触发冻结）
+- [2026-10-12-reconcile-report-full-view.md](notes/issue/2026-10/2026-10-12-reconcile-report-full-view.md) — 对账明细弹窗经 40 行截断防线后，超长报告的后 N 行在弹窗内不可见——需要应用内完整查看入口（滚动面板或导出）
+- [2026-10-12-reconcile-window-review-findings.md](notes/issue/2026-10/2026-10-12-reconcile-window-review-findings.md) — 对账弹窗相关批次 code review 发现——shell 白名单 `..` 穿越绕过（P1）、在途互斥吞新签名通知（P2）、白名单与 report 窗域零测试（P2）及 8 项 P3
+- [2026-10-12-source-aware-filter-batch-review.md](notes/issue/2026-10/2026-10-12-source-aware-filter-batch-review.md) — 出身标注 + 过滤视图两批（含六轮验收期修复）合并前 code review——无 P1；4 项 P2（跨桶运行设备查看回归、许可静默文本匹配、级联编排零测试、计数时间窗）与 8 项 P3
+- [2026-10-13-AppLogcatDock测试偶发抖动.md](notes/issue/2026-10/2026-10-13-AppLogcatDock测试偶发抖动.md) — App.logcat.test.tsx 的「dock 默认收起；点击展开并订阅，再点收起退订」用例在整仓并行跑时偶发失败（单独跑稳定通过），2026-10-13 两个不同批次各中一次
+- [2026-10-13-scrcpy-split-review.md](notes/issue/2026-10/2026-10-13-scrcpy-split-review.md) — scrcpy 拆分 review 发现（只记录不修复）——ipc.ts 部分入参校验文案是硬编码中文未走 msg() i18n；项目骨架.md 仍留着从未落地的 scrcpy/stream.ts【规划】行
+- [2026-10-13-存量lint不干净.md](notes/issue/2026-10/2026-10-13-存量lint不干净.md) — 存量 lint 不干净——sdkSourceSwitch.test.ts 一处缺函数返回类型（error 级），另有 DeviceWizard.tsx 等十余条 prettier 警告；2026-10-13 拆分验收时发现，与拆分无关
+- [2026-10-13-真机两批-review.md](notes/issue/2026-10/2026-10-13-真机两批-review.md) — 真机两批（USB 接入+APK 拖装 / 工具条对齐+三域）合并前 code review——1 项 P2（取消退出后真机跟踪不恢复）与 8 项 P3；只记录不修，修复另开一轮
+- [2026-10-13-真机增量-review.md](notes/issue/2026-10/2026-10-13-真机增量-review.md) — 上轮 review 后的增量代码走查（review 修复批 ec9a4e5/f2d1bb7 + 两个热修复 516864a/834f020）——1 项 P2（真机投屏重试链路失效）与 3 项 P3；只记录不修
+- [2026-10-13-真机硬件验收待执行.md](notes/issue/2026-10/2026-10-13-真机硬件验收待执行.md) — 真机 USB 接入与 APK 拖装第一批代码完成，但验收清单中需要物理设备的条目全部未实测——插拔跟随、投屏操控、拖装链路、MIUI 拦截词条、Android 14 旧包「仍要安装」、kill-server 恢复
+- [2026-10-15-刚连上首操作画面冻结数秒.md](notes/issue/2026-10/2026-10-15-刚连上首操作画面冻结数秒.md) — 二轮实窗验收后关闭：修正 GOP 微秒/毫秒误比、回放首关键帧序号误判与首批无 ACK 互等，首次配置不再发送 0×0 释放输入；真实主窗切换及息屏解锁首滑像素复验通过
+- [2026-10-15-无线批-review.md](notes/issue/2026-10/2026-10-15-无线批-review.md) — 无线批（plan 2026-10-15-real-device-wireless）Phase 5 code review 发现清单——1 项 P2（connect TCP 层失败不重试，promote 穿 adbd 重启窗口假报 unreachable）+ 8 项 P3；修复批九项全部清零（P3-8 记录不修）
+- [2026-10-15-真机无线批硬件验收待执行.md](notes/issue/2026-10/2026-10-15-真机无线批硬件验收待执行.md) — 真机无线批代码完成、自动化门禁全绿（1230 测试），但需要物理设备与真实手机交互的验收条目未实测——荣耀转无线/扫描/双条目并存/断开（用户可验），小米 mDNS+配对码（暂无设备，用户批复留手动验收）
+- [2026-10-15-荣耀30Pro-USB-serial漂移.md](notes/issue/2026-10/2026-10-15-荣耀30Pro-USB-serial漂移.md) — 荣耀 30 Pro（EBG_AN00）USB serial 在会话内漂移——DSLDU20B12002637 与 DSLU20B12002637 两种形态出现，设备身份按 serial 键控会闪断重建；只记录不修
+- [2026-10-16-clipboard-sync-review-and-acceptance.md](notes/issue/2026-10/2026-10-16-clipboard-sync-review-and-acceptance.md) — 用户人工验收通过，P2 超限全文序列化与 P3 注释均已修复；新增三项回归、全量 1272 项通过，复审无新发现
+- [2026-10-16-dev-merge-clipboard-recording-review.md](notes/issue/2026-10/2026-10-16-dev-merge-clipboard-recording-review.md) — dev 合并后集成 review——剪贴板批与录屏批的接缝核查；无新增 P0/P1/P2，P3 两项已修复（dispose 改名 unbindAll 并注明非终态语义、补跨特性回归测试）
+- [2026-10-16-recording-interaction-validation.md](notes/issue/2026-10/2026-10-16-recording-interaction-validation.md) — 录屏交互性能验收缺有效数据——双流长录平均包率约 34fps，实验触控仪器录前异常、录中超时，不能据此判定通过或给录屏定责
+- [2026-10-16-recording-p0-audio-clock.md](notes/issue/2026-10/2026-10-16-recording-p0-audio-clock.md) — 录屏长录同步未达标——原始 AAC PTS 漂移，正式采样时钟双 AVD 十分钟最大 112/106ms；Android 13+ 真机音频仍待验
+- [2026-10-16-recording-phase5-review.md](notes/issue/2026-10/2026-10-16-recording-phase5-review.md) — 录屏功能 Phase 5 code review 发现清单——2 项 P2、16 项 P3，无 P0/P1；修复批已全部处置，详见文末
+- [2026-10-16-recording-result-logcat-overlap.md](notes/issue/2026-10/2026-10-16-recording-result-logcat-overlap.md) — 已修复录屏结果与 Logcat 重叠——移除顶部结果条，完成结果走原生 dialog，当前计时与日志同组排列
+- [2026-10-16-投屏回放无ACK恢复盲点.md](notes/issue/2026-10/2026-10-16-投屏回放无ACK恢复盲点.md) — 已实窗复现并修复回放首批无 ACK 的互等：4 包解码阈值先于 8 包 ACK，渲染端停收而 main 未武装；新增显式重同步请求、阈值 16 与归属校验/去重
+- [2026-10-16-无线投屏建流失败后切回缺少重试入口.md](notes/issue/2026-10/2026-10-16-无线投屏建流失败后切回缺少重试入口.md) — USB/无线双条目两次启动分别有一侧 scrcpy video socket 超时；错误会话清理后切回，activate 返回空，界面停在连接态且没有重试入口，留后续单独修复
+- [2026-10-16-解锁投屏修复-code-review.md](notes/issue/2026-10/2026-10-16-解锁投屏修复-code-review.md) — 解锁投屏 Phase 5 的三项发现已修复并正式回归：本地手势随代次取消、零帧有界恢复与可重试错误态、ACK 安全整数校验；全量 1254 项通过
+- [2026-10-22-sdk-migration-adb-probe-win32.md](notes/issue/2026-10/2026-10-22-sdk-migration-adb-probe-win32.md) — sdkMigration 的 SDK 根核验探测写死无后缀 adb 路径——win32 下恒假阴性，迁移/切换根验证会误判
+- [2026-10-22-win32-hidden-non-x86-images.md](notes/issue/2026-10/2026-10-22-win32-hidden-non-x86-images.md) — win32 目录过滤后本地非 x86_64 镜像不可见（卸载入口随之隐藏）——一期接受，后续可加「不可用已装镜像」提示
+- [2026-10-22-windows-emulator-env-review.md](notes/issue/2026-10/2026-10-22-windows-emulator-env-review.md) — P5 模拟器环境适配代码评审发现——1 条 P2（繁中功能显示名与系统实际不符）+ 3 条 P3；只记录不修
+- [2026-10-22-windows-file-resilience-review.md](notes/issue/2026-10/2026-10-22-windows-file-resilience-review.md) — P4 分支（fsWin/sha1 流式化 + SDK 切换弹窗化 + 同路径守卫修复）代码评审发现——无 P1；流程 P2 一条（lint 门禁口径）+ P3 两条；只记录不修
+- [2026-10-22-windows-merge-integration-review.md](notes/issue/2026-10/2026-10-22-windows-merge-integration-review.md) — feat/windows-branch 三批合并集成 review——P1 引导/P2 检测链/P3 进程管理的接缝核查；无 P1，P2 一条（profiles.ts avdmanager 调用链 win32 必挂）+ P3 一条（四处 spawn 缺 windowsHide）；只记录不修
+- [2026-10-22-windows-process-mgmt-review.md](notes/issue/2026-10/2026-10-22-windows-process-mgmt-review.md) — P3 进程管理 Windows 化代码评审发现——无 P1；P2 两条（测试平台假设钉住、会话结束弹窗暴露面）+ P3 四条；只记录不修
+- [2026-10-22-windows-quit-stay-no-window.md](notes/issue/2026-10/2026-10-22-windows-quit-stay-no-window.md) — Windows 关窗确认选「留在应用」后 app 无窗口且无唤回入口——需 second-instance 处理，真机验收前修复
+- [2026-10-22-windows-sdk-bootstrap-review.md](notes/issue/2026-10/2026-10-22-windows-sdk-bootstrap-review.md) — Windows P1 SDK 引导平台化 code review——0 项 P1、1 项 P2（cmd.exe 含空格路径待真机验证）、4 项 P3（同日修复批已全部处置）
+- [2026-10-22-windows-studio-detect-review.md](notes/issue/2026-10/2026-10-22-windows-studio-detect-review.md) — P2 Windows 检测链（4dc8d46）代码评审发现——4 项 P3：平台传参风格、APPDATA 未优先读 env、win 用例 runner 可携带性、isStudioSdk 遗留未用声明；只记录未修
+- [2026-10-23-关于页真值对接-review.md](notes/issue/2026-10/2026-10-23-关于页真值对接-review.md) — 关于页真值对接（about:get / about:open-data-directory）阶段 5 评审——无 P1/P2，P3 三条（openPath 无 catch、错误路径测试缺口、可选链层级不一致）；同日修复批全量处置
+- [2026-10-30-windows-test-suite-platform-assumptions.md](notes/issue/2026-10/2026-10-30-windows-test-suite-platform-assumptions.md) — Windows 真机 npm test 全套 153 失败（基线 160）——测试夹具的 mac 平台假设经 process.platform 泄漏，产品代码 Windows 分支行为正确；裁决不修，mac 全绿为门禁口径
+- [2026-10-31-orphan-emulator-after-app-restart.md](notes/issue/2026-10/2026-10-31-orphan-emulator-after-app-restart.md) — 应用重启后上代 headless 模拟器进程存活成孤儿——runningCount 预检看不见，迁移与活体模拟器抢镜像文件（EPERM）；P3「孤儿进程」验收项的真机实证变体
+- [2026-10-31-shared-mode-bootstrap-button-misleading.md](notes/issue/2026-10/2026-10-31-shared-mode-bootstrap-button-misleading.md) — 共享模式缺 cmdline-tools 时向导仍出「完成 SDK 引导」按钮——点击必被共享只读守卫拒绝；应显示「去 SDK Manager 补装」指引（sdkSharedNotReady 文案已备而未接）
+- [2026-10-31-windows-acceptance-fixes-review.md](notes/issue/2026-10/2026-10-31-windows-acceptance-fixes-review.md) — Windows 真机验收十批修复（da14795..733e2b0）代码评审——0 P1 / 2 P2 / 8 P3；「删源前停 adb」族尚差 adopt 与 replaceTarget 清场两处，只记录未修
+- [2026-10-31-windows-dev-merge-integration-review.md](notes/issue/2026-10/2026-10-31-windows-dev-merge-integration-review.md) — feat/windows-branch 并入 dev 的合并集成 review——0 P1 / 1 P2（dialog avdHome 白名单 win32 失效，孤立报告「打开目录」必被拒）/ 4 P3；接缝文件双侧内容完整、护栏口径一致、npmrc×下载链证伪交互
+- [2026-10-31-windows-sdk-source-switch-matrix.md](notes/issue/2026-10/2026-10-31-windows-sdk-source-switch-matrix.md) — SDK 来源切换矩阵在 win32 整体失真——classifyRoot 三个 SDK 标记全是 darwin 路径，切出零迁移不弹评估、回切被 target-junk 拒绝；真机验收实证（2026-10-22 记录的 sdkMigration adb 探测假阴性实为三处全中）
+
+### notes/issue/2026-11/
+
+- [2026-11-02-dev-latest-merge-review.md](notes/issue/2026-11/2026-11-02-dev-latest-merge-review.md) — dev 最近合入评审两项 P2 已修复，窗口最小化恢复经实测确认并修复，附验证结果
+- [2026-11-02-screenshot-editor-review.md](notes/issue/2026-11/2026-11-02-screenshot-editor-review.md) — 截图编辑器阶段 5 评审——八项检查与 plan 专项全部通过，无 P1/P2；1 项 P3（导出防重 React state 理论重入窗口，来源同款，main 侧占位兜底）
+- [2026-11-02-windows-icon-master-edge.md](notes/issue/2026-11/2026-11-02-windows-icon-master-edge.md) — 黑屏 Windows 图标母版原尺寸下，手机外沿仍有少量生成杂色，常用小尺寸不影响黑屏识别
+- [2026-11-02-windows-test-baseline.md](notes/issue/2026-11/2026-11-02-windows-test-baseline.md) — Windows 图标替换前的全量测试已有 153 项失败，涉及平台假设、路径、符号链接与权限，未在本任务修复
+- [2026-11-02-windows-titlebar-narrow-window.md](notes/issue/2026-11/2026-11-02-windows-titlebar-narrow-window.md) — Windows 顶部宽左栏配合窄主窗时 Logcat 越界，已在独立修复轮次处理，三档缩放复验通过
+- [2026-11-02-worktree单实例锁互斥.md](notes/issue/2026-11/2026-11-02-worktree单实例锁互斥.md) — 多 worktree 并行开发时同包名 Electron 应用共享 userData，单实例锁先到先得——后启动的 dev 拿不到锁静默退出，人工验收被挡；create-worktree 只分配了端口未处理锁
+- [2026-11-03-actions-runtime-deprecation.md](notes/issue/2026-11/2026-11-03-actions-runtime-deprecation.md) — GitHub 提示 checkout 和 setup-node v4 使用已弃用的 Node 20 运行时，目前由平台强制切换到 Node 24 并构建成功
+- [2026-11-03-logcat-subscription-test-flake.md](notes/issue/2026-11/2026-11-03-logcat-subscription-test-flake.md) — 全仓测试中日志 dock 展开后的订阅断言偶发失败，无代码改动复跑全部通过，等待时序需单独核查
+- [2026-11-03-low-core-default-settings.md](notes/issue/2026-11/2026-11-03-low-core-default-settings.md) — 少于四核的宿主会产生超出自身能力范围的默认模拟器 CPU 配置，首次发布 CI 暴露此问题
+- [2026-11-03-publication-review.md](notes/issue/2026-11/2026-11-03-publication-review.md) — 首次公开发布检查发现 Logcat 测试偶发失败、hook 未执行和旧产品说明待核对
+- [2026-11-03-screenshot-layout-review.md](notes/issue/2026-11/2026-11-03-screenshot-layout-review.md) — 已修复图片编辑页缩放后的三灯定位偏移，以及损坏的 worktree 元数据阻断端口覆盖与构建两项复审问题
+- [2026-11-03-wireless-unreachable-diagnostics.md](notes/issue/2026-11/2026-11-03-wireless-unreachable-diagnostics.md) — 无线连接把 macOS Local network prohibited 引发的 No route to host 统一提示为确认手机 Wi-Fi，原始 ADB 错误未传给用户
+
+### notes/learn/
+
+- [2026-10-06-红绿灯垂直居中实测.md](notes/learn/2026-10-06-红绿灯垂直居中实测.md) — darwin 红绿灯垂直居中的像素实测法——12px 灯、trafficLightPosition 的 +2 内禀偏移与 40px 板头的 y=12 公式；多实例/多显示器下的可靠测量路径
 
 ### notes/learn/2026-09/
 
@@ -87,27 +233,260 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [2026-10-01-electron-color-scheme-dark-text.md](notes/learn/2026-10/2026-10-01-electron-color-scheme-dark-text.md) — Electron renderer 开 color-scheme: light dark 跟随系统进深色后，硬编码的深色文字不可见——主题落地前锁 color-scheme: light
 - [2026-10-02-eslint-return-type-on-zero-dep-mjs.md](notes/learn/2026-10/2026-10-02-eslint-return-type-on-zero-dep-mjs.md) — eslint 的 TS 推荐规则会打到零依赖 .mjs 脚本上要求返回类型标注——scripts/ 每个新脚本头部带文件级 disable
+- [2026-10-03-cdp-port-stale-instance.md](notes/learn/2026-10/2026-10-03-cdp-port-stale-instance.md) — electron-vite dev 的 CDP 端口被残留 Electron 实例占用时，CDP 会静默连到旧 app——「新代码不生效」先查 9222 被谁占
+- [2026-10-03-cdp-smoke-no-test-framework.md](notes/learn/2026-10/2026-10-03-cdp-smoke-no-test-framework.md) — 无测试框架时验证 Electron renderer 交互——dev 带 --remote-debugging-port，Node 内建 WebSocket 直连 CDP 点按钮/读状态/截屏
 - [2026-10-03-electron-enable-logging-renderer-console.md](notes/learn/2026-10/2026-10-03-electron-enable-logging-renderer-console.md) — Electron dev 终端看不到 renderer 控制台——ELECTRON_ENABLE_LOGGING=1 让 console 进 stdout，是无测试框架时验证 preload/renderer 的主要手段
+- [2026-10-03-styled-components-v6-ref-typing.md](notes/learn/2026-10/2026-10-03-styled-components-v6-ref-typing.md) — styled-components v6 对 styled(自定义组件) 的 ref 转发无类型通道——手动聚焦改用 autoFocus + onFocus 事件替代 ref
+- [2026-10-03-vitest-testing-library-gotchas.md](notes/learn/2026-10/2026-10-03-vitest-testing-library-gotchas.md) — vitest + testing-library 两个必踩坑——RTL 自动 cleanup 依赖全局 afterEach，受控组件测试要用 useState Harness 回灌 value
+- [2026-10-03-vitest5-vi-fn-single-generic.md](notes/learn/2026-10/2026-10-03-vitest5-vi-fn-single-generic.md) — vitest 5 的 vi.fn 泛型改成单个函数类型参数——旧写法 <Args, Return> 报 TS2558 Expected 0-1 type arguments
+- [2026-10-04-avd-config-handwrite.md](notes/learn/2026-10/2026-10-04-avd-config-handwrite.md) — AVD 目录结构可以手写——emulator 只读 .ini + config.ini，最小配置冷启动 9 秒，绕开 avdmanager 依赖
+- [2026-10-04-electron-runtime-icon.md](notes/learn/2026-10/2026-10-04-electron-runtime-icon.md) — Electron 打包图标、macOS Dock 和原生提示框分别配置；主进程共用 NativeImage 可统一运行时图片
+- [2026-10-04-electron-vite-multi-page-wizard-window.md](notes/learn/2026-10/2026-10-04-electron-vite-multi-page-wizard-window.md) — electron-vite 加第二个 HTML 入口的三件套——rollupOptions.input、嵌套目录入口的相对路径（./ 还是 ../）、modal 子窗 dev/prod 双加载分支
+- [2026-10-04-emulator-process-group-kill.md](notes/learn/2026-10/2026-10-04-emulator-process-group-kill.md) — macOS 上 emulator 是启动器、真身是 qemu 子进程——停止要按进程组整组 kill，否则残留实例抢 AVD 锁让新实例静默 exit 1
+- [2026-10-04-generated-icon-alpha.md](notes/learn/2026-10/2026-10-04-generated-icon-alpha.md) — 生成式图标的透明外沿会残留杂点；同系列图标导出时复用参考 alpha 通道可固定圆角和留白
+- [2026-10-04-scrcpy-transport-forward-tcp.md](notes/learn/2026-10/2026-10-04-scrcpy-transport-forward-tcp.md) — scrcpy 取流传输要走 adb forward + 裸 TCP（官方客户端同款路径）——Tango 的 adb server 直连 localabstract 会卡死服务端取帧
+- [2026-10-04-titlebar-hidden-blur-traffic-lights.md](notes/learn/2026-10/2026-10-04-titlebar-hidden-blur-traffic-lights.md) — macOS titleBarStyle hidden 的失焦三灯整组消失怪癖——setWindowButtonVisibility 在 blur 抢不过系统，hiddenInset 是正解
+- [2026-10-05-cdp-evaluate-page-destroy-hang.md](notes/learn/2026-10/2026-10-05-cdp-evaluate-page-destroy-hang.md) — CDP 驱动 Electron 页面时窗口在 evaluate 应答前关闭——WebSocket 无响应也不报错，pending promise 永不 settle，脚本静默悬挂
+- [2026-10-05-electron-cdp-acceptance-observables.md](notes/learn/2026-10/2026-10-05-electron-cdp-acceptance-observables.md) — Electron 真机 UI 验收的可观测经验：scrcpy 注入不进内核 getevent 要用 paints 跃迁做正反证；macOS displaysleep 节流会让 ResizeObserver/layout 长时间不就绪；主题切换经 useEffect 生效需轮询；BoardHead 外观控件有分段/下拉两种形态
+- [2026-10-05-emulator-console-token-host-home.md](notes/learn/2026-10/2026-10-05-emulator-console-token-host-home.md) — console token 路径不随 ANDROID_EMULATOR_HOME 重定向——恒为 $HOME/.emulator_console_auth_token，缺失时 emulator 会写宿主 home；共享 adb 靠 smart-socket 只读探测保不重启
+- [2026-10-05-fast-xml-parser-v5-attrs-and-vitest-no-typecheck.md](notes/learn/2026-10/2026-10-05-fast-xml-parser-v5-attrs-and-vitest-no-typecheck.md) — fast-xml-parser v5 默认忽略 XML 属性——@_path/@_unit 静默丢失，manifest 解析出 0 条且不报错；vitest 只转译不做类型检查，运行时 undefined 缺陷会漏网
+- [2026-10-05-offscreen-electron-pixel-acceptance.md](notes/learn/2026-10/2026-10-05-offscreen-electron-pixel-acceptance.md) — jsdom 证不了像素对齐——离屏 Electron + 页内 getBoundingClientRect 几何断言 + capturePage 序列帧，一套临时 harness 覆盖状态矩阵、动画漂移与主题可见性
+- [2026-10-05-tsx-generic-arrow-comma.md](notes/learn/2026-10/2026-10-05-tsx-generic-arrow-comma.md) — tsx 里泛型箭头函数必须写 <T,>——裸 <T>( 被解析成 JSX 起始标签，连环假错报到几百行外的 styled 段
+- [2026-10-05-vitest-clearallmocks-impl-bleed.md](notes/learn/2026-10/2026-10-05-vitest-clearallmocks-impl-bleed.md) — vi.clearAllMocks 只清调用记录不重置实现——上一组 describe 末用例设置的持久 mockRejectedValue 会渗进下一组，报错栈指向别的用例的 setup 行
+- [2026-10-05-worktree-git-common-dir-relative.md](notes/learn/2026-10/2026-10-05-worktree-git-common-dir-relative.md) — create-worktree 技能的仓库父目录公式在仓库根执行会得到相对路径 "."，worktree 被建进主仓库内部；用 rev-parse --show-toplevel 或绝对路径展开
+- [2026-10-05-xml-namespace-backreference-colon.md](notes/learn/2026-10/2026-10-05-xml-namespace-backreference-colon.md) — 正则解析带命名空间前缀的 XML 块时，前缀捕获组必须把冒号包进组内，否则闭合标签回引永假、惰性块体吞掉全部后续同祖节点；esbuild 不校验正则字面量，坏正则要到运行时才以"静默错配"现形
+- [2026-10-06-abort-dual-error-shapes.md](notes/learn/2026-10/2026-10-06-abort-dual-error-shapes.md) — AbortController 取消会以两种错误形态到达——自检点的 CancelledError 与 fetch/execFile 的原生 AbortError；分流只认一种会让取消穿成失败
+- [2026-10-06-async-ipc-handler-test-rejects.md](notes/learn/2026-10/2026-10-06-async-ipc-handler-test-rejects.md) — ipcMain.handle 的 handler 改 async 后，非法入参不再同步抛错而是 reject——测试断言要从 toThrow 换 rejects.toThrow
+- [2026-10-06-book-index-is-generated-no-prettier.md](notes/learn/2026-10/2026-10-06-book-index-is-generated-no-prettier.md) — book/README.md 是索引生成物——对它跑 prettier 会让 release-check 判「索引过期」，收口只跑 book:index 直接提交
+- [2026-10-06-commit-scope-must-be-lowercase.md](notes/learn/2026-10/2026-10-06-commit-scope-must-be-lowercase.md) — commit-msg 钩子要求 scope 全小写——驼峰命名（packageOps）会被主题校验拒两次且报错信息不直观
+- [2026-10-06-injection-masks-dual-path-divergence.md](notes/learn/2026-10/2026-10-06-injection-masks-dual-path-divergence.md) — 测试注入让两侧共用同一份对象会抹平"双路径分叉"——单测全绿的双口径，集成后一边必拒；回归锚要断言"两侧消费同源产物"
+- [2026-10-06-sysimg-zip-2gb-limit-and-package-xml.md](notes/learn/2026-10/2026-10-06-sysimg-zip-2gb-limit-and-package-xml.md) — 系统镜像 zip 两个实测坑——adm-zip 单条目 Buffer 撞 2^31 上限（userdata.img 恰 2147483648 字节）必须走系统 unzip；zip 不带 package.xml 且首层是 <abi>/，直连安装要自生成身份文件
+- [2026-10-07-adb-fragmented-reply-hangs-ipc.md](notes/learn/2026-10/2026-10-07-adb-fragmented-reply-hangs-ipc.md) — ADB 探测只读首段且漏掉 close 会让启动 Promise 挂起；Electron 的丢回复错误需沿等待链追踪
+- [2026-10-07-cancel-vs-failure-channel.md](notes/learn/2026-10/2026-10-07-cancel-vs-failure-channel.md) — 用户主动取消要走可空返回值契约，不走错误通道——字符串匹配取消文案会碎，catch-all 会把取消当失败警示
+- [2026-10-07-discard-rotation-input-and-release-keys.md](notes/learn/2026-10/2026-10-07-discard-rotation-input-and-release-keys.md) — 丢弃旋转期间的新输入时，main 必须释放旧键；renderer 清掉移动 RAF 和跨暂停 IME
+- [2026-10-07-rotation-await-input-guard.md](notes/learn/2026-10/2026-10-07-rotation-await-input-guard.md) — 异步旋转须在首次 await 前阻止新触点；失败提示须按信封副本核对当前归属
+- [2026-10-07-scrcpy-manual-rotation-auto-revert.md](notes/learn/2026-10/2026-10-07-scrcpy-manual-rotation-auto-revert.md) — scrcpy 手动旋转会恢复自动旋转；模拟器须先同步锁定方向，避免传感器立即转回竖屏
+- [2026-10-07-start-preparation-cancel-and-probe-deadline.md](notes/learn/2026-10/2026-10-07-start-preparation-cancel-and-probe-deadline.md) — ADB smart-socket 应按完整帧和总期限结束；启动准备需先登记，并在取消时丢弃迟到结果、释放预留
+- [2026-10-07-studio-skin-camera-runtime-contracts.md](notes/learn/2026-10/2026-10-07-studio-skin-camera-runtime-contracts.md) — 摄像头空清单先核对真实 CLI 格式；Studio 皮肤按固定提交获取，display part 和 quarter-turn 决定渲染及输入几何
+- [2026-10-08-avd-reconciliation-implementation-notes.md](notes/learn/2026-10/2026-10-08-avd-reconciliation-implementation-notes.md) — 持久化对账实现轮的四条硬经验——fake timers 与真实 fs 的共存法、clearAllMocks 的返回值泄漏、绝对路径段判逃逸、单飞 mock 的 resolver 时序
+- [2026-10-08-hook-container-deps-and-runtime-status-fixtures.md](notes/learn/2026-10/2026-10-08-hook-container-deps-and-runtime-status-fixtures.md) — 自定义 hook 的返回对象不能进 effect 依赖（枚举态每次换引用 → 无限重拉 OOM）；devices 域测试里 runtime 状态必须真实驱动，store fixture 塞 status 无效
+- [2026-10-08-opaque-skin-mask-black-screen.md](notes/learn/2026-10/2026-10-08-opaque-skin-mask-black-screen.md) — 启动完成却显示整块灰色时先对比设备截图与投屏；完全不透明的皮肤前景必须回退，不能误修 AVD
+- [2026-10-08-qvga-cutout-insets.md](notes/learn/2026-10/2026-10-08-qvga-cutout-insets.md) — 分辨率恢复后仍破版，要检查安卓残留的挖孔屏 overlay 与实际窗口 inset
+- [2026-10-08-skin-overrides-display-size.md](notes/learn/2026-10/2026-10-08-skin-overrides-display-size.md) — 无头模拟器也会从皮肤读取屏幕尺寸；小图标先对比配置、实际尺寸和密度
+- [2026-10-09-config-edit-safety.md](notes/learn/2026-10/2026-10-09-config-edit-safety.md) — 已有模拟器编辑只归一化差异，恢复必须同时比较配置与元数据；官方工具与真实安卓状态需要独立验收
+- [2026-10-09-devices-test-fixture-gotchas.md](notes/learn/2026-10/2026-10-09-devices-test-fixture-gotchas.md) — devices 域测试挂具的两个坑——双 freshDomain 的 handlerFor 取首个注册、mock start 固定 runId 与按代次隔离机制的映射失配
+- [2026-10-09-electron-fetch-system-proxy.md](notes/learn/2026-10/2026-10-09-electron-fetch-system-proxy.md) — Electron 主进程的 Node fetch 不遵循系统代理；官方皮肤用 net.fetch 后在直连 DNS 失败的真实进程中仍可获取，命令行探针不能替代应用默认路径验收
+- [2026-10-09-emulator-camera-arg-compat.md](notes/learn/2026-10/2026-10-09-emulator-camera-arg-compat.md) — emulator 虚拟场景只认 config 小写；创建和编辑共用映射，复现先保留原配置以免掩盖相机闪退
+- [2026-10-09-external-paste-event.md](notes/learn/2026-10/2026-10-09-external-paste-event.md) — 外部粘贴不会走 insertText 或 compositionend；隐藏输入代理必须显式处理 paste 并阻止默认插入
+- [2026-10-09-input-release-control-write-and-listeners.md](notes/learn/2026-10/2026-10-09-input-release-control-write-and-listeners.md) — 输入释放要与新输入门控分开，控制发送同时观察 write/consumed/ACK，正常等待结束也要移除 abort 监听；皮肤别名以官方绑定和尺寸为证
+- [2026-10-09-remaining-issue-fixes.md](notes/learn/2026-10/2026-10-09-remaining-issue-fixes.md) — 工具环境要显式注入、画布要区分流与布局就绪、scrcpy 回包要用与 writer 一致的解析器
+- [2026-10-10-compact-appearance-menu.md](notes/learn/2026-10/2026-10-10-compact-appearance-menu.md) — styled 后代 button 仍会影响子组件，外观模式图标须读所选值，窄栏菜单须用真实排版验收
+- [2026-10-10-electron-settings-static-preview.md](notes/learn/2026-10/2026-10-10-electron-settings-static-preview.md) — 设置静态前端的只读边界与验收：展示模型留在 renderer，多语样例独立验证，截图需核对渲染状态和 DIP
+- [2026-10-10-electron-window-two-coordinate-systems.md](notes/learn/2026-10/2026-10-10-electron-window-two-coordinate-systems.md) — Electron 窗口尺寸有两套坐标系——getBounds/setSize 是外框、getContentBounds/setContentSize 是内容；跨平台做 UI 布局钳制时混用两套会差一个帧差宽度（Windows 14-16px），且测试替身常把「外框=内容」烧进假设掩盖缺陷
+- [2026-10-10-electron39-dragdrop-webutils.md](notes/learn/2026-10/2026-10-10-electron39-dragdrop-webutils.md) — Electron 39 拖放文件路径必须经 preload webUtils.getPathForFile 中转；jsdom 拖放测试三个坑（小写事件名、relatedTarget 不进 init、DataTransfer 靠 fireEvent init）
+- [2026-10-10-logcat-verify-pitfalls.md](notes/learn/2026-10/2026-10-10-logcat-verify-pitfalls.md) — 日志面板验证期两个环境陷阱：npm run format 不透传参数全仓扰动；npx electron 直指 js 文件会换 app 名隔离 userData
+- [2026-10-10-screenshot-adb-binary-and-hooks-rules.md](notes/learn/2026-10/2026-10-10-screenshot-adb-binary-and-hooks-rules.md) — 截屏批三个实现经验——exec-out 二进制必须 Buffer 版 runner（runAdb utf8 化毁字节）、互斥检查与占位间不得夹 await、react-hooks 新规则用渲染期派生替代 effect setState
+- [2026-10-10-styled-single-wrapper-refactor.md](notes/learn/2026-10/2026-10-10-styled-single-wrapper-refactor.md) — styled 单 Wrapper 全局重排的执行经验——影响表和施工批次必须对账、并行 agent 的集中验证纪律、后代类选择器特异性升档的前提
+- [2026-10-11-sdk-source-async-predicate-and-sync-guard.md](notes/learn/2026-10/2026-10-11-sdk-source-async-predicate-and-sync-guard.md) — SDK 来源切换实现批的三条踩坑——异步谓词被同步布尔守卫吞掉恒过、IPC 入口守卫做真实 fs 读扰动时序敏感用例、就绪门检查绑定了应用自有布局
+- [2026-10-12-app-mount-subscription-test-mock-shape.md](notes/learn/2026-10/2026-10-12-app-mount-subscription-test-mock-shape.md) — 断网开关批经验——App 挂载期新增 window.api 订阅必须同步补齐既有测试的 mock 形状（22 项连环挂）；vi.fn mock 带参函数要显式参数类型
+- [2026-10-12-freshdomain-resetmodules-stale-import.md](notes/learn/2026-10/2026-10-12-freshdomain-resetmodules-stale-import.md) — 来源感知列表批经验——vi.resetModules 后静态 import 成旧模块（测试设态必须动态重取同实例）；每调用现建 deps 的模块没有单例拦截点，监听器注册表是全覆盖分流的正解
+- [2026-10-12-merge-readme-regen-and-lint-baseline.md](notes/learn/2026-10/2026-10-12-merge-readme-regen-and-lint-baseline.md) — 双分支合并 review 经验——生成物 README 冲突必须重跑生成器收敛（手拼必漂移）；lint/测试「通过」注记要复跑验证，基线问题在两父提交上分别复跑定位归属
+- [2026-10-12-persistent-field-store-projection-checklist.md](notes/learn/2026-10/2026-10-12-persistent-field-store-projection-checklist.md) — 持久字段新增的完整落点清单——types/toMeta 之外还有 store 白名单投影与校验；漏投影的表象是读丢字段+切来源即冻结写入（误判外部修改）
+- [2026-10-13-adb双server诊断污染与观测日志.md](notes/learn/2026-10/2026-10-13-adb双server诊断污染与观测日志.md) — 排查「真机先插、应用后起读不到」的三条经验——双 adb server 会互相抢 USB 接口造成假盲区、后台长连接客户端必须带观测日志否则故障不可归因、全新 server 的 USB 枚举是异步的需要 devices 逼一次落地
+- [2026-10-13-book相对链接按目录深度.md](notes/learn/2026-10/2026-10-13-book相对链接按目录深度.md) — book 内部相对链接的层级按「文件所在目录到仓库根的深度」算——notes/issue 与 notes/learn 有月份子目录（四级），链接 src 要 ../../../..；think-report 无子目录（三级）用 ../../..
+- [2026-10-13-主进程大文件拆分的边界方法.md](notes/learn/2026-10/2026-10-13-主进程大文件拆分的边界方法.md) — 主进程大文件拆分的边界方法——ESM let 不可外部赋值决定的状态归属规则（单写方私有 vs state.ts 访问器）、vi.resetModules 单例语义保持、按消费方零改动倒推出口契约
+- [2026-10-13-打包竞态asar错位与隐藏目录.md](notes/learn/2026-10/2026-10-13-打包竞态asar错位与隐藏目录.md) — electron-builder 打包时 .zcode/.workbuddy 等隐藏目录被工具实时写入，asar 内容区与索引错位，主入口混入他文件字节致 SyntaxError 静默闪退；files 排除隐藏目录 + afterPack ad-hoc 签名 + asar 校验脚本三件套根治
+- [2026-10-13-拆工厂闭包用context不用访问器.md](notes/learn/2026-10/2026-10-13-拆工厂闭包用context不用访问器.md) — 拆工厂闭包与拆模块单例是两回事——工厂用 ManagerContext 首参显式化闭包状态（无 ESM let 问题、无单例重载问题），错误路径调 destroySession 决定分层；可选链收窄在属性链上依旧可用
+- [2026-10-13-真机三域适配的组合查询与双源状态.md](notes/learn/2026-10/2026-10-13-真机三域适配的组合查询与双源状态.md) — 真机截屏/网络/日志三域适配的三个可复用结论——组合查询模式的第三次复用收口成两个函数、跨来源状态不能放进会 prune 的 store、派生对象的生命周期跟随要用原始值 key
+- [2026-10-13-真机接入的三个接缝经验.md](notes/learn/2026-10/2026-10-13-真机接入的三个接缝经验.md) — 真机接入实现的三个接缝经验——track 载荷是 key:value 冒号格式、ensureSession 同 runId 幂等决定了重连必须代次自增、投屏 hook 参数收窄为结构化最小形态即可被真机画布复用
+- [2026-10-13-自签项目签名身份专用钥匙串.md](notes/learn/2026-10/2026-10-13-自签项目签名身份专用钥匙串.md) — 本机无 Apple 证书时给项目签名的完整方案——openssl 自签 codeSigning 证书放专用钥匙串（密码本地 600 文件、签名前解锁、分区访问控制预授权 codesign），appId 换正式反域名，DR 锚定证书实现升级后 TCC 授权保留
+- [2026-10-15-息屏唤醒投屏冻结死锁.md](notes/learn/2026-10/2026-10-15-息屏唤醒投屏冻结死锁.md) — 息屏唤醒后投屏冻结但操控有效的死锁——唤醒突发同时打爆 GopCache PTS 跨度预算（清链）与未 ACK 包预算，sendResync 空手悬空丢包而 outbox 已被 ACK 清零、看门狗永不触发；修复为看门狗补悬空分支两轮空回放后 resetVideo
+- [2026-10-15-真机无线开通与排障路径.md](notes/learn/2026-10/2026-10-15-真机无线开通与排障路径.md) — 真机无线调试开通与排障路径——荣耀/华为系无官方开关只能 tcpip（先读 IP 再切换）、adbd 重启竞态要退避重试、跨网段被代理 TUN 假握手劫持而同网段免疫、荣耀息屏深睡断 Wi-Fi 充电可避、mDNS 实例名含空格按服务类型后缀匹配
+- [2026-10-16-clipboard-sync-lifecycle.md](notes/learn/2026-10/2026-10-16-clipboard-sync-lifecycle.md) — 双向剪贴板的观察基线、单飞 ACK 队列与 IME 回声必须分开；设备消息消费不能等待出站 ACK
+- [2026-10-16-recording-poc-media-boundaries.md](notes/learn/2026-10/2026-10-16-recording-poc-media-boundaries.md) — 录屏 P0 的三个边界——独立 scrcpy 会话各持 jar 路径，WebCodecs decoder flush 后重新等关键帧，音画测试源按实际播放时间校准
+- [2026-10-16-投屏PTS单位与静置ACK误判.md](notes/learn/2026-10/2026-10-16-投屏PTS单位与静置ACK误判.md) — PTS 与 ACK 单位和节拍须对齐；后台回放从首关键帧起算，拥堵显式恢复须独立计时、有界失败，并同步取消本地手势；验收覆盖真实主窗后台激活
+- [2026-10-22-vitest-esm-namespace-spy.md](notes/learn/2026-10/2026-10-22-vitest-esm-namespace-spy.md) — vitest 里 vi.spyOn 打不通 node 内置模块的 ESM 命名空间——要么整模块 vi.mock，要么给被测函数留接缝参数
+- [2026-10-22-window-api-default-stub-injected-tests.md](notes/learn/2026-10/2026-10-22-window-api-default-stub-injected-tests.md) — 组件新增 window.api 读取时，注入式测试用例会因缺 api 桩 TypeError——beforeEach 挂默认桩（含 platform），自挂完整桩的用例自然覆盖
+- [2026-10-22-windows-spawn-bat-tar-exe.md](notes/learn/2026-10/2026-10-22-windows-spawn-bat-tar-exe.md) — win32 下 spawn .bat/.cmd 必须 cmd.exe /c 包装（Node 安全修复后直接抛 EINVAL）；GUI 进程拉子进程要带 windowsHide 防闪黑框；Windows 解 zip 用系统自带 tar.exe（bsdtar 原生 zip64），PowerShell Expand-Archive 有 2GB 单文件上限不可用
+- [2026-10-22-接缝存在不等于接缝生效.md](notes/learn/2026-10/2026-10-22-接缝存在不等于接缝生效.md) — 测试接缝的可注入性要靠「默认实现也走注入」锁定——defaultAdbOnPath 收了 fileExists 接缝却写死 defaultFileExists，接缝自始未生效
+- [2026-10-23-可选链部分mock抛错.md](notes/learn/2026-10/2026-10-23-可选链部分mock抛错.md) — 可选链只护到链上最后一个 ?.——访问 window.api 下更深的域时，测试部分 mock 缺中间键会让 useEffect 同步抛错
+- [2026-10-30-book-index-win32-path-separator.md](notes/learn/2026-10/2026-10-30-book-index-win32-path-separator.md) — 零依赖 Node 脚本里凡是要产出「跨平台一致的文本」（索引、清单、模板），path.relative/join 的结果必须先归一为正斜杠——win32 的反斜杠会击穿按 'a/b' 写死的键匹配与 split('/')
+- [2026-10-30-windows-darwin-path-duplicates.md](notes/learn/2026-10/2026-10-30-windows-darwin-path-duplicates.md) — Windows 真机验收连爆三处 darwin 路径硬编码（sdkMigration adb 探测、profiles avdmanager 链、javaBinFor/javaHomeFor）——同一根因：P1 平台化只改了 sdkPaths 单源及其直接消费方，自行 join 布局的"第二路径真源"全数漏网；两判定源口径分叉会让 UI 逻辑死锁
+
+### notes/learn/2026-11/
+
+- [2026-11-02-device-overlap-ready-fixture.md](notes/learn/2026-11/2026-11-02-device-overlap-ready-fixture.md) — 检查投屏与窗口控件遮挡时必须提供 ready 视频尺寸，连接中占位和 DOM 结构测试无法覆盖外框缩放
+- [2026-11-02-minimized-window-focus.md](notes/learn/2026-11/2026-11-02-minimized-window-focus.md) — Windows Electron 最小化工具窗重新打开要先 restore，再 focus；focus 本身不还原
+- [2026-11-02-window-controls-overlay-safe-area.md](notes/learn/2026-11/2026-11-02-window-controls-overlay-safe-area.md) — Electron 原生按钮安全区不仅要读取 env，内部 flex 也必须允许收缩，否则宽左栏仍会把 Logcat 挤进窗口按钮区
+- [2026-11-02-worktree-stash-checkout三重坑.md](notes/learn/2026-11/2026-11-02-worktree-stash-checkout三重坑.md) — worktree 里用 stash+checkout 对比基线有三重坑——stash 是仓库级共享（pop 到别的分支遗留条目）、untracked 文件冲突卡半途、切换分支会杀死运行中的 dev；基线对比只用只读方式
+- [2026-11-02-复刻验收压窗宽极值.md](notes/learn/2026-11/2026-11-02-复刻验收压窗宽极值.md) — 复刻带窗口自适应的源码功能时，视觉验收必须把窗口压到 MIN 宽高极值——典型尺寸（竖屏 551px）通过不代表 360px 极小窗通过；单行 flex 工具条在窄容器必溢出
+- [2026-11-03-adb-local-network-prohibited.md](notes/learn/2026-11/2026-11-03-adb-local-network-prohibited.md) — 手机 Wi-Fi 与 5555 端口正常仍报 No route to host 时，检查共享 ADB 服务的 macOS 本地网络权限；本次重启服务后恢复
+- [2026-11-03-toolbar-centering-validation.md](notes/learn/2026-11/2026-11-03-toolbar-centering-validation.md) — 工具条居中要测实际内容；macOS 原生窗口按钮还需按工具栏高度定位，并用原生窗口截图核验
+
+### notes/summary/2026-10/
+
+- [2026-10-03-项目骨架与规范.md](notes/summary/2026-10/2026-10-03-项目骨架与规范.md) — 交付可开发的骨架：目录/组件书写规范成文，styled-components + zustand + lucide-react 就位，原生对话框通道打通，骨架文档同步
+- [2026-10-04-会话管理壳.md](notes/summary/2026-10/2026-10-04-会话管理壳.md) — 交付纯前端会话管理壳：左右分栏 + 模拟器列表全量交互（新建/删除/重命名/状态/启停按钮），数据假、不接 Android
+- [2026-10-04-设计系统.md](notes/summary/2026-10/2026-10-04-设计系统.md) — 交付「发信板」设计系统：impeccable 从 multi-session-browser 反推 DESIGN.md，tokens 平移到本仓库可用
+- [2026-10-09-模拟器对接.md](notes/summary/2026-10/2026-10-09-模拟器对接.md) — 交付真模拟器全链路：SDK bootstrap 全量、PoC 过验收线（≥30fps/≤150ms）、向导接真 avdmanager、启停状态机、投屏触控物理键
+- [2026-10-16-功能完善.md](notes/summary/2026-10/2026-10-16-功能完善.md) — 交付一期收尾：日志面板、截屏/录屏/拖拽安装/剪贴板/断网、设置窗、并行与内存水位防线
+- [2026-10-16-真机接入与投屏.md](notes/summary/2026-10/2026-10-16-真机接入与投屏.md) — 真机接入——USB 与无线调试（扫描/配对/连接）接入现有设备列表与投屏，复用内置 scrcpy 栈，不引入 QtScrcpy
+- [2026-10-22-windows-emulator-env.md](notes/summary/2026-10/2026-10-22-windows-emulator-env.md) — Windows 模拟器环境适配落地——镜像按宿主 ABI 过滤（x86_64）、WHPX 失败识别与深链引导、摄像头隐私设置入口；win32-only 分支 mac 零回归
+- [2026-10-22-windows-file-resilience.md](notes/summary/2026-10/2026-10-22-windows-file-resilience.md) — P4 文件链路健壮性落地——fsWin rename 容错（win32 锁重试+EXDEV 回退）接入三条链路、sha1 边下边算；零实现偏差，mac 构造性零回归
+- [2026-10-22-windows-process-mgmt.md](notes/summary/2026-10/2026-10-22-windows-process-mgmt.md) — Windows 进程管理落地——runner 树杀 taskkill /T、win32 不 detached、关窗确认弹窗；win32-only 分支 mac 零回归
+- [2026-10-22-windows-studio-detect.md](notes/summary/2026-10/2026-10-22-windows-studio-detect.md) — Windows 检测链分支——studioDetect 四条候选链与 adb 候选平台化、零注册表固定目录探测、路径大小写规范化；mac 行为零变化
+- [2026-10-23-关于页真值对接.md](notes/summary/2026-10/2026-10-23-关于页真值对接.md) — 设置窗关于页接通真值：应用/Electron/Chromium 版本与数据目录经 about:get 拉取，打开目录按钮接通并贴行右缘
+
+### notes/summary/2026-11/
+
+- [2026-11-02-screenshot-review-fixes.md](notes/summary/2026-11/2026-11-02-screenshot-review-fixes.md) — 截图编辑评审修复：导出事务锁、马赛克裁剪交集、最小化工具窗还原，134 项测试通过
+- [2026-11-02-windows-device-top-clearance.md](notes/summary/2026-11/2026-11-02-windows-device-top-clearance.md) — Windows 手机顶部避开控件，后续按用户要求将实际间距由 28px 收紧至 8px，三档缩放验证通过
+- [2026-11-02-windows-icon.md](notes/summary/2026-11/2026-11-02-windows-icon.md) — Windows 使用无底板、屏幕镂空的三手机透明图标，覆盖窗口、可执行文件与关于页，黑屏版已覆盖，macOS 原图保留
+- [2026-11-02-windows-inline-window-controls.md](notes/summary/2026-11/2026-11-02-windows-inline-window-controls.md) — 取消 Windows 主窗和设置窗的通栏顶部，标识归左栏、窗口按钮与 Logcat 置于右上，正文恢复从 y=0 开始
+- [2026-11-02-windows-titlebar-adaptation.md](notes/summary/2026-11/2026-11-02-windows-titlebar-adaptation.md) — Windows 主窗和设置窗顶部适配完成，原生按钮与 Logcat 分区，窄窗问题经独立修复轮次解决，三档缩放各 23 项通过
+- [2026-11-02-截图编辑器.md](notes/summary/2026-11/2026-11-02-截图编辑器.md) — 从 multi-session-browser 复刻截图编辑器——四核心文件原样迁入加记录在案的接缝，设备单例编辑窗与编辑四通道，气泡编辑入口双画布接线；V1—V9 人工验收通过
+- [2026-11-03-about-transparent-icon.md](notes/summary/2026-11/2026-11-03-about-transparent-icon.md) — 关于页在所有平台改用已有透明三手机图标，保持原尺寸与布局
+- [2026-11-03-bocode-license-notices.md](notes/summary/2026-11/2026-11-03-bocode-license-notices.md) — 补充 BoCode 原始 MIT 许可和第三方来源声明，标明规范与两份维护脚本的改编范围
+- [2026-11-03-first-installers-release.md](notes/summary/2026-11/2026-11-03-first-installers-release.md) — v1.0.0 Preview 已发布 macOS ARM64 DMG、Windows x64 EXE 和 SHA256SUMS，原生构建及公开下载校验通过
+- [2026-11-03-github-history-sync.md](notes/summary/2026-11/2026-11-03-github-history-sync.md) — 公开包含 book 的完整 dev 历史，保留原 405 个 commit ID，并恢复当前开发目录直接推送
+- [2026-11-03-github-publication.md](notes/summary/2026-11/2026-11-03-github-publication.md) — 将含 MIT 许可的 472 文件快照首次发布到 GitHub dev，保留本地历史并排除 book
+- [2026-11-03-mit-license.md](notes/summary/2026-11/2026-11-03-mit-license.md) — 项目根目录新增标准 MIT 许可证，版权署名为 2026 PZRvm
+- [2026-11-03-readme-local-assets.md](notes/summary/2026-11/2026-11-03-readme-local-assets.md) — 设备与浏览器三语 README 的十二种 Shields 徽章改为仓库本地 SVG，设备首页使用带背景 logo
+- [2026-11-03-repository-tools-cleanup.md](notes/summary/2026-11/2026-11-03-repository-tools-cleanup.md) — 删除独立 e2e 与录屏实验脚本，保留六个必要工具，并在三语 README 中致谢 BoCode
+- [2026-11-03-screenshot-editor-layout.md](notes/summary/2026-11/2026-11-03-screenshot-editor-layout.md) — 图片编辑窗下限升至 720px，左右工具区与 macOS 原生三灯随高度居中、左侧工具组水平居中，截图气泡去掉复制成功文本
+- [2026-11-03-screenshot-review-fixes.md](notes/summary/2026-11/2026-11-03-screenshot-review-fixes.md) — 修复页面缩放后的原生三灯偏移与工作区元数据异常；真实 Electron 缩放验证、配置加载及全仓 1560 项测试通过
+- [2026-11-03-wireless-runtime-investigation.md](notes/summary/2026-11/2026-11-03-wireless-runtime-investigation.md) — 三星手机转无线失败来自共享 ADB 服务被 macOS 禁止本地网络访问，手工重启服务后应用显示无线已连接，shell 实测通过
+
+### notes/task/
+
+- [2026-10-09-剩余缺口验收后代码审查.md](notes/task/2026-10-09-剩余缺口验收后代码审查.md) — 剩余缺口和官方皮肤网络修复验收后的代码审查：未发现新增明确缺陷，148 项相关回归与类型检查通过
+- [2026-10-09-待修问题清单.md](notes/task/2026-10-09-待修问题清单.md) — issue 全量核对后的追踪清单：六项代码缺口已收口，Pixel 7/API 34 卡顿暂缓；快照绕开、跨平台与真机验收仍保留
+
+### notes/think-report/
+
+- [20261008104140-已有模拟器配置编辑.md](notes/think-report/20261008104140-已有模拟器配置编辑.md) — 已确认编辑名称与附加设置、固定内部存储和机型/API；停机保存、下次冷启动、保留数据，RAM 扩缩复用现有校验
+- [20261008112223-安卓模拟器节省空间与共享SDK.md](notes/think-report/20261008112223-安卓模拟器节省空间与共享SDK.md) — 优先共用官方 SDK 和系统镜像、保留独立 AVD；本机两套镜像无重合，第三方省盘收益未实测且需适配设备管理
+- [20261009022552-SDK共享检测与真机投屏.md](notes/think-report/20261009022552-SDK共享检测与真机投屏.md) — 设置项检测 Android Studio/SDK 并开放共享或自选路径（stage05 增强）；真机 USB/无线接入复用既有 scrcpy 投屏栈（stage06 新阶段）
+- [20261012031543-断网开关.md](notes/think-report/20261012031543-断网开关.md) — 断网开关：飞行模式总开关 + wifi/数据分 radio 开关（用户批复扩容），状态以设备读回为唯一事实源；实测模拟器单关 radio 不断网、logcat 无稳定监听锚点——轮询定案（stage05 步骤）
+- [20261013013755-真机USB无线接入与APK拖装.md](notes/think-report/20261013013755-真机USB无线接入与APK拖装.md) — stage06 真机接入按「先 USB 后 WiFi」两批复核可行性（既有批复结论对照重构后代码逐条验证 + 插拔检测选型）；新增调研 APK 拖装到真机——复用 apkInstall 域 + 真机特有失败签名
+- [20261016124043-模拟器录屏.md](notes/think-report/20261016124043-模拟器录屏.md) — 模拟器与真机录屏——按用户批复改为 MP4、设备声音、暂停续录和后台持续录制，跟随横竖屏且单文件，推荐独立录制解码与固定画布重编码、Mediabunny 封装，列明兼容性和验证门槛
+- [20261016125001-双向剪贴板同步.md](notes/think-report/20261016125001-双向剪贴板同步.md) — 当前选中设备与电脑的纯文本双向自动同步可复用 scrcpy 与 Electron，无需新依赖；列出轮询、切换归属、输入法干扰和协议限制
+- [20261016173327-录屏计时与提示交互.md](notes/think-report/20261016173327-录屏计时与提示交互.md) — 录屏交互方案已确认并实施——左侧状态、Logcat 左侧计时/生成反馈、原生结果 dialog、按设备条件记忆与统一恢复入口；验证见交互 plan
+- [20261022110137-Windows兼容问题解决方案调研.md](notes/think-report/20261022110137-Windows兼容问题解决方案调研.md) — Windows 兼容 16 项外围问题（进程/文件系统/打包/模拟器环境/UI）的线上方案选型，已全部批复
+- [20261022125639-Windows适配主体工程调研.md](notes/think-report/20261022125639-Windows适配主体工程调研.md) — Windows 适配主体工程（SDK 引导平台化/解压选型 tar.exe/Studio 检测链零注册表）的方案选型，已全部批复
+- [20261102145653-截图编辑器功能盘点.md](notes/think-report/20261102145653-截图编辑器功能盘点.md) — 已确认的浏览器截图编辑器功能盘点：7 个主工具与 13 项配套能力，以及导出清空历史、单槽过期等复刻边界
 
 ### plans/
 
 - [2026-10-01-book-infra-scripts.md](plans/2026-10-01-book-infra-scripts.md) — book 基建脚本施工图——引入 BoCode 的索引生成与发版检查脚本并按本仓库适配（路径、目录表、检查语义、中文文案）
 - [2026-10-01-stage01-骨架与规范.md](plans/2026-10-01-stage01-骨架与规范.md) — stage 01 施工图——骨架改造的 brief、影响面与设计：依赖接入、组件规范成文、main/preload 拆目录、原生 dialog/toast 通道、文档同步
 - [2026-10-02-git-infra-scripts.md](plans/2026-10-02-git-infra-scripts.md) — git 基建施工图——Clean Commit 主题校验脚本、commit-msg hook、git-policy CI 工作流、dev 分支，收口 book-infra-scripts-missing
+- [2026-10-03-stage02-设计系统.md](plans/2026-10-03-stage02-设计系统.md) — stage 02 施工图——impeccable 反推 DESIGN.md、themeSystems token 单源平移、styled-components 主题接入、亮暗三态可切、元素基线五件
+- [2026-10-03-stage03-会话管理壳.md](plans/2026-10-03-stage03-会话管理壳.md) — stage 03 施工图——左右分栏壳（280px 可拖 220–420）+ 设备列表全量交互（新建向导/删除确认/行内重命名/启停）+ 主进程 JSON 元数据持久化，全程 mock 不接 Android
+- [2026-10-03-test-file-layout.md](plans/2026-10-03-test-file-layout.md) — 测试文件布局转 __tests__/ 子目录共置（方案 B）并把约定成文进 coding-style 与项目骨架快照
+- [2026-10-03-test-infra-and-roving-focus.md](plans/2026-10-03-test-infra-and-roving-focus.md) — 两笔挂账的施工图——vitest 测试基建接入（stage 01 挂账步骤）与 SegmentedControl roving focus 修复（stage 02 P3 issue）
+- [2026-10-04-application-icon-integration.md](plans/2026-10-04-application-icon-integration.md) — 手机图标接入主窗、向导窗、macOS Dock、全部原生提示框和各平台打包配置
+- [2026-10-04-application-icon.md](plans/2026-10-04-application-icon.md) — 应用图标沿用 multi-session-browser 的尺寸、圆角和配色，将三层浏览器窗口替换为三层手机
+- [2026-10-04-avd-create-delete.md](plans/2026-10-04-avd-create-delete.md) — stage04 步骤 3 施工图——AVD 新建/删除接真：avdmanager 画像与 manifest 镜像清单（API × 变体 × arm64）、未装镜像向导内下载、create/delete + ANDROID_AVD_HOME 隔离
+- [2026-10-04-native-traffic-lights-inactive-theme.md](plans/2026-10-04-native-traffic-lights-inactive-theme.md) — 将 macOS 原生外观同步到应用亮暗选择，修复浅色页面失焦时原生三灯不可见
+- [2026-10-04-native-traffic-lights.md](plans/2026-10-04-native-traffic-lights.md) — 主窗恢复 macOS 原生红绿灯，保留无标题文字的板头布局，移除自绘按钮和专用 IPC
+- [2026-10-04-poc-gate-投屏链路.md](plans/2026-10-04-poc-gate-投屏链路.md) — stage04 步骤 1 施工图——PoC 闸门：本机已有 SDK 下单 AVD 无头启动 + scrcpy 取流 + 触控注入最小链路，量帧率/延迟出报告，对照 ≥30fps/≤150ms 验收线决定过停
+- [2026-10-04-sdk-bootstrap.md](plans/2026-10-04-sdk-bootstrap.md) — stage04 步骤 2 施工图——SDK bootstrap：检测/下载 JRE+cmdline-tools+platform-tools+emulator 四件套到应用自有 SDK 根，许可应用内确认写哈希，路径以 IPC 参数可自定义
+- [2026-10-04-self-drawn-traffic-lights.md](plans/2026-10-04-self-drawn-traffic-lights.md) — 修复轮施工图——自绘三灯根治失焦消失（原生灯永久隐藏 + renderer 常绘圆点 + minimize/fullscreen IPC）、向导弹窗填满视口
+- [2026-10-04-shell-fix-三灯与外观两态.md](plans/2026-10-04-shell-fix-三灯与外观两态.md) — 壳体验修复轮施工图——计数文案改「设备」、失焦三灯消失治理（setWindowButtonVisibility）、外观入口两态化（窄=弹出菜单/宽≥390=三段分段）
+- [2026-10-04-shell-polish-原生向导与板头.md](plans/2026-10-04-shell-polish-原生向导与板头.md) — stage 03 优化轮施工图——新建向导改 Electron 原生模态子窗 + 主窗对齐姊妹仓库板头形态（hidden 标题条/板头三件套/底部橙底新建钮/选中行删除钮常显）
+- [2026-10-05-avd-reconciliation.md](plans/2026-10-05-avd-reconciliation.md) — 基于当前 v2 元数据与真实 runner 的对账设计：补齐读取诊断、AVD/镜像核验、失效展示及安全重查
+- [2026-10-05-device-action-icon-alignment.md](plans/2026-10-05-device-action-icon-alignment.md) — 统一设备行加载图标与动作按钮的尺寸和中心，修复启动中、停止中图标错位
+- [2026-10-05-device-frame-and-canvas.md](plans/2026-10-05-device-frame-and-canvas.md) — 用主题工作台替换投屏黑色背景，为手机和平板增加不同外框并保持完整画面与触控坐标一致
+- [2026-10-05-device-store-issue-batch.md](plans/2026-10-05-device-store-issue-batch.md) — 四个设备域 issue 的收口批次——三个已在 7099076 修掉待验证回写，键盘重命名本轮实现
+- [2026-10-05-device-stream-control.md](plans/2026-10-05-device-stream-control.md) — stage04 步骤 5 的需求与设计：多设备 scrcpy 会话、后台停解码与关键帧恢复、等比画布和触控键盘输入
+- [2026-10-05-emulator-runner.md](plans/2026-10-05-emulator-runner.md) — stage04 步骤 4 的需求与设计：真启停、端口避让、可取消状态机、崩溃回写及退出清理
+- [2026-10-05-emulator-wizard.md](plans/2026-10-05-emulator-wizard.md) — 按方案 A 重建两页模拟器向导：六类画像、完整镜像选择、附加设置、机型皮肤、真实摄像头与 Quick Boot；SD 卡暂缓、跨架构二期
+- [2026-10-05-wizard-catalog-loading.md](plans/2026-10-05-wizard-catalog-loading.md) — 为新建设备向导增加画像与镜像清单的加载动画、独立错误重试及关闭后结果保护
+- [2026-10-06-download-cancel.md](plans/2026-10-06-download-cancel.md) — 镜像下载的显式取消——向导行内取消入口、AbortController 中断直连下载、临时文件与半解压目录清理、取消广播与互斥释放；依赖 manifest 直连线路先行
+- [2026-10-06-download-progress-zero.md](plans/2026-10-06-download-progress-zero.md) — 修复镜像下载进度恒 0%——实测确认官方 CLI 两代都无可读进度流（管道全缓冲 + 新版无进度行），改为 manifest 直连流式下载自算真实进度
+- [2026-10-06-image-uninstall.md](plans/2026-10-06-image-uninstall.md) — 已装系统镜像的应用内删除——向导镜像行入口、设备引用守卫、官方卸载路径与清单缓存联动
+- [2026-10-06-real-machine-verification.md](plans/2026-10-06-real-machine-verification.md) — 修复轮真机验证三件（皮肤/摄像头创建链路、能力加载时延、解压取消）与六类画像真机验收的前三阶段设计——Step 0 简报、Phase 1 影响图与风险、Phase 2 验证矩阵与证据契约
+- [2026-10-06-theme-persistence.md](plans/2026-10-06-theme-persistence.md) — 主题状态迁主进程持久化——theme.json 单一事实源，重启保留亮暗模式与主题色，建窗零白闪
+- [2026-10-06-wizard-independent-window.md](plans/2026-10-06-wizard-independent-window.md) — 新建设备向导从模态子窗改为可移动的独立窗口——非模态不阻塞主窗、创建成功后主窗列表刷新、向导生命周期与父窗解耦收口
+- [2026-10-07-adb-probe-and-start-cancel.md](plans/2026-10-07-adb-probe-and-start-cancel.md) — 修复已复现的 ADB 分段应答挂起与启动准备无法取消，覆盖迟到结果和端口清理
+- [2026-10-07-discard-input-during-rotation.md](plans/2026-10-07-discard-input-during-rotation.md) — 旋转期间丢弃新输入、不排队补发，main 释放旧按键和触点，修复暂停后丢失 KeyUp
+- [2026-10-07-manual-screen-rotation.md](plans/2026-10-07-manual-screen-rotation.md) — 修复 Android 设置页手动横屏后被自动旋转立即恢复竖屏的问题
+- [2026-10-07-review-p3-fixes.md](plans/2026-10-07-review-p3-fixes.md) — 修复皮肤/摄像头集成 review 的三项 P3——取消不再冒充失败、零背景皮肤入库口径统一、启动核验文案不再叠加建议从句
+- [2026-10-07-rotation-review-and-power-stop.md](plans/2026-10-07-rotation-review-and-power-stop.md) — 修复旋转等待期间触点竞态与失败提示，将工具条电源接入设备停止链路
+- [2026-10-07-skin-camera-integration.md](plans/2026-10-07-skin-camera-integration.md) — 接通真实皮肤投屏、兼容新版摄像头枚举与权限反馈，并按画像精确获取固定版本官方皮肤后缓存复用
+- [2026-10-07-skin-foreground-occlusion.md](plans/2026-10-07-skin-foreground-occlusion.md) — 按用户最新决定启用真实皮肤前景遮罩，让圆角和摄像头挖孔可以遮住视频
+- [2026-10-07-wizard-skin-choice-preservation.md](plans/2026-10-07-wizard-skin-choice-preservation.md) — 保留向导中明确的机型皮肤选择，避免切换镜像后的能力默认值覆盖通用外框或手选皮肤
+- [2026-10-08-device-config-edit.md](plans/2026-10-08-device-config-edit.md) — 已有 AVD 停机编辑名称与附加设置，复用创建表单；存储与机型/API 固定，配置和元数据以可恢复事务保存
+- [2026-10-08-opaque-skin-black-screen.md](plans/2026-10-08-opaque-skin-black-screen.md) — 两台已有设备的黑屏来自不透明皮肤遮罩；校验前景透明度并回退通用外框，随后审查配置编辑范围
+- [2026-10-08-qvga-cutout-repair.md](plans/2026-10-08-qvga-cutout-repair.md) — QVGA 的挖孔屏模拟占用顶部 136 像素，关闭该设备的错误 overlay 并验证重启保留
+- [2026-10-08-skin-native-display.md](plans/2026-10-08-skin-native-display.md) — 皮肤不能覆盖机型分辨率；修复 QVGA 图标过小，并移除画面顶部皮肤提示
+- [2026-10-09-config-mismatch-reconcile.md](plans/2026-10-09-config-mismatch-reconcile.md) — 编辑页逐项采用 config 值或在保存时用表单同步差异，语义解析容量单位并保留只读与事务边界
+- [2026-10-09-config-safety-followup-fixes.md](plans/2026-10-09-config-safety-followup-fixes.md) — 修复补充复查四项——创建临时行落盘、改名绕过残留事务清理、摄像头占用改启动时仲裁与虚拟场景回退
+- [2026-10-09-emulator-config-safety-fixes.md](plans/2026-10-09-emulator-config-safety-fixes.md) — 修复用户指定的前十四项配置安全、下载创建、编辑差异、摄像头并发、皮肤残留及文档问题
+- [2026-10-09-external-text-paste.md](plans/2026-10-09-external-text-paste.md) — 修复投屏输入代理缺少 paste 事件处理，支持从宿主复制纯文本并粘贴到当前模拟器
+- [2026-10-09-remaining-code-gaps.md](plans/2026-10-09-remaining-code-gaps.md) — 修复布局归零漏释放、控制写失败未处理异常、官方皮肤别名与监听器卫生；设备库和摄像头占用已确认完成，卡顿暂缓
+- [2026-10-09-remaining-issue-fixes.md](plans/2026-10-09-remaining-issue-fixes.md) — 分五批修复画像枚举依赖宿主 Java、向导加载失败卡住、画布过早就绪、皮肤像素预算和剪贴板控制回包
+- [2026-10-09-settings-frontend.md](plans/2026-10-09-settings-frontend.md) — 设置窗口静态前端方案：五分类双栏、三语文案、SDK 三态来源、组件与窗口接线边界
+- [2026-10-09-skin-download-system-proxy.md](plans/2026-10-09-skin-download-system-proxy.md) — 官方皮肤下载改用 Electron 网络栈遵循系统代理，保留固定源与完整性预算，并为网络失败和超时提供可操作提示
+- [2026-10-09-virtual-scene-camera-edit.md](plans/2026-10-09-virtual-scene-camera-edit.md) — 修复编辑页写入 virtualScene 导致 Android 摄像头为零和相机闪退，并支持保存修正历史配置
+- [2026-10-10-compact-appearance-menu.md](plans/2026-10-10-compact-appearance-menu.md) — 窄侧栏外观按钮按所选模式显示图标，三行菜单独立于板头按钮尺寸并居中展开
+- [2026-10-10-drag-apk-install.md](plans/2026-10-10-drag-apk-install.md) — 拖拽 APK 安装设计：画布拖放（webUtils 取路径）→ adb install -r → 悬停高亮与结果浮层，每设备串行
+- [2026-10-10-i18n-and-appearance.md](plans/2026-10-10-i18n-and-appearance.md) — 全应用三语 i18n（字典单源 + locale 持久化广播 + 三窗与主进程文案迁移）与设置窗外观接通，合并施工图共四批
+- [2026-10-10-logcat-panel.md](plans/2026-10-10-logcat-panel.md) — 日志面板设计：右侧可拖宽 dock + 独立日志窗、主进程会话与环形缓冲、批量+ack 流控与多窗口订阅
+- [2026-10-10-screenshot-clipboard-save.md](plans/2026-10-10-screenshot-clipboard-save.md) — 截屏一键保存设计：相机按钮→adb screencap→先入系统剪贴板，气泡内「保存」写入下载目录
+- [2026-10-10-settings-chrome-and-appearance.md](plans/2026-10-10-settings-chrome-and-appearance.md) — 设置窗按用户参考图隐藏标题栏，左上角仅保留关闭和全屏，改为齿轮导航与图标外观控件
+- [2026-10-10-settings-reference-layout.md](plans/2026-10-10-settings-reference-layout.md) — 设置静态界面按用户参考图保留行式外观与主题色，隐藏主窗顶部外观 tab
+- [2026-10-10-styled-single-wrapper-refactor.md](plans/2026-10-10-styled-single-wrapper-refactor.md) — 渲染层 styled-components 全量重排——每文件只留一个 Wrapper，内部元素改 className 后代选择器，视觉零变化
+- [2026-10-11-sdk-source-switching.md](plans/2026-10-11-sdk-source-switching.md) — SDK 来源切换设计：三态状态机与 sdk.json 持久化、路径迁移引擎（同卷 rename/跨卷 copy+verify+journal 崩溃恢复）、共享模式保留根与清除入口、AVD 镜像引用改写与设置窗交互
+- [2026-10-12-device-list-origin-view-filter.md](plans/2026-10-12-device-list-origin-view-filter.md) — 设备列表出身过滤视图（方案 C）：一份事实源 + 随来源切换的视图谓词——默认只显示当前来源桶出身的设备，其余收进折叠区可展开，运行/过渡态设备永远豁免
+- [2026-10-12-device-list-source-aware.md](plans/2026-10-12-device-list-source-aware.md) — 来源感知设备列表：设备出身标注（项目自有/Android Studio SDK，创建时落盘）+ 切 SDK 来源后主动重查全量可用性 + 镜像缺失时的来源指路文案
+- [2026-10-12-network-switch-group.md](plans/2026-10-12-network-switch-group.md) — 断网开关组：工具条并排三开关——飞行模式总开关（真断网）+ Wi-Fi/移动数据分 radio（场景测试）；1s 轮询读回、变化才推、设备为唯一事实源
+- [2026-10-12-reconcile-report-panel.md](plans/2026-10-12-reconcile-report-panel.md) — 对账报告完整查看面板设计——主窗首个自绘弹层（BaseModal 原语 + 分组滚动明细），汇总条「查看详情」与摘要式原生通知双入口打开，原生长文本弹窗退役；关闭 issue 2026-10-12-reconcile-report-full-view
+- [2026-10-12-shared-mode-wizard-installed-only.md](plans/2026-10-12-shared-mode-wizard-installed-only.md) — 共享 Studio SDK 模式的向导收窄设计——画像页只显示与已装镜像匹配的设备、镜像区只列已装 API（无服务筛选/完整列表/Preview/不支持开关与下载卸载按钮）、清单本地化与指路 Studio 空态；托管/自选完全不变
+- [2026-10-13-devices-test-split.md](plans/2026-10-13-devices-test-split.md) — 把 devices/__tests__/index.test.ts（3359 行、120 用例）按 describe 块拆到 8 个 <模块名>.test.ts + 共享 harness.ts，对齐 emulator 测试惯例；断言零削弱、总数不变
+- [2026-10-13-main-devices-emulator-split.md](plans/2026-10-13-main-devices-emulator-split.md) — 纯机械拆分 src/main/devices/index.ts（2603 行 → 薄 index + 10 个域模块）与 src/main/emulator/index.ts（711 行 → 薄 index + 5 个文件）；对齐 emulator 目录「薄 index + 域模块」样板，公共契约（17 个导出符号）不变，行为零变化
+- [2026-10-13-real-device-toolbar-parity.md](plans/2026-10-13-real-device-toolbar-parity.md) — 真机工具条对齐——通用边框 + 六键（返回/主页/概览/音量±/旋转）+ 截屏/网络/日志三域真机适配（think-report 假设 5 推迟项提前执行，用户 2026-10-13 批复「全做」；电源键经用户裁定不做）；三域统一走 serialOfDeviceId 已验证的「外部表优先、miss 落 AVD」组合查询模式
+- [2026-10-13-real-device-usb-and-apk-install.md](plans/2026-10-13-real-device-usb-and-apk-install.md) — stage06 第一批——USB 真机接入（track-devices-l 长连接插拔跟随 + 投屏第二桥 + 未授权引导）与 APK 拖装到真机（serialOf 组合查询 + 真机失败签名 + 「仍要安装」旗标重试）；依据 think-report 20261013013755 全批复
+- [2026-10-13-scrcpy-module-split.md](plans/2026-10-13-scrcpy-module-split.md) — 纯机械拆分 src/main/scrcpy/index.ts（758 行 → 薄 index 装配 + 8 个域文件）；工厂闭包状态（sessions/active/deps）显式化为 ManagerContext 传参，公共契约（createScrcpyManager + 3 常量 + 2 类型）与行为零变化
+- [2026-10-13-scrcpy-split-review-fixes.md](plans/2026-10-13-scrcpy-split-review-fixes.md) — 修复 scrcpy 拆分 review 的两个存量 issue——ipc.ts 六处入参校验硬编码中文迁移 msg()（新增 5 词条 × zh-CN/zh-TW/en 三语块，zh 文本逐字保持）；项目骨架.md 删掉已落地的 scrcpy/stream.ts【规划】行并在顶部指引补模块拆分快照链接
+- [2026-10-15-real-device-wireless.md](plans/2026-10-15-real-device-wireless.md) — stage06 第二批——真机无线接入：荣耀/华为系「一键转无线」（tcpip 5555 → 读 wlan0 IP → connect，覆盖 adbd 重启竞态）为无持久化主路径；mDNS 扫描 + 配对码走小米等有官方无线调试开关的机型（验收待用户持机手动执行）；网段扫描与手动 IP:5555 为辅助入口。端口钉死 5555，不存设备记录，USB/无线双条目并存不聚合
+- [2026-10-16-bidirectional-clipboard-sync.md](plans/2026-10-16-bidirectional-clipboard-sync.md) — 当前选中设备与电脑的纯文本双向自动同步：300ms 宿主检测、scrcpy 推送、无初始覆盖与空串清空，含写入调度和验收门禁
+- [2026-10-16-device-recording.md](plans/2026-10-16-device-recording.md) — 模拟器与真机录屏施工图——设备声音、暂停续录、各设备独立 MP4、旋转后最大画布居中、后台任务与下载目录落盘；先过媒体能力验证再接产品
+- [2026-10-16-recording-interactions.md](plans/2026-10-16-recording-interactions.md) — 已确认录屏交互实施——设备行状态、Logcat 左侧计时/生成进度、原生结果队列、按设备条件记忆与统一恢复提示
+- [2026-10-16-unlock-stream-resync.md](plans/2026-10-16-unlock-stream-resync.md) — 解锁首滑冻结及 review 三项修复完成：校正缓存与回放、显式重同步、本地手势清理、有界恢复及 ACK 校验；全量 1254 项回归通过
+- [2026-10-22-windows-emulator-env.md](plans/2026-10-22-windows-emulator-env.md) — 模拟器环境适配——镜像目录按宿主架构过滤 x86_64、WHPX 缺失的失败识别与深链引导、摄像头空列表的系统隐私设置入口；Win P5，依赖外围调研 D1-D3
+- [2026-10-22-windows-file-resilience.md](plans/2026-10-22-windows-file-resilience.md) — 文件链路 Windows 健壮性——rename/move 占用锁退避重试与 EXDEV 跨卷回退小工具（替换四个文件的裸调用点）、sha1 校验并入下载流省一次 2GB 读盘；Win P4，依赖外围调研 B1 与 P1 合并后代码现状
+- [2026-10-22-windows-process-mgmt.md](plans/2026-10-22-windows-process-mgmt.md) — 进程管理 Windows 化——runner 树杀 taskkill /T、detached 平台化与 windowsHide、before-quit 关窗确认弹窗（有设备在跑先确认再退出）；Win P3，依赖外围调研与用户批复
+- [2026-10-22-windows-sdk-bootstrap.md](plans/2026-10-22-windows-sdk-bootstrap.md) — SDK 引导 Windows 平台化——下载源按平台查表、sdkPaths 补 .exe/.bat、platformExec 执行器（cmd.exe /c + windowsHide）、解压改 Windows 自带 tar.exe；Win P1，依赖主体工程调研
+- [2026-10-22-windows-studio-detect.md](plans/2026-10-22-windows-studio-detect.md) — Studio/SDK 检测链 Windows 分支——studioDetect 四条候选链平台化（零注册表）、adb 系统候选补 Windows 路径、路径比较大小写规范化；Win P2，依赖主体工程调研
+- [2026-10-23-windows-settings-finish.md](plans/2026-10-23-windows-settings-finish.md) — 设置页 Windows 收尾——杀软白名单性能建议卡片（确切路径清单 + Defender 受控深链）、SDK 根路径过长检测提示（260 预算，只提示不拦截）、非 mac 板头去标题消除双标题；Win P6，依赖外围调研 C2/B3/E1
+- [2026-11-02-screenshot-editor.md](plans/2026-11-02-screenshot-editor.md) — 截图编辑器复刻计划：直接迁入多会话浏览器的画布、工具条、历史与导出交互，仅适配设备缓存、窗口、IPC、三语和主题
+- [2026-11-02-screenshot-review-fixes.md](plans/2026-11-02-screenshot-review-fixes.md) — 修复截图评审两项 P2：导出期间锁定编辑、马赛克裁剪求交，并核验窗口最小化恢复
+- [2026-11-02-windows-device-top-clearance.md](plans/2026-11-02-windows-device-top-clearance.md) — Windows 投屏按顶部控件下方的剩余空间缩放，让手机外框避开 Logcat 和原生窗口按钮，保持无通栏布局
+- [2026-11-02-windows-icon.md](plans/2026-11-02-windows-icon.md) — Windows 使用屏幕镂空的三手机透明图标，替换母版、运行时 PNG 与 ICO，清理黑屏版本和预览副本
+- [2026-11-02-windows-inline-window-controls.md](plans/2026-11-02-windows-inline-window-controls.md) — 按用户修订移除主窗和设置窗的通栏顶部行，将标识放回左栏，窗口按钮与 Logcat 直接悬置右上
+- [2026-11-02-windows-titlebar-narrow-window.md](plans/2026-11-02-windows-titlebar-narrow-window.md) — 修复 Windows 顶部宽左栏与窄主窗组合下的 Logcat 越界，让左侧收缩并为右侧按钮保留空间
+- [2026-11-02-windows-window-chrome.md](plans/2026-11-02-windows-window-chrome.md) — Windows 主窗和设置窗移除系统标题栏，将透明图标、标题与原生窗口按钮融入应用顶部，Logcat 开关位于窗口按钮左侧
+- [2026-11-03-about-transparent-icon.md](plans/2026-11-03-about-transparent-icon.md) — 关于页在所有平台复用已有透明三手机图标，保留尺寸与布局
+- [2026-11-03-first-installers-release.md](plans/2026-11-03-first-installers-release.md) — 从同步后的 dev 构建 macOS ARM64 和 Windows x64 安装包，校验后发布首个 GitHub Release
+- [2026-11-03-github-history-sync.md](plans/2026-11-03-github-history-sync.md) — 将含 book 的完整本地 dev 历史与公开仓库对齐，保留所有原提交并通过普通推送同步
+- [2026-11-03-github-publication.md](plans/2026-11-03-github-publication.md) — 为 GitHub 发布准备三语 README，并确保发布内容和历史均不含 book
+- [2026-11-03-mit-license.md](plans/2026-11-03-mit-license.md) — 按用户选择为项目添加 MIT 许可证，版权署名为 PZRvm
+- [2026-11-03-repository-tools-cleanup.md](plans/2026-11-03-repository-tools-cleanup.md) — 清理 GitHub 上的 e2e 与脚本目录，同时保留必要构建和检查能力，并在三语 README 致谢 BoCode
+- [2026-11-03-screenshot-editor-layout.md](plans/2026-11-03-screenshot-editor-layout.md) — 图片编辑窗口最小宽度调为 720px，左右工具区居中，并移除截图气泡的复制成功文本
+- [2026-11-03-screenshot-review-fixes.md](plans/2026-11-03-screenshot-review-fixes.md) — 修复图片编辑页缩放后的原生按钮定位，以及工作区端口元数据异常阻断配置的问题
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
-
-### stage/
-
-- [01-项目骨架与规范.md](stage/01-项目骨架与规范.md) — 交付可开发的骨架：目录/组件书写规范成文，styled-components + zustand + lucide-react 就位，原生对话框通道打通，骨架文档同步
-- [02-设计系统.md](stage/02-设计系统.md) — 交付「发信板」设计系统：impeccable 从 multi-session-browser 反推 DESIGN.md，tokens 平移到本仓库可用
-- [03-会话管理壳.md](stage/03-会话管理壳.md) — 交付纯前端会话管理壳：左右分栏 + 模拟器列表全量交互（新建/删除/重命名/状态/启停按钮），数据假、不接 Android
-- [04-模拟器对接.md](stage/04-模拟器对接.md) — 交付真模拟器全链路：SDK bootstrap 全量、PoC 过验收线（≥30fps/≤150ms）、向导接真 avdmanager、启停状态机、投屏触控物理键
-- [05-功能完善.md](stage/05-功能完善.md) — 交付一期收尾：日志面板、截屏/录屏/拖拽安装/剪贴板/断网、设置窗、并行与内存水位防线
-- [README.md](stage/README.md) — stage 目录用法——项目开发阶段的里程碑跟踪：人定阶段，勾选带结果，agent 可勾选和建议
 
 ### think-report/
 
 - [20260929011713-安卓与iOS多实例模拟器工具.md](think-report/20260929011713-安卓与iOS多实例模拟器工具.md) — 多模拟器桌面工具可行性结论：安卓走 AVD+scrcpy 嵌入画面，iOS 走 Simulator+idb，官方并发上限与许可证均已核实可行
+- [20261005221831-模拟器向导分类与附加设置.md](think-report/20261005221831-模拟器向导分类与附加设置.md) — 已确认的向导范围：画像分类、API镜像与附加设置，含机型皮肤和真实摄像头；SD卡暂缓，跨架构二期
+- [20261006223636-机型皮肤与宿主摄像头.md](think-report/20261006223636-机型皮肤与宿主摄像头.md) — 皮肤未显示源于投屏未接 skinRef；摄像头同时有新版 CLI 解析缺口和权限诊断缺口；官方 Studio 皮肤可按机型下载缓存，Pixel 7 固定版本归档已实取验证
 - [README.md](think-report/README.md) — think-report 是立项前的可行性调研报告——写一次、供拍板，开发阶段不需要回读
 
-<!-- 40 documents -->
+### todos/
+
+- [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
+
+<!-- 383 documents -->

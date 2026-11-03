@@ -1,7 +1,9 @@
 ---
 description: preload 沿用模板的 sandbox: false；白名单 api 已就绪，具备评估开启 sandbox 的条件
+status: resolved
 ---
 
+> 2026-10-12 核销（fix/issue-audit 批）：主窗/向导/设置/日志窗 webPreferences 全部 sandbox: true，白名单 api 运行正常。
 # preload webPreferences.sandbox 沿用模板默认 false
 
 - **Observed**: 2026-10-01 stage 01 改造时，`src/main/window/index.ts` 保留了 electron-vite 模板的 `sandbox: false`。当前 preload 只用 `contextBridge` + `ipcRenderer`（经白名单 api），两者均兼容 sandbox。

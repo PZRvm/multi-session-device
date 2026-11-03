@@ -3,7 +3,10 @@ dist
 out
 .DS_Store
 .eslintcache
-*.log*
+# 日志文件及其轮转（*.log / *.log.1 / *.log.old）；不写 *.log*——那会误伤
+# 文件名含 .log 前缀段的源码（如 App.logcat.test.tsx，plan 2026-10-10-logcat-panel）
+*.log
+*.log.*
 
 # 本地工具产物
 .zcode/
@@ -12,4 +15,6 @@ out
 .opencode/
 .vscode/
 .obsidian/
+.impeccable/
+.workbuddy/
 skills-zh/

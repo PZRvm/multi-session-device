@@ -1,6 +1,34 @@
 :root {
-  /* 主题系统在 stage 02 落地前先锁浅色，避免深色系统下文字不可见 */
+  /* 无 JS 期的琥珀系缺省值 + 对账基准——运行时由 src/renderer/src/theme/apply.ts
+     经 themeCssVariables 全量覆盖（两处字面量改一处须同步另一处，见
+     themeSystems.ts 单源注释）。color-scheme 与 token 同链路切换。 */
   color-scheme: light;
+  --board-bg: #f6f4ee;
+  --board-bg-raised: #ede9df;
+  --board-hairline: #d8d2c5;
+  --board-tile: #ede9df;
+  --board-tile-line: #d8d2c5;
+  --board-tile-ink: #9a5f00;
+  --board-scrollbar-thumb: #c9c1b2;
+  --board-scrollbar-hover: #bcb4a6;
+  --board-ink: #1e2329;
+  --board-ink-dim: #616974;
+  --danger: #b3261e;
+  --board-hover-veil: rgba(30, 35, 41, 0.08);
+  --board-control-line: #bcb4a6;
+  --board-segment-selected-bg: #ffffff;
+  --panel-divider: #c7c1b5;
+  --accent: #ffb000;
+  --accent-strong: #ffc133;
+  --accent-press: #e6a000;
+  --accent-ink: #221a00;
+  --accent-veil: rgba(34, 26, 0, 0.12);
+  --loading: #9a5f00;
+  --settings-confirm-card-bg: #ffffff;
+  --device-shell: #d8d2c5;
+  --device-shell-edge: #bcb4a6;
+  --device-bezel-ink: #616974;
+  --idle: #6b7280;
 }
 
 * {
@@ -9,11 +37,20 @@
 
 body {
   margin: 0;
-  background: #ffffff;
+  background: var(--board-bg);
+  color: var(--board-ink);
   font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
+    -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  /* 桌面应用默认整体禁选（按钮文案/画布拖动不再出现选区）；要可复制的
+     数据文本（日志行/报告行/失败原文）在组件内局部回开 user-select: text */
+  user-select: none;
+}
+
+/* 表单控件不受整体禁选影响：输入内容必须可选可编辑 */
+input,
+textarea {
+  user-select: text;
 }

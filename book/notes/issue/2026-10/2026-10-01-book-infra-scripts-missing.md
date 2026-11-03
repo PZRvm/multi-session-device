@@ -1,7 +1,9 @@
 ---
 description: workflow/git-workflow 引用的 book:index、check-commit-message.mjs、.githooks、git-policy.yml 在本仓库均不存在，规则与基建脱节
+status: resolved
 ---
 
+> 2026-10-12 核销（fix/issue-audit 批）：scripts/（check-commit-message/check-book-clean/gen-book-index 等）、.githooks/、.github/workflows/git-policy.yml 均已存在——原登记时 git-policy 查错了位置（在 .github/workflows/ 而非仓库根）。
 # book 规则引用的基建脚本在本仓库缺失
 
 - **Observed**: 2026-10-01 收尾时发现：`book/guidelines/workflow.md` 交互规则 7 要求收尾跑 `npm run book:index`，`git-workflow.md` 引用 `scripts/check-commit-message.mjs`、`.githooks/`、`.github/workflows/git-policy.yml`、`npm run book:release-check`——以上在本仓库一律不存在（package.json 无对应脚本，无 scripts/ 与 .githooks/ 目录），用户终端实测 `npm run book:index` 报 Missing script。仓库也只有 `main` 分支，git-workflow 描述的 dev 集成分支尚未建立。
