@@ -30,6 +30,7 @@ class TestWindow extends EventEmitter {
     id: 2,
     ipc: new EventEmitter(),
     mainFrame: {},
+    getZoomFactor: vi.fn(() => 1),
     setWindowOpenHandler: vi.fn()
   })
   getContentBounds = (): { height: number } => ({ height: 520 })
@@ -119,6 +120,34 @@ describe('截图编辑窗边界（设备单例）', () => {
     const window = windows[0]
     expect(mocks.construct.mock.calls[0][0]).not.toHaveProperty('trafficLightPosition')
     expect(window.webContents.ipc.listenerCount(IPC_CHANNELS.screenshotEditorToolbarHeight)).toBe(0)
+    window.emit('ready-to-show')
+    await pending
+  })
+
+  it('页面缩放时按 DIP 定位，接受最小高度的亚像素误差并按 DIP 校验窗高', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    const pending = module!.openScreenshotEditorWindow('d1')
+    const window = windows[0]
+    const resize = (height: number, zoom: number): void => {
+      window.webContents.getZoomFactor.mockReturnValue(zoom)
+      window.webContents.ipc.emit(
+        IPC_CHANNELS.screenshotEditorToolbarHeight,
+        { senderFrame: window.webContents.mainFrame },
+        height
+      )
+    }
+    resize(68.8, 1.25)
+    expect(window.setWindowButtonPosition).toHaveBeenLastCalledWith({ x: 14, y: 35 })
+    resize(47.998, 0.8)
+    expect(window.setWindowButtonPosition).toHaveBeenLastCalledWith({ x: 14, y: 11 })
+    resize(48, 1.25)
+    expect(window.setWindowButtonPosition).toHaveBeenLastCalledWith({ x: 14, y: 22 })
+    // CSS 高度未超窗高，但换算为 DIP 后已超出，不能移动原生按钮。
+    resize(500, 1.25)
+    expect(window.setWindowButtonPosition).toHaveBeenCalledTimes(3)
+    // 缩小时较大的 CSS 高度仍可处于实际窗口范围内。
+    resize(600, 0.8)
+    expect(window.setWindowButtonPosition).toHaveBeenLastCalledWith({ x: 14, y: 232 })
     window.emit('ready-to-show')
     await pending
   })

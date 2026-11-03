@@ -163,13 +163,18 @@ export function openScreenshotEditorWindow(
             event.senderFrame !== window.webContents.mainFrame ||
             typeof height !== 'number' ||
             !Number.isFinite(height) ||
-            height < 48 ||
-            height > window.getContentBounds().height
+            height < 47.5
           ) {
             return
           }
-          // 原生灯中心比 position.y 低约 8px，见 learn/2026-10-06-红绿灯垂直居中实测。
-          window.setWindowButtonPosition({ x: 14, y: Math.round(height / 2 - 8) })
+          // DOM 上报 CSS px；原生位置和窗高度量为 DIP，缩放因子只信本窗 webContents。
+          const toolbarHeight = height * window.webContents.getZoomFactor()
+          if (toolbarHeight > window.getContentBounds().height + 0.5) return
+          // 原生灯中心比 position.y 低约 8px；容纳尺寸换算的亚像素误差。
+          window.setWindowButtonPosition({
+            x: 14,
+            y: Math.max(0, Math.round(toolbarHeight / 2 - 8))
+          })
         }
       )
     }

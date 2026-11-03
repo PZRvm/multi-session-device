@@ -102,11 +102,9 @@ function EditorWindow(): React.JSX.Element {
   const copy = useCopy(SCREENSHOT_EDITOR_COPY)
   const observeToolbar = useCallback((node: HTMLElement | null) => {
     if (!node || !HIDDEN_TITLEBAR_CHROME) return
-    let previousHeight = 0
     const observer = new ResizeObserver(() => {
       const height = node.getBoundingClientRect().height
-      if (height === previousHeight) return
-      previousHeight = height
+      // 页面缩放可能只改变 CSS 宽度，仍需通知主进程按当前 zoomFactor 重算。
       window.api.screenshot.setEditorToolbarHeight(height)
     })
     observer.observe(node, { box: 'border-box' })

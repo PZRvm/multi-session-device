@@ -1,14 +1,28 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'path'
 import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import type { Plugin } from 'vite'
 
 const sharedAlias = { '@shared': resolve('src/shared') }
-const worktreeMetadataPath = resolve('.worktree.json')
-const worktreePort = existsSync(worktreeMetadataPath)
-  ? (JSON.parse(readFileSync(worktreeMetadataPath, 'utf8')) as { port: number }).port
-  : undefined
+
+function isPort(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 65535
+}
+
+function devPort(): number {
+  const override = Number(process.env.MSD_DEV_PORT)
+  if (isPort(override)) return override
+  try {
+    const metadata: unknown = JSON.parse(readFileSync(resolve('.worktree.json'), 'utf8'))
+    if (metadata && typeof metadata === 'object' && 'port' in metadata && isPort(metadata.port)) {
+      return metadata.port
+    }
+  } catch {
+    // 本地可选元数据缺失、不可读或损坏时沿用主仓库默认端口。
+  }
+  return 6174
+}
 
 /** 构建期剥掉 dev HMR 专用的 CSP ws: 放行——产物只保留 'self'（recording-processor 页） */
 const stripDevOnlyCsp = (): Plugin => ({
@@ -17,7 +31,7 @@ const stripDevOnlyCsp = (): Plugin => ({
   transformIndexHtml: (html) => html.replace("connect-src 'self' ws:;", "connect-src 'self';")
 })
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   main: { resolve: { alias: sharedAlias } },
   preload: { resolve: { alias: sharedAlias } },
   renderer: {
@@ -25,7 +39,7 @@ export default defineConfig({
     // 保证确定性——被占用时显式报错退出而非静默漂移。
     // worktree 自动读取本地登记端口；MSD_DEV_PORT 可显式覆盖。
     // 分配规则见 .zcode/skills/create-worktree，主仓库无元数据时仍用 6174。
-    server: { port: Number(process.env.MSD_DEV_PORT) || worktreePort || 6174, strictPort: true },
+    server: { port: command === 'serve' ? devPort() : 6174, strictPort: true },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),
@@ -50,4 +64,4 @@ export default defineConfig({
       }
     }
   }
-})
+}))

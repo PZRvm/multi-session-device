@@ -1,6 +1,7 @@
 {
   "name": "multi-session-device",
   "version": "1.0.0",
+  "license": "MIT",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
   "author": "example.com",

@@ -14,4 +14,4 @@
 
 许可证：MIT。完整原文见 [licenses/BoCode-MIT.txt](licenses/BoCode-MIT.txt)，上游文件见 [BoCode LICENSE](https://github.com/Focus695/BoCode/blob/dev/LICENSE)。分发上述内容的副本或实质性部分时，应一并保留上游版权声明和许可文本。
 
-上述许可声明适用于源自 BoCode 的内容，不表示本项目的全部原创代码采用 MIT 许可证。其他第三方组件与资源遵循各自的许可证。
+上述许可声明适用于源自 BoCode 的内容。本项目原创代码采用根目录 [LICENSE](LICENSE) 中的 MIT 许可证。其他第三方组件与资源遵循各自的许可证。

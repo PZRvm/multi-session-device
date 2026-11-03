@@ -214,6 +214,8 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-02-windows-titlebar-narrow-window.md](notes/issue/2026-11/2026-11-02-windows-titlebar-narrow-window.md) — Windows 顶部宽左栏配合窄主窗时 Logcat 越界，已在独立修复轮次处理，三档缩放复验通过
 - [2026-11-02-worktree单实例锁互斥.md](notes/issue/2026-11/2026-11-02-worktree单实例锁互斥.md) — 多 worktree 并行开发时同包名 Electron 应用共享 userData，单实例锁先到先得——后启动的 dev 拿不到锁静默退出，人工验收被挡；create-worktree 只分配了端口未处理锁
 - [2026-11-03-logcat-subscription-test-flake.md](notes/issue/2026-11/2026-11-03-logcat-subscription-test-flake.md) — 全仓测试中日志 dock 展开后的订阅断言偶发失败，无代码改动复跑全部通过，等待时序需单独核查
+- [2026-11-03-publication-review.md](notes/issue/2026-11/2026-11-03-publication-review.md) — 首次公开发布检查发现 Logcat 测试偶发失败、hook 未执行和旧产品说明待核对
+- [2026-11-03-screenshot-layout-review.md](notes/issue/2026-11/2026-11-03-screenshot-layout-review.md) — 已修复图片编辑页缩放后的三灯定位偏移，以及损坏的 worktree 元数据阻断端口覆盖与构建两项复审问题
 - [2026-11-03-wireless-unreachable-diagnostics.md](notes/issue/2026-11/2026-11-03-wireless-unreachable-diagnostics.md) — 无线连接把 macOS Local network prohibited 引发的 No route to host 统一提示为确认手机 Wi-Fi，原始 ADB 错误未传给用户
 
 ### notes/learn/
@@ -343,8 +345,11 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-02-截图编辑器.md](notes/summary/2026-11/2026-11-02-截图编辑器.md) — 从 multi-session-browser 复刻截图编辑器——四核心文件原样迁入加记录在案的接缝，设备单例编辑窗与编辑四通道，气泡编辑入口双画布接线；V1—V9 人工验收通过
 - [2026-11-03-about-transparent-icon.md](notes/summary/2026-11/2026-11-03-about-transparent-icon.md) — 关于页在所有平台改用已有透明三手机图标，保持原尺寸与布局
 - [2026-11-03-bocode-license-notices.md](notes/summary/2026-11/2026-11-03-bocode-license-notices.md) — 补充 BoCode 原始 MIT 许可和第三方来源声明，标明规范与两份维护脚本的改编范围
+- [2026-11-03-github-publication.md](notes/summary/2026-11/2026-11-03-github-publication.md) — 将含 MIT 许可的 472 文件快照首次发布到 GitHub dev，保留本地历史并排除 book
+- [2026-11-03-mit-license.md](notes/summary/2026-11/2026-11-03-mit-license.md) — 项目根目录新增标准 MIT 许可证，版权署名为 2026 PZRvm
 - [2026-11-03-readme-local-assets.md](notes/summary/2026-11/2026-11-03-readme-local-assets.md) — 设备与浏览器三语 README 的十二种 Shields 徽章改为仓库本地 SVG，设备首页使用带背景 logo
 - [2026-11-03-screenshot-editor-layout.md](notes/summary/2026-11/2026-11-03-screenshot-editor-layout.md) — 图片编辑窗下限升至 720px，左右工具区与 macOS 原生三灯随高度居中、左侧工具组水平居中，截图气泡去掉复制成功文本
+- [2026-11-03-screenshot-review-fixes.md](notes/summary/2026-11/2026-11-03-screenshot-review-fixes.md) — 修复页面缩放后的原生三灯偏移与工作区元数据异常；真实 Electron 缩放验证、配置加载及全仓 1560 项测试通过
 - [2026-11-03-wireless-runtime-investigation.md](notes/summary/2026-11/2026-11-03-wireless-runtime-investigation.md) — 三星手机转无线失败来自共享 ADB 服务被 macOS 禁止本地网络访问，手工重启服务后应用显示无线已连接，shell 实测通过
 
 ### notes/task/
@@ -459,8 +464,11 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-02-windows-titlebar-narrow-window.md](plans/2026-11-02-windows-titlebar-narrow-window.md) — 修复 Windows 顶部宽左栏与窄主窗组合下的 Logcat 越界，让左侧收缩并为右侧按钮保留空间
 - [2026-11-02-windows-window-chrome.md](plans/2026-11-02-windows-window-chrome.md) — Windows 主窗和设置窗移除系统标题栏，将透明图标、标题与原生窗口按钮融入应用顶部，Logcat 开关位于窗口按钮左侧
 - [2026-11-03-about-transparent-icon.md](plans/2026-11-03-about-transparent-icon.md) — 关于页在所有平台复用已有透明三手机图标，保留尺寸与布局
+- [2026-11-03-github-history-sync.md](plans/2026-11-03-github-history-sync.md) — 将含 book 的完整本地 dev 历史与公开仓库对齐，保留所有原提交并通过普通推送同步
 - [2026-11-03-github-publication.md](plans/2026-11-03-github-publication.md) — 为 GitHub 发布准备三语 README，并确保发布内容和历史均不含 book
+- [2026-11-03-mit-license.md](plans/2026-11-03-mit-license.md) — 按用户选择为项目添加 MIT 许可证，版权署名为 PZRvm
 - [2026-11-03-screenshot-editor-layout.md](plans/2026-11-03-screenshot-editor-layout.md) — 图片编辑窗口最小宽度调为 720px，左右工具区居中，并移除截图气泡的复制成功文本
+- [2026-11-03-screenshot-review-fixes.md](plans/2026-11-03-screenshot-review-fixes.md) — 修复图片编辑页缩放后的原生按钮定位，以及工作区端口元数据异常阻断配置的问题
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### think-report/
@@ -474,4 +482,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 368 documents -->
+<!-- 376 documents -->
