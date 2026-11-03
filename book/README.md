@@ -321,6 +321,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-02-worktree-stash-checkout三重坑.md](notes/learn/2026-11/2026-11-02-worktree-stash-checkout三重坑.md) — worktree 里用 stash+checkout 对比基线有三重坑——stash 是仓库级共享（pop 到别的分支遗留条目）、untracked 文件冲突卡半途、切换分支会杀死运行中的 dev；基线对比只用只读方式
 - [2026-11-02-复刻验收压窗宽极值.md](notes/learn/2026-11/2026-11-02-复刻验收压窗宽极值.md) — 复刻带窗口自适应的源码功能时，视觉验收必须把窗口压到 MIN 宽高极值——典型尺寸（竖屏 551px）通过不代表 360px 极小窗通过；单行 flex 工具条在窄容器必溢出
 - [2026-11-03-adb-local-network-prohibited.md](notes/learn/2026-11/2026-11-03-adb-local-network-prohibited.md) — 手机 Wi-Fi 与 5555 端口正常仍报 No route to host 时，检查共享 ADB 服务的 macOS 本地网络权限；本次重启服务后恢复
+- [2026-11-03-pull-request-release-badge-branch.md](notes/learn/2026-11/2026-11-03-pull-request-release-badge-branch.md) — 合并 PR 后发布的 badge 分支筛选不等于 checkout 分支，应使用实际运行与 merge SHA 核对
 - [2026-11-03-toolbar-centering-validation.md](notes/learn/2026-11/2026-11-03-toolbar-centering-validation.md) — 工具条居中要测实际内容；macOS 原生窗口按钮还需按工具栏高度定位，并用原生窗口截图核验
 
 ### notes/summary/2026-10/
@@ -350,6 +351,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-03-first-installers-release.md](notes/summary/2026-11/2026-11-03-first-installers-release.md) — v1.0.0 Preview 已发布 macOS ARM64 DMG、Windows x64 EXE 和 SHA256SUMS，原生构建及公开下载校验通过
 - [2026-11-03-github-history-sync.md](notes/summary/2026-11/2026-11-03-github-history-sync.md) — 公开包含 book 的完整 dev 历史，保留原 405 个 commit ID，并恢复当前开发目录直接推送
 - [2026-11-03-github-publication.md](notes/summary/2026-11/2026-11-03-github-publication.md) — 将含 MIT 许可的 472 文件快照首次发布到 GitHub dev，保留本地历史并排除 book
+- [2026-11-03-main-merge-release.md](notes/summary/2026-11/2026-11-03-main-merge-release.md) — dev 已先合入 main，新发布流程经 PR #1 生效，仅 dev 到 main 的 PR 合并触发，版本在 dev 维护
 - [2026-11-03-mit-license.md](notes/summary/2026-11/2026-11-03-mit-license.md) — 项目根目录新增标准 MIT 许可证，版权署名为 2026 PZRvm
 - [2026-11-03-readme-local-assets.md](notes/summary/2026-11/2026-11-03-readme-local-assets.md) — 设备与浏览器三语 README 的十二种 Shields 徽章改为仓库本地 SVG，设备首页使用带背景 logo
 - [2026-11-03-repository-tools-cleanup.md](notes/summary/2026-11/2026-11-03-repository-tools-cleanup.md) — 删除独立 e2e 与录屏实验脚本，保留六个必要工具，并在三语 README 中致谢 BoCode
@@ -490,4 +492,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 384 documents -->
+<!-- 386 documents -->

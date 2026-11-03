@@ -1,6 +1,6 @@
 ---
 description: 先将当前 dev 合入 main，再将安装包发布改为仅在同仓库 dev 到 main 的 PR 合并后触发，版本号在 dev 更新
-status: in_progress
+status: completed
 created: 2026-11-03
 ---
 
@@ -39,4 +39,13 @@ release 使用 pull_request.closed/main 事件，prepare 任务要求 merged=tru
 - [x] 阶段 3：更新 main PR 合并触发、关联 PR 核验、版本化说明模板和 Git 工作流。
 - [x] 阶段 4：typecheck、lint、workflow YAML/Bash 检查通过；实际脚本验证版本/锁文件、版本注入拒绝、重复/缺失/草稿/403、标签缺失/同 SHA/冲突/403、十组分支策略、说明渲染及 merge SHA。
 - [x] 阶段 5：只读核对来源、权限、精确 SHA、版本幂等和变更范围，未发现新增问题。
-- [ ] 阶段 6：报告、索引、PR 合并和远端流程核对。
+- [x] 阶段 6：PR #1 检查全绿后以 400c47c 合并到 main；main 检查及发布工作流成功，已有 v1.0.0 跳过且标签/校验值不变；报告与经验记录同步 dev。
+
+## 远端结果
+
+- 首次建立 main：2304f0e692303a19814b855ae0d564bb432b8754，树与原 dev 一致。
+- CI 配置提交：a2cb93a02f1d8988fa076d396aa90628bec97898。
+- [PR #1](https://github.com/PZRvm/multi-session-device/pull/1)：6 项检查通过后使用 merge commit 合并，main 为 400c47cf9b40ed9bd31cb979b6056c2e5aa59144。
+- [main 推送检查](https://github.com/PZRvm/multi-session-device/actions/runs/41615396834)通过；[合并后发布检查](https://github.com/PZRvm/multi-session-device/actions/runs/41615398533) Success，版本检查执行，已有版本的构建及上传跳过。
+- v1.0.0 仍指向 a473b0e，SHA256SUMS 的 SHA-256 仍为 3c632113326a9f4dd45aebefabed0cbfafaa61bcfa4f0569204f82d1e9918e6f；没有新增或覆盖 Release。
+- 本地 main、dev 已快进到合并结果；收尾文档提交继续进入 dev，后续随正常 PR 合入 main。
