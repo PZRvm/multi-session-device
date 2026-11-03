@@ -1,6 +1,6 @@
 ---
 description: 从同步后的 dev 构建 macOS ARM64 和 Windows x64 安装包，校验后发布首个 GitHub Release
-status: in_progress
+status: completed
 created: 2026-11-03
 ---
 
@@ -33,13 +33,15 @@ created: 2026-11-03
 - [x] Step 0、阶段 1：核对源代码、版本、架构、环境和认证能力。
 - [x] 阶段 2：确定原生双平台工作流及发布门禁，无待确认缺口。
 - [x] 阶段 3：双平台工作流、可选 asar 路径参数和预览版发布说明完成。
-- [ ] 阶段 4：本地检查、原生构建及产物校验。
-- [ ] 阶段 5：只读评审，只记录。
-- [ ] 阶段 6：报告、计划、索引及 Release 结果核对。
+- [x] 阶段 4：本地检查、双平台原生构建及 asar 校验通过；公开下载回验 SHA256SUMS 和 GitHub digest 一致，DMG hdiutil verify 通过。
+- [x] 阶段 5：只读核对工作流权限、发布门禁、源码范围和附件；Actions 运行时弃用提示另记 issue，未顺手更新依赖版本。
+- [x] 阶段 6：完成报告、计划和索引，v1.0.0 Preview 已发布；标签精确指向 a473b0e，附件包含两个安装包及 SHA256SUMS。
 
 本地验证：typecheck 通过；asar 使用真实构造归档验证无参数 macOS 默认路径、显式 Windows 路径、缺失文件拒绝、主入口不一致拒绝和截断拒绝；workflow YAML、权限/依赖关系及全部 Bash 步骤语法通过。lint 首次指出两处格式警告，已按项目 Prettier 修正后复验。
 
 首轮原生 CI 在打包前失败：Windows checkout 的 CRLF 触发 Prettier；macOS 3 核 runner 上 settings 的两个测试带入固定 4 核设置而失败。阶段 4 回到阶段 3 作定向调整：checkout 前禁用自动换行转换；settings 测试显式设定 8 核宿主，保留全部原断言。发现的低核数默认配置问题另记 issue，不修改产品逻辑。
+
+发布结果：https://github.com/PZRvm/multi-session-device/releases/tag/v1.0.0 。成功工作流 41611057405；构建源提交 a473b0e09263155ebc0a52c64e60ef5f528b0c96。后续报告提交只更新 dev，不移动标签或重新推送发布分支。
 
 ## 参考
 

@@ -213,6 +213,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-02-windows-test-baseline.md](notes/issue/2026-11/2026-11-02-windows-test-baseline.md) — Windows 图标替换前的全量测试已有 153 项失败，涉及平台假设、路径、符号链接与权限，未在本任务修复
 - [2026-11-02-windows-titlebar-narrow-window.md](notes/issue/2026-11/2026-11-02-windows-titlebar-narrow-window.md) — Windows 顶部宽左栏配合窄主窗时 Logcat 越界，已在独立修复轮次处理，三档缩放复验通过
 - [2026-11-02-worktree单实例锁互斥.md](notes/issue/2026-11/2026-11-02-worktree单实例锁互斥.md) — 多 worktree 并行开发时同包名 Electron 应用共享 userData，单实例锁先到先得——后启动的 dev 拿不到锁静默退出，人工验收被挡；create-worktree 只分配了端口未处理锁
+- [2026-11-03-actions-runtime-deprecation.md](notes/issue/2026-11/2026-11-03-actions-runtime-deprecation.md) — GitHub 提示 checkout 和 setup-node v4 使用已弃用的 Node 20 运行时，目前由平台强制切换到 Node 24 并构建成功
 - [2026-11-03-logcat-subscription-test-flake.md](notes/issue/2026-11/2026-11-03-logcat-subscription-test-flake.md) — 全仓测试中日志 dock 展开后的订阅断言偶发失败，无代码改动复跑全部通过，等待时序需单独核查
 - [2026-11-03-low-core-default-settings.md](notes/issue/2026-11/2026-11-03-low-core-default-settings.md) — 少于四核的宿主会产生超出自身能力范围的默认模拟器 CPU 配置，首次发布 CI 暴露此问题
 - [2026-11-03-publication-review.md](notes/issue/2026-11/2026-11-03-publication-review.md) — 首次公开发布检查发现 Logcat 测试偶发失败、hook 未执行和旧产品说明待核对
@@ -346,6 +347,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-02-截图编辑器.md](notes/summary/2026-11/2026-11-02-截图编辑器.md) — 从 multi-session-browser 复刻截图编辑器——四核心文件原样迁入加记录在案的接缝，设备单例编辑窗与编辑四通道，气泡编辑入口双画布接线；V1—V9 人工验收通过
 - [2026-11-03-about-transparent-icon.md](notes/summary/2026-11/2026-11-03-about-transparent-icon.md) — 关于页在所有平台改用已有透明三手机图标，保持原尺寸与布局
 - [2026-11-03-bocode-license-notices.md](notes/summary/2026-11/2026-11-03-bocode-license-notices.md) — 补充 BoCode 原始 MIT 许可和第三方来源声明，标明规范与两份维护脚本的改编范围
+- [2026-11-03-first-installers-release.md](notes/summary/2026-11/2026-11-03-first-installers-release.md) — v1.0.0 Preview 已发布 macOS ARM64 DMG、Windows x64 EXE 和 SHA256SUMS，原生构建及公开下载校验通过
 - [2026-11-03-github-history-sync.md](notes/summary/2026-11/2026-11-03-github-history-sync.md) — 公开包含 book 的完整 dev 历史，保留原 405 个 commit ID，并恢复当前开发目录直接推送
 - [2026-11-03-github-publication.md](notes/summary/2026-11/2026-11-03-github-publication.md) — 将含 MIT 许可的 472 文件快照首次发布到 GitHub dev，保留本地历史并排除 book
 - [2026-11-03-mit-license.md](notes/summary/2026-11/2026-11-03-mit-license.md) — 项目根目录新增标准 MIT 许可证，版权署名为 2026 PZRvm
@@ -487,4 +489,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 381 documents -->
+<!-- 383 documents -->
