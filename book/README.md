@@ -337,6 +337,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-02-windows-inline-window-controls.md](notes/summary/2026-11/2026-11-02-windows-inline-window-controls.md) — 取消 Windows 主窗和设置窗的通栏顶部，标识归左栏、窗口按钮与 Logcat 置于右上，正文恢复从 y=0 开始
 - [2026-11-02-windows-titlebar-adaptation.md](notes/summary/2026-11/2026-11-02-windows-titlebar-adaptation.md) — Windows 主窗和设置窗顶部适配完成，原生按钮与 Logcat 分区，窄窗问题经独立修复轮次解决，三档缩放各 23 项通过
 - [2026-11-02-截图编辑器.md](notes/summary/2026-11/2026-11-02-截图编辑器.md) — 从 multi-session-browser 复刻截图编辑器——四核心文件原样迁入加记录在案的接缝，设备单例编辑窗与编辑四通道，气泡编辑入口双画布接线；V1—V9 人工验收通过
+- [2026-11-03-about-transparent-icon.md](notes/summary/2026-11/2026-11-03-about-transparent-icon.md) — 关于页在所有平台改用已有透明三手机图标，保持原尺寸与布局
 
 ### notes/task/
 
@@ -449,6 +450,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-02-windows-inline-window-controls.md](plans/2026-11-02-windows-inline-window-controls.md) — 按用户修订移除主窗和设置窗的通栏顶部行，将标识放回左栏，窗口按钮与 Logcat 直接悬置右上
 - [2026-11-02-windows-titlebar-narrow-window.md](plans/2026-11-02-windows-titlebar-narrow-window.md) — 修复 Windows 顶部宽左栏与窄主窗组合下的 Logcat 越界，让左侧收缩并为右侧按钮保留空间
 - [2026-11-02-windows-window-chrome.md](plans/2026-11-02-windows-window-chrome.md) — Windows 主窗和设置窗移除系统标题栏，将透明图标、标题与原生窗口按钮融入应用顶部，Logcat 开关位于窗口按钮左侧
+- [2026-11-03-about-transparent-icon.md](plans/2026-11-03-about-transparent-icon.md) — 关于页在所有平台复用已有透明三手机图标，保留尺寸与布局
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### think-report/
@@ -462,4 +464,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 356 documents -->
+<!-- 358 documents -->
