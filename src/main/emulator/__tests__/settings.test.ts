@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   buildCapabilities,
   buildEnrichedCapabilities,
@@ -13,6 +13,12 @@ import {
 } from '../settings'
 import type { DeviceAdvancedSettings, WizardCapabilities } from '@shared/types'
 import type { SkinRecord } from '../skins'
+
+// 本文件以 8 核宿主验证既定的 4 核设置，不依赖 runner 实际核数。
+vi.mock('node:os', async (importOriginal) => {
+  const os = await importOriginal<typeof import('node:os')>()
+  return { ...os, cpus: () => Array.from({ length: 8 }, () => os.cpus()[0]) }
+})
 
 const fixtureDir = join(__dirname, 'fixtures')
 

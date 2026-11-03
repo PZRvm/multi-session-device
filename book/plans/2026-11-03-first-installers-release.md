@@ -10,7 +10,7 @@ created: 2026-11-03
 
 - 背景：项目已公开，用户要求推送源码，并把 macOS 和 Windows 安装包发布到 GitHub Releases。
 - 需求：同步 dev；为现有 1.0.0 版本生成 macOS Apple Silicon DMG、Windows x64 NSIS EXE，以及 SHA-256 校验文件，发布到 v1.0.0。
-- 范围：GitHub Actions 打包发布工作流、发布说明、asar 校验脚本的文件路径参数、本计划和收尾记录。
+- 范围：GitHub Actions 打包发布工作流、发布说明、asar 校验脚本的文件路径参数、必要的测试宿主隔离、本计划和收尾记录。
 - 排除：不改产品功能，不改版本号，不推 main，不使用或上传本机签名凭据，不为尚未验证的 Intel Mac/Linux/Windows ARM64 生成安装包，不声称公证或完整硬件验收通过。
 - 验收：源码及标签已推送；两个平台的原生构建与包内校验成功；Release 包含 DMG、EXE 和 SHA256SUMS；公开下载入口存在，附件大小及校验值可核对。
 
@@ -38,6 +38,8 @@ created: 2026-11-03
 - [ ] 阶段 6：报告、计划、索引及 Release 结果核对。
 
 本地验证：typecheck 通过；asar 使用真实构造归档验证无参数 macOS 默认路径、显式 Windows 路径、缺失文件拒绝、主入口不一致拒绝和截断拒绝；workflow YAML、权限/依赖关系及全部 Bash 步骤语法通过。lint 首次指出两处格式警告，已按项目 Prettier 修正后复验。
+
+首轮原生 CI 在打包前失败：Windows checkout 的 CRLF 触发 Prettier；macOS 3 核 runner 上 settings 的两个测试带入固定 4 核设置而失败。阶段 4 回到阶段 3 作定向调整：checkout 前禁用自动换行转换；settings 测试显式设定 8 核宿主，保留全部原断言。发现的低核数默认配置问题另记 issue，不修改产品逻辑。
 
 ## 参考
 

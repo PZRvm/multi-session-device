@@ -214,6 +214,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-02-windows-titlebar-narrow-window.md](notes/issue/2026-11/2026-11-02-windows-titlebar-narrow-window.md) — Windows 顶部宽左栏配合窄主窗时 Logcat 越界，已在独立修复轮次处理，三档缩放复验通过
 - [2026-11-02-worktree单实例锁互斥.md](notes/issue/2026-11/2026-11-02-worktree单实例锁互斥.md) — 多 worktree 并行开发时同包名 Electron 应用共享 userData，单实例锁先到先得——后启动的 dev 拿不到锁静默退出，人工验收被挡；create-worktree 只分配了端口未处理锁
 - [2026-11-03-logcat-subscription-test-flake.md](notes/issue/2026-11/2026-11-03-logcat-subscription-test-flake.md) — 全仓测试中日志 dock 展开后的订阅断言偶发失败，无代码改动复跑全部通过，等待时序需单独核查
+- [2026-11-03-low-core-default-settings.md](notes/issue/2026-11/2026-11-03-low-core-default-settings.md) — 少于四核的宿主会产生超出自身能力范围的默认模拟器 CPU 配置，首次发布 CI 暴露此问题
 - [2026-11-03-publication-review.md](notes/issue/2026-11/2026-11-03-publication-review.md) — 首次公开发布检查发现 Logcat 测试偶发失败、hook 未执行和旧产品说明待核对
 - [2026-11-03-screenshot-layout-review.md](notes/issue/2026-11/2026-11-03-screenshot-layout-review.md) — 已修复图片编辑页缩放后的三灯定位偏移，以及损坏的 worktree 元数据阻断端口覆盖与构建两项复审问题
 - [2026-11-03-wireless-unreachable-diagnostics.md](notes/issue/2026-11/2026-11-03-wireless-unreachable-diagnostics.md) — 无线连接把 macOS Local network prohibited 引发的 No route to host 统一提示为确认手机 Wi-Fi，原始 ADB 错误未传给用户
@@ -486,4 +487,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 380 documents -->
+<!-- 381 documents -->
