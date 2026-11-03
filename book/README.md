@@ -466,6 +466,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-02-windows-titlebar-narrow-window.md](plans/2026-11-02-windows-titlebar-narrow-window.md) — 修复 Windows 顶部宽左栏与窄主窗组合下的 Logcat 越界，让左侧收缩并为右侧按钮保留空间
 - [2026-11-02-windows-window-chrome.md](plans/2026-11-02-windows-window-chrome.md) — Windows 主窗和设置窗移除系统标题栏，将透明图标、标题与原生窗口按钮融入应用顶部，Logcat 开关位于窗口按钮左侧
 - [2026-11-03-about-transparent-icon.md](plans/2026-11-03-about-transparent-icon.md) — 关于页在所有平台复用已有透明三手机图标，保留尺寸与布局
+- [2026-11-03-first-installers-release.md](plans/2026-11-03-first-installers-release.md) — 从同步后的 dev 构建 macOS ARM64 和 Windows x64 安装包，校验后发布首个 GitHub Release
 - [2026-11-03-github-history-sync.md](plans/2026-11-03-github-history-sync.md) — 将含 book 的完整本地 dev 历史与公开仓库对齐，保留所有原提交并通过普通推送同步
 - [2026-11-03-github-publication.md](plans/2026-11-03-github-publication.md) — 为 GitHub 发布准备三语 README，并确保发布内容和历史均不含 book
 - [2026-11-03-mit-license.md](plans/2026-11-03-mit-license.md) — 按用户选择为项目添加 MIT 许可证，版权署名为 PZRvm
@@ -485,4 +486,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 379 documents -->
+<!-- 380 documents -->

@@ -10,15 +10,20 @@
 import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 const distAppDir = join(process.cwd(), 'dist', 'mac-arm64')
-const appName = readdirSync(distAppDir).find((n) => n.endsWith('.app'))
-if (!appName) {
+const archiveArgument = process.argv[2]
+const appName = archiveArgument
+  ? undefined
+  : readdirSync(distAppDir).find((n) => n.endsWith('.app'))
+if (!archiveArgument && !appName) {
   console.error(`[verify-asar] 未找到 .app：${distAppDir}`)
   process.exit(1)
 }
-const asarPath = join(distAppDir, appName, 'Contents', 'Resources', 'app.asar')
+const asarPath = archiveArgument
+  ? resolve(archiveArgument)
+  : join(distAppDir, appName, 'Contents', 'Resources', 'app.asar')
 const data = readFileSync(asarPath)
 
 // asar 头布局：[4..8)=头 pickle 长度，[12..16)=头 JSON 字节长，内容区从 8+头长 开始
@@ -92,6 +97,4 @@ if (files.some(([p]) => p.startsWith('book/') || p.startsWith('e2e/'))) {
 }
 
 if (failed) process.exit(1)
-console.log(
-  `[verify-asar] ✓ ${appName} 的 app.asar 完整（${files.length} 个文件，主入口与仓库产物一致）`
-)
+console.log(`[verify-asar] ✓ ${asarPath} 完整（${files.length} 个文件，主入口与仓库产物一致）`)
