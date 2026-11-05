@@ -48,3 +48,5 @@ description: 无线修复复审的三项 P2 已按用户授权修复，截图门
 - [x] P2-3：每个 attempt 独立保留，完成时不再 forget(owner)；既有容量/TTL/关窗清理不变，慢 A 晚于快 B 完成后，B 的复制与修复继续有效。
 
 回归先在原代码上失败，再在修复后通过；全仓 1597 项通过、6 项跳过；build/typecheck、lint、Prettier 通过。修复 diff 复审无新增阻塞项。三项代码问题销账；合并记录见 [修复计划](../../../plans/2026-11-05-wireless-recovery-review-fixes.md)。前文保留原审查证据，不代表当前仍未修复。
+
+合并完成：实现提交 `c2469d5` 已 fast-forward 合入 dev，合并前后 typecheck/lint 均通过，book 检查通过。未推送，原专项硬件验收保持独立。

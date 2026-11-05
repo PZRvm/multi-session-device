@@ -26,7 +26,7 @@ description: 无线连接诊断与用户确认修复已实现，1592 项测试�
 
 ## 后续
 
-补正式包权限与升级、TLS 真机、USB/运行中 AVD 以及 IDE 调试验收；[plan](../../../plans/2026-11-05-wireless-diagnostics-and-recovery.md) 保持 `in_progress`。未合并、未推送，未替换已安装应用。
+补正式包权限与升级、TLS 真机、USB/运行中 AVD 以及 IDE 调试验收；[plan](../../../plans/2026-11-05-wireless-diagnostics-and-recovery.md) 保持 `in_progress`。后续按用户指令随三项复审修复于 c2469d5 本地合并 dev；未推送、未替换已安装应用。
 
 ## 后续复审补充（2026-11-05）
 

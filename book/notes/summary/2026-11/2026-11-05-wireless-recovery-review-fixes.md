@@ -1,5 +1,5 @@
 ---
-description: 三项无线修复 P2 已修正，失败回归转绿，1597 项测试通过，等待本地合并 dev 与复验
+description: 三项无线修复 P2 已修正，1597 项测试通过，c2469d5 已 fast-forward 合并 dev 且合并前后门禁通过
 ---
 
 # 无线修复的三项并发问题已修正
@@ -22,4 +22,4 @@ description: 三项无线修复 P2 已修正，失败回归转绿，1597 项测�
 
 ## 后续
 
-按 [修复计划](../../../plans/2026-11-05-wireless-recovery-review-fixes.md) 提交并合并 dev，目标检出复验后更新本条。原功能的正式签名权限、TLS 真机及其他专项人工验收仍保留在独立 issue，不扩展解释为本轮已验证。
+按 [修复计划](../../../plans/2026-11-05-wireless-recovery-review-fixes.md) 完成提交与本地合并：`c2469d5`，fast-forward 并入 dev 的 1 个实现提交，合并前后 typecheck/lint 通过，book 检查通过。worktree/分支与原始文档备份保留，未 push。原功能的正式签名权限、TLS 真机及其他专项人工验收仍保留在独立 issue，不扩展解释为本轮已验证。

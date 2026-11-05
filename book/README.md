@@ -368,7 +368,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-03-wireless-runtime-investigation.md](notes/summary/2026-11/2026-11-03-wireless-runtime-investigation.md) — 三星手机转无线失败来自共享 ADB 服务被 macOS 禁止本地网络访问，手工重启服务后应用显示无线已连接，shell 实测通过
 - [2026-11-04-screenshot-disconnect-review-fixes.md](notes/summary/2026-11/2026-11-04-screenshot-disconnect-review-fixes.md) — 修复真机断连时截图会话未失效和续编注释过时；新增断连、重连与下载中断连的 IPC 装配回归
 - [2026-11-05-wireless-diagnostics-and-recovery.md](notes/summary/2026-11/2026-11-05-wireless-diagnostics-and-recovery.md) — 无线连接诊断与用户确认修复已实现，1592 项测试及经典无线实测通过，单实例锁恢复，正式包和其他硬件验收待完成
-- [2026-11-05-wireless-recovery-review-fixes.md](notes/summary/2026-11/2026-11-05-wireless-recovery-review-fixes.md) — 三项无线修复 P2 已修正，失败回归转绿，1597 项测试通过，等待本地合并 dev 与复验
+- [2026-11-05-wireless-recovery-review-fixes.md](notes/summary/2026-11/2026-11-05-wireless-recovery-review-fixes.md) — 三项无线修复 P2 已修正，1597 项测试通过，c2469d5 已 fast-forward 合并 dev 且合并前后门禁通过
 
 ### notes/task/
 

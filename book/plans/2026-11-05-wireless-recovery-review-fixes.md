@@ -1,6 +1,6 @@
 ---
 description: 修复无线恢复复审的三项 P2，补截图门、日志会话与诊断上下文回归，验证提交后合并 dev
-status: in_progress
+status: completed
 created: 2026-11-05
 ---
 
@@ -36,7 +36,7 @@ created: 2026-11-05
 - [x] Phase 3：原代码上的 4 个失败断言覆盖三项 P2；三处最小修复后转绿。
 - [x] Phase 4：相关 71 项通过，全仓 1597 项通过/6 项跳过；build/typecheck、lint、Prettier 通过。
 - [x] Phase 5：复审三项最小修复和回归，未发现新增阻塞问题；评审后只写文档。
-- [ ] Phase 6：issue 销账、summary、计划与索引返写；提交并合并 dev，合并后复验。
+- [x] Phase 6：三项 issue 销账、summary/计划/索引返写；提交 c2469d5 已以 fast-forward 合并 dev，目标检出 typecheck/lint 与 book 检查通过。
 
 ## Test plan
 
@@ -47,3 +47,9 @@ created: 2026-11-05
 ## Done criteria
 
 三项回归通过且原测试未削弱；修复 issue 销账、文档检查通过；工作树形成提交并本地合并 dev，dev typecheck/lint 复验通过；无远端推送。原功能未完成的专项人工验收仍单独记录，不据此宣称全部覆盖。
+
+## 合并结果（2026-11-05）
+
+功能及三项修复合成提交 `c2469d5`，从 feature/wireless-diagnostics-recovery 以默认 fast-forward 合并 dev，共并入 1 个实现提交。合并前 worktree typecheck/lint 通过，合并后主仓库 dev typecheck/lint 与 book:release-check 通过。此前完整构建与 1597 项通过/6 项跳过的测试证据保持有效，合并过程未改实现。
+
+主仓库原有的三个本轮计划副本已按明确路径备份到 stash `0907e2c43ac88d3b96aa2b7f752b2fb3afdcb7e5`，最新版本随功能合入；备份未删除，不自动覆盖已合入的新文档。worktree 与分支保留，不推送远端。
