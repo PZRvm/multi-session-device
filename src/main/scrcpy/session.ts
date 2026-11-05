@@ -1,3 +1,4 @@
+import { adbRecovery } from '../emulator/adbRecovery'
 import { randomUUID } from 'node:crypto'
 import type { ScrcpyMediaStreamPacket } from '@yume-chan/scrcpy'
 import { msg } from '../locale'
@@ -82,7 +83,7 @@ export const runSession = async (ctx: ManagerContext, session: StreamSession): P
     session.error = error instanceof Error ? error.message : String(error)
     ctx.sendState(session)
   } finally {
-    await destroySession(ctx, session.deviceId)
+    if (ctx.sessions.get(session.deviceId) === session) await destroySession(ctx, session.deviceId)
   }
 }
 
@@ -94,6 +95,7 @@ export const ensureSession = async (
     serial: string
   }
 ): Promise<void> => {
+  adbRecovery.assertOpen()
   const existing = ctx.sessions.get(device.id)
   if (existing) {
     if (existing.runId === device.runId) return // 同代次幂等（并发 ensureSession 共享结果）

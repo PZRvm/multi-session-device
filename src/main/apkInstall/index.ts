@@ -1,3 +1,4 @@
+import { adbRecovery } from '../emulator/adbRecovery'
 import { ipcMain } from 'electron'
 import { basename } from 'node:path'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
@@ -69,12 +70,13 @@ const isInstallInput = (raw: unknown): raw is ApkInstallInput => {
   )
 }
 
-export function registerApkInstallIpc(deps: ApkInstallDeps): void {
+export function registerApkInstallIpc(deps: ApkInstallDeps): { isBusy: () => boolean } {
   const run = deps.run ?? runAdb
   // 每设备串行：安装中的重复请求直接拒绝（不排队）；不同设备互不影响
   const activeDevices = new Set<string>()
 
   const install = async (input: ApkInstallInput): Promise<ApkInstallOutcome> => {
+    adbRecovery.assertOpen()
     const { deviceId, filePath, allowLowTargetSdk } = input
     const serial = deps.serialOf(deviceId)
     if (activeDevices.has(deviceId)) throw new Error(msg('apkInstallBusy'))
@@ -117,4 +119,5 @@ export function registerApkInstallIpc(deps: ApkInstallDeps): void {
       return install(raw)
     }
   )
+  return { isBusy: () => activeDevices.size > 0 }
 }

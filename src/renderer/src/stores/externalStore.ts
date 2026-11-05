@@ -1,3 +1,4 @@
+import type { WirelessRecoveryState } from '@shared/wirelessRecovery'
 import { create } from 'zustand'
 import type { ExternalDevice, NetworkState } from '@shared/types'
 
@@ -7,6 +8,8 @@ import type { ExternalDevice, NetworkState } from '@shared/types'
 // 网络态（plan 2026-10-13-real-device-toolbar-parity S4）放本 store 而非 deviceStore——
 // 后者的 network 随 AVD 快照 prune，外部键（serial）会被清掉。
 interface ExternalStoreState {
+  recovery: WirelessRecoveryState
+  applyRecovery: (recovery: WirelessRecoveryState) => void
   devices: ExternalDevice[]
   selectedId: string | null
   /** 真机网络态（main 1s 轮询推送直写；设备消失时随 apply prune） */
@@ -18,6 +21,8 @@ interface ExternalStoreState {
 }
 
 export const useExternalStore = create<ExternalStoreState>((set) => ({
+  recovery: { phase: 'idle', blocked: [] },
+  applyRecovery: (recovery) => set({ recovery }),
   devices: [],
   selectedId: null,
   network: {},

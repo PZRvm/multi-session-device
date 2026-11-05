@@ -984,6 +984,37 @@ describe('ScrcpyManager（fake transport）', () => {
       }
     })
   })
+  it('ADB repair rebuilds the same AVD run while preserving its active view token', async () => {
+    const { manager, transportOf } = await importManager()
+    manager.registerIpc()
+    const device = { id: 'd1', runId: 'r1', serial: 'emulator-5554' }
+    await manager.ensureSession(device)
+    await vi.waitFor(() =>
+      expect(collect().states.some((state) => state.status === 'ready')).toBe(true)
+    )
+    const firstStream = collect().states.find((state) => state.status === 'ready')!.streamId
+    const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+    await activate({}, { id: 'd1', viewToken: 'repair-view' })
+    await manager.suspendForAdbRecovery()
+    await manager.ensureSession(device)
+    await vi.waitFor(() =>
+      expect(
+        collect().states.some((state) => state.status === 'ready' && state.streamId !== firstStream)
+      ).toBe(true)
+    )
+    expect(manager.activeDeviceId()).toBe('d1')
+    transportOf('emulator-5554').__push({ type: 'configuration', data: new Uint8Array([1]) })
+    transportOf('emulator-5554').__push({
+      type: 'data',
+      pts: 0n,
+      keyframe: true,
+      data: new Uint8Array(10)
+    })
+    await vi.waitFor(() =>
+      expect(collect().packets.some((packet) => packet.viewToken === 'repair-view')).toBe(true)
+    )
+    await manager.destroyAll()
+  })
 })
 
 describe('息屏唤醒冻结回归（2026-10-15 真机 Wi-Fi 投屏调查）', () => {

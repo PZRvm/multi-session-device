@@ -1,3 +1,4 @@
+import { adbRecovery } from '../emulator/adbRecovery'
 import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { ScreenAckMessage, ScreenStateMessage } from '@shared/types'
@@ -24,6 +25,7 @@ export const registerIpc = (ctx: ManagerContext): void => {
   ipcMain.handle(
     IPC_CHANNELS.screenActivate,
     async (event, raw: unknown): Promise<ScreenStateMessage | null> => {
+      adbRecovery.assertOpen()
       if (!ctx.deps.isMainSender(event.sender)) throw new Error(msg('screenUnregisteredWindow'))
       if (typeof raw !== 'object' || raw === null) throw new Error(msg('activateInvalidPayload'))
       const value = raw as Record<string, unknown>

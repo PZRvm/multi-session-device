@@ -223,6 +223,8 @@ const wirelessApi = (
   ;(window as { api?: unknown }).api = {
     devices: {
       openExternalWireless: open,
+      onWirelessRecoveryChanged: () => () => {},
+      getWirelessRecoveryState: async () => ({ phase: 'idle', blocked: [] }),
       scanExternalWireless: over.scan ?? vi.fn(async () => []),
       promoteExternalWireless:
         over.promote ?? vi.fn(async () => ({ ok: true, serial: '192.168.31.102:5555' })),
@@ -368,4 +370,28 @@ describe('真机区无线入口（plan 2026-10-15-real-device-wireless）', () =
       expect(screen.queryByText(copy.wirelessPromoteDone)).toBeNull()
     })
   })
+})
+
+it('renders one stable recovery action group outside the section toggle', async () => {
+  wirelessApi({
+    promote: async () => ({
+      ok: false,
+      reason: 'unreachable',
+      host: '192.168.31.162',
+      attemptId: 'attempt',
+      repairable: true,
+      diagnosis: {
+        kind: 'service-suspected',
+        tcp: 'reachable',
+        stage: 'connect',
+        code: 1,
+        detail: 'No route to host'
+      }
+    })
+  })
+  renderPane({ externalDevices: [usbDevice()] })
+  fireEvent.click(screen.getByRole('button', { name: copy.wirelessPromote }))
+  const action = await screen.findByRole('button', { name: '修复连接' })
+  expect(screen.getAllByRole('button', { name: '修复连接' })).toHaveLength(1)
+  expect(action.parentElement?.closest('button')).toBeNull()
 })

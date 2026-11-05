@@ -1,3 +1,4 @@
+import { WIRELESS_RECOVERY_COPY } from '@shared/wirelessRecovery'
 import { format } from '@shared/i18n'
 import type { MainWindowCopy } from '@shared/i18n'
 import type { WirelessConnectOutcome } from '@shared/types'
@@ -5,9 +6,16 @@ import type { WirelessConnectOutcome } from '@shared/types'
 /** 无线连接失败 reason → 词条（连接器与行卡转无线反馈共用；纯函数供测试） */
 export const wirelessConnectFailureText = (
   copy: MainWindowCopy,
-  outcome: Extract<WirelessConnectOutcome, { ok: false }>
+  outcome: Extract<WirelessConnectOutcome, { ok: false }>,
+  recoveryCopy = WIRELESS_RECOVERY_COPY['zh-CN']
 ): string => {
+  if (outcome.diagnosis && !['no-wifi', 'not-found', 'unauthorized'].includes(outcome.reason)) {
+    const key = outcome.diagnosis.kind === 'service-suspected' ? 'service' : outcome.diagnosis.kind
+    return recoveryCopy[key]
+  }
   switch (outcome.reason) {
+    case 'tcpip-failed':
+      return recoveryCopy.tcpip
     case 'unreachable':
       return format(copy.wirelessFailUnreachable, { host: outcome.host })
     case 'cross-subnet':

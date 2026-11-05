@@ -4,6 +4,7 @@ import { access, constants } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { msg } from '../locale'
+import { adbRecovery } from './adbRecovery'
 
 /** 共享 adb server 锁定本机默认 endpoint——不读宿主传入的远端配置 */
 export const ADB_HOST = '127.0.0.1'
@@ -177,8 +178,16 @@ export async function runAdb(
   { timeoutMs = 10_000, signal }: { timeoutMs?: number; signal?: AbortSignal } = {}
 ): Promise<AdbRunResult> {
   if (signal?.aborted) throw new Error(msg('adbOperationCancelled'))
+  const finishCommand = adbRecovery.command()
   return new Promise<AdbRunResult>((resolve, reject) => {
-    const child = spawn(adbPath, args, { env: scrubAdbEnv(process.env), windowsHide: true })
+    let child: ReturnType<typeof spawn>
+    try {
+      child = spawn(adbPath, args, { env: scrubAdbEnv(process.env), windowsHide: true })
+    } catch (error) {
+      finishCommand()
+      reject(error)
+      return
+    }
     const out: Buffer[] = []
     const err: Buffer[] = []
     let settled = false
@@ -205,11 +214,13 @@ export async function runAdb(
       if (!settled) err.push(chunk)
     })
     child.on('error', (error) => {
+      finishCommand()
       signal?.removeEventListener('abort', abort)
       if (timer) clearTimeout(timer)
       reject(error)
     })
     child.on('close', (code) => {
+      finishCommand()
       signal?.removeEventListener('abort', abort)
       if (timer) clearTimeout(timer)
       if (settled) return

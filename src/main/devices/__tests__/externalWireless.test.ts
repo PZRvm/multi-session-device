@@ -263,6 +263,17 @@ describe('connectWirelessDevice', () => {
     })
     expect(deps.delay).not.toHaveBeenCalled()
   })
+  it('raw authentication rejection is actionable unauthorized, without repeated connection attempts', async () => {
+    const runCmd = vi.fn(async () => ({
+      code: 1,
+      stdout: '',
+      stderr: 'failed to authenticate to device'
+    }))
+    await expect(
+      connectWirelessDevice({ host: '192.168.31.162' }, makeDeps({ runCmd }))
+    ).resolves.toEqual({ ok: false, reason: 'unauthorized', host: '192.168.31.162' })
+    expect(runCmd).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('promoteToWireless', () => {
@@ -429,9 +440,11 @@ describe('无线通道装配', () => {
     wire(
       makeDeps({
         runCmd: vi.fn(async (args: string[]) =>
-          args[0] === 'connect'
-            ? ok('connected to 10.0.0.9:5555')
-            : ok('List of devices attached\n10.0.0.9:5555\tdevice\n')
+          args.includes('echo')
+            ? ok('msd-wireless-ready')
+            : args[0] === 'connect'
+              ? ok('connected to 10.0.0.9:5555')
+              : ok('List of devices attached\n10.0.0.9:5555\tdevice\n')
         )
       })
     )
@@ -448,6 +461,7 @@ describe('无线通道装配', () => {
     wire(
       makeDeps({
         runCmd: vi.fn(async (args: string[]) => {
+          if (args.includes('echo')) return ok('msd-wireless-ready')
           if (args.includes('route'))
             return ok('default via 192.168.31.1 dev wlan0 src 192.168.31.9\n')
           if (args[0] === 'connect') return ok('connected to 192.168.31.9:5555')
@@ -465,6 +479,17 @@ describe('无线通道装配', () => {
       disconnect({ sender: {} }, { serial: '192.168.31.9:5555' })
     ).resolves.toBeUndefined()
     setExternalDevicesForTests([])
+  })
+  it('recovery IPC rejects child frames and invalid attempts before executing commands', () => {
+    wire(makeDeps())
+    const get = handlers.get(IPC_CHANNELS.wirelessRecoveryGet) as (event: unknown) => unknown
+    const repair = handlers.get(IPC_CHANNELS.wirelessRecoveryRepair) as Handler
+    const frame = {}
+    expect(() => get({ sender: { mainFrame: frame }, senderFrame: {} })).toThrow(/非法/)
+    expect(() => repair({ sender: {} }, { attemptId: 123 })).toThrow(/非法/)
+    expect(get({ sender: { mainFrame: frame }, senderFrame: frame })).toMatchObject({
+      phase: 'idle'
+    })
   })
 })
 

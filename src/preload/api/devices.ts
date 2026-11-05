@@ -1,3 +1,4 @@
+import type { WirelessRecoveryState, WirelessRepairOutcome } from '@shared/wirelessRecovery'
 import { ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type {
@@ -19,6 +20,18 @@ import type {
 } from '@shared/types'
 
 export const devicesApi = {
+  getWirelessRecoveryState: (): Promise<WirelessRecoveryState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.wirelessRecoveryGet),
+  repairWirelessConnection: (attemptId: string): Promise<WirelessRepairOutcome> =>
+    ipcRenderer.invoke(IPC_CHANNELS.wirelessRecoveryRepair, { attemptId }),
+  copyWirelessDiagnostics: (attemptId: string): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.wirelessRecoveryCopy, { attemptId }),
+  onWirelessRecoveryChanged: (listener: (state: WirelessRecoveryState) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: WirelessRecoveryState): void =>
+      listener(state)
+    ipcRenderer.on(IPC_CHANNELS.wirelessRecoveryChanged, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.wirelessRecoveryChanged, handler)
+  },
   list: (): Promise<DeviceSnapshot> => ipcRenderer.invoke(IPC_CHANNELS.devicesList),
   create: (input: CreateDeviceInput): Promise<CreateDeviceResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.devicesCreate, input),

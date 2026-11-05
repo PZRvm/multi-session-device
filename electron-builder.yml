@@ -42,6 +42,7 @@ mac:
   artifactName: ${name}-${version}-${arch}-mac.${ext}
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
+    NSLocalNetworkUsageDescription: 用于发现、连接和投屏同一局域网内的 Android 测试设备。
     NSCameraUsageDescription: 用于让 Android 模拟器使用本机摄像头进行测试。
     NSMicrophoneUsageDescription: Application requests access to the device's microphone.
     NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.

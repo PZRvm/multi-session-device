@@ -1,3 +1,4 @@
+import type { WirelessDiagnosis } from './wirelessRecovery'
 import type { SettingsLocale } from './i18n/locale'
 import type { ThemeSystemId } from './themeSystems'
 
@@ -937,6 +938,7 @@ export type WirelessConnectOutcome =
   | {
       ok: false
       reason:
+        | 'tcpip-failed'
         | 'unreachable' // TCP 层连不上且同网段（Wi-Fi 断/地址错/省电深睡）
         | 'offline-race' // 重试耗尽仍 offline（adbd 切换窗口异常拉长）
         | 'cross-subnet' // 目标不在本机任何网段——连同一 Wi-Fi，或查代理 TUN
@@ -944,6 +946,9 @@ export type WirelessConnectOutcome =
         | 'no-wifi' // 转无线：手机 wlan0 无地址
         | 'not-found' // 转无线：USB serial 已不在线
       host: string
+      diagnosis?: WirelessDiagnosis
+      attemptId?: string
+      repairable?: boolean
     }
 
 export type WirelessPairOutcome = { ok: true } | { ok: false; message: string }

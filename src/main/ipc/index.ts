@@ -1,3 +1,8 @@
+import { adbRecovery } from '../emulator/adbRecovery'
+import { isMigrationActive } from '../emulator/sdkMigration'
+import { isRecordingActive } from '@shared/recording'
+import { WIRELESS_RECOVERY_COPY } from '@shared/wirelessRecovery'
+import { getLocaleState } from '../locale/store'
 import { settingsOwns } from '../window/settings'
 import {
   registerRecording,
@@ -74,7 +79,7 @@ export function registerIpcHandlers(): void {
   registerWirelessIpc()
   // 拖拽 APK 安装：serial 断言统一走组合查询（真机 connected 或 AVD running）经注入，
   // 安装域自身不反向依赖 devices；仅主窗可发起
-  registerApkInstallIpc({
+  const installer = registerApkInstallIpc({
     adbPath: adbBinaryPath,
     serialOf: serialOfDeviceId,
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id
@@ -171,7 +176,48 @@ export function registerIpcHandlers(): void {
   // removed 收；startWatch 幂等——重连首帧全量重发不叠 timer）；removed 同步清理
   // 截图缓存及全部编辑会话。注册须在 scrcpy/network/logcat 创建之后（onSession 闭包引用它们）；
   // 变化广播默认发全部窗口（独立日志窗下拉跟随，对齐 devices:changed 语义）
+  let restoreLogcatSubscriptions: (() => void) | undefined
   registerExternalIpc({
+    recovery: {
+      busy: () => {
+        const copy = WIRELESS_RECOVERY_COPY[getLocaleState()]
+        const reasons: string[] = []
+        if (installer?.isBusy()) reasons.push(copy.install)
+        if (recording.snapshot().tasks.some((task) => isRecordingActive(task.state)))
+          reasons.push(copy.recording)
+        if (isMigrationActive() || adbRecovery.blockers.includes('sdk-source'))
+          reasons.push(copy.migration)
+        if (
+          listDeviceRuntimeViews().some(
+            (device) => device.status === 'starting' || device.status === 'stopping'
+          )
+        )
+          reasons.push(copy.lifecycle)
+        return reasons
+      },
+      suspend: async () => {
+        for (const view of [...listDeviceRuntimeViews(), ...externalRuntimeViews()])
+          network.clearWatch(view.id)
+        await Promise.all([
+          scrcpy.suspendForAdbRecovery(),
+          logcat.suspendForAdbRecovery().then((restore) => {
+            restoreLogcatSubscriptions = restore
+          })
+        ])
+      },
+      resume: async () => {
+        restoreLogcatSubscriptions?.()
+        restoreLogcatSubscriptions = undefined
+        for (const view of listDeviceRuntimeViews()) {
+          if (view.status !== 'running' || !view.serial || !view.runId) continue
+          await scrcpy
+            .ensureSession({ id: view.id, serial: view.serial, runId: view.runId })
+            .catch((error) => console.warn('[wireless recovery]', error))
+          logcat.ensureSession({ id: view.id, serial: view.serial, runId: view.runId })
+          network.startWatch(view.id, view.serial)
+        }
+      }
+    },
     isMainSender: (sender) => getMainWindow()?.webContents.id === sender.id,
     // 无线五通道放行无线连接窗（原生弹窗化后的调用方）
     isWirelessSender: wirelessOwns,

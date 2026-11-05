@@ -1,3 +1,4 @@
+import { adbRecovery } from './adbRecovery'
 import { BrowserWindow, app } from 'electron'
 import { join, resolve } from 'node:path'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
@@ -147,6 +148,13 @@ export async function switchSource(
   input: { target: SdkSourceMode; customPath?: string },
   deps: SwitchDeps = createSwitchDeps()
 ): Promise<SdkSourceSwitchEvaluation> {
+  return adbRecovery.activity('sdk-source', () => switchSourceImpl(input, deps))
+}
+
+async function switchSourceImpl(
+  input: { target: SdkSourceMode; customPath?: string },
+  deps: SwitchDeps = createSwitchDeps()
+): Promise<SdkSourceSwitchEvaluation> {
   if (activeRun !== null) return { action: 'rejected', code: 'busy' }
   if ((await loadMigrationJournal(deps.migration)) !== null) {
     return { action: 'rejected', code: 'journal-pending' }
@@ -253,6 +261,13 @@ const progressWiring = (deps: SwitchDeps): ((progress: MigrationProgressPayload)
  * journal 已在场时即「崩溃恢复继续」入口（同一通道同一语义）。
  */
 export async function startSourceMigration(
+  input: { target: SdkSourceMode; customPath?: string; replace: boolean },
+  deps: SwitchDeps = createSwitchDeps()
+): Promise<'started'> {
+  return adbRecovery.activity('sdk-source', () => startSourceMigrationImpl(input, deps))
+}
+
+async function startSourceMigrationImpl(
   input: { target: SdkSourceMode; customPath?: string; replace: boolean },
   deps: SwitchDeps = createSwitchDeps()
 ): Promise<'started'> {
@@ -397,6 +412,13 @@ export async function adoptSourceSwitch(
   input: { target: SdkSourceMode; customPath?: string },
   deps: SwitchDeps = createSwitchDeps()
 ): Promise<SdkSourceSnapshot> {
+  return adbRecovery.activity('sdk-source', () => adoptSourceSwitchImpl(input, deps))
+}
+
+async function adoptSourceSwitchImpl(
+  input: { target: SdkSourceMode; customPath?: string },
+  deps: SwitchDeps = createSwitchDeps()
+): Promise<SdkSourceSnapshot> {
   if (activeRun !== null) throw new Error('migration running')
   if ((await loadMigrationJournal(deps.migration)) !== null) {
     throw new Error('pending migration journal')
@@ -454,6 +476,13 @@ export async function clearRetainedRoot(
   input: { root: string },
   deps: SwitchDeps = createSwitchDeps()
 ): Promise<SdkSourceSnapshot> {
+  return adbRecovery.activity('sdk-source', () => clearRetainedRootImpl(input, deps))
+}
+
+async function clearRetainedRootImpl(
+  input: { root: string },
+  deps: SwitchDeps = createSwitchDeps()
+): Promise<SdkSourceSnapshot> {
   if (!isSharedReadOnly()) throw new Error('retained roots clearable only in shared mode')
   if (activeRun !== null) throw new Error('migration running')
   const state = getSdkSourceState()
@@ -497,6 +526,13 @@ export interface ClearCascadeDeps extends SwitchDeps {
  * 级联失败不回滚 SDK 删除（用户确认的主操作优先成立）。
  */
 export async function clearRetainedWithCascade(
+  input: { root: string },
+  deps: ClearCascadeDeps = createSwitchDeps()
+): Promise<{ snapshot: SdkSourceSnapshot; failures: PurgeAppOwnedResult['failures'] }> {
+  return adbRecovery.activity('sdk-source', () => clearRetainedWithCascadeImpl(input, deps))
+}
+
+async function clearRetainedWithCascadeImpl(
   input: { root: string },
   deps: ClearCascadeDeps = createSwitchDeps()
 ): Promise<{ snapshot: SdkSourceSnapshot; failures: PurgeAppOwnedResult['failures'] }> {

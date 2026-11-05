@@ -206,7 +206,7 @@ describe('createTrackParser', () => {
 })
 
 describe('track 客户端', () => {
-  it('注册幂等：两轮注册无重复通道（无线批后一次注册 6 个）', async () => {
+  it('注册幂等：两轮注册无重复通道（诊断修复后一次注册 9 个）', async () => {
     const mod = await fresh()
     const bags = makeDeps()
     mod.registerExternalIpc(bags.deps)
@@ -215,8 +215,8 @@ describe('track 客户端', () => {
       .mocked(ipcMain.handle)
       .mock.calls.map((call) => call[0])
       .sort()
-    expect(channels).toHaveLength(6)
-    expect(new Set(channels).size).toBe(6)
+    expect(channels).toHaveLength(9)
+    expect(new Set(channels).size).toBe(9)
   })
 
   it('迁移在途无线四入口统一拒绝（adb 客户端会拉起 server，review P3-5）', async () => {

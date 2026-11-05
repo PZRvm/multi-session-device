@@ -97,6 +97,7 @@ description: 一期 Android 需求唯一依据——应用内新建隔离模拟�
   - AC：AVD 存放于 `ANDROID_AVD_HOME` 指向的应用自有目录，Android Studio Device Manager 不可见。
 - 作为测试人员，我要 Android Studio / Flutter / RN 能直接把 app 部署到运行中的设备上。
   - AC：与系统 adb server（端口 5037）共享，运行设备出现在 `adb devices` 与 IDE 部署目标；优先复用用户已有 platform-tools 的 adb，版本不一致时提示（防 adb server 重启闪断 IDE 连接）。
+  - AC（2026-11-05 用户选择 B）：无线连接失败后自动诊断；仅用户主动点击修复并确认全局中断影响后，可重启共享 ADB 一次并重试当前目标。录屏、APK 安装、SDK 迁移/来源切换与模拟器启停中禁止修复；不在启动、退出或普通连接失败时自动重启。详见 [诊断与修复 plan](../plans/2026-11-05-wireless-diagnostics-and-recovery.md)。
   - AC：设备命名带标识（如 `MST-03 · Pixel 8`），IDE 设备下拉里可辨认。
 
 **G. 设置窗口（复用浏览器仓库骨架）**

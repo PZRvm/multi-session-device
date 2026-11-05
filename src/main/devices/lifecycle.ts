@@ -1,3 +1,4 @@
+import { adbRecovery } from '../emulator/adbRecovery'
 import { app } from 'electron'
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -52,6 +53,7 @@ const deleteFlights = new Map<string, Promise<DeviceSnapshot>>()
 export const startDevice = async (id: string): Promise<DeviceSnapshot> => {
   if (!acceptingCommandsNow()) throw new Error(msg('appClosingNoStart'))
   await ensureLoaded()
+  adbRecovery.assertOpen()
   const device = requireDevice(id)
   if (editFlights.has(id)) throw new Error(msg('blockStartWhileSaving'))
   if (device.status === 'starting' || device.status === 'running') return snapshotNow()
@@ -95,6 +97,7 @@ export const startDevice = async (id: string): Promise<DeviceSnapshot> => {
 
 export const stopDevice = async (id: string): Promise<DeviceSnapshot> => {
   await ensureLoaded()
+  adbRecovery.assertOpen()
   const device = requireDevice(id)
   if (device.status !== 'running' && device.status !== 'stopping') {
     throw new Error(device.status === 'starting' ? msg('stopWhileStarting') : msg('stopNotRunning'))
@@ -158,6 +161,7 @@ const verifySnapshotSaved = async (id: string, startedAt: number): Promise<numbe
 
 export const cancelStartDevice = async (id: string): Promise<DeviceSnapshot> => {
   await ensureLoaded()
+  adbRecovery.assertOpen()
   const device = requireDevice(id)
   if (device.status === 'running') {
     throw new Error(msg('cancelWhileRunning'))
@@ -202,6 +206,7 @@ const deleteFlow = async (
   opts: { bypassOriginBucket?: boolean } = {}
 ): Promise<DeviceSnapshot> => {
   await ensureLoaded()
+  adbRecovery.assertOpen()
   const device = requireDevice(id)
   if (device.status === 'creating') throw new Error(msg('deleteWhileCreating'))
   if (editFlights.has(id)) throw new Error(msg('blockDeleteWhileSaving'))
@@ -281,6 +286,7 @@ export const purgeAppOwnedDevices = async (): Promise<{
   failures: Array<{ name: string; message: string }>
 }> => {
   await ensureLoaded()
+  adbRecovery.assertOpen()
   const targets = devicesNow()
     .filter((device) => originOfMeta(device) === 'app-owned')
     .map((device) => ({ id: device.id, name: device.name }))

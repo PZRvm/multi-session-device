@@ -78,6 +78,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-10-16-recording-implementation.md](docs/poc/2026-10-16-recording-implementation.md) — 录屏正式实现验证——独立 MP4、暂停旋转、后台与打包产物已跑通；1282 项测试通过，十分钟同步 112/106ms 未过，真机声音与交互性能待验
 - [2026-10-16-recording-p0.md](docs/poc/2026-10-16-recording-p0.md) — 录屏先行 P0——双 AVD、最大画布与 MP4 可行；原始 AAC PTS 漂移，修订仪器后候选 46/120ms，真机音频验收后移
 - [2026-11-02-screenshot-editor.md](docs/poc/2026-11-02-screenshot-editor.md) — 截图编辑器 T6 验收记录——自动门禁摘要 + V1—V9 人工画布验收结论（全部通过）
+- [2026-11-05-wireless-recovery.md](docs/poc/2026-11-05-wireless-recovery.md) — 无线诊断与显式修复的自动门禁、原生确认取消、实际共享服务重启及手机连接验证记录
 
 ### guidelines/
 
@@ -221,6 +222,8 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-03-screenshot-layout-review.md](notes/issue/2026-11/2026-11-03-screenshot-layout-review.md) — 已修复图片编辑页缩放后的三灯定位偏移，以及损坏的 worktree 元数据阻断端口覆盖与构建两项复审问题
 - [2026-11-03-wireless-unreachable-diagnostics.md](notes/issue/2026-11/2026-11-03-wireless-unreachable-diagnostics.md) — 无线连接把 macOS Local network prohibited 引发的 No route to host 统一提示为确认手机 Wi-Fi，原始 ADB 错误未传给用户
 - [2026-11-04-screenshot-per-capture-review.md](notes/issue/2026-11/2026-11-04-screenshot-per-capture-review.md) — 多截图编辑复审的真机断连清理和注释问题已修复，新增真实 IPC 装配回归，全仓 1570 项通过
+- [2026-11-05-wireless-recovery-code-review.md](notes/issue/2026-11/2026-11-05-wireless-recovery-code-review.md) — 无线修复复审的三项 P2 已按用户授权修复，截图门、日志失败壳与并发诊断均有失败回归转绿记录
+- [2026-11-05-wireless-recovery-hardware-validation.md](notes/issue/2026-11/2026-11-05-wireless-recovery-hardware-validation.md) — 无线诊断修复的正式签名权限、TLS 真机、USB/运行中 AVD 与 IDE 调试人工验收尚未执行
 
 ### notes/learn/
 
@@ -326,6 +329,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-03-editor-session-identity.md](notes/learn/2026-11/2026-11-03-editor-session-identity.md) — 多截图编辑需区分来源身份、图片版本与窗口代次；删登记还须清除被生命周期回调持有的图片引用
 - [2026-11-03-pull-request-release-badge-branch.md](notes/learn/2026-11/2026-11-03-pull-request-release-badge-branch.md) — 合并 PR 后发布的 badge 分支筛选不等于 checkout 分支，应使用实际运行与 merge SHA 核对
 - [2026-11-03-toolbar-centering-validation.md](notes/learn/2026-11/2026-11-03-toolbar-centering-validation.md) — 工具条居中要测实际内容；macOS 原生窗口按钮还需按工具栏高度定位，并用原生窗口截图核验
+- [2026-11-05-shared-adb-recovery.md](notes/learn/2026-11/2026-11-05-shared-adb-recovery.md) — 应用重启不等于共享 ADB 重启，端口可达与 ADB 失败须分开看，恢复还需保留视图和日志订阅
 
 ### notes/summary/2026-10/
 
@@ -363,6 +367,8 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-03-screenshot-review-fixes.md](notes/summary/2026-11/2026-11-03-screenshot-review-fixes.md) — 修复页面缩放后的原生三灯偏移与工作区元数据异常；真实 Electron 缩放验证、配置加载及全仓 1560 项测试通过
 - [2026-11-03-wireless-runtime-investigation.md](notes/summary/2026-11/2026-11-03-wireless-runtime-investigation.md) — 三星手机转无线失败来自共享 ADB 服务被 macOS 禁止本地网络访问，手工重启服务后应用显示无线已连接，shell 实测通过
 - [2026-11-04-screenshot-disconnect-review-fixes.md](notes/summary/2026-11/2026-11-04-screenshot-disconnect-review-fixes.md) — 修复真机断连时截图会话未失效和续编注释过时；新增断连、重连与下载中断连的 IPC 装配回归
+- [2026-11-05-wireless-diagnostics-and-recovery.md](notes/summary/2026-11/2026-11-05-wireless-diagnostics-and-recovery.md) — 无线连接诊断与用户确认修复已实现，1592 项测试及经典无线实测通过，单实例锁恢复，正式包和其他硬件验收待完成
+- [2026-11-05-wireless-recovery-review-fixes.md](notes/summary/2026-11/2026-11-05-wireless-recovery-review-fixes.md) — 三项无线修复 P2 已修正，失败回归转绿，1597 项测试通过，等待本地合并 dev 与复验
 
 ### notes/task/
 
@@ -382,6 +388,8 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [20261022110137-Windows兼容问题解决方案调研.md](notes/think-report/20261022110137-Windows兼容问题解决方案调研.md) — Windows 兼容 16 项外围问题（进程/文件系统/打包/模拟器环境/UI）的线上方案选型，已全部批复
 - [20261022125639-Windows适配主体工程调研.md](notes/think-report/20261022125639-Windows适配主体工程调研.md) — Windows 适配主体工程（SDK 引导平台化/解压选型 tar.exe/Studio 检测链零注册表）的方案选型，已全部批复
 - [20261102145653-截图编辑器功能盘点.md](notes/think-report/20261102145653-截图编辑器功能盘点.md) — 已确认的浏览器截图编辑器功能盘点：7 个主工具与 13 项配套能力，以及导出清空历史、单槽过期等复刻边界
+- [20261105134112-无线连接失败诊断与修复.md](notes/think-report/20261105134112-无线连接失败诊断与修复.md) — 无线连接失败时自动诊断、由用户触发共享 ADB 重启修复的候选方案与裁决项
+- [20261105160421-真机通用连接修复入口.md](notes/think-report/20261105160421-真机通用连接修复入口.md) — 将无线失败专用修复扩展为真机区常驻入口，支持 USB 消失时诊断及用户确认后的共享 ADB 重启
 
 ### plans/
 
@@ -485,6 +493,8 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-03-screenshot-editor-layout.md](plans/2026-11-03-screenshot-editor-layout.md) — 图片编辑窗口最小宽度调为 720px，左右工具区居中，并移除截图气泡的复制成功文本
 - [2026-11-03-screenshot-editor-per-capture.md](plans/2026-11-03-screenshot-editor-per-capture.md) — 修复同设备新截图复用旧编辑页的问题，按截图建立编辑窗口并隔离取图、导出与缓存回写
 - [2026-11-03-screenshot-review-fixes.md](plans/2026-11-03-screenshot-review-fixes.md) — 修复图片编辑页缩放后的原生按钮定位，以及工作区端口元数据异常阻断配置的问题
+- [2026-11-05-wireless-diagnostics-and-recovery.md](plans/2026-11-05-wireless-diagnostics-and-recovery.md) — 无线连接失败后自动诊断、用户确认后重启共享 ADB 并重试当前目标，含任务保护、会话恢复和验收步骤
+- [2026-11-05-wireless-recovery-review-fixes.md](plans/2026-11-05-wireless-recovery-review-fixes.md) — 修复无线恢复复审的三项 P2，补截图门、日志会话与诊断上下文回归，验证提交后合并 dev
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
 
 ### think-report/
@@ -498,4 +508,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 392 documents -->
+<!-- 402 documents -->

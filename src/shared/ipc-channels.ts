@@ -43,6 +43,10 @@ export const IPC_CHANNELS = {
   devicesExternalChanged: 'devices:external-changed',
   // ---- 真机无线域（plan 2026-10-15-real-device-wireless；仅登记主窗）----
   /** 无线扫描：mDNS 服务 + 本网段 5555 探活，返回候选列表 */
+  wirelessRecoveryGet: 'wireless:recovery-get',
+  wirelessRecoveryChanged: 'wireless:recovery-changed',
+  wirelessRecoveryRepair: 'wireless:recovery-repair',
+  wirelessRecoveryCopy: 'wireless:recovery-copy',
   devicesExternalScan: 'devices:external-scan',
   /** 配对码配对（小米系等有官方无线调试开关的机型） */
   devicesExternalPair: 'devices:external-pair',

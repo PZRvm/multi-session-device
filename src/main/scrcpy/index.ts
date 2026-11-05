@@ -18,6 +18,11 @@ export function createScrcpyManager(deps: ScrcpyManagerDeps): ScrcpyManager {
     ensureSession: (device) => ensureSession(ctx, device),
     destroySession: (deviceId) => destroySession(ctx, deviceId),
     destroyAll: () => destroyAll(ctx),
+    suspendForAdbRecovery: async () => {
+      const active = ctx.active
+      await destroyAll(ctx)
+      ctx.active = active
+    },
     activeDeviceId: () => ctx.active?.deviceId ?? null,
     registerIpc: () => registerIpc(ctx)
   }

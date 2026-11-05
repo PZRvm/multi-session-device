@@ -1,3 +1,4 @@
+import { adbRecovery } from '../emulator/adbRecovery'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { ipcMain, type WebContents } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
@@ -57,6 +58,7 @@ export interface LogcatManager {
   ensureSession: (device: { id: string; runId: string; serial: string }) => void
   destroySession: (deviceId: string) => Promise<void>
   destroyAll: () => Promise<void>
+  suspendForAdbRecovery: () => Promise<() => void>
   registerIpc: () => void
 }
 
@@ -71,6 +73,7 @@ const runningDeviceOf = (
 
 export function createLogcatManager(deps: LogcatManagerDeps): LogcatManager {
   const sessions = new Map<string, LogcatSession>()
+  let recoverySubscriptions = new Map<string, { seq: number; contents: WebContents[] }>()
 
   const killChild = (session: LogcatSession): Promise<void> => {
     const child = session.child
@@ -109,6 +112,7 @@ export function createLogcatManager(deps: LogcatManagerDeps): LogcatManager {
   }
 
   const destroySession = (deviceId: string): Promise<void> => {
+    recoverySubscriptions.delete(deviceId)
     const session = sessions.get(deviceId)
     if (!session) return Promise.resolve()
     return destroySessionOf(session)
@@ -174,6 +178,7 @@ export function createLogcatManager(deps: LogcatManagerDeps): LogcatManager {
   }
 
   const startSession = (device: { id: string; runId: string; serial: string }): LogcatSession => {
+    adbRecovery.assertOpen()
     const session: LogcatSession = {
       deviceId: device.id,
       runId: device.runId,
@@ -231,6 +236,7 @@ export function createLogcatManager(deps: LogcatManagerDeps): LogcatManager {
     if (existing && existing.runId === device.runId) return
     if (existing) void destroySession(device.id)
     startSession(device)
+    restoreRecoverySubscribers(device.id)
   }
 
   const unsubscribe = (deviceId: string, webContentsId: number): void => {
@@ -262,6 +268,17 @@ export function createLogcatManager(deps: LogcatManagerDeps): LogcatManager {
     const subscriber = session.subscribers.get(contents.id)!
     // 回放即缓冲尾（pending 中的行已在 ring 里，同步流程无间隙可补）
     sendBatch(session, subscriber, session.ring.slice(-LOGCAT_REPLAY_LINES), true, 0)
+  }
+
+  const restoreRecoverySubscribers = (id: string): void => {
+    const saved = recoverySubscriptions.get(id)
+    const session = sessions.get(id)
+    if (!saved || !session || session.spawnError) return
+    session.seq = Math.max(session.seq, saved.seq)
+    for (const contents of saved.contents) {
+      if (!contents.isDestroyed()) subscribe(id, contents)
+    }
+    recoverySubscriptions.delete(id)
   }
 
   const acknowledge = (deviceId: string, webContentsId: number, upToSeq: number): void => {
@@ -310,6 +327,26 @@ export function createLogcatManager(deps: LogcatManagerDeps): LogcatManager {
 
   return {
     ensureSession,
+    suspendForAdbRecovery: async () => {
+      const subscriptions = new Map(
+        [...sessions.values()].map((session) => [
+          session.deviceId,
+          {
+            seq: session.seq,
+            contents: [...session.subscribers.values()].map(({ contents }) => contents)
+          }
+        ])
+      )
+      await Promise.all([...sessions.keys()].map((id) => destroySession(id)))
+      return () => {
+        recoverySubscriptions = subscriptions
+        for (const id of subscriptions.keys()) {
+          const view = runningDeviceOf(deps.runtimeViews(), id)
+          if (view && !sessions.has(id)) startSession({ id, ...view })
+          restoreRecoverySubscribers(id)
+        }
+      }
+    },
     destroySession,
     destroyAll: () =>
       Promise.all([...sessions.keys()].map((id) => destroySession(id))).then(() => undefined),

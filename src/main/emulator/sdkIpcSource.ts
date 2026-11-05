@@ -1,3 +1,4 @@
+import { adbRecovery } from './adbRecovery'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { SdkSnapshot, SdkSourceSnapshot, StudioSdkDetection } from '@shared/types'
@@ -30,21 +31,25 @@ export function registerSdkSourceIpc(deps: SdkIpcDeps): void {
   )
 
   ipcMain.handle(IPC_CHANNELS.sdkSourceGet, (event): Promise<SdkSourceSnapshot> => {
+    adbRecovery.assertOpen()
     requireSettingsSender(IPC_CHANNELS.sdkSourceGet, event)
     return getSdkSourceSnapshot()
   })
 
   ipcMain.handle(IPC_CHANNELS.sdkDetectStudio, (event): Promise<StudioSdkDetection> => {
+    adbRecovery.assertOpen()
     requireSettingsSender(IPC_CHANNELS.sdkDetectStudio, event)
     return runStudioDetection()
   })
 
   ipcMain.handle(IPC_CHANNELS.sdkSourceSet, (event, raw: unknown) => {
+    adbRecovery.assertOpen()
     requireSettingsSender(IPC_CHANNELS.sdkSourceSet, event)
     return switchSource(readSourceTargetInput(raw))
   })
 
   ipcMain.handle(IPC_CHANNELS.sdkSourceMigrate, async (event, raw: unknown) => {
+    adbRecovery.assertOpen()
     requireSettingsSender(IPC_CHANNELS.sdkSourceMigrate, event)
     const input = readSourceTargetInput(raw)
     const replace =
@@ -55,16 +60,19 @@ export function registerSdkSourceIpc(deps: SdkIpcDeps): void {
   })
 
   ipcMain.handle(IPC_CHANNELS.sdkSourceAdopt, (event, raw: unknown) => {
+    adbRecovery.assertOpen()
     requireSettingsSender(IPC_CHANNELS.sdkSourceAdopt, event)
     return adoptSourceSwitch(readSourceTargetInput(raw))
   })
 
   ipcMain.handle(IPC_CHANNELS.sdkSourceMigrateCancel, (event) => {
+    adbRecovery.assertOpen()
     requireSettingsSender(IPC_CHANNELS.sdkSourceMigrateCancel, event)
     return cancelSourceMigration()
   })
 
   ipcMain.handle(IPC_CHANNELS.sdkSourceClearRetained, async (event, raw: unknown) => {
+    adbRecovery.assertOpen()
     requireSettingsSender(IPC_CHANNELS.sdkSourceClearRetained, event)
     if (
       typeof raw !== 'object' ||
@@ -91,12 +99,14 @@ export function registerSdkSourceIpc(deps: SdkIpcDeps): void {
 
   // 清除确认框的级联计数（仅设置窗）：项目自有设备全体将被连带删除
   ipcMain.handle(IPC_CHANNELS.sdkAppOwnedCount, async (event): Promise<number> => {
+    adbRecovery.assertOpen()
     requireSettingsSender(IPC_CHANNELS.sdkAppOwnedCount, event)
     return deps.appOwnedDeviceCount !== undefined ? deps.appOwnedDeviceCount() : 0
   })
 
   // 原生目录选择器（自选 SDK 根）：null = 用户取消，不走错误通道
   ipcMain.handle(IPC_CHANNELS.sdkChooseCustomRoot, async (event): Promise<string | null> => {
+    adbRecovery.assertOpen()
     requireSettingsSender(IPC_CHANNELS.sdkChooseCustomRoot, event)
     const window = BrowserWindow.fromWebContents(event.sender)
     if (window === null) throw new Error(msg('loadSettingsFailed', { detail: 'window gone' }))

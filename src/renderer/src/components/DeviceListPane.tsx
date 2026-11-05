@@ -1,3 +1,5 @@
+import WirelessRecoveryFeedback from './WirelessRecoveryFeedback'
+import { WIRELESS_RECOVERY_COPY } from '@shared/wirelessRecovery'
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Loader2, Usb, Wifi } from 'lucide-react'
 import styled from 'styled-components'
@@ -246,23 +248,31 @@ const DeviceListPane = ({
   onCrossBucketBlocked
 }: DeviceListPaneProps): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
+  const recoveryCopy = useCopy(WIRELESS_RECOVERY_COPY)
   const [foldedOpen, setFoldedOpen] = useState(false)
   const [realOpen, setRealOpen] = useState(true)
   // 无线批（plan 2026-10-15-real-device-wireless）：连接器已改 mac 原生弹窗（用户裁定，
   // 渲染层弹层与窗口几何打架）——这里只发起开窗；转无线反馈是行内瞬态，不进 store
   // （无状态裁定：刷新即丢，设备由 track 推送呈现）
+  const [failedAttempt, setFailedAttempt] = useState<{
+    serial: string
+    outcome: Extract<WirelessConnectOutcome, { ok: false }>
+  } | null>(null)
+  const promoteRequest = useRef(0)
   const [promote, setPromote] = useState<PromoteState | null>(null)
   // 断开/删除失败反馈（P3-3）：serial → 文案（map——P3-10：多台先后失败并存不覆盖）
   const [disconnectErrors, setDisconnectErrors] = useState<Record<string, string>>({})
   const { active, folded } = splitByOriginView(devices, sourceBucket)
   // 自清定时器登记（P3-9）：卸载统一清理（对齐 inputErrorTimerRef 先例）
   const timersRef = useRef(new Set<number>())
-  useEffect(
-    () => () => {
-      for (const id of timersRef.current) window.clearTimeout(id)
-    },
-    []
-  )
+  useEffect(() => {
+    const requests = promoteRequest
+    const timers = timersRef.current
+    return () => {
+      requests.current++
+      for (const id of timers) window.clearTimeout(id)
+    }
+  }, [])
   const later = (fn: () => void, ms: number): void => {
     const id = window.setTimeout(() => {
       timersRef.current.delete(id)
@@ -275,25 +285,29 @@ const DeviceListPane = ({
     promote && externalDevices.some((device) => device.serial === promote.serial) ? promote : null
 
   const handlePromote = (serial: string): void => {
+    const request = ++promoteRequest.current
+    setFailedAttempt(null)
     setPromote({ serial, phase: 'working' })
     void toApiResult(window.api.devices.promoteExternalWireless({ serial })).then((result) => {
+      if (request !== promoteRequest.current) return
       if (!result.ok) {
         setPromote({ serial, phase: 'fail', text: result.error })
         return
       }
       const outcome: WirelessConnectOutcome = result.data
+      if (!outcome.ok) setFailedAttempt({ serial, outcome })
       setPromote(
         outcome.ok
           ? { serial, phase: 'done' }
-          : { serial, phase: 'fail', text: wirelessConnectFailureText(copy, outcome) }
+          : { serial, phase: 'fail', text: wirelessConnectFailureText(copy, outcome, recoveryCopy) }
       )
       // done 提示 6 秒后自清（P3-4：重插同 serial 不重显旧提示）；失败态不自动清，
       // 随设备离场消失（派生收口）
       if (outcome.ok) {
-        later(
-          () => setPromote((cur) => (cur?.serial === serial && cur.phase === 'done' ? null : cur)),
-          6_000
-        )
+        later(() => {
+          if (promoteRequest.current === request)
+            setPromote((cur) => (cur?.serial === serial && cur.phase === 'done' ? null : cur))
+        }, 6_000)
       }
     })
   }
@@ -433,6 +447,24 @@ const DeviceListPane = ({
               <Wifi size={12} aria-hidden="true" />
             </button>
           </div>
+          {failedAttempt?.outcome.attemptId ? (
+            <div className="recovery-feedback">
+              {!externalDevices.some((device) => device.serial === failedAttempt.serial) ? (
+                <p role="status">
+                  {wirelessConnectFailureText(copy, failedAttempt.outcome, recoveryCopy)}
+                </p>
+              ) : null}
+              <WirelessRecoveryFeedback
+                key={failedAttempt.outcome.attemptId}
+                outcome={failedAttempt.outcome}
+                onRetry={() => handlePromote(failedAttempt.serial)}
+                onRecovered={() => {
+                  setFailedAttempt(null)
+                  setPromote({ serial: failedAttempt.serial, phase: 'done' })
+                }}
+              />
+            </div>
+          ) : null}
           {realOpen ? (
             <div className="real-body">
               {externalDevices.length === 0 ? (
@@ -563,6 +595,11 @@ const Wrapper = styled.div`
      紧跟 AVD 分区（或空库提示）之后，不钉在栏底（用户 2026-10-13 反馈）。
      无线批（2026-10-15）：组头拆成容器行（按钮嵌按钮不合法）+ 右侧常驻无线入口；
      弹层锚在本区（position: relative） */
+  .recovery-feedback {
+    padding: 8px 12px;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
   .real-devices {
     position: relative;
     border-top: 1px solid var(--board-hairline);

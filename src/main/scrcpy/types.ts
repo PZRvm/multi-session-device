@@ -101,6 +101,7 @@ export interface ScrcpyManager {
   ensureSession: (device: { id: string; runId: string; serial: string }) => Promise<void>
   destroySession: (deviceId: string) => Promise<void>
   destroyAll: () => Promise<void>
+  suspendForAdbRecovery: () => Promise<void>
   activeDeviceId: () => string | null
   registerIpc: () => void
 }

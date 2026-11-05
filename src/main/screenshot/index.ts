@@ -1,3 +1,4 @@
+import { adbRecovery } from '../emulator/adbRecovery'
 import { access, constants, link, rm, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -29,8 +30,16 @@ export async function runAdbBinary(
   args: string[],
   { timeoutMs = SCREENCAP_TIMEOUT_MS }: { timeoutMs?: number } = {}
 ): Promise<AdbBinaryResult> {
+  const finishCommand = adbRecovery.command()
   return new Promise<AdbBinaryResult>((resolve, reject) => {
-    const child = spawn(adbPath, args, { env: scrubAdbEnv(process.env), windowsHide: true })
+    let child: ReturnType<typeof spawn>
+    try {
+      child = spawn(adbPath, args, { env: scrubAdbEnv(process.env), windowsHide: true })
+    } catch (error) {
+      finishCommand()
+      reject(error)
+      return
+    }
     const out: Buffer[] = []
     const err: Buffer[] = []
     let settled = false
@@ -60,10 +69,12 @@ export async function runAdbBinary(
       if (!settled) err.push(chunk)
     })
     child.on('error', (error) => {
+      finishCommand()
       clearTimeout(timer)
       reject(error)
     })
     child.on('close', (code) => {
+      finishCommand()
       clearTimeout(timer)
       if (settled) return
       const rawStderr = Buffer.concat(err)
