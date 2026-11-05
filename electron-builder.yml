@@ -38,6 +38,8 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
+  # 暂停证书签名；afterPack 保留无需钥匙串密码的 ad-hoc 签名。
+  identity: null
   icon: build/icon.icns
   artifactName: ${name}-${version}-${arch}-mac.${ext}
   entitlementsInherit: build/entitlements.mac.plist

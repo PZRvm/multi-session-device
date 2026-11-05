@@ -368,6 +368,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-03-screenshot-review-fixes.md](notes/summary/2026-11/2026-11-03-screenshot-review-fixes.md) — 修复页面缩放后的原生三灯偏移与工作区元数据异常；真实 Electron 缩放验证、配置加载及全仓 1560 项测试通过
 - [2026-11-03-wireless-runtime-investigation.md](notes/summary/2026-11/2026-11-03-wireless-runtime-investigation.md) — 三星手机转无线失败来自共享 ADB 服务被 macOS 禁止本地网络访问，手工重启服务后应用显示无线已连接，shell 实测通过
 - [2026-11-04-screenshot-disconnect-review-fixes.md](notes/summary/2026-11/2026-11-04-screenshot-disconnect-review-fixes.md) — 修复真机断连时截图会话未失效和续编注释过时；新增断连、重连与下载中断连的 IPC 装配回归
+- [2026-11-05-mac-without-certificate.md](notes/summary/2026-11/2026-11-05-mac-without-certificate.md) — macOS 暂停证书签名，打包只做无需密码的匿名签名
 - [2026-11-05-wireless-diagnostics-and-recovery.md](notes/summary/2026-11/2026-11-05-wireless-diagnostics-and-recovery.md) — 无线连接诊断与用户确认修复已实现，1592 项测试及经典无线实测通过，单实例锁恢复，正式包和其他硬件验收待完成
 - [2026-11-05-wireless-recovery-review-fixes.md](notes/summary/2026-11/2026-11-05-wireless-recovery-review-fixes.md) — 三项无线修复 P2 已修正，1597 项测试通过，c2469d5 已 fast-forward 合并 dev 且合并前后门禁通过
 
@@ -494,6 +495,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-03-screenshot-editor-layout.md](plans/2026-11-03-screenshot-editor-layout.md) — 图片编辑窗口最小宽度调为 720px，左右工具区居中，并移除截图气泡的复制成功文本
 - [2026-11-03-screenshot-editor-per-capture.md](plans/2026-11-03-screenshot-editor-per-capture.md) — 修复同设备新截图复用旧编辑页的问题，按截图建立编辑窗口并隔离取图、导出与缓存回写
 - [2026-11-03-screenshot-review-fixes.md](plans/2026-11-03-screenshot-review-fixes.md) — 修复图片编辑页缩放后的原生按钮定位，以及工作区端口元数据异常阻断配置的问题
+- [2026-11-05-mac-without-certificate.md](plans/2026-11-05-mac-without-certificate.md) — 暂停 macOS 证书签名，使用无需钥匙串密码的匿名签名
 - [2026-11-05-wireless-diagnostics-and-recovery.md](plans/2026-11-05-wireless-diagnostics-and-recovery.md) — 无线连接失败后自动诊断、用户确认后重启共享 ADB 并重试当前目标，含任务保护、会话恢复和验收步骤
 - [2026-11-05-wireless-recovery-review-fixes.md](plans/2026-11-05-wireless-recovery-review-fixes.md) — 修复无线恢复复审的三项 P2，补截图门、日志会话与诊断上下文回归，验证提交后合并 dev
 - [README.md](plans/README.md) — plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
@@ -509,4 +511,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 403 documents -->
+<!-- 405 documents -->
