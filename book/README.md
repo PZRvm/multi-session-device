@@ -222,6 +222,7 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 - [2026-11-03-screenshot-layout-review.md](notes/issue/2026-11/2026-11-03-screenshot-layout-review.md) — 已修复图片编辑页缩放后的三灯定位偏移，以及损坏的 worktree 元数据阻断端口覆盖与构建两项复审问题
 - [2026-11-03-wireless-unreachable-diagnostics.md](notes/issue/2026-11/2026-11-03-wireless-unreachable-diagnostics.md) — 无线连接把 macOS Local network prohibited 引发的 No route to host 统一提示为确认手机 Wi-Fi，原始 ADB 错误未传给用户
 - [2026-11-04-screenshot-per-capture-review.md](notes/issue/2026-11/2026-11-04-screenshot-per-capture-review.md) — 多截图编辑复审的真机断连清理和注释问题已修复，新增真实 IPC 装配回归，全仓 1570 项通过
+- [2026-11-05-commit-msg-hook-not-executable.md](notes/issue/2026-11/2026-11-05-commit-msg-hook-not-executable.md) — 主仓库提交时提示 commit-msg hook 无执行权限而被忽略，本轮手动主题校验通过，未改 hook 权限
 - [2026-11-05-wireless-recovery-code-review.md](notes/issue/2026-11/2026-11-05-wireless-recovery-code-review.md) — 无线修复复审的三项 P2 已按用户授权修复，截图门、日志失败壳与并发诊断均有失败回归转绿记录
 - [2026-11-05-wireless-recovery-hardware-validation.md](notes/issue/2026-11/2026-11-05-wireless-recovery-hardware-validation.md) — 无线诊断修复的正式签名权限、TLS 真机、USB/运行中 AVD 与 IDE 调试人工验收尚未执行
 
@@ -508,4 +509,4 @@ description: book 总索引——每篇文档的地图。book 有改动后跑 np
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 402 documents -->
+<!-- 403 documents -->
