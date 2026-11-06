@@ -41,6 +41,8 @@ const renderPane = (overrides: Partial<Parameters<typeof DeviceListPane>[0]>): v
       onStart={vi.fn()}
       onStop={vi.fn()}
       onCancelStart={vi.fn()}
+      onHibernate={vi.fn()}
+      onResume={vi.fn()}
       onCopySerial={vi.fn()}
       onDelete={vi.fn()}
       onRename={vi.fn()}
@@ -95,6 +97,8 @@ describe('DeviceListPane 空库文案（review P2-3/P3）', () => {
         onStart={vi.fn()}
         onStop={vi.fn()}
         onCancelStart={vi.fn()}
+        onHibernate={vi.fn()}
+        onResume={vi.fn()}
         onCopySerial={vi.fn()}
         onDelete={vi.fn()}
         onRename={vi.fn()}
@@ -355,6 +359,8 @@ describe('真机区无线入口（plan 2026-10-15-real-device-wireless）', () =
       onStart: vi.fn(),
       onStop: vi.fn(),
       onCancelStart: vi.fn(),
+      onHibernate: vi.fn(),
+      onResume: vi.fn(),
       onCopySerial: vi.fn(),
       onDelete: vi.fn(),
       onRename: vi.fn(),

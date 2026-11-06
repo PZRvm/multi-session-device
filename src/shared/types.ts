@@ -147,11 +147,24 @@ export interface DeviceMetaLegacy {
 export type DeviceFrameKind = 'phone' | 'tablet' | 'generic'
 
 /**
- * 运行态不入盘：重启一律回到「停止」，主进程内存持有。
+ * 运行态不入盘：重启一律回到「停止」，主进程内存持有——唯一例外是 hibernated，
+ * 由 AVD 目录内的休眠清单（msd-hibernation.json）在启动扫描时投影，不由 devices.json 承载。
  * creating/deleting 是创建/删除事务的临时态；starting 可取消；stopping 是停止/取消/
  * 异常回收共用的过渡态，停止失败时保留在 stopping 并附 lastError 等待重试。
+ * hibernating/resuming 是休眠事务的过渡态（plan 2026-11-06-emulator-hibernation）：
+ * 失败不统一回退 stopped——保存失败实例仍活回 running，退出失败留在 hibernating
+ * 可重试，加载失败回 hibernated 附原因；丢弃休眠状态是唯一显式回到 stopped 的路径。
  */
-export type DeviceStatus = 'creating' | 'stopped' | 'starting' | 'running' | 'stopping' | 'deleting'
+export type DeviceStatus =
+  | 'creating'
+  | 'stopped'
+  | 'starting'
+  | 'running'
+  | 'stopping'
+  | 'deleting'
+  | 'hibernating'
+  | 'hibernated'
+  | 'resuming'
 
 /** 运行故障原因（不入盘，随快照发布；code 是闭集外仍可扩展的字符串） */
 export interface DeviceError {
@@ -262,6 +275,13 @@ export interface Device extends DeviceMeta {
   runId?: string
   /** 本次启动时间（快照核验基准）；运行态不入盘 */
   startedAt?: number
+  /**
+   * 休眠能力（main 派生、不入盘；快照发布时随行计算）：平台 × GPU 后端门控——
+   * PoC 只验证过 Mac + host，其余组合不展示可执行的休眠入口。null 视为不可用。
+   */
+  hibernationAvailable?: boolean
+  /** 休眠不可用原因（renderer tooltip/说明用）；可用时为空 */
+  hibernationDisabledReason?: string | null
 }
 
 /** 带代次的全量快照：list、命令响应与 changed 推送共用；renderer 忽略较旧 revision */

@@ -40,6 +40,10 @@ type DeviceListPaneProps = {
   onStart: (id: string) => void
   onStop: (id: string) => void
   onCancelStart: (id: string) => void
+  /** 手动休眠（含退出失败后的重试；plan 2026-11-06-emulator-hibernation） */
+  onHibernate: (id: string) => void
+  /** 从休眠恢复 */
+  onResume: (id: string) => void
   onCopySerial: (id: string) => void
   onDelete: (device: Device) => void
   onRename: (id: string, name: string) => void
@@ -62,6 +66,8 @@ const rowHandlers = (
     | 'onStart'
     | 'onStop'
     | 'onCancelStart'
+    | 'onHibernate'
+    | 'onResume'
     | 'onCopySerial'
     | 'onDelete'
     | 'onRename'
@@ -81,6 +87,8 @@ const rowHandlers = (
     onStart={() => shared.onStart(device.id)}
     onStop={() => shared.onStop(device.id)}
     onCancelStart={() => shared.onCancelStart(device.id)}
+    onHibernate={() => shared.onHibernate(device.id)}
+    onResume={() => shared.onResume(device.id)}
     onCopySerial={() => shared.onCopySerial(device.id)}
     onDelete={() => shared.onDelete(device)}
     onRename={(name) => shared.onRename(device.id, name)}
@@ -240,6 +248,8 @@ const DeviceListPane = ({
   onStart,
   onStop,
   onCancelStart,
+  onHibernate,
+  onResume,
   onCopySerial,
   onDelete,
   onRename,
@@ -372,6 +382,8 @@ const DeviceListPane = ({
                   onStart,
                   onStop,
                   onCancelStart,
+                  onHibernate,
+                  onResume,
                   onCopySerial,
                   onDelete,
                   onRename,
@@ -408,6 +420,8 @@ const DeviceListPane = ({
                         onStart,
                         onStop,
                         onCancelStart,
+                        onHibernate,
+                        onResume,
                         onCopySerial,
                         onDelete,
                         onRename,

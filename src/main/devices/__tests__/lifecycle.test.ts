@@ -421,7 +421,7 @@ describe('devices 域（启动/停止/取消状态机）', () => {
     expect(row.runId).toBeUndefined()
   })
 
-  it('delete：running 设备先停后删——stop 先于 deleteAvd，落盘不含该 id', async () => {
+  it('delete：用户通道对 running 设备直接拒绝——零停止/删除副作用（设计 E）', async () => {
     const { handlerFor, runnerEvents } = await freshDomain()
     const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(
       mainWindowEvent(),
@@ -429,8 +429,23 @@ describe('devices 域（启动/停止/取消状态机）', () => {
     )) as { createdId: string }
     await handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id: created.createdId })
     runnerEvents().onRunning(created.createdId, 'run-1', 'emulator-5554')
-    const snapshot = (await handlerFor(IPC_CHANNELS.devicesDelete)(mainWindowEvent(), {
-      id: created.createdId
+    await expect(
+      handlerFor(IPC_CHANNELS.devicesDelete)(mainWindowEvent(), { id: created.createdId })
+    ).rejects.toThrow('不在停止状态')
+    expect(mocks.runnerInstance.stop).not.toHaveBeenCalled()
+    expect(mocks.deleteAvd).not.toHaveBeenCalled()
+  })
+
+  it('delete：内部路径保留先停后删——stop 先于 deleteAvd，落盘不含该 id', async () => {
+    const { handlerFor, runnerEvents, domain } = await freshDomain()
+    const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(
+      mainWindowEvent(),
+      validCreateInput
+    )) as { createdId: string }
+    await handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id: created.createdId })
+    runnerEvents().onRunning(created.createdId, 'run-1', 'emulator-5554')
+    const snapshot = (await domain.deleteDevice(created.createdId, {
+      internal: true
     })) as { devices: unknown[] }
     expect(mocks.runnerInstance.stop).toHaveBeenCalledTimes(1)
     expect(mocks.deleteAvd).toHaveBeenCalledTimes(1)
@@ -442,18 +457,18 @@ describe('devices 域（启动/停止/取消状态机）', () => {
     expect(persisted).toHaveLength(0)
   })
 
-  it('delete：running 设备先经 runner.stop，停止失败不删 AVD', async () => {
+  it('delete：内部路径停止失败不删 AVD', async () => {
     mocks.runnerInstance.stop.mockRejectedValue(new Error('停止超时'))
-    const { handlerFor, runnerEvents } = await freshDomain()
+    const { handlerFor, runnerEvents, domain } = await freshDomain()
     const created = (await handlerFor(IPC_CHANNELS.devicesCreate)(
       mainWindowEvent(),
       validCreateInput
     )) as { createdId: string }
     await handlerFor(IPC_CHANNELS.devicesStart)(mainWindowEvent(), { id: created.createdId })
     runnerEvents().onRunning(created.createdId, 'run-1', 'emulator-5554')
-    await expect(
-      handlerFor(IPC_CHANNELS.devicesDelete)(mainWindowEvent(), { id: created.createdId })
-    ).rejects.toThrow('停止超时')
+    await expect(domain.deleteDevice(created.createdId, { internal: true })).rejects.toThrow(
+      '停止超时'
+    )
     expect(mocks.deleteAvd).not.toHaveBeenCalled()
   })
 

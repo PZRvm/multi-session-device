@@ -52,6 +52,15 @@ export const devicesApi = {
     ipcRenderer.invoke(IPC_CHANNELS.devicesStop, { id }),
   cancelStart: (id: string): Promise<DeviceSnapshot> =>
     ipcRenderer.invoke(IPC_CHANNELS.devicesCancelStart, { id }),
+  /** 手动休眠：保存命名快照并优雅退出实例（不传路径/端口/快照名——main 单源） */
+  hibernate: (id: string): Promise<DeviceSnapshot> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesHibernate, { id }),
+  /** 从休眠恢复：兼容性校验后以保存的快照启动，获得新 runId */
+  resume: (id: string): Promise<DeviceSnapshot> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesResume, { id }),
+  /** 放弃休眠状态：删除快照与清单回到 stopped（renderer 先确认，main 复核状态） */
+  discardHibernation: (id: string): Promise<DeviceSnapshot> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesDiscardHibernation, { id }),
   /** 复制当前登记 serial——受控通道，main 校验运行态后写入剪贴板 */
   copySerial: (id: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.devicesCopySerial, { id }),

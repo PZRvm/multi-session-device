@@ -13,6 +13,7 @@ import { registerDialogIpc } from '../dialog'
 import {
   assertEditorTarget,
   attachDeviceStreamBridge,
+  attachHibernationGate,
   adbBinaryPath,
   androidToolEnv,
   appOwnedDeviceCount,
@@ -32,7 +33,7 @@ import { createLogcatManager } from '../logcat'
 import { registerSdkIpc, onSdkSourceChanged } from '../emulator'
 import { registerApkInstallIpc } from '../apkInstall'
 import { createScrcpyManager } from '../scrcpy'
-import { registerScreenshotIpc, clearScreenshotCache } from '../screenshot'
+import { registerScreenshotIpc, clearScreenshotCache, waitScreenshotIdle } from '../screenshot'
 import { registerNetworkIpc } from '../network'
 import { registerWizardIpc } from '../window/wizard'
 import { registerSettingsIpc } from '../window/settings'
@@ -169,6 +170,19 @@ export function registerIpcHandlers(): void {
         .then(() => Promise.all([scrcpy.destroySession(id), logcat.destroySession(id)]))
         .then(() => undefined)
     }
+  })
+
+  // 休眠事务门（plan 2026-11-06 设计 D2-D4）：逐设备忙态查询与输入释放/截图排空
+  // ——安装域提供逐设备忙态，录制域判活跃任务（成品封装不阻塞），scrcpy 释放
+  // 已按下输入，截图域有界排空在途副作用
+  attachHibernationGate({
+    installerBusyFor: (id) => installer?.isDeviceBusy(id) ?? false,
+    recordingActiveFor: (id) =>
+      recording
+        .snapshot()
+        .tasks.some((task) => task.deviceId === id && isRecordingActive(task.state)),
+    releaseInputs: (id) => scrcpy.releaseInputs(id),
+    drainScreenshots: (id) => waitScreenshotIdle(id, 20_000)
   })
 
   // 真机跟踪（track-devices-l 长连接）+ 会话第二桥：外部设备没有 runner，track 事件

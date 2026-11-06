@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { serialForPort, tcpProbe, type PortAllocator } from './ports'
 import { listAdbSerials, runAdb, scrubAdbEnv } from './adb'
 import { abortableSleep, awaitWithAbort } from './abort'
+import { emuConsoleExec } from './emuConsole'
 import { msg } from '../locale'
 
 // 容错上限（非冷启动验收耗时）：PoC 实测无头冷启动 ~24s，超时裕量留给慢机器
@@ -11,6 +12,10 @@ export const BOOT_TIMEOUT_MS = 240_000
 export const BOOT_INTERVAL_MS = 1_500
 export const TERM_GRACE_MS = 3_000
 export const KILL_GRACE_MS = 5_000
+/** console kill 命令本身的往返期限（PoC 实测退出 ~1.5-2s，裕量放大） */
+export const CONSOLE_KILL_TIMEOUT_MS = 15_000
+/** console kill 后等待进程关闭的期限（保存后退出通常数秒内） */
+export const QUIT_GRACE_MS = 30_000
 const STDERR_TAIL_BYTES = 4096
 
 export type RunnerPhase = 'starting' | 'running' | 'stopping'
@@ -94,6 +99,11 @@ export interface RunnerDeps {
   onUnexpectedExit: (id: string, runId: string, info: UnexpectedExitInfo) => void
   /** 终止前钩子（投屏会话释放；stream 步骤接入）——失败不阻塞进程终止 */
   beforeKill?: (id: string, runId: string) => Promise<void>
+  /**
+   * console 命令执行（休眠域）：按 console 端口认证并执行单条命令。
+   * 缺省用 emuConsole 实现；接缝供单测注入。
+   */
+  consoleExec?: (port: number, command: string, timeoutMs: number) => Promise<string>
 }
 
 export const stderrTailText = (chunks: Buffer[]): string => {
@@ -262,6 +272,41 @@ export class EmulatorRunner {
 
   serialOf(id: string): string | undefined {
     return this.#entries.get(id)?.serial
+  }
+
+  /** console 端口（休眠保存/优雅退出的目标）；无活动实例时 undefined */
+  portOf(id: string): number | undefined {
+    return this.#entries.get(id)?.port
+  }
+
+  /**
+   * 休眠退出（plan 2026-11-06 设计 D5）：经 console kill 优雅退出本实例，进程关闭
+   * 后释放端口登记。不调用 beforeKill（休眠流程在保存前已自行拆除媒体会话）。
+   * 失败（console 不通/超时不退）抛错并保留 entry——状态由调用侧解释为
+   * hibernating 退出失败（可重试），不得显示已释放。
+   */
+  async quit(id: string): Promise<void> {
+    if (this.#preparing.has(id)) throw new Error(msg('stopWhileStarting'))
+    const entry = this.#requireEntry(id)
+    if (entry.phase === 'stopping') throw new Error(msg('runnerNoInstance'))
+    if (entry.phase !== 'running') throw new Error(msg('stopWhileStarting'))
+    entry.phase = 'stopping'
+    const exec =
+      this.deps.consoleExec ??
+      ((port: number, command: string, timeoutMs: number) =>
+        emuConsoleExec(port, command, timeoutMs))
+    const response = await exec(entry.port, 'kill', CONSOLE_KILL_TIMEOUT_MS)
+    if (/KO/i.test(response)) {
+      entry.phase = 'running'
+      throw new Error(msg('hibernateKillRejected', { response }))
+    }
+    if (!(await this.#closedWithin(entry, QUIT_GRACE_MS))) {
+      // 进程未退：保留 entry（phase 回 running，实例仍在跑）——调用侧保持资源占用状态
+      entry.phase = 'running'
+      throw new Error(msg('hibernateQuitTimeout'))
+    }
+    this.#entries.delete(id)
+    this.deps.ports.release(id)
   }
 
   activeIds(): string[] {

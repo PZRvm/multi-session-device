@@ -175,6 +175,17 @@ const captures = new Set<string>()
  *  编辑复制/下载与原保存共用同一占位集合——同设备冲突立即反馈 busy，不另建队列 */
 const saves = new Set<string>()
 
+/**
+ * 有界等待该设备在途截图/编辑保存排空（休眠保存前；plan 设计 D4）。
+ * 超时不算休眠失败——capture 自身有 15s 超时上限，这里只挡常规并发窗口。
+ */
+export const waitScreenshotIdle = async (deviceId: string, timeoutMs: number): Promise<void> => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline && (captures.has(deviceId) || saves.has(deviceId))) {
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}
+
 export const clearScreenshotCache = (deviceId: string): void => {
   cache.delete(deviceId)
   for (const [id, session] of editSessions) {

@@ -30,6 +30,7 @@ vi.mock('electron', () => ({
 vi.mock('../../devices', () => ({
   registerDevicesIpc: vi.fn(),
   attachDeviceStreamBridge: vi.fn(),
+  attachHibernationGate: vi.fn(),
   registerExternalIpc: (deps: { onSession: (event: ExternalSessionEvent) => void }) => {
     state.external = deps.onSession
   },

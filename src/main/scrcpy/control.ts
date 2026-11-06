@@ -169,7 +169,8 @@ async function injectKey(
   })
 }
 
-async function releaseInput(context: InjectContext): Promise<void> {
+/** 释放会话登记的全部按下指针与按键（休眠保存前调用，避免按住状态进快照） */
+export async function releaseInput(context: InjectContext): Promise<void> {
   for (const pointerId of [...context.pressedPointers]) {
     context.pressedPointers.delete(pointerId)
     await context.writer.injectTouch({

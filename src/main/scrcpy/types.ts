@@ -102,6 +102,8 @@ export interface ScrcpyManager {
   destroySession: (deviceId: string) => Promise<void>
   destroyAll: () => Promise<void>
   suspendForAdbRecovery: () => Promise<void>
+  /** 释放该设备会话登记的按下指针/按键（休眠保存前；无会话/无控制通道 = 无可释放） */
+  releaseInputs: (deviceId: string) => Promise<void>
   activeDeviceId: () => string | null
   registerIpc: () => void
 }

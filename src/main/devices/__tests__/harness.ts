@@ -154,6 +154,33 @@ export const mocks = {
     source: 'app-sdk',
     protocolVersion: 41
   })),
+  // adb 命令应答（readGuestBootId 等）：默认返回稳定 boot_id
+  runAdb: vi.fn(async () => ({ code: 0, stdout: 'boot-id-stable\n', stderr: '' })),
+  // 休眠 console：默认受理成功
+  emuConsoleExec: vi.fn(async () => ''),
+  // 休眠清单内存态：read/write/remove/snapshotExists 围绕本 map（'corrupt' = 模拟损坏）
+  hibernationStore: {
+    current: new Map<
+      string,
+      | {
+          schemaVersion: 1
+          deviceId: string
+          snapshotName: string
+          savedAt: number
+          guestBootId: string
+          stage: 'saving' | 'saved' | 'hibernated'
+          emulatorVersion: string | null
+          imagePackageName: string
+          imageRevision: number | null
+          gpuBackend: string
+          hardwareFingerprint: string
+        }
+      | 'corrupt'
+    >()
+  },
+  waitHibernationSnapshotStable: vi.fn(async () => 1024),
+  cleanupOldHibernationSnapshots: vi.fn(async () => undefined),
+  tcpProbe: vi.fn(async () => false),
   loadFrameKindIndex: vi.fn(
     async (): Promise<{
       lookup: (profileId: string) => 'phone' | 'tablet' | 'generic'
@@ -171,8 +198,10 @@ export const mocks = {
     ),
     stop: vi.fn(async () => undefined),
     cancelStart: vi.fn(async () => undefined),
+    quit: vi.fn(async () => undefined),
     phaseOf: vi.fn((): 'starting' | 'running' | 'stopping' | null => null),
     serialOf: vi.fn((): string | undefined => undefined),
+    portOf: vi.fn((): number | undefined => 5554),
     disposeAll: vi.fn(async () => [] as string[]),
     resumeAccepting: vi.fn()
   },
@@ -277,7 +306,41 @@ vi.mock('../../emulator/adb', () => ({
   candidateAdbPaths: () => [{ path: '/adb', source: 'app-sdk' }],
   ensureSharedServer: mocks.ensureSharedServer,
   listAdbSerials: mocks.listAdbSerials,
-  resolveAdbExecutable: mocks.resolveAdbExecutable
+  resolveAdbExecutable: mocks.resolveAdbExecutable,
+  runAdb: mocks.runAdb
+}))
+vi.mock('../../emulator/emuConsole', () => ({ emuConsoleExec: mocks.emuConsoleExec }))
+// 休眠清单域：IO 点换内存态（原子写语义由 hibernation 模块单测覆盖）
+vi.mock('../../emulator/hibernation', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../emulator/hibernation')>()
+  return {
+    ...actual,
+    readHibernationManifest: async (deviceId: string) => {
+      const entry = mocks.hibernationStore.current.get(deviceId)
+      if (entry === undefined) return { kind: 'none' } as const
+      if (entry === 'corrupt') return { kind: 'corrupt', reason: 'simulated' } as const
+      return { kind: 'ok', manifest: entry } as const
+    },
+    writeHibernationManifest: async (_deviceId: string, manifest: unknown) => {
+      const record = manifest as {
+        deviceId: string
+      }
+      mocks.hibernationStore.current.set(record.deviceId, manifest as never)
+    },
+    removeHibernationManifest: async (deviceId: string) => {
+      mocks.hibernationStore.current.delete(deviceId)
+    },
+    hibernationSnapshotExists: async (deviceId: string) => {
+      const entry = mocks.hibernationStore.current.get(deviceId)
+      return typeof entry === 'object' && entry !== null
+    },
+    waitHibernationSnapshotStable: mocks.waitHibernationSnapshotStable,
+    cleanupOldHibernationSnapshots: mocks.cleanupOldHibernationSnapshots
+  }
+})
+vi.mock('../../emulator/ports', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../emulator/ports')>()),
+  tcpProbe: mocks.tcpProbe
 }))
 vi.mock('../../emulator/runner', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../emulator/runner')>()),
@@ -312,6 +375,7 @@ vi.mock('../../window/wizard', () => ({
 
 /** devices 域有模块级状态——每用例 resetModules 动态导入隔离 */
 export const freshDomain = async (): Promise<{
+  domain: typeof import('..')
   handlerFor: (channel: string) => (event: unknown, raw: unknown) => Promise<unknown>
   runnerEvents: () => {
     onRunning: (id: string, runId: string, serial: string) => void
@@ -325,12 +389,15 @@ export const freshDomain = async (): Promise<{
 }> => {
   vi.resetModules()
   mocks.fileMetas.current = null
+  mocks.hibernationStore.current.clear()
   mocks.createRunner.mockImplementation(() => mocks.runnerInstance)
   const domain = await import('..')
   domain.registerDevicesIpc()
   return {
+    domain,
     handlerFor: (channel: string) => {
-      const call = mocks.handle.mock.calls.find(([name]) => name === channel)
+      // 多域测试：后注册者胜（find 会永远命中第一个域的 handler）
+      const call = mocks.handle.mock.calls.findLast(([name]) => name === channel)
       if (!call) throw new Error(`handler 未注册：${channel}`)
       return call[1] as (event: unknown, raw: unknown) => Promise<unknown>
     },

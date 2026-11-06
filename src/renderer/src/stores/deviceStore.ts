@@ -64,6 +64,12 @@ interface DeviceState {
   start: (id: string) => Promise<ApiResult<DeviceSnapshot>>
   stop: (id: string) => Promise<ApiResult<DeviceSnapshot>>
   cancelStart: (id: string) => Promise<ApiResult<DeviceSnapshot>>
+  /** 手动休眠（保存快照 → 释放进程；命令语义见 plan 2026-11-06-emulator-hibernation） */
+  hibernate: (id: string) => Promise<ApiResult<DeviceSnapshot>>
+  /** 从休眠快照恢复（新 runId；状态只镜像主进程推送） */
+  resume: (id: string) => Promise<ApiResult<DeviceSnapshot>>
+  /** 放弃休眠状态（删快照与清单 → stopped） */
+  discardHibernation: (id: string) => Promise<ApiResult<DeviceSnapshot>>
   setSelected: (id: string) => void
   /** 主进程 changed 推送与命令响应共用的快照入口（按 revision 幂等） */
   applySnapshot: (snapshot: DeviceSnapshot) => void
@@ -133,6 +139,9 @@ export const useDeviceStore = create<DeviceState>()((set, get) => {
     start: (id) => runCommand(() => window.api.devices.start(id)),
     stop: (id) => runCommand(() => window.api.devices.stop(id)),
     cancelStart: (id) => runCommand(() => window.api.devices.cancelStart(id)),
+    hibernate: (id) => runCommand(() => window.api.devices.hibernate(id)),
+    resume: (id) => runCommand(() => window.api.devices.resume(id)),
+    discardHibernation: (id) => runCommand(() => window.api.devices.discardHibernation(id)),
     setSelected: (id) => set({ selectedId: id }),
     applySnapshot: apply,
     applyNetworkState: (deviceId, state) =>

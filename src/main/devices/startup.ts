@@ -10,8 +10,9 @@ import type {
 import { CHECK_TIMEOUT_MS, checkDeviceHealth } from '../emulator/reconcile'
 import { awaitWithAbort } from '../emulator/abort'
 import { isMigrationActive } from '../emulator/sdkMigration'
-import { ensureSharedServer } from '../emulator/adb'
+import { ensureSharedServer, runAdb } from '../emulator/adb'
 import { createRunner } from '../emulator/runner'
+import { cleanupOldHibernationSnapshots, removeHibernationManifest } from '../emulator/hibernation'
 import { getMainWindow } from '../window'
 import { listWebcams } from '../emulator/cameras'
 import { looksLikeWhpxMissing } from '../emulator/whpx'
@@ -49,11 +50,28 @@ const emitRuntimeError = (message: RuntimeErrorMessage): void => {
 
 const handleRunning = (id: string, runId: string, serial: string): void => {
   const device = devicesNow().find((entry) => entry.id === id)
-  if (!device || device.runId !== runId || device.status !== 'starting') return
+  if (!device || device.runId !== runId) return
+  if (device.status !== 'starting' && device.status !== 'resuming') return
+  const wasResuming = device.status === 'resuming'
   device.status = 'running'
   device.serial = serial
   broadcastChanged()
   streamBridge.running?.(id, runId, serial)
+  if (wasResuming) {
+    resumePlansByDevice.delete(id)
+    // 恢复成功才消费清单（设计 B）；清理失败记录告警，下次休眠/放弃时重试
+    void consumeHibernationAfterResume(id).catch((error) => {
+      console.warn(`[hibernate] 恢复后清单消费失败（${id}）：${messageOf(error)}`)
+    })
+  }
+}
+
+/** 恢复成功后的清单消费：删清单 + 清旧休眠快照（保留本次加载的快照至下次休眠覆盖） */
+const consumeHibernationAfterResume = async (id: string): Promise<void> => {
+  const device = devicesNow().find((entry) => entry.id === id)
+  if (!device) return
+  await removeHibernationManifest(id, avdDirs())
+  await cleanupOldHibernationSnapshots(id, null, avdDirs(), (message) => console.warn(message))
 }
 
 const handleUnexpectedExit = (
@@ -63,6 +81,34 @@ const handleUnexpectedExit = (
 ): void => {
   const device = devicesNow().find((entry) => entry.id === id)
   if (!device || device.runId !== runId) return // 旧代次退出不覆盖新实例
+  // 恢复失败（含 boot_id 复核不过的自动冷启动回退）：回 hibernated 附原因——
+  // 快照与清单保留，可重试或放弃；不得当作普通 stopped 崩溃收口
+  if (device.status === 'resuming') {
+    resumePlansByDevice.delete(id)
+    device.status = 'hibernated'
+    device.serial = undefined
+    device.runId = undefined
+    device.startedAt = undefined
+    device.cameraNotice = undefined
+    device.lastError = {
+      code: 'resume-failed',
+      message: msg('hibernateResumeFailed', { detail: info.stderrTail || `exit ${info.code}` })
+    }
+    broadcastChanged()
+    return
+  }
+  // 休眠事务中的崩溃：状态由休眠流程自身收口（保存失败恢复运行/进程丢失回 stopped），
+  // 这里只发通知不抢写状态
+  if (device.status === 'hibernating') {
+    emitRuntimeError({
+      eventId: randomUUID(),
+      deviceId: id,
+      runId,
+      code: 'hibernate-crashed',
+      message: msg('hibernateCrashed', { detail: info.stderrTail || `exit ${info.code}` })
+    })
+    return
+  }
   // 致命参数错误只打在 stdout（37.2.12 实测），stderr/stdout 尾部都带上
   const parts = [
     info.stderrTail.length > 0 ? info.stderrTail : null,
@@ -258,6 +304,41 @@ const applyCameraFallbackOverride = (
 /** 运行会话数（starting/running/stopping 全算）——迁移与来源切换的预检口径 */
 export const runningDeviceCount = (): number => runner.activeIds().length
 
+// ---- 休眠域（plan 2026-11-06-emulator-hibernation）----
+
+/** 进行中的恢复计划：extraArgsFor/afterBoot/onRunning 按 runId 关联快照加载语义 */
+export interface ResumePlan {
+  runId: string
+  snapshotName: string
+  /** 清单保存的 guest boot_id；恢复成功必须一致（防自动冷启动回退冒充恢复） */
+  expectedBootId: string
+}
+export const resumePlansByDevice = new Map<string, ResumePlan>()
+
+/** 恢复加载失败（boot_id 不一致/进程退出）：快照保留，回 hibernated 附原因 */
+export class ResumeVerificationError extends Error {}
+
+/** 休眠恢复 argv 需去掉的自动快照参数（-no-snapshot 会覆盖 -snapshot） */
+const stripNoSnapshotArgs = (args: string[]): string[] =>
+  args.filter(
+    (arg) => arg !== '-no-snapshot' && arg !== '-no-snapshot-load' && arg !== '-no-snapshot-save'
+  )
+
+/** 读取 guest 内核 boot_id（快照恢复的同一性证据） */
+export const readGuestBootId = async (serial: string): Promise<string> => {
+  const result = await runAdb(adbBinaryPath(), [
+    '-s',
+    serial,
+    'shell',
+    'cat /proc/sys/kernel/random/boot_id'
+  ])
+  const value = result.stdout.trim()
+  if (result.code !== 0 || value.length === 0) {
+    throw new Error(msg('hibernateBootIdUnavailable'))
+  }
+  return value
+}
+
 /** 迁移期间 SDK 域只读：journal 内存标志在场即阻断创建/启动（同步零 await——
  *  创建事务的用例对入口节拍敏感，真实 fs 读会扰动时序） */
 export const assertSdkDomainOpen = (): void => {
@@ -367,6 +448,15 @@ export const runner = createRunner({
   },
   beforeKill: (id, runId) => streamBridge.beforeKill?.(id, runId) ?? Promise.resolve(),
   afterBoot: async (id, runId, serial, signal) => {
+    // 恢复复核（设计 D7）：不能只等 sys.boot_completed=1——快照加载失败自动回退
+    // 冷启动时该值同样为 1。guest boot_id 与清单一致才算恢复成功。
+    const plan = resumePlansByDevice.get(id)
+    if (plan?.runId === runId) {
+      const bootId = await readGuestBootId(serial)
+      if (bootId !== plan.expectedBootId) {
+        throw new ResumeVerificationError(msg('hibernateBootIdMismatch', { bootId }))
+      }
+    }
     const device = requireDevice(id)
     if (device.runId !== runId || !device.cutoutResetPending) return
     await resetDisplayCutout({ adbPath: adbBinaryPath(), serial, avdName: id, signal })
@@ -377,7 +467,10 @@ export const runner = createRunner({
   },
   // 运行字段按设备自己的已验证设置构造 argv；legacy（无设置）沿用固定 Cold/host。
   // Quick 的首启/失效路径：从未有效快照 → -no-snapshot-load（不加载旧快照，
-  // 正常停止仍保存新快照；plan 设计 8 的冷启动恢复）
+  // 正常停止仍保存新快照；plan 设计 8 的冷启动恢复）。
+  // 休眠恢复（plan 2026-11-06）：显式 -snapshot <名> + -no-snapshot-save（PoC F4：
+  // 退出自动保存会覆盖所加载的快照），并去掉所有 -no-snapshot*（Cold 的 -no-snapshot
+  // 会覆盖 -snapshot——启动参数互斥表实测）。
   extraArgsFor: (id) => {
     const device = devicesNow().find((entry) => entry.id === id)
     const display = displayArgsByDevice.get(id)
@@ -390,6 +483,20 @@ export const runner = createRunner({
       if (override.front) applyCameraFallbackOverride(next, '-camera-front')
       if (override.rear) applyCameraFallbackOverride(next, '-camera-back')
       return next
+    }
+    const plan = resumePlansByDevice.get(id)
+    if (plan !== undefined && plan.runId === device?.runId) {
+      const base =
+        device?.advancedSettings === undefined || device.advancedSettings === null
+          ? ['-gpu', 'host']
+          : settingsToRunnerArgs(device.advancedSettings)
+      return withCameraOverride([
+        ...stripNoSnapshotArgs(base),
+        '-snapshot',
+        plan.snapshotName,
+        '-no-snapshot-save',
+        ...displayArgs
+      ])
     }
     if (device?.advancedSettings === undefined || device.advancedSettings === null) {
       return withCameraOverride(['-no-snapshot', '-gpu', 'host', ...displayArgs])

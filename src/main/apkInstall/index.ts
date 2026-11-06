@@ -70,7 +70,10 @@ const isInstallInput = (raw: unknown): raw is ApkInstallInput => {
   )
 }
 
-export function registerApkInstallIpc(deps: ApkInstallDeps): { isBusy: () => boolean } {
+export function registerApkInstallIpc(deps: ApkInstallDeps): {
+  isBusy: () => boolean
+  isDeviceBusy: (deviceId: string) => boolean
+} {
   const run = deps.run ?? runAdb
   // 每设备串行：安装中的重复请求直接拒绝（不排队）；不同设备互不影响
   const activeDevices = new Set<string>()
@@ -119,5 +122,8 @@ export function registerApkInstallIpc(deps: ApkInstallDeps): { isBusy: () => boo
       return install(raw)
     }
   )
-  return { isBusy: () => activeDevices.size > 0 }
+  return {
+    isBusy: () => activeDevices.size > 0,
+    isDeviceBusy: (deviceId) => activeDevices.has(deviceId)
+  }
 }

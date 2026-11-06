@@ -31,6 +31,13 @@ export const IPC_CHANNELS = {
   devicesStart: 'devices:start',
   devicesStop: 'devices:stop',
   devicesCancelStart: 'devices:cancel-start',
+  // ---- 休眠域（plan 2026-11-06-emulator-hibernation；仅登记主窗）----
+  /** 运行设备手动休眠：保存命名快照 → 优雅退出进程 → 投影 hibernated */
+  devicesHibernate: 'devices:hibernate',
+  /** 已休眠设备恢复：校验兼容性后以指定快照启动，新 runId */
+  devicesResume: 'devices:resume',
+  /** 放弃休眠状态：确认后删除快照与清单，回到 stopped（可冷启动/删除） */
+  devicesDiscardHibernation: 'devices:discard-hibernation',
   /** 复制当前登记 serial——受控文本复制通道，不开放任意剪贴板读写 */
   devicesCopySerial: 'devices:copy-serial',
   devicesChanged: 'devices:changed',

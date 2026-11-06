@@ -21,7 +21,15 @@ import {
 import { acknowledgeReconciliation, ensureLoaded, reconcileDevices } from './scan'
 import { lastReportNow, requireDevice, snapshotNow } from './state'
 import { assertSdkDomainOpen } from './startup'
-import { cancelStartDevice, deleteDevice, startDevice, stopDevice } from './lifecycle'
+import {
+  cancelStartDevice,
+  deleteDevice,
+  discardHibernationDevice,
+  hibernateDevice,
+  resumeDevice,
+  startDevice,
+  stopDevice
+} from './lifecycle'
 import { createDevice, renameDevice } from './create'
 import { readDeviceConfig, updateDeviceConfig } from './edit'
 
@@ -112,6 +120,43 @@ export function registerDevicesIpc(): void {
     }
     return stopDevice(raw.id)
   })
+
+  // ---- 休眠域（plan 2026-11-06-emulator-hibernation；仅登记主窗）----
+
+  ipcMain.handle(
+    IPC_CHANNELS.devicesHibernate,
+    async (event, raw: unknown): Promise<DeviceSnapshot> => {
+      requireSender(IPC_CHANNELS.devicesHibernate, event, 'main')
+      if (!isDeviceIdInput(raw)) {
+        throw new Error(`${IPC_CHANNELS.devicesHibernate}${msg('invalidPayload')}`)
+      }
+      assertSdkDomainOpen()
+      return hibernateDevice(raw.id)
+    }
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.devicesResume,
+    async (event, raw: unknown): Promise<DeviceSnapshot> => {
+      requireSender(IPC_CHANNELS.devicesResume, event, 'main')
+      if (!isDeviceIdInput(raw)) {
+        throw new Error(`${IPC_CHANNELS.devicesResume}${msg('invalidPayload')}`)
+      }
+      assertSdkDomainOpen()
+      return resumeDevice(raw.id)
+    }
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.devicesDiscardHibernation,
+    async (event, raw: unknown): Promise<DeviceSnapshot> => {
+      requireSender(IPC_CHANNELS.devicesDiscardHibernation, event, 'main')
+      if (!isDeviceIdInput(raw)) {
+        throw new Error(`${IPC_CHANNELS.devicesDiscardHibernation}${msg('invalidPayload')}`)
+      }
+      return discardHibernationDevice(raw.id)
+    }
+  )
 
   ipcMain.handle(
     IPC_CHANNELS.devicesCancelStart,

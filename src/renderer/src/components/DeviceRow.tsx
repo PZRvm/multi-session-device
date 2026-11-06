@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Building2, Copy, Loader2, Play, Settings2, Square, Trash2, X } from 'lucide-react'
+import { Building2, Copy, Loader2, Moon, Play, Settings2, Square, Trash2, X } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
 import type { Device, DeviceAvailability, DeviceStatus } from '@shared/types'
@@ -33,6 +33,10 @@ type DeviceRowProps = {
   onStart: () => void
   onStop: () => void
   onCancelStart: () => void
+  /** 手动休眠（保存快照释放进程）；退出失败后的重试共用本入口 */
+  onHibernate: () => void
+  /** 从休眠恢复 */
+  onResume: () => void
   onCopySerial: () => void
   onDelete: () => void
   onRename: (name: string) => void
@@ -57,6 +61,8 @@ const DeviceRow = ({
   onStart,
   onStop,
   onCancelStart,
+  onHibernate,
+  onResume,
   onCopySerial,
   onDelete,
   onRename,
@@ -74,7 +80,10 @@ const DeviceRow = ({
     starting: copy.statusStarting,
     running: copy.statusRunning,
     stopping: copy.statusStopping,
-    deleting: copy.statusDeleting
+    deleting: copy.statusDeleting,
+    hibernating: copy.statusHibernating,
+    hibernated: copy.statusHibernated,
+    resuming: copy.statusResuming
   }
   const availabilityLabels: Record<DeviceAvailability['state'], string> = {
     checking: copy.availChecking,
@@ -97,8 +106,11 @@ const DeviceRow = ({
   const startDisabled =
     device.status === 'stopped' &&
     (crossBucket || !storeTrusted || availability === null || availability.state !== 'valid')
-  const deleteDisabled =
-    !metaWritable || crossBucket || (device.status !== 'stopped' && device.status !== 'running')
+  // 用户删除入口仅停止态渲染（plan 2026-11-06 设计 E）：运行/过渡/休眠态无 DOM 焦点入口
+  const deleteRenderable = device.status === 'stopped'
+  const deleteDisabled = !metaWritable || crossBucket
+  // 休眠能力门控（main 派生字段）：不可用时按钮禁用并以原因说明，不放行可执行入口
+  const hibernateDisabled = device.hibernationAvailable !== true
 
   const startRename = (): void => {
     if (device.status === 'creating' || device.status === 'deleting') return
@@ -274,6 +286,20 @@ const DeviceRow = ({
             <button
               type="button"
               className="icon-button"
+              aria-label={format(copy.hibernateAria, { name: device.name })}
+              title={
+                hibernateDisabled
+                  ? (device.hibernationDisabledReason ?? copy.hibernateUnsupported)
+                  : copy.hibernateTitle
+              }
+              disabled={hibernateDisabled}
+              onClick={onHibernate}
+            >
+              <Moon size={14} />
+            </button>
+            <button
+              type="button"
+              className="icon-button"
               aria-label={format(copy.stopAria, { name: device.name })}
               title={copy.stop}
               onClick={onStop}
@@ -288,6 +314,71 @@ const DeviceRow = ({
               onClick={onCopySerial}
             >
               <Copy size={14} />
+            </button>
+          </>
+        ) : null}
+        {device.status === 'hibernating' ? (
+          <>
+            <span
+              className="busy-slot"
+              role="img"
+              aria-label={format(copy.hibernatingAria, { name: device.name })}
+            >
+              <Loader2 size={14} aria-hidden="true" className="busy-icon" />
+            </span>
+            {/* 退出失败的重试/停止出口（保存失败已自动回运行态） */}
+            {device.lastError?.code === 'hibernate-exit-failed' ? (
+              <>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={format(copy.retryHibernateAria, { name: device.name })}
+                  title={copy.hibernateRetryTitle}
+                  onClick={onHibernate}
+                >
+                  <Moon size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={format(copy.stopAria, { name: device.name })}
+                  title={copy.hibernateGiveUpStopTitle}
+                  onClick={onStop}
+                >
+                  <Square size={14} />
+                </button>
+              </>
+            ) : null}
+          </>
+        ) : null}
+        {device.status === 'hibernated' ? (
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={format(copy.resumeAria, { name: device.name })}
+            title={copy.resumeTitle}
+            onClick={onResume}
+          >
+            <Play size={14} />
+          </button>
+        ) : null}
+        {device.status === 'resuming' ? (
+          <>
+            <span
+              className="busy-slot"
+              role="img"
+              aria-label={format(copy.resumingAria, { name: device.name })}
+            >
+              <Loader2 size={14} aria-hidden="true" className="busy-icon" />
+            </span>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label={format(copy.cancelResumeAria, { name: device.name })}
+              title={copy.cancelResume}
+              onClick={onCancelStart}
+            >
+              <X size={14} />
             </button>
           </>
         ) : null}
@@ -332,22 +423,24 @@ const DeviceRow = ({
         >
           <Settings2 size={14} />
         </button>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label={format(copy.deleteAria, { name: device.name })}
-          title={
-            crossBucket
-              ? copy.crossBucketBlockedTitle
-              : metaWritable
-                ? copy.deleteTitle
-                : copy.deleteFrozenTitle
-          }
-          disabled={deleteDisabled}
-          onClick={onDelete}
-        >
-          <Trash2 size={14} />
-        </button>
+        {deleteRenderable ? (
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={format(copy.deleteAria, { name: device.name })}
+            title={
+              crossBucket
+                ? copy.crossBucketBlockedTitle
+                : metaWritable
+                  ? copy.deleteTitle
+                  : copy.deleteFrozenTitle
+            }
+            disabled={deleteDisabled}
+            onClick={onDelete}
+          >
+            <Trash2 size={14} />
+          </button>
+        ) : null}
       </span>
     </Wrapper>
   )
@@ -393,12 +486,20 @@ const Wrapper = styled.div`
     background: var(--loading);
   }
 
-  /* 过渡态（非停止/运行）用琥珀点提示忙碌 */
+  /* 过渡态（非停止/运行）用琥珀点提示忙碌；休眠事务过渡同口径 */
   .status-dot[data-status='creating'],
   .status-dot[data-status='starting'],
   .status-dot[data-status='stopping'],
-  .status-dot[data-status='deleting'] {
+  .status-dot[data-status='deleting'],
+  .status-dot[data-status='hibernating'],
+  .status-dot[data-status='resuming'] {
     background: var(--board-tile-ink);
+  }
+
+  /* 已休眠：现场已保存、进程已释放——用主题 accent 弱化色区分于停止 */
+  .status-dot[data-status='hibernated'] {
+    background: var(--loading);
+    opacity: 0.55;
   }
 
   /* 选中态反白后原状态色在 accent 背景上对比不足（灰 2.6:1、深琥珀约 3:1），与文字行同口径改用 ink */
