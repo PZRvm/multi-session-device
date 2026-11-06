@@ -100,7 +100,7 @@ description: Master index of the book — the map of every document. Regenerate 
 
 ### notes/issue/
 
-**Open (41)**
+**Open (42)**
 
 - [2026-10-06-向导独立窗口-review.md](notes/issue/2026-10-06-向导独立窗口-review.md) — 向导独立窗口分支（5 提交）的 code review 发现——两处注释腐化、span 嵌 h3 不合法、dead CSS、非 darwin 标题双显与两条备查信息
 - [2026-10-04-messageport-bridge-no-delivery.md](notes/issue/2026-10/2026-10-04-messageport-bridge-no-delivery.md) — MessagePortMain 经 contextBridge 回传后 port 对象可达但不投递消息——视频包通道退回 webContents.send（每帧拷贝），产品化时可再评估
@@ -143,6 +143,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-05-commit-msg-hook-not-executable.md](notes/issue/2026-11/2026-11-05-commit-msg-hook-not-executable.md) — 主仓库提交时提示 commit-msg hook 无执行权限而被忽略，本轮手动主题校验通过，未改 hook 权限
 - [2026-11-05-wireless-recovery-hardware-validation.md](notes/issue/2026-11/2026-11-05-wireless-recovery-hardware-validation.md) — 无线诊断修复的正式签名权限、TLS 真机、USB/运行中 AVD 与 IDE 调试人工验收尚未执行
 - [2026-11-06-bocode-directory-navigation.md](notes/issue/2026-11/2026-11-06-bocode-directory-navigation.md) — BoCode 原版升级的目录 README 少了项目专属 PRD、录屏接口和架构快照入口，文档本身与总索引仍完整
+- [2026-11-06-hibernation-review-round.md](notes/issue/2026-11/2026-11-06-hibernation-review-round.md) — 休眠域评审轮发现：恢复后清单消费失败的陈旧投影风险、已休眠设备编辑无前置提示、quit 后 adb serial 残留影响紧接恢复
 
 **Resolved (83)**
 
@@ -336,6 +337,8 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-03-toolbar-centering-validation.md](notes/learn/2026-11/2026-11-03-toolbar-centering-validation.md) — 工具条居中要测实际内容；macOS 原生窗口按钮还需按工具栏高度定位，并用原生窗口截图核验
 - [2026-11-05-shared-adb-recovery.md](notes/learn/2026-11/2026-11-05-shared-adb-recovery.md) — 应用重启不等于共享 ADB 重启，端口可达与 ADB 失败须分开看，恢复还需保留视图和日志订阅
 - [2026-11-06-bocode-upgrade-project-adaptations.md](notes/learn/2026-11/2026-11-06-bocode-upgrade-project-adaptations.md) — 升级 BoCode 时保持四技能原文，把根路径、Git log 和状态模板差异写入项目规则，索引脚本必须合并而非覆盖
+- [2026-11-06-devices-harness-multidomain.md](notes/learn/2026-11/2026-11-06-devices-harness-multidomain.md) — devices 域测试 harness 的三个坑：多域测试 handlerFor 必须取最后注册、clearAllMocks 不清 per-test 实现、EmulatorRunner 工厂参数是 () => 值
+- [2026-11-06-emulator-snapshot-save-protocol.md](notes/learn/2026-11/2026-11-06-emulator-snapshot-save-protocol.md) — emulator console 的 snapshot save OK 只是受理而非写盘完成；缺失/半写/配置变化快照都会静默冷启动回退——完成判定与恢复复核的实测协议
 
 ### notes/summary/2026-10/
 
@@ -377,6 +380,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-05-wireless-diagnostics-and-recovery.md](notes/summary/2026-11/2026-11-05-wireless-diagnostics-and-recovery.md) — 无线连接诊断与用户确认修复已实现，1592 项测试及经典无线实测通过，单实例锁恢复，正式包和其他硬件验收待完成
 - [2026-11-05-wireless-recovery-review-fixes.md](notes/summary/2026-11/2026-11-05-wireless-recovery-review-fixes.md) — 三项无线修复 P2 已修正，1597 项测试通过，c2469d5 已 fast-forward 合并 dev 且合并前后门禁通过
 - [2026-11-06-bocode-upgrade.md](notes/summary/2026-11/2026-11-06-bocode-upgrade.md) — BoCode 已切换到 79426a9 官方英文四技能，同步任务分级及状态索引，保留项目布局和发布约定，目录导航一项 P3 待补
+- [2026-11-06-emulator-hibernation.md](notes/summary/2026-11/2026-11-06-emulator-hibernation.md) — 模拟器手动休眠（官方命名快照+进程退出）与停止态删除入口的完整交付：协议实证、状态机、门控与验证证据
 
 ### notes/task/
 
@@ -526,4 +530,4 @@ description: Master index of the book — the map of every document. Regenerate 
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 417 documents -->
+<!-- 421 documents -->

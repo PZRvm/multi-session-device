@@ -1,11 +1,15 @@
 ---
 description: 手动快照休眠与恢复的开发施工图，包含持久清单、状态事务、任务互斥、停止态删除及 Mac/Windows 验收门槛
-status: draft
+status: completed
 ---
 
 # 模拟器休眠与停止态删除 — 开发计划
 
-本计划仅供后续实施。用户已确认调研边界，随后明确要求撤回实施动作、创建 worktree 并只编写计划；当前不继续 PoC、不修改功能代码、不安装依赖、不启动 dev、不提交或推送。
+本计划已实施完成（2026-11-06，同日交付；summary 见 notes/summary/2026-11/）。
+声明交付范围：Mac + host GPU 门控内全量交付（PoC/实现/测试/真机冒烟/dev 装配验证）；
+Windows 与软件 GPU 后端按计划保持能力关闭（独立门槛未跑），UI 级人工点检留待下次
+真实使用（逻辑层由组件测试与真机冒烟覆盖）。评审发现记于
+notes/issue/2026-11/2026-11-06-hibernation-review-round.md，未随手修复。
 
 - 工作区：`multi-session-device-wt/feature-emulator-hibernation`
 - 分支：`feature/emulator-hibernation`；基分支：`dev`；创建基线：`824313852429f5c24e111e5ac1cecc3284b28750`
