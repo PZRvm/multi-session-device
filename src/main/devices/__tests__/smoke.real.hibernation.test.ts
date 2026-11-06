@@ -138,7 +138,7 @@ const bootId = async (serial: string): Promise<string> =>
 
     // 冷启动（-no-snapshot：禁自动加载，验证手动保存仍可用——PoC 协议）。
     // 端口由 PortAllocator 分配（不写死）：serial 与 console 端口都从 runner 取
-    await runner.start(AVD_NAME, 'smoke-run-1')
+    await runner.start(AVD_NAME, '11111111-1111-4111-8111-111111111111')
     await until(async () => runner.portOf(AVD_NAME) !== undefined, 'port allocated', 30_000)
     const port = runner.portOf(AVD_NAME)!
     const serial = `emulator-${port}`
@@ -222,7 +222,7 @@ const bootId = async (serial: string): Promise<string> =>
       onUnexpectedExit: events.unexpectedExit
     })
     const resumeBegin = Date.now()
-    await resumeRunner.start(AVD_NAME, 'smoke-run-2')
+    await resumeRunner.start(AVD_NAME, '22222222-2222-4222-8222-222222222222')
     await until(
       async () =>
         (
