@@ -69,6 +69,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [ADR-004-recording-media-pipeline.md](docs/decisions/ADR-004-recording-media-pipeline.md) — 录屏采用 Mediabunny 1.61.5 封装 MP4、独立 WebCodecs renderer 处理画布；设备音频独立采集与采样时钟，真机验收后移
 - [ADR-005-screenshot-editor-reuse.md](docs/decisions/ADR-005-screenshot-editor-reuse.md) — 截图编辑器直接迁入多会话浏览器实现——Konva/react-konva 是复用源编辑器的绘图依赖而非新 UI 栈；图标、窗口、缓存与文件发布按本项目差异适配
 - [ADR-006-sync-official-bocode.md](docs/decisions/ADR-006-sync-official-bocode.md) — 使用官方英文 BoCode skills 并以 SHA 跟踪升级，项目路径、发布机制与中文历史记录保持独立
+- [ADR-007-emulator-hibernation-snapshot.md](docs/decisions/ADR-007-emulator-hibernation-snapshot.md) — 模拟器休眠采用官方命名快照 + 进程退出的适配边界，版本化清单落在 AVD 目录内，能力按平台独立门控
 - [README.md](docs/decisions/README.md) — How to write an ADR here — sections, naming, numbering, and when a decision needs a record
 
 ### docs/poc/
@@ -80,6 +81,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-02-screenshot-editor.md](docs/poc/2026-11-02-screenshot-editor.md) — 截图编辑器 T6 验收记录——自动门禁摘要 + V1—V9 人工画布验收结论（全部通过）
 - [2026-11-05-wireless-recovery.md](docs/poc/2026-11-05-wireless-recovery.md) — 无线诊断与显式修复的自动门禁、原生确认取消、实际共享服务重启及手机连接验证记录
 - [2026-11-06-bocode-status-migration.md](docs/poc/2026-11-06-bocode-status-migration.md) — BoCode 升级时 68 篇历史 task/issue 状态转换的逐篇依据，原正文和文件位置保持不变
+- [2026-11-06-hibernation-poc.md](docs/poc/2026-11-06-hibernation-poc.md) — 模拟器休眠 G0 原生快照 PoC：双机各五轮全通过；缺失/半写/配置变化快照会静默冷启动回退，损坏快照原生悬挂——设计以 boot_id 复核与指纹校验拦截
 
 ### guidelines/
 
@@ -402,6 +404,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [20261105134112-无线连接失败诊断与修复.md](notes/think-report/20261105134112-无线连接失败诊断与修复.md) — 无线连接失败时自动诊断、由用户触发共享 ADB 重启修复的候选方案与裁决项
 - [20261105160421-真机通用连接修复入口.md](notes/think-report/20261105160421-真机通用连接修复入口.md) — 将无线失败专用修复扩展为真机区常驻入口，支持 USB 消失时诊断及用户确认后的共享 ADB 重启
 - [20261106131053-BoCode原版升级.md](notes/think-report/20261106131053-BoCode原版升级.md) — 升级官方 BoCode 的差异、原版 skills 替换方案、68 篇状态迁移及项目约定保留清单
+- [20261106144528-模拟器休眠与运行时隐藏删除.md](notes/think-report/20261106144528-模拟器休眠与运行时隐藏删除.md) — 以官方状态快照加进程退出实现释放内存的休眠，先验证既有 Quick Boot 稳定性；删除入口建议仅停止态显示
 
 ### plans/
 
@@ -509,6 +512,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-05-wireless-diagnostics-and-recovery.md](plans/2026-11-05-wireless-diagnostics-and-recovery.md) — 无线连接失败后自动诊断、用户确认后重启共享 ADB 并重试当前目标，含任务保护、会话恢复和验收步骤
 - [2026-11-05-wireless-recovery-review-fixes.md](plans/2026-11-05-wireless-recovery-review-fixes.md) — 修复无线恢复复审的三项 P2，补截图门、日志会话与诊断上下文回归，验证提交后合并 dev
 - [2026-11-06-bocode-upgrade.md](plans/2026-11-06-bocode-upgrade.md) — 将中文改编 BoCode 切换为官方原版，同步任务分级、状态索引和升级版本戳，保留项目适配
+- [2026-11-06-emulator-hibernation.md](plans/2026-11-06-emulator-hibernation.md) — 手动快照休眠与恢复的开发施工图，包含持久清单、状态事务、任务互斥、停止态删除及 Mac/Windows 验收门槛
 - [README.md](plans/README.md) — Plans directory usage — implementation plans land here once the Phase 2 design is complete, with naming and the plan template
 
 ### think-report/
@@ -522,4 +526,4 @@ description: Master index of the book — the map of every document. Regenerate 
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 413 documents -->
+<!-- 417 documents -->

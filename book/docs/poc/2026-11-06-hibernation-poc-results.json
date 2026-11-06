@@ -1,0 +1,600 @@
+{
+  "root": "/private/tmp/msd-hib-poc2",
+  "sdk": "/Users/pangzerui/Library/Android/sdk",
+  "emulator": "36.1.9.0 (build 13823996)",
+  "image": "system-images;android-36.1;google_apis_playstore;arm64-v8a",
+  "profile": "pixel_7",
+  "rounds": 5,
+  "events": [
+    {
+      "kind": "created",
+      "time": 1793952177.522,
+      "name": "msd_hib2_a"
+    },
+    {
+      "kind": "created",
+      "time": 1793952178.238,
+      "name": "msd_hib2_b"
+    },
+    {
+      "kind": "cold_started",
+      "time": 1793952196.699,
+      "name": "msd_hib2_a",
+      "serial": "emulator-5710",
+      "bootId": "a517a2cd-45c7-4a05-9301-65820a41ab4a",
+      "foreground": "topResumedActivity=ActivityRecord{105491522 u0 com.android.settings/.homepage.SettingsHomepageActivity t6}",
+      "seconds": 18.436,
+      "rssKiB": 2528592
+    },
+    {
+      "kind": "cold_started",
+      "time": 1793952200.004,
+      "name": "msd_hib2_b",
+      "serial": "emulator-5720",
+      "bootId": "048f3d91-f792-42e8-a003-e16a2036128c",
+      "foreground": "topResumedActivity=ActivityRecord{15091678 u0 com.android.settings/.homepage.SettingsHomepageActivity t14}",
+      "seconds": 21.738,
+      "rssKiB": 2736464
+    },
+    {
+      "kind": "host_mem_cold",
+      "time": 1793952200.007,
+      "availKiB": 8116256
+    },
+    {
+      "kind": "saved",
+      "time": 1793952211.655,
+      "name": "msd_hib2_a",
+      "round": 1,
+      "seconds": 3.646,
+      "response": "Android Console: Authentication required\r\nAndroid Console: type 'auth <auth_token>' to authenticate\r\nAndroid Console: you can find your <auth_token> in \r\n'/Users/pangzerui/.emulator_console_auth_token'\r\nOK\r\nAndroid Console: type 'help' for a list of commands\r\nOK",
+      "kib": 930996
+    },
+    {
+      "kind": "resumed",
+      "time": 1793952218.808,
+      "name": "msd_hib2_a",
+      "round": 1,
+      "resumeSeconds": 2.847,
+      "exit": {
+        "seconds": 1.62,
+        "code": 0,
+        "killResponse": "killing emulator, bye bye",
+        "processLeft": false,
+        "consoleListening": false,
+        "adbListening": false
+      },
+      "bootIdMatch": true,
+      "foregroundMatch": true,
+      "screencapOk": true,
+      "inputOk": true,
+      "rssKiB": 1985408,
+      "pass": true
+    },
+    {
+      "kind": "saved",
+      "time": 1793952223.005,
+      "name": "msd_hib2_b",
+      "round": 1,
+      "seconds": 4.197,
+      "response": "Android Console: Authentication required\r\nAndroid Console: type 'auth <auth_token>' to authenticate\r\nAndroid Console: you can find your <auth_token> in \r\n'/Users/pangzerui/.emulator_console_auth_token'\r\nOK\r\nAndroid Console: type 'help' for a list of commands\r\nOK",
+      "kib": 986000
+    },
+    {
+      "kind": "resumed",
+      "time": 1793952229.948,
+      "name": "msd_hib2_b",
+      "round": 1,
+      "resumeSeconds": 2.219,
+      "exit": {
+        "seconds": 2.617,
+        "code": 0,
+        "killResponse": "killing emulator, bye bye",
+        "processLeft": false,
+        "consoleListening": false,
+        "adbListening": false
+      },
+      "bootIdMatch": true,
+      "foregroundMatch": true,
+      "screencapOk": true,
+      "inputOk": true,
+      "rssKiB": 2600256,
+      "pass": true
+    },
+    {
+      "kind": "both_alive_independent",
+      "time": 1793952230.239,
+      "round": 1,
+      "a": {
+        "device": "device",
+        "bootId": "a517a2cd-45c7-4a05-9301-65820a41ab4a"
+      },
+      "b": {
+        "device": "device",
+        "bootId": "048f3d91-f792-42e8-a003-e16a2036128c"
+      },
+      "distinctBootIds": true,
+      "hostAvailKiB": 7609088
+    },
+    {
+      "kind": "saved",
+      "time": 1793952233.509,
+      "name": "msd_hib2_a",
+      "round": 2,
+      "seconds": 3.27,
+      "response": "Android Console: Authentication required\r\nAndroid Console: type 'auth <auth_token>' to authenticate\r\nAndroid Console: you can find your <auth_token> in \r\n'/Users/pangzerui/.emulator_console_auth_token'\r\nOK\r\nAndroid Console: type 'help' for a list of commands\r\nOK",
+      "kib": 987612
+    },
+    {
+      "kind": "resumed",
+      "time": 1793952270.215,
+      "name": "msd_hib2_a",
+      "round": 2,
+      "resumeSeconds": 3.31,
+      "exit": {
+        "seconds": 30.526,
+        "code": "timeout",
+        "killResponse": "killing emulator, bye bye",
+        "processLeft": false,
+        "consoleListening": false,
+        "adbListening": false
+      },
+      "bootIdMatch": true,
+      "foregroundMatch": true,
+      "screencapOk": true,
+      "inputOk": true,
+      "rssKiB": 2565680,
+      "pass": true
+    },
+    {
+      "kind": "saved",
+      "time": 1793952273.4,
+      "name": "msd_hib2_b",
+      "round": 2,
+      "seconds": 3.185,
+      "response": "Android Console: Authentication required\r\nAndroid Console: type 'auth <auth_token>' to authenticate\r\nAndroid Console: you can find your <auth_token> in \r\n'/Users/pangzerui/.emulator_console_auth_token'\r\nOK\r\nAndroid Console: type 'help' for a list of commands\r\nOK",
+      "kib": 1045980
+    },
+    {
+      "kind": "resumed",
+      "time": 1793952278.508,
+      "name": "msd_hib2_b",
+      "round": 2,
+      "resumeSeconds": 2.181,
+      "exit": {
+        "seconds": 1.561,
+        "code": 0,
+        "killResponse": "killing emulator, bye bye",
+        "processLeft": false,
+        "consoleListening": false,
+        "adbListening": false
+      },
+      "bootIdMatch": true,
+      "foregroundMatch": true,
+      "screencapOk": true,
+      "inputOk": true,
+      "rssKiB": 4478816,
+      "pass": true
+    },
+    {
+      "kind": "both_alive_independent",
+      "time": 1793952278.619,
+      "round": 2,
+      "a": {
+        "device": "device",
+        "bootId": "a517a2cd-45c7-4a05-9301-65820a41ab4a"
+      },
+      "b": {
+        "device": "device",
+        "bootId": "048f3d91-f792-42e8-a003-e16a2036128c"
+      },
+      "distinctBootIds": true,
+      "hostAvailKiB": 8375328
+    },
+    {
+      "kind": "saved",
+      "time": 1793952281.423,
+      "name": "msd_hib2_a",
+      "round": 3,
+      "seconds": 2.804,
+      "response": "Android Console: Authentication required\r\nAndroid Console: type 'auth <auth_token>' to authenticate\r\nAndroid Console: you can find your <auth_token> in \r\n'/Users/pangzerui/.emulator_console_auth_token'\r\nOK\r\nAndroid Console: type 'help' for a list of commands\r\nOK",
+      "kib": 1006944
+    },
+    {
+      "kind": "resumed",
+      "time": 1793952286.527,
+      "name": "msd_hib2_a",
+      "round": 3,
+      "resumeSeconds": 1.595,
+      "exit": {
+        "seconds": 2.562,
+        "code": 0,
+        "killResponse": "killing emulator, bye bye",
+        "processLeft": false,
+        "consoleListening": false,
+        "adbListening": false
+      },
+      "bootIdMatch": true,
+      "foregroundMatch": true,
+      "screencapOk": true,
+      "inputOk": true,
+      "rssKiB": 4527872,
+      "pass": true
+    },
+    {
+      "kind": "saved",
+      "time": 1793952289.576,
+      "name": "msd_hib2_b",
+      "round": 3,
+      "seconds": 3.049,
+      "response": "Android Console: Authentication required\r\nAndroid Console: type 'auth <auth_token>' to authenticate\r\nAndroid Console: you can find your <auth_token> in \r\n'/Users/pangzerui/.emulator_console_auth_token'\r\nOK\r\nAndroid Console: type 'help' for a list of commands\r\nOK",
+      "kib": 1039528
+    },
+    {
+      "kind": "resumed",
+      "time": 1793952293.47,
+      "name": "msd_hib2_b",
+      "round": 3,
+      "resumeSeconds": 1.623,
+      "exit": {
+        "seconds": 1.561,
+        "code": 0,
+        "killResponse": "killing emulator, bye bye",
+        "processLeft": false,
+        "consoleListening": false,
+        "adbListening": false
+      },
+      "bootIdMatch": true,
+      "foregroundMatch": true,
+      "screencapOk": true,
+      "inputOk": true,
+      "rssKiB": 4303584,
+      "pass": true
+    },
+    {
+      "kind": "both_alive_independent",
+      "time": 1793952293.534,
+      "round": 3,
+      "a": {
+        "device": "device",
+        "bootId": "a517a2cd-45c7-4a05-9301-65820a41ab4a"
+      },
+      "b": {
+        "device": "device",
+        "bootId": "048f3d91-f792-42e8-a003-e16a2036128c"
+      },
+      "distinctBootIds": true,
+      "hostAvailKiB": 8706416
+    },
+    {
+      "kind": "saved",
+      "time": 1793952296.399,
+      "name": "msd_hib2_a",
+      "round": 4,
+      "seconds": 2.865,
+      "response": "Android Console: Authentication required\r\nAndroid Console: type 'auth <auth_token>' to authenticate\r\nAndroid Console: you can find your <auth_token> in \r\n'/Users/pangzerui/.emulator_console_auth_token'\r\nOK\r\nAndroid Console: type 'help' for a list of commands\r\nOK",
+      "kib": 1020816
+    },
+    {
+      "kind": "resumed",
+      "time": 1793952300.224,
+      "name": "msd_hib2_a",
+      "round": 4,
+      "resumeSeconds": 1.785,
+      "exit": {
+        "seconds": 1.57,
+        "code": 0,
+        "killResponse": "killing emulator, bye bye",
+        "processLeft": false,
+        "consoleListening": false,
+        "adbListening": false
+      },
+      "bootIdMatch": true,
+      "foregroundMatch": true,
+      "screencapOk": true,
+      "inputOk": true,
+      "rssKiB": 4442240,
+      "pass": true
+    },
+    {
+      "kind": "saved",
+      "time": 1793952302.881,
+      "name": "msd_hib2_b",
+      "round": 4,
+      "seconds": 2.657,
+      "response": "Android Console: Authentication required\r\nAndroid Console: type 'auth <auth_token>' to authenticate\r\nAndroid Console: you can find your <auth_token> in \r\n'/Users/pangzerui/.emulator_console_auth_token'\r\nOK\r\nAndroid Console: type 'help' for a list of commands\r\nOK",
+      "kib": 1016904
+    },
+    {
+      "kind": "resumed",
+      "time": 1793952307.925,
+      "name": "msd_hib2_b",
+      "round": 4,
+      "resumeSeconds": 1.598,
+      "exit": {
+        "seconds": 2.559,
+        "code": 0,
+        "killResponse": "killing emulator, bye bye",
+        "processLeft": false,
+        "consoleListening": false,
+        "adbListening": false
+      },
+      "bootIdMatch": true,
+      "foregroundMatch": true,
+      "screencapOk": true,
+      "inputOk": true,
+      "rssKiB": 4356320,
+      "pass": true
+    },
+    {
+      "kind": "both_alive_independent",
+      "time": 1793952307.993,
+      "round": 4,
+      "a": {
+        "device": "device",
+        "bootId": "a517a2cd-45c7-4a05-9301-65820a41ab4a"
+      },
+      "b": {
+        "device": "device",
+        "bootId": "048f3d91-f792-42e8-a003-e16a2036128c"
+      },
+      "distinctBootIds": true,
+      "hostAvailKiB": 8782896
+    },
+    {
+      "kind": "saved",
+      "time": 1793952310.704,
+      "name": "msd_hib2_a",
+      "round": 5,
+      "seconds": 2.711,
+      "response": "Android Console: Authentication required\r\nAndroid Console: type 'auth <auth_token>' to authenticate\r\nAndroid Console: you can find your <auth_token> in \r\n'/Users/pangzerui/.emulator_console_auth_token'\r\nOK\r\nAndroid Console: type 'help' for a list of commands\r\nOK",
+      "kib": 1056980
+    },
+    {
+      "kind": "resumed",
+      "time": 1793952315.622,
+      "name": "msd_hib2_a",
+      "round": 5,
+      "resumeSeconds": 1.586,
+      "exit": {
+        "seconds": 2.566,
+        "code": 0,
+        "killResponse": "killing emulator, bye bye",
+        "processLeft": false,
+        "consoleListening": false,
+        "adbListening": false
+      },
+      "bootIdMatch": true,
+      "foregroundMatch": true,
+      "screencapOk": true,
+      "inputOk": true,
+      "rssKiB": 4254304,
+      "pass": true
+    },
+    {
+      "kind": "saved",
+      "time": 1793952318.576,
+      "name": "msd_hib2_b",
+      "round": 5,
+      "seconds": 2.954,
+      "response": "Android Console: Authentication required\r\nAndroid Console: type 'auth <auth_token>' to authenticate\r\nAndroid Console: you can find your <auth_token> in \r\n'/Users/pangzerui/.emulator_console_auth_token'\r\nOK\r\nAndroid Console: type 'help' for a list of commands\r\nOK",
+      "kib": 1021064
+    },
+    {
+      "kind": "resumed",
+      "time": 1793952353.143,
+      "name": "msd_hib2_b",
+      "round": 5,
+      "resumeSeconds": 2.684,
+      "exit": {
+        "seconds": 30.52,
+        "code": "timeout",
+        "killResponse": "killing emulator, bye bye",
+        "processLeft": false,
+        "consoleListening": false,
+        "adbListening": false
+      },
+      "bootIdMatch": true,
+      "foregroundMatch": true,
+      "screencapOk": true,
+      "inputOk": true,
+      "rssKiB": 1976368,
+      "pass": true
+    },
+    {
+      "kind": "both_alive_independent",
+      "time": 1793952353.267,
+      "round": 5,
+      "a": {
+        "device": "device",
+        "bootId": "a517a2cd-45c7-4a05-9301-65820a41ab4a"
+      },
+      "b": {
+        "device": "device",
+        "bootId": "048f3d91-f792-42e8-a003-e16a2036128c"
+      },
+      "distinctBootIds": true,
+      "hostAvailKiB": 7632832
+    },
+    {
+      "kind": "final_exit",
+      "time": 1793952383.897,
+      "name": "msd_hib2_a",
+      "seconds": 30.523,
+      "code": "timeout",
+      "killResponse": "killing emulator, bye bye",
+      "processLeft": false,
+      "consoleListening": false,
+      "adbListening": false
+    },
+    {
+      "kind": "final_exit",
+      "time": 1793952386.57,
+      "name": "msd_hib2_b",
+      "seconds": 2.563,
+      "code": 0,
+      "killResponse": "killing emulator, bye bye",
+      "processLeft": false,
+      "consoleListening": false,
+      "adbListening": false
+    },
+    {
+      "kind": "booted",
+      "time": 1793952405.567,
+      "bootId": "f81b9e79-4c1b-4b5b-91f2-b0cf5dde76c5",
+      "silentColdBoot": true,
+      "tailMentions": [
+        "INFO         | Loading snapshot 'msd_missing_snap'...",
+        "WARNING      | Device 'encrypt' does not have the requested snapshot 'msd_missing_snap'",
+        "WARNING      | Failed to load snapshot 'msd_missing_snap'",
+        "USER_INFO    | The emulator is performing a cold boot without a saved state because there's no snapshot and you have configured it not to save on exit.",
+        "WARNING      | adb command '/Users/pangzerui/Library/Android/sdk/platform-tools/adb -e shell settings put system screen_off_timeout 2147483647 ' failed: 'adb: more than one emulator'"
+      ]
+    },
+    {
+      "kind": "corrupted_file",
+      "time": 1793952414.386,
+      "file": "ram.bin",
+      "originalBytes": 948737909
+    },
+    {
+      "kind": "hung",
+      "time": 1793952595.713,
+      "silentColdBoot": false,
+      "tailMentions": [
+        "INFO         | Loading snapshot 'corrupt_snap'...",
+        "length_error was thrown in -fno-exceptions mode with message \"vector\"[18017:14205707:20261106,160655.255071:WARNING crash_report_exception_handler.cc:235] UniversalExceptionRaise: (os/kern) failure (5)"
+      ]
+    },
+    {
+      "kind": "midsave_killed",
+      "time": 1793952608.459,
+      "snapshotDirExists": true,
+      "files": [
+        "ram.bin",
+        "textures.bin"
+      ]
+    },
+    {
+      "kind": "booted",
+      "time": 1793952630.231,
+      "bootId": "758cbf6c-d8c4-4ac1-a2f8-1262987220ce",
+      "silentColdBoot": true,
+      "tailMentions": [
+        "INFO         | Loading snapshot 'midsave_snap'...",
+        "WARNING      | Device 'encrypt' does not have the requested snapshot 'midsave_snap'",
+        "WARNING      | Failed to load snapshot 'midsave_snap'",
+        "USER_INFO    | The emulator is performing a cold boot without a saved state because there's no snapshot and you have configured it not to save on exit.",
+        "WARNING      | adb command '/Users/pangzerui/Library/Android/sdk/platform-tools/adb -e shell settings put system screen_off_timeout 2147483647 ' failed: 'adb: more than one emulator'",
+        "WARNING      | adb command '/opt/homebrew/bin/adb -e shell settings put system screen_off_timeout 2147483647 ' failed: 'adb: more than one emulator'"
+      ]
+    },
+    {
+      "kind": "fail_exit_autosave_plain",
+      "time": 1793952643.414,
+      "flag": false,
+      "beforeFg": "topResumedActivity=ActivityRecord{105491522 u0 com.android.settings/.homepage.SettingsHomepageActivity t6}",
+      "afterFg": "topResumedActivity=ActivityRecord{105491522 u0 com.android.settings/.homepage.SettingsHomepageActivity t6}",
+      "snapshotUnchanged": true
+    },
+    {
+      "kind": "fail_exit_autosave_nosave",
+      "time": 1793952657.275,
+      "flag": true,
+      "beforeFg": "topResumedActivity=ActivityRecord{105491522 u0 com.android.settings/.homepage.SettingsHomepageActivity t6}",
+      "afterFg": "topResumedActivity=ActivityRecord{105491522 u0 com.android.settings/.homepage.SettingsHomepageActivity t6}",
+      "snapshotUnchanged": true
+    },
+    {
+      "kind": "fail_save_readonly",
+      "time": 1793952797.633,
+      "result": {
+        "error": "save accepted but zero bytes after 90s: readonly_snap (console: \"Android Console: Authentication required\\r\\nAndroid Console: type 'auth <auth_token>' to authenticate\\r\\nAndroid Console: you can find your <auth_token> in \\r\\n'/Users/pangzerui/.emulator_console_auth_token'\\r\\nOK\\r\\nAndroid Console: type 'help' for a list of commands\\r\\nOK\")"
+      },
+      "emulatorAlive": false
+    },
+    {
+      "kind": "booted",
+      "time": 1793952814.288,
+      "bootId": "a5d1f91c-9286-4e7b-b001-6dede0b1d71d",
+      "memTotal": "MemTotal:        3043416 kB",
+      "silentColdBoot": true,
+      "tailMentions": [
+        "INFO         | setDisplayActiveConfig 0",
+        "INFO         | Loading snapshot 'hib_r1'...",
+        "WARNING      | Error -1 from the snapshot callback",
+        "WARNING      | Failed to load snapshot 'hib_r1'",
+        "USER_INFO    | The emulator is starting from scratch. Reason: different AVD configuration",
+        "WARNING      | adb command '/Users/pangzerui/Library/Android/sdk/platform-tools/adb -e shell settings put system screen_off_timeout 2147483647 ' failed: 'adb: more than one emulator'"
+      ]
+    }
+  ],
+  "failMatrix": {
+    "missingSnapshot": {
+      "kind": "booted",
+      "bootId": "f81b9e79-4c1b-4b5b-91f2-b0cf5dde76c5",
+      "silentColdBoot": true,
+      "tailMentions": [
+        "INFO         | Loading snapshot 'msd_missing_snap'...",
+        "WARNING      | Device 'encrypt' does not have the requested snapshot 'msd_missing_snap'",
+        "WARNING      | Failed to load snapshot 'msd_missing_snap'",
+        "USER_INFO    | The emulator is performing a cold boot without a saved state because there's no snapshot and you have configured it not to save on exit.",
+        "WARNING      | adb command '/Users/pangzerui/Library/Android/sdk/platform-tools/adb -e shell settings put system screen_off_timeout 2147483647 ' failed: 'adb: more than one emulator'"
+      ]
+    },
+    "corruptSnapshot": {
+      "kind": "hung",
+      "silentColdBoot": false,
+      "tailMentions": [
+        "INFO         | Loading snapshot 'corrupt_snap'...",
+        "length_error was thrown in -fno-exceptions mode with message \"vector\"[18017:14205707:20261106,160655.255071:WARNING crash_report_exception_handler.cc:235] UniversalExceptionRaise: (os/kern) failure (5)"
+      ]
+    },
+    "midsaveLoad": {
+      "kind": "booted",
+      "bootId": "758cbf6c-d8c4-4ac1-a2f8-1262987220ce",
+      "silentColdBoot": true,
+      "tailMentions": [
+        "INFO         | Loading snapshot 'midsave_snap'...",
+        "WARNING      | Device 'encrypt' does not have the requested snapshot 'midsave_snap'",
+        "WARNING      | Failed to load snapshot 'midsave_snap'",
+        "USER_INFO    | The emulator is performing a cold boot without a saved state because there's no snapshot and you have configured it not to save on exit.",
+        "WARNING      | adb command '/Users/pangzerui/Library/Android/sdk/platform-tools/adb -e shell settings put system screen_off_timeout 2147483647 ' failed: 'adb: more than one emulator'",
+        "WARNING      | adb command '/opt/homebrew/bin/adb -e shell settings put system screen_off_timeout 2147483647 ' failed: 'adb: more than one emulator'"
+      ]
+    },
+    "exitAutosavePlain": {
+      "flag": false,
+      "beforeFg": "topResumedActivity=ActivityRecord{105491522 u0 com.android.settings/.homepage.SettingsHomepageActivity t6}",
+      "afterFg": "topResumedActivity=ActivityRecord{105491522 u0 com.android.settings/.homepage.SettingsHomepageActivity t6}",
+      "snapshotUnchanged": true
+    },
+    "exitAutosaveNoSave": {
+      "flag": true,
+      "beforeFg": "topResumedActivity=ActivityRecord{105491522 u0 com.android.settings/.homepage.SettingsHomepageActivity t6}",
+      "afterFg": "topResumedActivity=ActivityRecord{105491522 u0 com.android.settings/.homepage.SettingsHomepageActivity t6}",
+      "snapshotUnchanged": true
+    },
+    "saveFailure": {
+      "result": {
+        "error": "save accepted but zero bytes after 90s: readonly_snap (console: \"Android Console: Authentication required\\r\\nAndroid Console: type 'auth <auth_token>' to authenticate\\r\\nAndroid Console: you can find your <auth_token> in \\r\\n'/Users/pangzerui/.emulator_console_auth_token'\\r\\nOK\\r\\nAndroid Console: type 'help' for a list of commands\\r\\nOK\")"
+      },
+      "emulatorAlive": false
+    },
+    "configChanged": {
+      "kind": "booted",
+      "bootId": "a5d1f91c-9286-4e7b-b001-6dede0b1d71d",
+      "memTotal": "MemTotal:        3043416 kB",
+      "silentColdBoot": true,
+      "tailMentions": [
+        "INFO         | setDisplayActiveConfig 0",
+        "INFO         | Loading snapshot 'hib_r1'...",
+        "WARNING      | Error -1 from the snapshot callback",
+        "WARNING      | Failed to load snapshot 'hib_r1'",
+        "USER_INFO    | The emulator is starting from scratch. Reason: different AVD configuration",
+        "WARNING      | adb command '/Users/pangzerui/Library/Android/sdk/platform-tools/adb -e shell settings put system screen_off_timeout 2147483647 ' failed: 'adb: more than one emulator'"
+      ]
+    }
+  },
+  "remainingOwnedPids": false
+}
