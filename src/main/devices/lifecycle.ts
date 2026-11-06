@@ -131,7 +131,6 @@ export const stopDevice = async (id: string): Promise<DeviceSnapshot> => {
       throw new Error(msg('stopWhileResuming'))
     }
     await removeHibernationManifest(id, avdDirs()).catch(() => undefined)
-    void cleanupOldHibernationSnapshots(id, null, avdDirs(), (message) => console.warn(message))
     if (runner.phaseOf(id) === null) {
       // 实例进程已不在（如端口异常提交前的窗口）：记账收口到 stopped
       device.status = 'stopped'
@@ -550,8 +549,11 @@ const hibernateFlow = async (id: string): Promise<DeviceSnapshot> => {
       displayArgsByDevice.delete(id)
       broadcastChanged()
     }
-    // 旧休眠快照在进程退出后清理（运行中删除再复用同名实测会静默丢快照——PoC 发现）
-    void cleanupOldHibernationSnapshots(id, null, avdDirs(), (message) => console.warn(message))
+    // 旧休眠快照在进程退出后清理（运行中删除再复用同名实测会静默丢快照——PoC 发现）；
+    // 必须保留本次快照：keepName 传 null 会把刚保存的快照一并删掉，恢复即「快照缺失」
+    void cleanupOldHibernationSnapshots(id, savedManifest.snapshotName, avdDirs(), (message) =>
+      console.warn(message)
+    )
     return snapshotNow()
   } catch (error) {
     const target = devicesNow().find((entry) => entry.id === id)

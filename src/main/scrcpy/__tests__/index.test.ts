@@ -251,6 +251,25 @@ describe('ScrcpyManager（fake transport）', () => {
     await manager.destroyAll()
   })
 
+  it('迟到的 ACK 静默容忍：无活动视图/会话已销毁不抛错（休眠拆除窗口实测缺陷）', async () => {
+    const { manager, transportOf } = await importManager()
+    try {
+      const ack = await handlerFor(IPC_CHANNELS.screenAck)
+      const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+      // 无活动视图（从未激活）
+      expect(() => ack({}, { viewToken: 'vt-1', generation: 1, throughSeq: 0 })).not.toThrow()
+      // 激活后销毁会话（休眠/停止的拆除路径），ACK 迟到到达
+      await activate({}, { id: 'd1', viewToken: 'vt-1' })
+      await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+      await new Promise((resolve) => setImmediate(resolve))
+      void transportOf
+      await manager.destroySession('d1')
+      expect(() => ack({}, { viewToken: 'vt-1', generation: 1, throughSeq: 0 })).not.toThrow()
+    } finally {
+      await manager.destroyAll()
+    }
+  })
+
   it('renderer 请求重同步：合法视图立即丢弃可回放链并重建；旧归属/伪造标志忽略，等待期间去重', async () => {
     const { manager, transportOf } = await importManager()
     try {

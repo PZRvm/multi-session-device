@@ -373,6 +373,9 @@ export class EmulatorRunner {
       child.once('close', (code) => resolve(code ?? null))
     })
     child.once('close', (code) => this.#onClosed(entry, code ?? -1))
+    // spawn 失败（ENOENT 等）只发 'error' 事件：无监听会以未捕获异常击穿主进程，
+    // 且 boot 等待侧毫无痕迹——记日志并按早期退出收口
+    child.once('error', (error) => console.error(`[runner] spawn 失败：${String(error)}`))
     child.stderr?.on('data', (chunk: Buffer) => pushTailChunk(entry.stderrChunks, chunk))
     child.stdout?.on('data', (chunk: Buffer) => pushTailChunk(entry.stdoutChunks, chunk))
   }

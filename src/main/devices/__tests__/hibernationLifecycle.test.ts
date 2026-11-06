@@ -86,9 +86,16 @@ describe('休眠域（plan 2026-11-06-emulator-hibernation）', () => {
       expect.any(Number)
     )
     expect(mocks.waitHibernationSnapshotStable).toHaveBeenCalled()
-    const manifest = manifestOf(id) as { stage: string; guestBootId: string }
+    const manifest = manifestOf(id) as { stage: string; guestBootId: string; snapshotName: string }
     expect(manifest.stage).toBe('hibernated')
     expect(manifest.guestBootId).toBe('boot-id-stable')
+    // 回归（用户实测缺陷）：清理必须保留本次快照——keepName=null 会把刚保存的快照删掉
+    expect(mocks.cleanupOldHibernationSnapshots).toHaveBeenCalledWith(
+      id,
+      manifest.snapshotName,
+      expect.anything(),
+      expect.anything()
+    )
     // 媒体拆除经 beforeKill 桥（attachDeviceStreamBridge 默认未接 → 无会话副作用）
     for (const [key, value] of writeSpy.mock.calls as Array<[string, unknown]>) {
       void key
@@ -195,6 +202,7 @@ describe('休眠域（plan 2026-11-06-emulator-hibernation）', () => {
 
   it('恢复成功：快照参数 + boot_id 复核通过 → running；清单消费；新 runId', async () => {
     const { id, handlerFor, domain } = await hibernatedDevice()
+    const cleanupCallsBefore = mocks.cleanupOldHibernationSnapshots.mock.calls.length
     // 恢复 argv 经 extraArgsFor：resume plan 生效（-snapshot + -no-snapshot-save，无 -no-snapshot）
     const resume = (await handlerFor(IPC_CHANNELS.devicesResume)(mainWindowEvent(), {
       id
@@ -221,9 +229,9 @@ describe('休眠域（plan 2026-11-06-emulator-hibernation）', () => {
     const row = snapshot.devices.find((device) => device.id === id)!
     expect(row.status).toBe('running')
     expect(row.runId).toBe(attemptRunId)
-    // 成功后消费清单
+    // 成功后消费清单（快照目录留给下次休眠的退出后清理——运行中不删）
     expect(manifestOf(id)).toBeUndefined()
-    expect(mocks.cleanupOldHibernationSnapshots).toHaveBeenCalled()
+    expect(mocks.cleanupOldHibernationSnapshots.mock.calls.length).toBe(cleanupCallsBefore)
     void domain
   })
 

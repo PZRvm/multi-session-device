@@ -12,7 +12,7 @@ import { awaitWithAbort } from '../emulator/abort'
 import { isMigrationActive } from '../emulator/sdkMigration'
 import { ensureSharedServer, runAdb } from '../emulator/adb'
 import { createRunner } from '../emulator/runner'
-import { cleanupOldHibernationSnapshots, removeHibernationManifest } from '../emulator/hibernation'
+import { removeHibernationManifest } from '../emulator/hibernation'
 import { getMainWindow } from '../window'
 import { listWebcams } from '../emulator/cameras'
 import { looksLikeWhpxMissing } from '../emulator/whpx'
@@ -66,12 +66,15 @@ const handleRunning = (id: string, runId: string, serial: string): void => {
   }
 }
 
-/** 恢复成功后的清单消费：删清单 + 清旧休眠快照（保留本次加载的快照至下次休眠覆盖） */
+/**
+ * 恢复成功后的清单消费：只删清单。快照目录删除仅在设备进程退出后的窗口安全
+ * （运行中删快照目录 + 后续同名保存实测返回 OK 但零字节）——本次加载的快照
+ * 留给下一次休眠提交后的清理（keep=新名，进程已退出时删旧）。
+ */
 const consumeHibernationAfterResume = async (id: string): Promise<void> => {
   const device = devicesNow().find((entry) => entry.id === id)
   if (!device) return
   await removeHibernationManifest(id, avdDirs())
-  await cleanupOldHibernationSnapshots(id, null, avdDirs(), (message) => console.warn(message))
 }
 
 const handleUnexpectedExit = (

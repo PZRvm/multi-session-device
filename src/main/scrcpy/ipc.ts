@@ -74,7 +74,12 @@ export const registerIpc = (ctx: ManagerContext): void => {
   })
 
   ipcMain.handle(IPC_CHANNELS.screenAck, (event, raw: unknown): void => {
-    const session = requireReadySession(ctx, event.sender)
+    // ACK 是纯流控回执：会话在拆除窗口（休眠/停止/切换视图）被销毁后，renderer
+    // 迟到的 ACK 无任何副作用可撤销——静默忽略，不按错误收口（休眠冒烟实测）
+    if (!ctx.deps.isMainSender(event.sender)) throw new Error(msg('screenUnregisteredWindow'))
+    if (!ctx.active) return
+    const session = ctx.sessions.get(ctx.active.deviceId)
+    if (!session || session.state !== 'ready') return
     const ack = raw as Partial<ScreenAckMessage> | null
     if (
       !ack ||

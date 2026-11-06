@@ -158,6 +158,25 @@ export const mocks = {
   runAdb: vi.fn(async () => ({ code: 0, stdout: 'boot-id-stable\n', stderr: '' })),
   // 休眠 console：默认受理成功
   emuConsoleExec: vi.fn(async () => ''),
+  appGetPath: vi.fn((): string => '/userdata'),
+  // 休眠清单 IO：默认内存态（'corrupt' = 模拟损坏）；真机冒烟可整体覆写为真实 fs
+  readHibernationManifest: vi.fn((deviceId: string) => {
+    const entry = mocks.hibernationStore.current.get(deviceId)
+    if (entry === undefined) return { kind: 'none' } as const
+    if (entry === 'corrupt') return { kind: 'corrupt', reason: 'simulated' } as const
+    return { kind: 'ok', manifest: entry } as const
+  }),
+  writeHibernationManifest: vi.fn((_deviceId: string, manifest: { deviceId: string }) => {
+    mocks.hibernationStore.current.set(manifest.deviceId, manifest as never)
+  }),
+  removeHibernationManifest: vi.fn((deviceId: string) => {
+    mocks.hibernationStore.current.delete(deviceId)
+  }),
+  hibernationSnapshotExists: vi.fn((deviceId: string, snapshotName?: string) => {
+    const entry = mocks.hibernationStore.current.get(deviceId)
+    if (typeof entry !== 'object' || entry === null) return false
+    return snapshotName === undefined || entry.snapshotName === snapshotName
+  }),
   // 休眠清单内存态：read/write/remove/snapshotExists 围绕本 map（'corrupt' = 模拟损坏）
   hibernationStore: {
     current: new Map<
@@ -217,7 +236,7 @@ export const mocks = {
 vi.mock('electron', () => ({
   ipcMain: { handle: mocks.handle },
   BrowserWindow: { getAllWindows: mocks.getAllWindows, fromWebContents: vi.fn(() => null) },
-  app: { getPath: vi.fn(() => '/userdata') },
+  app: { getPath: mocks.appGetPath },
   clipboard: { writeText: mocks.clipboardWriteText }
 }))
 vi.mock('../../store', () => ({
@@ -310,30 +329,19 @@ vi.mock('../../emulator/adb', () => ({
   runAdb: mocks.runAdb
 }))
 vi.mock('../../emulator/emuConsole', () => ({ emuConsoleExec: mocks.emuConsoleExec }))
-// 休眠清单域：IO 点换内存态（原子写语义由 hibernation 模块单测覆盖）
+// 休眠清单域：IO 默认内存态（原子写语义由 hibernation 模块单测覆盖），
+// 全部经可覆写 fn 委托——真机冒烟整体换真实 fs 实现
 vi.mock('../../emulator/hibernation', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../emulator/hibernation')>()
   return {
     ...actual,
-    readHibernationManifest: async (deviceId: string) => {
-      const entry = mocks.hibernationStore.current.get(deviceId)
-      if (entry === undefined) return { kind: 'none' } as const
-      if (entry === 'corrupt') return { kind: 'corrupt', reason: 'simulated' } as const
-      return { kind: 'ok', manifest: entry } as const
-    },
-    writeHibernationManifest: async (_deviceId: string, manifest: unknown) => {
-      const record = manifest as {
-        deviceId: string
-      }
-      mocks.hibernationStore.current.set(record.deviceId, manifest as never)
-    },
-    removeHibernationManifest: async (deviceId: string) => {
-      mocks.hibernationStore.current.delete(deviceId)
-    },
-    hibernationSnapshotExists: async (deviceId: string) => {
-      const entry = mocks.hibernationStore.current.get(deviceId)
-      return typeof entry === 'object' && entry !== null
-    },
+    readHibernationManifest: async (deviceId: string) => mocks.readHibernationManifest(deviceId),
+    writeHibernationManifest: async (deviceId: string, manifest: unknown) =>
+      mocks.writeHibernationManifest(deviceId, manifest as { deviceId: string }),
+    removeHibernationManifest: async (deviceId: string) =>
+      mocks.removeHibernationManifest(deviceId),
+    hibernationSnapshotExists: async (deviceId: string, snapshotName: string) =>
+      mocks.hibernationSnapshotExists(deviceId, snapshotName),
     waitHibernationSnapshotStable: mocks.waitHibernationSnapshotStable,
     cleanupOldHibernationSnapshots: mocks.cleanupOldHibernationSnapshots
   }
@@ -374,7 +382,9 @@ vi.mock('../../window/wizard', () => ({
 }))
 
 /** devices 域有模块级状态——每用例 resetModules 动态导入隔离 */
-export const freshDomain = async (): Promise<{
+export const freshDomain = async (
+  opts: { useFakeRunner?: boolean } = {}
+): Promise<{
   domain: typeof import('..')
   handlerFor: (channel: string) => (event: unknown, raw: unknown) => Promise<unknown>
   runnerEvents: () => {
@@ -390,7 +400,10 @@ export const freshDomain = async (): Promise<{
   vi.resetModules()
   mocks.fileMetas.current = null
   mocks.hibernationStore.current.clear()
-  mocks.createRunner.mockImplementation(() => mocks.runnerInstance)
+  // 真机冒烟可切换真实 runner（默认假实例——单测不需要真进程编排）
+  if (opts.useFakeRunner !== false) {
+    mocks.createRunner.mockImplementation(() => mocks.runnerInstance)
+  }
   const domain = await import('..')
   domain.registerDevicesIpc()
   return {

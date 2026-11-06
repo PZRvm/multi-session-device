@@ -259,3 +259,232 @@ const bootId = async (serial: string): Promise<string> =>
     )
   })
 })
+
+;(SmokeGate ? describe : describe.skip)('devices 域休眠全链路（真 fs 清单 + 真清理）', () => {
+  vi.setConfig({ testTimeout: 600_000, hookTimeout: 120_000 })
+
+  it('创建→启动→休眠（快照在场）→恢复→再休眠（旧快照被清、新快照保留）→放弃（清场）', async () => {
+    const { freshDomain, mainWindowEvent, mocks, validCreateInput } = await import('./harness')
+    const ROOT2 = process.env['MSD_SMOKE_HIB_ROOT'] ?? '/tmp/msd-hib-smoke-domain'
+    await run('/usr/bin/pkill', ['-f', 'msd_hib_smoke_d']).catch(() => undefined)
+    await rm(ROOT2, { recursive: true, force: true })
+    const USERDATA = join(ROOT2, 'userdata')
+    await mkdir(join(USERDATA, 'avd-home'), { recursive: true })
+    await mkdir(join(USERDATA, 'android-user'), { recursive: true })
+
+    // —— 把 harness 的 IO mock 全部换成真实实现（mock 盲区正是本轮缺陷来源）——
+    mocks.appGetPath.mockImplementation(() => USERDATA)
+    const { writeFile: wf } = await import('node:fs/promises')
+    await wf(
+      join(USERDATA, 'sdk.json'),
+      JSON.stringify({
+        version: 1,
+        source: 'shared-studio',
+        customPath: null,
+        sharedPath: SDK
+      }),
+      'utf8'
+    )
+    const realRunner = (await vi.importActual(
+      '../../emulator/runner'
+    )) as typeof import('../../emulator/runner')
+    const realAdb = (await vi.importActual(
+      '../../emulator/adb'
+    )) as typeof import('../../emulator/adb')
+    const realPorts = (await vi.importActual(
+      '../../emulator/ports'
+    )) as typeof import('../../emulator/ports')
+    const realConsole = (await vi.importActual(
+      '../../emulator/emuConsole'
+    )) as typeof import('../../emulator/emuConsole')
+    const realHib = (await vi.importActual(
+      '../../emulator/hibernation'
+    )) as typeof import('../../emulator/hibernation')
+    const realAvd = (await vi.importActual(
+      '../../emulator/avd'
+    )) as typeof import('../../emulator/avd')
+    const realDirs = (): { avdHome: string; sdkRoot: string } => ({
+      avdHome: join(USERDATA, 'avd-home'),
+      sdkRoot: SDK
+    })
+    mocks.createRunner.mockImplementation((deps: unknown) => realRunner.createRunner(deps as never))
+    mocks.runAdb.mockImplementation(((path: string, args: string[], opts?: unknown) =>
+      realAdb.runAdb(path, args, opts as never)) as never)
+    mocks.listAdbSerials.mockImplementation((async (path: string) =>
+      realAdb.listAdbSerials(path)) as never)
+    mocks.ensureSharedServer.mockImplementation((async (
+      executable: Parameters<typeof realAdb.ensureSharedServer>[0]
+    ) => realAdb.ensureSharedServer(executable)) as never)
+    mocks.resolveAdbExecutable.mockImplementation((async () => ({
+      path: ADB,
+      source: 'app-sdk' as const,
+      protocolVersion: 41
+    })) as never)
+    mocks.tcpProbe.mockImplementation(((port: number) => realPorts.tcpProbe(port)) as never)
+    mocks.emuConsoleExec.mockImplementation(((port: number, command: string, timeoutMs: number) =>
+      realConsole.emuConsoleExec(port, command, timeoutMs)) as never)
+    mocks.readHibernationManifest.mockImplementation((async (deviceId: string) =>
+      realHib.readHibernationManifest(deviceId, realDirs())) as never)
+    mocks.writeHibernationManifest.mockImplementation((async (
+      deviceId: string,
+      manifest: unknown
+    ) => realHib.writeHibernationManifest(deviceId, manifest as never, realDirs())) as never)
+    mocks.removeHibernationManifest.mockImplementation((async (deviceId: string) =>
+      realHib.removeHibernationManifest(deviceId, realDirs())) as never)
+    mocks.hibernationSnapshotExists.mockImplementation((async (deviceId: string, name: string) =>
+      realHib.hibernationSnapshotExists(deviceId, name, realDirs())) as never)
+    mocks.waitHibernationSnapshotStable.mockImplementation(((dir: string) =>
+      realHib.waitHibernationSnapshotStable(dir, {
+        firstByteBudgetMs: 90_000,
+        stableBudgetMs: 180_000,
+        intervalMs: 1_000
+      })) as never)
+    mocks.cleanupOldHibernationSnapshots.mockImplementation((async (
+      deviceId: string,
+      keep: string | null
+    ) => realHib.cleanupOldHibernationSnapshots(deviceId, keep, realDirs())) as never)
+    mocks.createAvd.mockImplementation((async (input: { avdName: string }) =>
+      realAvd.createAvd(input as never, {
+        avdHome: join(USERDATA, 'avd-home'),
+        sdkRoot: SDK,
+        javaHome: '/Applications/Android Studio.app/Contents/jbr/Contents/Home',
+        userHome: join(USERDATA, 'android-user')
+      })) as never)
+    // 指纹参与项的 config 读也走真文件（默认 mock 返回 null 也一致，但真读更贴近产品）
+    mocks.readAvdConfigRaw.mockImplementation((async (name: string) => {
+      const { readFile: rf } = await import('node:fs/promises')
+      return rf(join(USERDATA, 'avd-home', `${name}.avd`, 'config.ini'), 'utf8').catch(() => null)
+    }) as never)
+
+    mocks.getMainWindow.mockReturnValue({ webContents: { id: 7, send: () => undefined } })
+    const { handlerFor, runnerEvents } = await freshDomain({ useFakeRunner: false })
+    // SDK 来源态是模块内存态（freshDomain 的 resetModules 会重置）——在域就绪后
+    // 用同一实例恢复：sdk.json 指向 Studio SDK（emulator 二进制真实所在）
+    const sdkSource = (await vi.importActual(
+      '../../emulator/sdkSource'
+    )) as typeof import('../../emulator/sdkSource')
+    await sdkSource.restoreSdkSource()
+    // 创建事务的镜像登记：36.1 playstore 标记 verified（真实在场由真实
+    // avdmanager create -k 兜底——镜像缺失会直接失败）
+    mocks.scanLocalImages.mockImplementation(
+      (async () =>
+        new Map([
+          [
+            'system-images;android-36.1;google_apis_playstore;arm64-v8a',
+            {
+              packageName: 'system-images;android-36.1;google_apis_playstore;arm64-v8a',
+              displayName: null,
+              apiLevelText: '36.1',
+              extensionLevel: null,
+              tagIds: ['google_apis_playstore'],
+              abi: 'arm64-v8a',
+              revision: null,
+              verified: true
+            }
+          ]
+        ])) as never
+    )
+    const IPC = (await import('@shared/ipc-channels')).IPC_CHANNELS
+    const statusOf = async (id: string): Promise<string> => {
+      const snapshot = (await handlerFor(IPC.devicesList)(mainWindowEvent(), undefined)) as {
+        devices: Array<{ id: string; status: string }>
+      }
+      return snapshot.devices.find((device) => device.id === id)!.status
+    }
+    const manifestOnDisk = async (
+      id: string
+    ): Promise<{ stage: string; snapshotName: string } | null> => {
+      const { readFile: rf } = await import('node:fs/promises')
+      return rf(join(USERDATA, 'avd-home', `${id}.avd`, 'msd-hibernation.json'), 'utf8')
+        .then((text) => JSON.parse(text))
+        .catch(() => null)
+    }
+    const serialBootId = async (serial: string): Promise<string> => bootId(serial)
+
+    // 创建（真实 avdmanager 建 AVD）→ 启动 → running
+    const created = (await handlerFor(IPC.devicesCreate)(mainWindowEvent(), {
+      ...validCreateInput,
+      imagePackageName: 'system-images;android-36.1;google_apis_playstore;arm64-v8a'
+    })) as { createdId: string }
+    const id = created.createdId
+    await handlerFor(IPC.devicesStart)(mainWindowEvent(), { id })
+    try {
+      await until(async () => (await statusOf(id)) === 'running', 'start → running', 240_000)
+    } catch (error) {
+      const snapshot = (await handlerFor(IPC.devicesList)(mainWindowEvent(), undefined)) as {
+        devices: Array<{
+          id: string
+          status: string
+          serial?: string
+          lastError?: { code: string; message: string }
+        }>
+      }
+      const row = snapshot.devices.find((device) => device.id === id)!
+      console.error(
+        '[domain-smoke] start failed:',
+        JSON.stringify({
+          status: row.status,
+          serial: row.serial,
+          lastError: row.lastError?.message?.slice(0, 500)
+        })
+      )
+      throw error
+    }
+    const serialRow = (await handlerFor(IPC.devicesList)(mainWindowEvent(), undefined)) as {
+      devices: Array<{ id: string; serial?: string }>
+    }
+    const serial = serialRow.devices.find((device) => device.id === id)!.serial!
+    const port = Number(serial.replace('emulator-', ''))
+    void runnerEvents
+    const coldBootId = await serialBootId(serial)
+
+    // —— 第一次休眠：真保存/真退出/真清理，回归断言：快照目录必须在场 ——
+    await handlerFor(IPC.devicesHibernate)(mainWindowEvent(), { id })
+    await until(async () => (await statusOf(id)) === 'hibernated', 'hibernate', 300_000)
+    const manifest1 = await manifestOnDisk(id)
+    expect(manifest1?.stage).toBe('hibernated')
+    const snapshotDir1 = join(
+      USERDATA,
+      'avd-home',
+      `${id}.avd`,
+      'snapshots',
+      manifest1!.snapshotName
+    )
+    expect(existsSync(snapshotDir1)).toBe(true) // 用户实测缺陷的回归点（自删快照）
+    await until(async () => !(await tcpProbe(port)), 'port released after hibernate', 15_000)
+
+    // —— 恢复：boot_id 一致 ——
+    await handlerFor(IPC.devicesResume)(mainWindowEvent(), { id })
+    await until(async () => (await statusOf(id)) === 'running', 'resume → running', 240_000)
+    expect(await serialBootId(serial)).toBe(coldBootId)
+
+    // —— 第二次休眠：旧快照被清（真 fs），新快照保留 ——
+    await handlerFor(IPC.devicesHibernate)(mainWindowEvent(), { id })
+    await until(async () => (await statusOf(id)) === 'hibernated', 'second hibernate', 300_000)
+    const manifest2 = await manifestOnDisk(id)
+    expect(manifest2?.snapshotName).not.toBe(manifest1!.snapshotName)
+    // 旧快照清理是 fire-and-forget——有界等待其落地
+    await until(
+      async () => !existsSync(snapshotDir1),
+      'old snapshot cleaned after second hibernate',
+      30_000
+    )
+    expect(
+      existsSync(join(USERDATA, 'avd-home', `${id}.avd`, 'snapshots', manifest2!.snapshotName))
+    ).toBe(true)
+
+    // —— 放弃：快照全清、清单删除、stopped ——
+    await handlerFor(IPC.devicesDiscardHibernation)(mainWindowEvent(), { id })
+    expect(await statusOf(id)).toBe('stopped')
+    expect(await manifestOnDisk(id)).toBeNull()
+    const snapshotsRoot = join(USERDATA, 'avd-home', `${id}.avd`, 'snapshots')
+    const { readdir: rd } = await import('node:fs/promises')
+    const left = await rd(snapshotsRoot).catch(() => [] as string[])
+    expect(left.filter((entry) => entry.startsWith('msd-hib-'))).toEqual([])
+
+    // 清场
+    await run('/usr/bin/pkill', ['-f', `qemu-system.*${id}`]).catch(() => undefined)
+    await rm(ROOT2, { recursive: true, force: true })
+    expect(existsSync(ROOT2)).toBe(false)
+  })
+})
