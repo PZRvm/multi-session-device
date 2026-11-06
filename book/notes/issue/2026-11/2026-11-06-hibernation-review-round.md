@@ -38,6 +38,16 @@ summary 2026-11-06-emulator-hibernation 与 ADR-007。
 - 建议方向：resumeFlow 对该错误做一次有界退避重试（runner 启动前 serial 探测
   失败等待 adb 注销）。
 
+## 2026-11-06 晚：用户实测缺陷修复轮（f72e2a2）
+
+- 休眠提交后旧快照清理 keepName 误传 null → 恢复「快照缺失」（用户实测）：已修
+  （keep=本次快照名；恢复后清单消费不再删快照目录），新增 devices 域全链路真机
+  冒烟作回归层。本条与下方 P3 的「快照清理失败重试」合并观察。
+- screen:ack 拆除窗口报错（用户实测）：ACK 静默容忍，已修。
+- 新增 runner spawn error 监听（此前 spawn 失败完全静默）。
+- P1/P2/P3 仍然 open；另发现：dev 单实例锁回退已实现（见 commit），原
+  issue 2026-11-02-worktree单实例锁互斥 的方向落地于 src/main/index.ts。
+
 ## 已核对无问题的重点项（评审结论）
 
 跨代次污染（runId/viewToken/截图缓存随 beforeKill 清空）、删除守卫位置（用户
