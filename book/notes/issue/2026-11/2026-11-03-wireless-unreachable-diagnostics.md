@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: 无线连接把 macOS Local network prohibited 引发的 No route to host 统一提示为确认手机 Wi-Fi，原始 ADB 错误未传给用户
 ---
 

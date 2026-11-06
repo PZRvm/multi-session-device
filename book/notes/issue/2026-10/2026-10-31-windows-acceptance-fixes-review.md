@@ -1,4 +1,5 @@
 ---
+status: open
 description: Windows 真机验收十批修复（da14795..733e2b0）代码评审——0 P1 / 2 P2 / 8 P3；「删源前停 adb」族尚差 adopt 与 replaceTarget 清场两处，只记录未修
 created: 2026-10-31
 tags: [windows, review, acceptance, adb, migration]

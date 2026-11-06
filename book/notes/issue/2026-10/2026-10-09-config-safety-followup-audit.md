@@ -1,6 +1,6 @@
 ---
 description: 复查确认创建临时行落盘、残留事务后改名误冻结、旧设备摄像头漏计和相机编号重排误拦截四项缺口
-status: closed
+status: resolved
 created: 2026-10-09
 ---
 

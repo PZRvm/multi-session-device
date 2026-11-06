@@ -1,4 +1,5 @@
 ---
+status: open
 description: 直连 package.xml 的官方创建兼容性已修复并实测；Android 相机取景与签名版权限验收仍待完成
 tags: [real-machine, downloader, package-xml, avdmanager, tcc, acceptance]
 ---

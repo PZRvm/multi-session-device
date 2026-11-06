@@ -1,4 +1,5 @@
 ---
+status: open
 description: 主窗左上亮暗切换钮 review 两项 P3——matchMedia 订阅与 provider 重复、切换钮用动作标签而非 aria-pressed
 created: 2026-10-10
 tags: [review, p3, theme, a11y, boardhead]

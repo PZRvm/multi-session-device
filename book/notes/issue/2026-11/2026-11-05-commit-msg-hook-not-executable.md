@@ -1,4 +1,5 @@
 ---
+status: open
 description: 主仓库提交时提示 commit-msg hook 无执行权限而被忽略，本轮手动主题校验通过，未改 hook 权限
 ---
 

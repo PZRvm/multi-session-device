@@ -1,69 +1,70 @@
 ---
-description: 所有 book 文档的说人话书写标准——忠实契约优先，然后是极简风格规则、强度分级与回读检查
+description: Plain-language writing standard for every book document — fidelity contract first, then minimal style rules, intensity levels, and a read-back check
 ---
 
-# 书写风格——说人话
+# Writing style — speak human
 
-`book/` 下的一切（summary、learn、issue、task、plans、guidelines、docs）都用同一种写法：像一个具体的人在具体场景里说话——不像一个模型在表演写作。专业可以；模板化不行。
+Everything under `book/` (summary, changelog, learn, issue, task, plans, guidelines, docs) is written the same way: like a specific person speaking in a specific situation — not like a model performing writing. Professional is fine; templated is not.
 
-三层承载这个标准：**`bowrite` skill**（薄写——写薄写好）是给 agent 的可执行形态，蒸馏自 [shuorenhua](https://github.com/MrGeDiao/shuorenhua)（源头，MIT，作者 MrGeDiao），加上本项目自己 review 中攒下的表达模式；上游 shuorenhua skill 对中文钻得最深，有条件值得装；本文件是两者都没装时的项目内文字兜底。
+Three layers carry this standard: the **`bowrite` skill**（薄写 — write thin, write well）is the executable form for agents, distilling [shuorenhua](https://github.com/MrGeDiao/shuorenhua) (MIT, by MrGeDiao) for cleanup and [human-writing](https://github.com/KKKKhazix/human-writing) (MIT, by KKKKhazix) for the from-scratch gates, together with patterns accumulated in this project's own reviews; the upstreams go deeper（shuorenhua for Chinese cleanup, human-writing for long-form creation）and are worth installing if available; this file is the in-project prose fallback when no skill is loaded.
 
-## 忠实契约——高于任何风格
+## Fidelity contract — above any style
 
-任何改写不得增加事实、丢掉核心事实、改变责任归属。以下内容永不移动：
+No rewrite may add facts, drop core facts, or change who is responsible. The following never move:
 
-- 数字、版本、日期、命令、API 名、参数名、字段名、配置键、日志、报错信息
-- 代码块、表格数据、目录结构
-- 系统行为主体、领域术语、ADR 结论、责任归属（谁在什么状态下做了什么）
-- 定量说法含糊时，保留原有的数量关系并标注待确认——绝不补上原文没有的数量、年份、度量
-- 谓词强度不许漂移："提升了性能"不许弱化成"对性能有点影响"；"省时间"不许膨胀成"省时省钱"
+- Numbers, versions, dates, commands, API names, parameter names, field names, config keys, logs, error messages
+- Code blocks, table data, directory structures
+- System-behavior subjects, domain terms, ADR conclusions, responsibility attribution (who did what, in what state)
+- Conditions, prerequisites, exceptions, and scope of application（仅当、除非、不适用于）— cutting one doesn't remove a fact, it removes the fact's boundary
+- When a quantitative claim is ambiguous, keep the original relationship and flag it for confirmation — never add counts, years, or measurements the source doesn't have
+- Predicate strength must not drift: "improved performance" must not soften into "touches performance"; "saves time" must not grow into "saves time and money"
 
-## 极简规则
+## Minimal rules
 
-按模式操作，不做逐词替换。为躲开重复而轮换同义词本身就是模型腔——该重复的关键词就重复。
+Work by pattern, not word-for-word substitution. Rotating synonyms to dodge repetition is itself model-speak — repeat a keyword when it is the right word.
 
-- 删填充开场白和元评论："值得注意的是"、"让我解释一下"、"希望有帮助"
-- 删空洞总结收尾："综上所述"、"说到底"、"本质上"
-- "不是 X，而是 Y"的骨架，通常删掉前半句，直接说 Y
-- 无出处的引用（"研究表明"）：标注缺出处——不删观点，也不编造出处
-- 行话拆成具体动作："赋能"、"撬动"、"协同"、"闭环"
-- 还原名词化："进行了一次优化" → 到底改了什么、快了多少。"执行 / 实施 / 完成 + 动名词"就是信号
-- 缩短翻译腔：少用长定语链、少堆被动、少来"通过 X 的方式来实现 Z"
-- 别在相邻几句话里给同一个东西起三个名字
-- 填充型强调词（"重要的"、"关键的"、"核心的"）：只在密度明显过高时删，或换成具体信息
+- Cut filler openers and meta-commentary: "it's worth noting that", "let me explain", "hope this helps"
+- Cut empty-summary closers: "in summary", "at the end of the day", "essentially"
+- In "not X, but Y" skeletons, usually delete the first half and just say Y
+- Unsourced citations ("studies show"): flag the missing source — don't delete the claim, don't invent a source
+- Unpack jargon into plain actions: "empower", "leverage", "synergy", "closed loop"
+- Un-nominalize: "performed an optimization" → what changed, how much faster. "perform / implement / complete + gerund" is the tell
+- Shorten translationese: fewer long attributive chains, fewer passive piles, less "through X, by way of Y, to achieve Z"
+- Don't call the same thing by three different names in adjacent sentences
+- Filler intensifiers ("important", "key", "critical", "core"): trim only when density is clearly too high, or replace with concrete information
 
-## 强度分级
+## Intensity levels
 
-book 文档用 `docs` 档（优先级：可检索、可复现、术语稳定）：
+Book documents use the `docs` setting (priorities: searchable, reproducible, stable terminology):
 
-| 档位            | 何时                 | 动作                                       |
-| --------------- | -------------------- | ------------------------------------------ |
-| minimal（默认） | 文本大体自然         | 删空洞总结，收紧语气                       |
-| standard        | 模型腔明显但结构尚好 | 统一语域，改掉表演腔，按需合并句子或换主语 |
-| aggressive      | 几乎不用             | 文档永不用到这一档                         |
+| Level | When | Action |
+|------|------|--------|
+| minimal (default) | Text is mostly natural | Remove empty summaries, tighten tone |
+| standard | Visible model-speak but sound structure | Unify register, fix performative tone, merge sentences or switch subjects where needed |
+| aggressive | Almost never | Docs never go up to this level |
 
-不做结构性删并：权威文档（规范、架构、ADR）只做句级改写和空话删除——段落永不重排。
+No structural delete-and-merge: authoritative documents (specs, architecture, ADRs) get sentence-level rewrites and empty-sentence removal only — paragraphs are never reordered.
 
-## 正面目标
+## Positive target
 
-成稿要带着具体信息、有主语有动作、语域一致、对不确定诚实。"能发出去了"就是终点——不要朝"听起来像人"一直磨，磨到失真。
+The finished text should carry concrete information, a subject and an action, a consistent register, and honesty about uncertainty. "Ready to send" is the finish line — don't keep polishing toward "sounds human" until it distorts.
 
-## 回读（提交前）
+## Read-back (before committing)
 
-1. **忠实回读**：受保护的内容漂移了吗、信息丢了吗、术语扭曲了吗、删完之后有没有读不通的地方？
-2. **残渣回读**（第一遍过后还觉得有味才做）：残留的开场白、残留的总结、旁白腔、含糊评判、过分均匀的节奏——轻改即可。
+1. **Fidelity read-back**: did protected spans drift, did information get lost, did terminology distort, does anything read broken after the cuts?
+2. **Residual-slop read-back** (only if the first pass still smells): leftover openers, leftover summaries, narrator voice, vague judgments, over-even rhythm — light corrections only.
 
-## Frontmatter 约定
+## Frontmatter convention
 
-每篇 book 文档开头：
+Every book document starts with:
 
 ```markdown
 ---
-description: 一行说人话的内容摘要
+description: one plain-language line about the content
 ---
 ```
 
-好例子：`模块总览：web、api、worker 各自的职责与边界`
-坏例子：`本文描述系统整体架构`（那是体裁，不是内容）
+Good: `Module overview: responsibilities and boundaries of web, api, and worker`
+Bad: `This document describes the overall architecture of the system` (that's the genre, not the content)
 
-总索引 `book/README.md` 由这些 description 生成；缺一个，`npm run book:index` 就警告并以退出码 1 失败。
+The master index `book/README.md` is generated from these descriptions; `npm run book:index` warns and exits 1 when one is missing.

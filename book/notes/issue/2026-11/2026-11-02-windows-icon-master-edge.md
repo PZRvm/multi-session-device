@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: 黑屏 Windows 图标母版原尺寸下，手机外沿仍有少量生成杂色，常用小尺寸不影响黑屏识别
 ---
 

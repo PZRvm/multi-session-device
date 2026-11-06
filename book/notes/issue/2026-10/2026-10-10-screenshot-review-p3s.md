@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: 截屏批 review P3 共十项——首轮五项（save TOCTOU、缓存竞态、0×0 PNG、错误气泡时效、动画重复）+ 独立 review 追加五项（stderr 无界、oversized 绕 i18n、通道名错位、过期回调覆盖、runner 直测缺口）
 created: 2026-10-10
 tags: [review, p3, screenshot, race, clipboard, downloads]

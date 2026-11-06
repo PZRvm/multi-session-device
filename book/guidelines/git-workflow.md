@@ -1,31 +1,31 @@
 ---
-description: Clean Commit 提交信息格式与 Clean Flow 分支、PR、合并规则（单人及团队开发）
+description: Clean Commit message format and Clean Flow branch, PR, and merge rules for solo and team development
 ---
 
-# Git 工作流
+# Git workflow
 
-本仓库遵守 [Clean Commit](https://github.com/wgtechlabs/clean-commit) 与 [Clean Flow](https://github.com/wgtechlabs/clean-flow)：提交历史保持可读，`main` 只接收已经在 `dev` 上稳定集成过的代码。两份规范本身只带文档——本仓库用自己的零依赖工具执行它们（`scripts/check-commit-message.mjs`、`.githooks/`、`.github/workflows/git-policy.yml`）。
+This repository follows [Clean Commit](https://github.com/wgtechlabs/clean-commit) and [Clean Flow](https://github.com/wgtechlabs/clean-flow): commit history stays readable, and `main` only ever receives code that already integrated stably on `dev`. Both specs ship as documentation only — this repository enforces them with its own zero-dependency tooling (`scripts/check-commit-message.mjs`, `.githooks/`, and `.github/workflows/git-policy.yml`).
 
-## 全流程一张图
+## The whole flow in one picture
 
 ```text
-大功能：feature/* 工作分支 ── 本地验收 ──> dev ── PR + merge commit ──> main
-小修复：  直接提交 ─────────────────────────────────────> dev
+Big feature: feature/* work branch ── local acceptance ──> dev ── PR + merge commit ──> main
+Small fix:   direct commit ─────────────────────────────────────> dev
 ```
 
-| 分支     | 用途                 | 允许的来源                                                 |
-| -------- | -------------------- | ---------------------------------------------------------- |
-| `main`   | 稳定、可发布的代码   | 只收来自 `dev` 的 merge commit                             |
-| `dev`    | 单人开发的集成分支   | 验证过的小修复、文档、低风险迭代直接提交；大功能做完后合入 |
-| 工作分支 | 独立大功能或横切改动 | 从最新 `dev` 切出                                          |
+| Branch | Purpose | Allowed sources |
+|--------|---------|-----------------|
+| `main` | Stable, releasable code | Merge commits from `dev` only |
+| `dev` | The solo-developer integration branch | Verified small fixes, docs, low-risk iterations commit directly; big features merge in when done |
+| Work branches | Independent big features or cross-cutting changes | Cut from the latest `dev` |
 
-永远不要直接向 `main` 提交或推送。单人开发为速度优化：小而聚焦、本地验证过的修复和文档可以直接进 `dev`。每个独立大功能仍然从工作分支开始，未完成的能力不会漏进 `dev`。
+Never commit or push directly to `main`. Solo development optimizes for speed: small, focused, locally verified fixes and docs may land on `dev` directly. Every independent big feature still starts from a work branch, so unfinished capability never leaks into `dev`.
 
-PR 留给值得单独留档的 review：多人协作，以及每一次 `dev → main` 发版。单人大功能本地验收后可以不开 PR 直接 squash-merge 进 `dev`；高风险改动仍然可以刻意开一个。
+PRs are for reviews that deserve their own record: multi-person collaboration, and every `dev → main` release. A solo big feature may squash-merge into `dev` after local acceptance without a PR; a high-risk change can still open one deliberately.
 
-## 分支命名
+## Branch naming
 
-短、小写、连字符：
+Short, lowercase, hyphenated:
 
 ```text
 feature/user-profile
@@ -36,9 +36,9 @@ test/upload-validation
 refactor/api-client
 ```
 
-## Clean Commit 格式
+## Clean Commit format
 
-所有非合并提交的主题用以下形式之一。规则自标准落地起只管新提交；既有历史永不重写。
+Every non-merge commit subject uses one of these forms. The rule applies to new commits from the moment this standard lands; existing history is never rewritten.
 
 ```text
 <emoji> <type>: <description>
@@ -47,19 +47,19 @@ refactor/api-client
 <emoji> <type>! (<scope>): <description>
 ```
 
-| Emoji | Type       | 用于                               |
-| :---: | ---------- | ---------------------------------- |
-|  📦   | `new`      | 新功能、新文件、新能力             |
-|  🔧   | `update`   | 对既有代码的修改、修复、重构、改进 |
-|  🗑️   | `remove`   | 删除代码、文件、功能、依赖         |
-|  🔒   | `security` | 安全修复、漏洞补丁                 |
-|  ⚙️   | `setup`    | 配置、CI/CD、工具链、构建系统      |
-|  ☕   | `chore`    | 维护、依赖升级、清理               |
-|  🧪   | `test`     | 新增、更新、修复测试               |
-|  📖   | `docs`     | 文档改动                           |
-|  🚀   | `release`  | 版本发布与发布准备                 |
+| Emoji | Type | Use for |
+|:---:|---|---|
+| 📦 | `new` | New features, files, or capabilities |
+| 🔧 | `update` | Changes, fixes, refactors, improvements to existing code |
+| 🗑️ | `remove` | Deleting code, files, features, or dependencies |
+| 🔒 | `security` | Security fixes and vulnerability patches |
+| ⚙️ | `setup` | Config, CI/CD, tooling, build system |
+| ☕ | `chore` | Maintenance, dependency updates, cleanup |
+| 🧪 | `test` | Adding, updating, or fixing tests |
+| 📖 | `docs` | Documentation changes |
+| 🚀 | `release` | Version releases and release preparation |
 
-规则：type 和 scope 小写；scope 可选、要短；描述用现在时、不以句号结尾、72 字符以内。破坏性标记 `!` 紧跟 type，只用于 `new`、`update`、`remove`、`security`。
+Rules: type and scope are lowercase; scope is optional and short; the description is present tense, doesn't end with a period, and stays under 72 characters. The breaking marker `!` goes right after the type and only on `new`, `update`, `remove`, and `security`.
 
 ```text
 📦 new (auth): add login rate limiting
@@ -69,41 +69,41 @@ refactor/api-client
 🚀 release: promote dev to main
 ```
 
-仓库脚本校验格式、type、scope、破坏性标记、句号结尾和长度；现在时与否留到 review 时人工判断。
+The repo script validates format, type, scope, breaking markers, trailing periods, and length; present tense stays a judgment call at review.
 
-## 单人敏捷开发
+## Solo agile development
 
-### 小修复与快速迭代
+### Small fixes and fast iterations
 
-保持单一目的、可快速验证，不含迁移、不可逆数据操作或大范围重构。本地检查通过后直接提交 `dev`：
+Keep them single-purpose, quickly verifiable, free of migrations, irreversible data operations, or wide refactors. After local checks pass, commit straight to `dev`:
 
 ```bash
 git checkout dev
 git pull --ff-only origin dev
-# 改动、测试
+# change, test
 node scripts/check-commit-message.mjs "🔧 update (form): handle empty optional input"
 git commit -am "🔧 update (form): handle empty optional input"
 git push origin dev
 ```
 
-### 独立大功能
+### Independent big features
 
-从工作分支开始。单人功能本地验收即可——squash-merge 进 `dev`，再推送：
+Start from a work branch. Local acceptance is enough for a solo feature — squash-merge into `dev`, then push:
 
 ```bash
-# 1. 从最新 dev 切出
+# 1. from the latest dev
 git checkout dev
 git pull --ff-only origin dev
 
-# 2. 切工作分支
+# 2. cut a work branch
 git checkout -b feature/user-profile
 
-# 3. 提交前先校验主题
+# 3. validate a subject before committing
 node scripts/check-commit-message.mjs "📦 new (auth): add login rate limiting"
 git add <files>
 git commit -m "📦 new (auth): add login rate limiting"
 
-# 4. 合回前与 dev 同步
+# 4. sync with dev before merging back
 git fetch origin
 git rebase origin/dev
 git checkout dev
@@ -112,36 +112,24 @@ git commit -m "📦 new (auth): add login rate limiting"
 git push origin dev
 ```
 
-多人共建同一功能时，从 `feature/user-profile` 向 `dev` 开 PR，检查通过后 **Squash and merge**；squash 的主题同样走 Clean Commit。合并后删除工作分支。
+When several people build the same feature, open the PR from `feature/user-profile` into `dev` and **Squash and merge** after checks; the squash subject uses Clean Commit too. Delete the work branch after merging.
 
-`dev` 稳定后，先跑 `npm run book:release-check`——两项全绿才发版：book 索引与内容一致（改了 book 忘跑 `book:index` 会失败），git 树里没有 .DS_Store 之类垃圾文件。然后开 `dev → main` 的 PR，选 **Create a merge commit**，保住集成边界。merge commit 的主题同样走 Clean Commit，例如：
+When `dev` is stable, run `npm run book:release-check`: tracked OS junk and a stale or invalid book index fail the check. Then open a same-repository `dev → main` PR and choose **Create a merge commit**, using a Clean Commit subject such as `🚀 release: promote dev to main`. This is an application repository: instance notes and plans belong in the book. BoCode's template-only cleanliness and release-changelog gates do not apply. Change records live in git log; a separate changelog is not enabled.
 
-```text
-🚀 release: promote dev to main
-```
+### Installer publication
 
-### 安装包自动发布
+Update versions on `dev`, for example `npm version patch --no-git-tag-version` (updates package.json and package-lock.json without a tag). After checks and a commit on dev, open the same-repository dev→main PR and merge with a merge commit.
 
-新版本号在 `dev` 更新。例如发布下一个补丁版本时执行：
+Only that merged PR starts `release-installers`: verify the version, build macOS ARM64 DMG and Windows x64 EXE, verify asar, generate SHA256SUMS, then create the `v<version>` tag and Preview Release at the PR's exact merge SHA. The release template supplies the version in its notes.
 
-```bash
-npm version patch --no-git-tag-version
-```
+Ordinary dev pushes, unmerged closed PRs, other PR sources, old release/v* branches and manual buttons do not trigger publication. Published versions skip building and uploading without overwriting tags or attachments, so increment the version on dev first. Residual drafts and GitHub API failures fail safely. Inspect Actions logs and rerun the original merge event when appropriate; inspect an incomplete draft before handling it. Code fixes return through dev and a new PR.
 
-该命令同时更新 package.json 和 package-lock.json，不创建本地标签。完成开发、检查并提交到 dev 后，再创建同仓库 `dev → main` PR；确认检查通过，选择 **Create a merge commit**。
+## Automation and platform settings
 
-PR 合并后，`release-installers` 才会启动：核对版本、构建 macOS ARM64 DMG 与 Windows x64 EXE、校验 asar、生成 SHA256SUMS，再以该 PR 的精确 merge SHA 创建 `v<版本号>` 标签和 Preview Release。无需本地打包或手动上传；发布说明中的版本号由模板自动替换。
+- PRs into `dev`/`main` and pushes to them are checked by `.github/workflows/git-policy.yml` for branch direction and commit subjects; direct pushes to `dev` still pass Clean Commit validation.
+- The same workflow runs `book:release-check` on every PR and push to `dev`/`main`; tracked OS junk, invalid documents or a stale book index fail it.
+- Main pushes are checked against an associated same-repository dev PR and a two-parent merge commit; ordinary direct pushes and squash/rebase release merges fail CI.
+- Run `git config core.hooksPath .githooks` once per clone to get the same `commit-msg` check locally.
+- Protect `main` on GitHub: require a PR from `dev`, status checks, and merge commits. Keep direct pushes to `dev` allowed for solo speed; team PRs still use squash merges.
 
-普通 dev 推送、未合并而关闭的 PR、其他来源 PR、旧 release/v* 分支及手动按钮均不会启动安装包发布。已发布的版本会安全跳过构建和上传，不覆盖附件或标签；因此新版本必须先在 dev 更新版本号。残留草稿或 GitHub API 查询失败会报错，不能误判成新版本。
-
-失败时先查看 Actions 日志，在原合并事件上重跑相应任务；若已产生未完成草稿，需先核对处理。代码修复仍回到 dev，再经 PR 合入 main。
-
-## 自动化与平台设置
-
-- 进 `dev`/`main` 的 PR 和对它们的推送，由 `.github/workflows/git-policy.yml` 校验分支方向和提交主题；直推 `dev` 的提交仍会过 Clean Commit 校验。
-- main 的推送通过关联 PR 和双亲提交核验：合法的同仓库 dev PR 合并通过，普通直推或 squash/rebase 合并标为失败；平台分支保护仍需按下文单独设置。
-- 同一个 workflow 在每次进 `dev`/`main` 的 PR 和推送上跑 `book:release-check`；索引过期或垃圾文件一进树就失败。
-- 每个 clone 跑一次 `git config core.hooksPath .githooks`，本地就有同样的 `commit-msg` 检查。
-- 在 GitHub 上保护 `main`：要求来自 `dev` 的 PR、状态检查、merge commit。直推 `dev` 保持允许，保单人速度；团队 PR 仍走 squash 合并。
-
-私有仓库的套餐不支持分支保护 API 时，CI 和本地 hook 已经在仓库内把政策执行到位；仓库转公开或套餐支持后尽快启用平台设置。
+On private repos whose plan lacks the branch-protection API, CI and the local hook already enforce the policy in-repo; enable the platform settings as soon as the repo is public or the plan supports them.

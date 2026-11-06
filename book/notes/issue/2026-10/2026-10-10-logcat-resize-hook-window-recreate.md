@@ -1,7 +1,7 @@
 ---
 description: 日志面板 review P2——主窗关闭后重开，dock 宽度钳制钩子不随新窗口挂载，will-resize 拦截失效
 created: 2026-10-10
-status: closed
+status: resolved
 severity: P2
 ---
 

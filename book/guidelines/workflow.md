@@ -1,77 +1,81 @@
 ---
-description: 六阶段门禁工作流，附八条 code↔book 交互规则和文档去向表
+description: Six-phase gate workflow with the eight code↔book interaction rules and the document routing table
 ---
 
-# 工作流（Workflow）
+# Workflow
 
-## 开发流程——六个阶段，硬门禁
+## Development process — six phases, hard gates
 
-每个功能都按顺序走过这些阶段。**不许跳步。**
+Grade the task first — S, M, or L per `task-tiers.md`; the tier is decided before any work and lands in the first commit's motive. S runs the light channel and never enters this table. Every M/L feature moves through these phases in order. **No skipping.**
 
-| 阶段   | 名称           | 产出                   | 门禁                                                                     |
-| ------ | -------------- | ---------------------- | ------------------------------------------------------------------------ |
-| Step 0 | 结构化需求简报 | 需求简报               | 每一栏都填满                                                             |
-| 阶段 1 | 分析           | 影响图 + 风险清单      | 没动任何代码                                                             |
-| 阶段 2 | 设计           | 数据流、文件清单、接口 | 设计完整即推进；只在真实缺口处停下——范围冲突、数据形态未定、外部依赖不明 |
-| 阶段 3 | 实现           | 代码                   | 严格按设计来；范围外什么都不碰                                           |
-| 阶段 4 | 测试           | 测试用例               | 全绿；没有为过关而削弱的断言                                             |
-| 阶段 5 | 代码评审       | 评审发现               | 只记录——不修                                                             |
-| 阶段 6 | 收尾           | 文档、经验、问题       | 只记录——不修                                                             |
+| Phase | Name | Output | Gate |
+|------|------|--------|------|
+| Step 0 | Structured requirements brief | Requirements brief | Every slot filled |
+| Phase 1 | Analysis | Impact map + risk list | No code changed |
+| Phase 2 | Design | Data flow, file list, interfaces | Design complete; stop only on real gaps — scope conflict, undetermined data shape, unclear external dependency |
+| Phase 3 | Implementation | Code | Strictly per design; nothing outside scope |
+| Phase 4 | Testing | Test cases | All green; no weakened assertions |
+| Phase 5 | Code review | Review findings | Record only — no fixes |
+| Phase 6 | Wrap-up | Docs, learnings, issues | Record only — no fixes |
 
-Step 0 在任何代码之前。把简报填满：背景、范围（影响什么、明确 **不** 影响什么、边界在哪）、需求本身。"不影响"一栏空着，是阶段 3 出现范围外改动的头号原因——排除项一栏必填。
+Step 0 comes before any code (M and L). Fill the brief: background, scope (what it affects, what it explicitly does **not** affect, and the boundaries), and the requirement itself. An empty "does not affect" list is the number-one cause of out-of-scope changes in Phase 3 — the exclusions slot is required. Requirements arrive as suggestions; physics is the only law — correctness, data integrity, and the user's explicit hard constraints don't negotiate, while convention, past practice, and "how it's done" do. Question the inherited HOW; the user's WHAT holds (reasoning and sources in ADR-005, in the BoCode repository's `book/docs/decisions/`). The stated request is a proxy — the experience behind it is the requirement: capture what the user will see, do, and get. Focus is saying no; the exclusions slot gives the feature its shape (ADR-006).
 
-阶段 2 产出完整设计——数据流、文件清单、接口——然后继续推进；只有出现真实缺口（范围冲突、数据形态未定、外部依赖不明）才停下来找用户，绝不只为"确认一下"而停。
+Phase 2 produces the full design — data flow, file list, interfaces — and proceeds; it stops for the user only when a real gap appears (scope conflict, undetermined data shape, unclear external dependency), never just for confirmation. Designs and estimates derive bottom-up from primitives — what the data and code actually are — never by analogy to last time; delete what no requirement calls for before optimizing anything that remains. Design is how it works — the surfaces the user touches (defaults, empty states, error messages) are designed with the data flow, never decorated after it (ADR-006).
 
-阶段 4 的关键在门禁，不在顺序：相关测试全绿、没有为过关削弱的断言、覆盖正常路径、边界输入（范围、空值、极值）、错误路径，再加一项回归检查确认既有行为没被破坏。测试先行（先写失败的测试 → 最小实现 → 保持绿色地重构）是默认循环——怎么排序随你，门禁不能松。
+Phase 4's hard part is the gate, not the sequence: all relevant tests green, no assertion weakened to get there, coverage of the normal path, boundary inputs (ranges, empty, extremes), error paths, and a regression check that existing behavior didn't break. Test-first (write a failing test → minimum implementation → refactor staying green) is the default loop — sequence the work however keeps the gate honest. Iterate fast inside the phase; polish at the gate — what crosses a gate is finished: defaults chosen, errors worded, edges handled (ADR-006).
 
-阶段 5 和阶段 6 共享同一条纪律：**只记录，绝不顺手修。** 评审或收尾中发现的问题进 `notes/issue/`，修复是之后单独的任务。顺手修感觉高效，实际上摧毁门禁：评审就不再是在评审交付出来的东西了。
+Phases 5 and 6 share one discipline: **record, never fix.** A problem found during review or wrap-up goes into `notes/issue/` — fixing it is a separate, later task. Fixing in passing feels efficient and destroys the gate: the review no longer reviews what was built.
 
-## code ↔ book——项目的两半
+## code ↔ book — the two halves
 
 ```
-                 book/（知识库 + 驱动力）
-               ┌──────────────────────────────────────┐
-               │  plans/      → 驱动实现              │
-               │  guidelines/ → 提供基线              │
-               │  learn/      → 提供经验              │
-               │  issue/      → 提供方向              │
-               │  decisions/  → 提供背景              │
-               └──────────────┬───────────────────────┘
-                              │ 驱动
+                 book/  (knowledge base + driving force)
+               ┌─────────────────────────────────────┐
+               │  plans/      → drives implementation │
+               │  guidelines/ → provides the baseline │
+               │  learn/      → provides experience   │
+               │  issue/      → provides direction    │
+               │  decisions/  → provides context      │
+               └──────────────┬──────────────────────┘
+                              │ drives
                               ▼
-                          src/（BoCode 默认布局为 code/）
-                              │ 产出
+                          src/
+                              │ produces
                               ▼
-               ┌──────────────────────────────────────┐
-               │  summary/    ← 功能报告              │
-               │  learn/      ← 新经验                │
-               │  issue/      ← 新发现的问题          │
-               │  changelogs/ ← 变更记录（未启用）    │
-               │  plans/      ← 完成状态              │
-               └──────────────────────────────────────┘
+               ┌─────────────────────────────────────┐
+               │  summary/    ← feature reports       │
+               │  learn/      ← new experience        │
+               │  issue/      ← new problems found    │
+               │  git log     ← change records        │
+               │  plans/      ← completion status     │
+               └─────────────────────────────────────┘
 ```
 
-## 交互规则
+## Interaction rules
 
-1. **写代码之前**——先在 `notes/learn/` 里搜相关经验，只查这条任务真正涉及的那份规范（`guidelines/README.md` 里的查阅指针会给你指路）；不做一刀切的预先通读。
-2. **写代码之中**——学到了新东西或踩了坑？立刻写进 `notes/learn/`；以后的会话（人也好 agent 也好）都受益。
-3. **写代码之后**——同步 book：计划状态、总结、新问题、索引（变更记录在本仓库以 git log 为准，`changelogs/` 未启用）。
-4. **计划驱动代码**——`book/plans/` 是实现的输入。agent 读计划、在 `src/`（本仓库源码根；BoCode 默认布局为 `code/`）里构建、写回 `book/`。
-5. **问题喂养代码**——`notes/issue/` 记录的问题，就是后续迭代的方向。
-6. **book 会复利**——每个功能离开时，book 都应该比它来时更完整。book 既是 agent 的上下文，也是人的参考手册。
-7. **刷新索引**——book 有任何改动，收尾前跑一遍 `npm run book:index`（仓库根；BoCode 默认布局为 `cd code && npm run book:index`）。新文件必须带 frontmatter `description`，内部链接必须可达——任何一项不过，构建就挂。
-8. **模型换代时重新审计**——脚手架会随模型能力老化。agent 的模型换代时，对照 [ADR-003](../docs/decisions/ADR-003-intent-gates-vs-distrust-gates.md) 的门禁分类法重新审计 AGENTS.md、`guidelines/` 和 skills：保留意图门禁（只记录不顺手修、范围纪律），删掉或软化那些只因不信任弱模型才存在的门禁。
+1. **Before coding** — search `notes/learn/` for related experience and consult only the guideline the task touches (the input pointers in `guidelines/README.md` route you); no blanket pre-reading.
+2. **While coding** — something new learned or tripped over? Write it to `notes/learn/` immediately; future sessions (human or agent) benefit.
+3. **After coding** — sync the book: plan status, summary, new issues, index. This project uses git log for change records; `book/changelogs/` is not enabled.
+4. **Plans drive code** — `book/plans/` is the input to implementation. The agent reads the plan, builds in `src/`, writes back to `book/`.
+5. **Issues feed code** — `notes/issue/` records problems that become the direction of later iterations.
+6. **The book compounds** — every feature should leave the book more complete than it found it. The book is both the agent's context and the human's reference manual.
+7. **Refresh the index** — after any book change, run `npm run book:index` before wrapping up. New files must carry a frontmatter `description`, and internal links must resolve — either failing fails the build.
+8. **Re-audit when the model changes** — scaffolding ages with model capability. When the agent's model generation changes, re-audit AGENTS.md, `guidelines/`, and skills against ADR-003's gate taxonomy: keep intent gates (record-never-fix, scope discipline), drop or soften gates that only exist from distrust of weaker models.
 
-## 文档去向
+## Document routing
 
-| 产出     | 位置                                          | 读者       | 文体                                         |
-| -------- | --------------------------------------------- | ---------- | -------------------------------------------- |
-| 功能报告 | `book/notes/summary/YYYY-MM/`                 | 人优先     | 报告：背景 → 做了什么 → 为什么 → 结果 → 后续 |
-| 经验知识 | `book/notes/learn/`                           | 人 + agent | 知识条目：可检索、带标签、写明适用条件       |
-| 潜在问题 | `book/notes/issue/`                           | 人 + agent | 结构化：问题 + 复现 + 建议方向               |
-| 任务跟踪 | `book/notes/task/`                            | 人 + agent | 清单                                         |
-| 架构决策 | `book/docs/decisions/`                        | 人优先     | ADR 格式                                     |
-| 实施计划 | `book/plans/`                                 | agent 优先 | 结构化、可直接执行                           |
-| 变更记录 | `book/changelogs/`（未启用——以 git log 为准） | 人优先     | 短条目、带日期                               |
+| Output | Location | Audience | Style |
+|--------|----------|----------|-------|
+| Feature report | `book/notes/summary/` | Humans first | Report: background → what → why → outcome |
+| Learned experience | `book/notes/learn/` | Humans + agents | Knowledge entry: searchable, tagged, applicability stated |
+| Potential problem | `book/notes/issue/` | Humans + agents | Structured: problem + reproduction + suggested direction |
+| Task tracking | `book/notes/task/` | Humans + agents | Checklist |
+| Architecture decision | `book/docs/decisions/` | Humans first | ADR format |
+| Implementation plan | `book/plans/` | Agents first | Structured, directly executable |
+| Change history | git log | Humans + agents | Commit records; no separate changelog |
 
-每份 book 文档都遵守 `guidelines/writing-style.md` 里的说人话标准。
+Every book document follows the plain-language standard in `guidelines/writing-style.md`.
+
+## Project adaptations
+
+Source lives in root `src/`; run commands at the repository root. Official skill references to `code/` and `cd code` map to this layout. Summaries archive under `book/notes/summary/YYYY-MM/`. Git log replaces changelog entries at every tier. Historical ADRs retain their original text; current rules come from AGENTS.md and these guidelines. ADR-005/006/008/009/010 mentioned by upstream rules refer to the BoCode repository, not local records with the same numbers.

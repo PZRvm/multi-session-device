@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: 启动挂起报告的可执行复现附录：临时 ADB 分段应答注入、完整应答对照与生产探测函数验证
 tags: [emulator, startup, adb, reproduction, diagnostics]
 ---

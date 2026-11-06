@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: Windows 关窗确认选「留在应用」后 app 无窗口且无唤回入口——需 second-instance 处理，真机验收前修复
 ---
 

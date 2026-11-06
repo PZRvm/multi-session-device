@@ -1,15 +1,13 @@
 ---
-description: 架构快照——带日期的文档，描述模块和数据流在当时的真实状态
+description: Architecture snapshots — dated documents describing the current state of modules and data flow
 ---
 
-# 架构快照
+# Architecture snapshots
 
-每篇快照描述系统在某个时间点的真实样子：进程、模块、数据流、部署形态。长期规则在 `guidelines/architecture.md`；本目录装今天为真的东西。
+Each snapshot describes how the system actually looks at a point in time: processes, modules, data flow, deployment shape. The long-term rules live in `guidelines/architecture.md`; this directory holds what is true today.
 
-当前实现见 [Android 运行与操控（阶段 4 收尾）](2026-10-08-android-runtime.md)；main 进程模块落点见 [模块拆分（2026-10-13）](2026-10-13-main-module-split.md)；录屏实现见 [设备录屏](2026-10-16-recording.md)；[项目骨架](项目骨架.md) 保留 stage 01/02 的历史结构。
+## Conventions
 
-## 约定
-
-- 一个进程、模块或横切关注点一篇文档；要带日期视图时，命名成 `YYYY-MM-DD-<topic>.md`
-- 被新快照取代的旧快照，顶部加一行 `superseded by <link>`——永不悄悄删历史
-- 每篇快照开头先给一段导向：什么跑在哪、谁和谁说话
+- One document per process, module, or cross-cutting concern; for a dated view, name it `YYYY-MM-DD-<topic>.md`
+- A snapshot superseded by a newer one gets a `superseded by <link>` line at the top — never delete history silently
+- Every snapshot starts with a one-paragraph orientation: what runs where, and what talks to what

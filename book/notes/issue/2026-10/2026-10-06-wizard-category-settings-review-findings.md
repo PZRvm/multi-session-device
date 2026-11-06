@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: 向导分类与附加设置分支合并结果（feature/wizard-category-settings @220f298，含 image-uninstall 与独立窗两支并入）的总体 code review 发现——P1 能力构建双路径分叉致皮肤/摄像头选择创建必拒、P2 四项、P3 十二项
 tags: [review, wizard, capabilities, skins, camera, race-condition, ipc]
 ---

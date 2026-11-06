@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: npm run lint 存量 17 项未清（10 errors / 7 warnings）——react-hooks/set-state-in-effect 为主，集中在 DeviceCanvas 等既有效应
 ---
 

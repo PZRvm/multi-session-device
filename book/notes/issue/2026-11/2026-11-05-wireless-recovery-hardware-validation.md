@@ -1,4 +1,5 @@
 ---
+status: open
 description: 无线诊断修复的正式签名权限、TLS 真机、USB/运行中 AVD 与 IDE 调试人工验收尚未执行
 ---
 

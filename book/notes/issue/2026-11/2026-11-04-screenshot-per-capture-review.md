@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: 多截图编辑复审的真机断连清理和注释问题已修复，新增真实 IPC 装配回归，全仓 1570 项通过
 ---
 

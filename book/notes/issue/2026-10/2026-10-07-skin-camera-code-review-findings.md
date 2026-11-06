@@ -1,4 +1,5 @@
 ---
+status: open
 description: 皮肤/摄像头集成（feature/wizard-category-settings 未提交轮）的 Phase 5 code review——无阻塞项；P3 三项（主动取消被当失败警示、无背景图皮肤可入库但投屏必报错、启动核验文案叠加），另含门禁复核与安全/几何核对结论
 tags: [review, skin, camera, wizard, geometry]
 ---

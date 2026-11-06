@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: scrcpy 拆分 review 发现（只记录不修复）——ipc.ts 部分入参校验文案是硬编码中文未走 msg() i18n；项目骨架.md 仍留着从未落地的 scrcpy/stream.ts【规划】行
 created: 2026-10-13
 tags: [i18n, 文档过期, scrcpy, review]

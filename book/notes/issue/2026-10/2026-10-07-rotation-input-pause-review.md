@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: 旋转暂停丢失 KeyUp 的 P2 已修复：main 释放旧键，暂停期间新输入直接丢弃
 tags: [review, rotation, keyboard, input, keyup, regression]
 ---

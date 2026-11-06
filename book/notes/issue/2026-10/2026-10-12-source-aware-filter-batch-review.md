@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: 出身标注 + 过滤视图两批（含六轮验收期修复）合并前 code review——无 P1；4 项 P2（跨桶运行设备查看回归、许可静默文本匹配、级联编排零测试、计数时间窗）与 8 项 P3
 created: 2026-10-12
 tags: [code-review, sdk-source, device-list, origin, store, ipc]

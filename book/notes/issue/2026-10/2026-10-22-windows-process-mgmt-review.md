@@ -1,4 +1,5 @@
 ---
+status: open
 description: P3 进程管理 Windows 化代码评审发现——无 P1；P2 两条（测试平台假设钉住、会话结束弹窗暴露面）+ P3 四条；只记录不修
 ---
 

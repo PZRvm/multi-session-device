@@ -1,6 +1,6 @@
 ---
 description: 已提供隔离 SDK 升级回归并在当前版本通过；-skin 的官方弃用风险继续监测
-status: monitoring
+status: open
 priority: P3
 created: 2026-10-08
 ---

@@ -1,4 +1,5 @@
 ---
+status: open
 description: SDK 来源切换矩阵在 win32 整体失真——classifyRoot 三个 SDK 标记全是 darwin 路径，切出零迁移不弹评估、回切被 target-junk 拒绝；真机验收实证（2026-10-22 记录的 sdkMigration adb 探测假阴性实为三处全中）
 created: 2026-10-31
 tags: [windows, sdk, migration, source-switch, acceptance]

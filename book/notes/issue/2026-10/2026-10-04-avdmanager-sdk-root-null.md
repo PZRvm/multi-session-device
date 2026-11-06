@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: avdmanager create avd 报 "Valid system image paths are: null"——根因是 SDK 的 cmdline-tools 符号链接把根推断带到了 Homebrew 空壳目录（2026-10-05 已修复并更正根因）
 ---
 

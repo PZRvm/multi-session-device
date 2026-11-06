@@ -1,4 +1,5 @@
 ---
+status: open
 description: 手办画像（pixel_8）的 AVD 在系统层拒绝一切旋转：settings user_rotation、emu rotate、虚拟加速度计、相机应用均不改画面方向；手机横屏的真机视觉验证待强制横屏应用或日常人工使用覆盖
 tags: [emulator, android, rotation, acceptance]
 ---

@@ -1,7 +1,7 @@
 ---
 description: 日志面板 review P3 备忘——主窗宽度注释过时、快照导出面扩大、日志窗 URL 参数重复解析
 created: 2026-10-10
-status: closed
+status: resolved
 severity: P3
 ---
 

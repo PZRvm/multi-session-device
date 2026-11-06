@@ -1,69 +1,96 @@
 ---
-description: 三类笔记（learn、task、issue）、各自何时写、检索顺序，以及每类的模板
+description: The four note types (learn, summary, task, issue), when each is written, the retrieval order, and the template for each
 ---
 
 # Notes
 
-项目的流水记录。每个子目录一个用途，这里的一切都是**只记录、不自动修复**——记下的问题变成任务；修复它是另一份工作。
+All running records of the project. Each subfolder has one purpose, and everything here is **recorded, never auto-fixed** — a recorded problem becomes a task; fixing it is separate work.
 
-`learn/` 和 `issue/` 按 `YYYY-MM/` 归档。月份是稳定的低维护物理分组；功能关系活在文件名、frontmatter 和正文链接里——永不活在更深的目录嵌套里。
+`summary/`, `learn/`, and `issue/` archive under `YYYY-MM/`. The month is a stable, low-maintenance physical grouping; feature relationships live in filenames, frontmatter, and links in the text — never in deeper directory nesting.
 
-| 目录     | 用途                       | 何时写                            |
-| -------- | -------------------------- | --------------------------------- |
-| `learn/` | 经验与教训                 | 写代码过程中，以及 Phase 6 收尾时 |
-| `task/`  | 任务跟踪与拆解             | 需求到来时                        |
-| `issue/` | 潜在问题（只记录，不修复） | 任何发现它的阶段                  |
+Tasks and issues archive **by status, not by moving files** (ADR-010). Both carry a frontmatter `status` — `open` when created, `done` (task) or `resolved` (issue) when handled. Flipping the field and rerunning the index is the whole archive step: `book/README.md` regroups with open entries first; files never move, so links never break.
 
-## 检索顺序
+| Folder | Use | Written when |
+|--------|-----|--------------|
+| `learn/` | Experience and lessons | During coding, and at Phase 6 wrap-up |
+| `summary/` | Feature and version reports | After each feature completes |
+| `task/` | Task tracking and breakdowns | When a requirement arrives |
+| `issue/` | Potential problems (recorded, never fixed) | Any phase that finds one |
 
-1. 先读 `book/README.md`；按功能名、关键词或摘要定位文档。
-2. 再读具体类型和月份。
-3. 写代码前先搜 `learn`；收尾时把功能的结果勾进 `stage/` 对应步骤（附一行结果），经验与遗留问题分别写进 `learn`、`issue`。
+## Retrieval order
 
-Obsidian 可以直接把 `book/` 当 vault 打开；已有链接都是普通相对 Markdown。
+1. Read `book/README.md` first; locate documents by feature name, keyword, or summary.
+2. Then read the specific type and month.
+3. Before coding, search `learn` first; at wrap-up, write the feature's outcome, experience, and open problems to `summary`, `learn`, and `issue` respectively — and flip the `status` of whatever it closes (`done` / `resolved`).
 
-## 模板
+Obsidian can open `book/` directly as a vault; existing links are plain relative Markdown.
 
-### learn——一篇可检索的知识条目，给人和 agent 共用
+## Templates
+
+Every entry is written thin and well — the `bowrite` skill（薄写）when loaded, `guidelines/writing-style.md` otherwise.
+
+### summary — a report a human can read without opening the code
 
 ```markdown
 ---
-description: <一行说人话的内容摘要>
+description: <one plain-language line about the content>
+---
+# <feature> — summary
+
+- **Background**: why this feature exists
+- **What was done**: the changes, in plain words
+- **Why these choices**: the decisions and their reasons
+- **Outcome**: what works now, measured where possible
+- **Follow-ups**: what's deliberately left open, linking issues
+```
+
+### learn — a searchable knowledge entry, for humans and agents
+
+```markdown
+---
+description: <one plain-language line about the content>
 tags: [<topic>, <tech>, <symptom>]
 ---
+# <the conclusion in one sentence>
 
-# <用一句话说出结论>
-
-- **Scenario**: 本条目什么时候适用
-- **Why**: 背后的机制
-- **How to apply**: 下次有什么不一样的做法
+- **Scenario**: when this entry applies
+- **Why**: the mechanism behind it
+- **How to apply**: what to do differently next time
 ```
 
-Tags 驱动检索——写你将来会搜的词，包括症状词（"timeout"、"drift"、"silent-fail"）。
+Tags drive retrieval — write the words you'd search for later, including symptom words ("timeout", "drift", "silent-fail").
 
-### issue——一个记下的问题，绝不顺手修
+### issue — a recorded problem, never fixed in passing
 
 ```markdown
 ---
-description: <一行说人话的内容摘要>
+description: <one plain-language line about the content>
+status: open
 ---
+# <the problem in one line>
 
-# <用一行说出问题>
-
-- **Observed**: 看到了什么、在哪、什么时候
-- **Reproduction**: 让它复现的步骤或条件
-- **Suggested direction**: 修复大概会碰到哪——只记录
+- **Observed**: what was seen, where, when
+- **Reproduction**: the steps or conditions that bring it back
+- **Suggested direction**: what a fix would probably touch — recorded only
 ```
 
-### task——一份跟踪一项工作的检查清单
+Flip `status` to `resolved` only when the fix has landed; the index then moves the entry out of Open.
+
+### task — a checklist that tracks a piece of work
 
 ```markdown
 ---
-description: <一行说人话的内容摘要>
+description: <one plain-language line about the content>
+status: open
 ---
+# <task>
 
-# <任务>
-
-- [ ] <步骤>
-- [x] <已完成的步骤，附一行结果>
+- [ ] <step>
+- [x] <completed step, with a one-line result>
 ```
+
+Flip `status` to `done` when the last box is checked; the index then moves the entry out of Open.
+
+## Project conventions
+
+Summaries and lessons may remain in Chinese. Existing record bodies and file locations are retained. Partial fixes, deferred checks and monitoring remain `open`; only records with complete disposition evidence become `resolved`. The index status is the current classification; historical wording inside an entry remains evidence from its original date. Git log is the change record; no separate changelog is required. When using the official book-writeback issue template, include `status: open` as shown above.

@@ -1,7 +1,7 @@
 ---
 description: DeviceWizard.tsx:458 存量 lint error——react-hooks 规则报 effect 内同步 setState 可触发级联渲染；dev 基线即有，非断网开关批引入
 created: 2026-10-12
-status: closed
+status: resolved
 ---
 
 # DeviceWizard effect 内同步 setState（存量 lint error）

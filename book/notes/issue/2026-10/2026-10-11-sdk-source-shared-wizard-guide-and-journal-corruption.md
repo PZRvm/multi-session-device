@@ -1,4 +1,5 @@
 ---
+status: open
 description: 共享 Studio SDK 模式四个遗留——向导缺包引导 UI 未做、journal 损坏无接管、ANDROID_USER_HOME/EMULATOR_HOME 落共享根内、source-adopt/source-migrate 缺 Studio 路径服务端复验（伪造载荷可把 Studio 根当可写自选根）
 tags: [SDK 来源, 向导, 崩溃恢复]
 ---

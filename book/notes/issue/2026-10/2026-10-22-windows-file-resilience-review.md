@@ -1,4 +1,5 @@
 ---
+status: open
 description: P4 分支（fsWin/sha1 流式化 + SDK 切换弹窗化 + 同路径守卫修复）代码评审发现——无 P1；流程 P2 一条（lint 门禁口径）+ P3 两条；只记录不修
 ---
 

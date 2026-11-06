@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: DeviceWizard download() 跨 tick 无互斥守卫——下载按钮是 disabled 行内的 span，jsdom 与极端竞速可穿透，两次并发 download 互相覆盖进度状态
 ---
 

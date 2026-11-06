@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: store v2 已保护坏 JSON 和未知版本，IO 错误、坏条目过滤及副作用前守卫仍缺，后续写入可能丢失原记录
 ---
 
