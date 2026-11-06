@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildCapabilities,
+  defaultGraphicsFor,
   buildEnrichedCapabilities,
   effectiveRamMin,
   readEmulatorVersion,
@@ -441,5 +442,11 @@ describe('富化能力读取实际 build 和镜像 revision', () => {
       readFile: async () => ''
     })
     expect(unknown.fields.ramMiB.min).toBe(2048)
+  })
+
+  it('defaultGraphicsFor：darwin 默认 host（硬件加速），其余平台维持 auto', () => {
+    expect(defaultGraphicsFor('darwin')).toBe('host')
+    expect(defaultGraphicsFor('win32')).toBe('auto')
+    expect(defaultGraphicsFor('linux')).toBe('auto')
   })
 })
