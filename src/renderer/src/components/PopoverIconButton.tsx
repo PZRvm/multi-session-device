@@ -22,6 +22,10 @@ type PopoverIconButtonProps = {
   onClick?: () => void
   /** 忙态槽变体：非交互转圈指示（role=img），气泡展示状态文本 */
   busy?: boolean
+  /** 按钮类名覆写（如画布工具条的 tool-btn/net-toggle 体系）；缺省 icon-button */
+  className?: string
+  /** 开关态（aria-pressed）：网络 radio 等状态按钮 */
+  pressed?: boolean
 }
 
 const SHOW_DELAY_MS = 120
@@ -36,7 +40,9 @@ export const PopoverIconButton = ({
   detail,
   disabled = false,
   onClick,
-  busy = false
+  busy = false,
+  className,
+  pressed
 }: PopoverIconButtonProps): React.JSX.Element => {
   const wrapRef = useRef<HTMLSpanElement>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -107,9 +113,10 @@ export const PopoverIconButton = ({
       ) : (
         <button
           type="button"
-          className="icon-button"
+          className={className ?? 'icon-button'}
           aria-label={accessibleName}
           aria-describedby={tip !== null ? bubbleId : undefined}
+          aria-pressed={pressed}
           disabled={disabled}
           onClick={onClick}
         >

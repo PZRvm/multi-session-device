@@ -106,7 +106,7 @@ describe.each(['darwin', 'win32', 'linux'])('主窗日志 dock（%s）', (platfo
     setViewport(1024)
   })
 
-  const toggleButton = (): HTMLElement => screen.getByTitle(copy.logcatTitle)
+  const toggleButton = (): HTMLElement => screen.getByRole('button', { name: copy.logcatTitle })
 
   it('板头留在列表内，Windows 开关浮在右上且不创建独立顶部行', async () => {
     const { container } = render(<App />)
@@ -265,7 +265,7 @@ describe.each(['darwin', 'win32', 'linux'])('主窗日志 dock（%s）', (platfo
       useDeviceStore.setState({ devices: [stopped] })
     })
     rerender(<App />)
-    expect(screen.queryByTitle(copy.logcatTitle)).toBeNull()
+    expect(screen.queryByRole('button', { name: copy.logcatTitle })).toBeNull()
     // dock 自动收起（不再保留空态挂死）
     expect(screen.queryByRole('log')).toBeNull()
     // 解锁随 dockVisible 变 false 发出

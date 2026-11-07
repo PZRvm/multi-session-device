@@ -17,6 +17,7 @@ import DeviceHealthNotice from './components/DeviceHealthNotice'
 import DeviceListPane from './components/DeviceListPane'
 import ExternalCanvas, { ExternalCanvasPlaceholder } from './components/ExternalCanvas'
 import LogcatPanel from './components/LogcatPanel'
+import { PopoverIconButton } from './components/PopoverIconButton'
 import ResizeHandle from './components/ResizeHandle'
 import { clampListWidth, LIST_MAX_WIDTH } from './components/listWidth'
 import {
@@ -519,16 +520,13 @@ const App = (): React.JSX.Element => {
     />
   )
   const logToggle = logTarget ? (
-    <button
-      type="button"
+    <PopoverIconButton
       className="log-toggle"
-      aria-label={copy.logcatTitle}
-      aria-pressed={dockVisible}
-      title={copy.logcatTitle}
+      icon={<ScrollText size={16} />}
+      label={copy.logcatTitle}
+      pressed={dockVisible}
       onClick={handleToggleLogDock}
-    >
-      <ScrollText size={16} />
-    </button>
+    />
   ) : null
   return (
     <Wrapper lang={locale} data-windows={isWindows}>
