@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Building2, Copy, Loader2, Moon, Play, Settings2, Square, Trash2, X } from 'lucide-react'
+import { Building2, Copy, Loader2, Pause, Play, Settings2, Square, Trash2, X } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
 import type { Device, DeviceAvailability, DeviceStatus } from '@shared/types'
 import { useCopy } from '../hooks/useCopy'
 import Input from './Input'
 import RecordingStatus from './RecordingStatus'
+import { PopoverIconButton } from './PopoverIconButton'
 
 /** 健康原因行：优先展示阻断原因；warning（如镜像身份不同）也提示 */
 const availabilityReason = (
@@ -244,175 +245,136 @@ const DeviceRow = ({
         onDoubleClick={(event) => event.stopPropagation()}
       >
         {device.status === 'stopped' ? (
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={format(copy.startAria, { name: device.name })}
-            title={
+          <PopoverIconButton
+            icon={<Play size={14} />}
+            label={format(copy.startAria, { name: device.name })}
+            detail={
               crossBucket && device.status === 'stopped'
                 ? copy.crossBucketBlockedTitle
                 : startDisabled
                   ? copy.startDisabledTitle
-                  : copy.start
+                  : null
             }
             disabled={startDisabled}
             onClick={onStart}
-          >
-            <Play size={14} />
-          </button>
+          />
         ) : null}
         {device.status === 'starting' ? (
           <>
-            <span
-              className="busy-slot"
-              role="img"
-              aria-label={format(copy.startingAria, { name: device.name })}
-            >
-              <Loader2 size={14} aria-hidden="true" className="busy-icon" />
-            </span>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={format(copy.cancelStartAria, { name: device.name })}
-              title={copy.cancelStart}
+            <PopoverIconButton
+              busy
+              icon={<Loader2 size={14} aria-hidden="true" className="busy-icon" />}
+              label={format(copy.startingAria, { name: device.name })}
+            />
+            <PopoverIconButton
+              icon={<X size={14} />}
+              label={format(copy.cancelStartAria, { name: device.name })}
+              detail={copy.cancelStart}
               onClick={onCancelStart}
-            >
-              <X size={14} />
-            </button>
+            />
           </>
         ) : null}
         {device.status === 'running' ? (
           <>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={format(copy.hibernateAria, { name: device.name })}
-              title={
+            <PopoverIconButton
+              icon={<Pause size={14} />}
+              label={format(copy.hibernateAria, { name: device.name })}
+              detail={
                 hibernateDisabled
                   ? (device.hibernationDisabledReason ?? copy.hibernateUnsupported)
                   : copy.hibernateTitle
               }
               disabled={hibernateDisabled}
               onClick={onHibernate}
-            >
-              <Moon size={14} />
-            </button>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={format(copy.stopAria, { name: device.name })}
-              title={copy.stop}
+            />
+            <PopoverIconButton
+              icon={<Square size={14} />}
+              label={format(copy.stopAria, { name: device.name })}
+              detail={copy.stop}
               onClick={onStop}
-            >
-              <Square size={14} />
-            </button>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={format(copy.copySerialAria, { serial: device.serial ?? '' })}
-              title={copy.copySerial}
+            />
+            <PopoverIconButton
+              icon={<Copy size={14} />}
+              label={format(copy.copySerialAria, { serial: device.serial ?? '' })}
+              detail={copy.copySerial}
               onClick={onCopySerial}
-            >
-              <Copy size={14} />
-            </button>
+            />
           </>
         ) : null}
         {device.status === 'hibernating' ? (
           <>
-            <span
-              className="busy-slot"
-              role="img"
-              aria-label={format(copy.hibernatingAria, { name: device.name })}
-            >
-              <Loader2 size={14} aria-hidden="true" className="busy-icon" />
-            </span>
+            <PopoverIconButton
+              busy
+              icon={<Loader2 size={14} aria-hidden="true" className="busy-icon" />}
+              label={format(copy.hibernatingAria, { name: device.name })}
+            />
             {/* 退出失败的重试/停止出口（保存失败已自动回运行态） */}
             {device.lastError?.code === 'hibernate-exit-failed' ? (
               <>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label={format(copy.retryHibernateAria, { name: device.name })}
-                  title={copy.hibernateRetryTitle}
+                <PopoverIconButton
+                  icon={<Pause size={14} />}
+                  label={format(copy.retryHibernateAria, { name: device.name })}
+                  detail={copy.hibernateRetryTitle}
                   onClick={onHibernate}
-                >
-                  <Moon size={14} />
-                </button>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label={format(copy.stopAria, { name: device.name })}
-                  title={copy.hibernateGiveUpStopTitle}
+                />
+                <PopoverIconButton
+                  icon={<Square size={14} />}
+                  label={format(copy.stopAria, { name: device.name })}
+                  detail={copy.hibernateGiveUpStopTitle}
                   onClick={onStop}
-                >
-                  <Square size={14} />
-                </button>
+                />
               </>
             ) : null}
           </>
         ) : null}
         {device.status === 'hibernated' ? (
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={format(copy.resumeAria, { name: device.name })}
-            title={copy.resumeTitle}
+          <PopoverIconButton
+            icon={<Play size={14} />}
+            label={format(copy.resumeAria, { name: device.name })}
+            detail={copy.resumeTitle}
             onClick={onResume}
-          >
-            <Play size={14} />
-          </button>
+          />
         ) : null}
         {device.status === 'resuming' ? (
           <>
-            <span
-              className="busy-slot"
-              role="img"
-              aria-label={format(copy.resumingAria, { name: device.name })}
-            >
-              <Loader2 size={14} aria-hidden="true" className="busy-icon" />
-            </span>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={format(copy.cancelResumeAria, { name: device.name })}
-              title={copy.cancelResume}
+            <PopoverIconButton
+              busy
+              icon={<Loader2 size={14} aria-hidden="true" className="busy-icon" />}
+              label={format(copy.resumingAria, { name: device.name })}
+            />
+            <PopoverIconButton
+              icon={<X size={14} />}
+              label={format(copy.cancelResumeAria, { name: device.name })}
+              detail={copy.cancelResume}
               onClick={onCancelStart}
-            >
-              <X size={14} />
-            </button>
+            />
           </>
         ) : null}
         {device.status === 'stopping' ? (
           <>
-            <span
-              className="busy-slot"
-              role="img"
-              aria-label={format(copy.stoppingAria, { name: device.name })}
-            >
-              <Loader2 size={14} aria-hidden="true" className="busy-icon" />
-            </span>
+            <PopoverIconButton
+              busy
+              icon={<Loader2 size={14} aria-hidden="true" className="busy-icon" />}
+              label={format(copy.stoppingAria, { name: device.name })}
+            />
             {/* 停止失败保留重试入口；未失败时点击无害（合并到在途清理） */}
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={format(copy.retryStopAria, { name: device.name })}
-              title={copy.stop}
+            <PopoverIconButton
+              icon={<Square size={14} />}
+              label={format(copy.retryStopAria, { name: device.name })}
+              detail={copy.stop}
               onClick={onStop}
-            >
-              <Square size={14} />
-            </button>
+            />
           </>
         ) : null}
-        <button
-          type="button"
-          className="icon-button"
-          aria-label={format(copy.editAria, { name: device.name })}
-          title={
+        <PopoverIconButton
+          icon={<Settings2 size={14} />}
+          label={format(copy.editAria, { name: device.name })}
+          detail={
             crossBucket && device.status !== 'running'
               ? copy.crossBucketBlockedTitle
               : device.status === 'creating' || device.status === 'deleting'
                 ? copy.editBusyTitle
-                : copy.editTitle
+                : null
           }
           disabled={
             (crossBucket && device.status !== 'running') ||
@@ -420,15 +382,12 @@ const DeviceRow = ({
             device.status === 'deleting'
           }
           onClick={onEdit}
-        >
-          <Settings2 size={14} />
-        </button>
+        />
         {deleteRenderable ? (
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={format(copy.deleteAria, { name: device.name })}
-            title={
+          <PopoverIconButton
+            icon={<Trash2 size={14} />}
+            label={format(copy.deleteAria, { name: device.name })}
+            detail={
               crossBucket
                 ? copy.crossBucketBlockedTitle
                 : metaWritable
@@ -437,9 +396,7 @@ const DeviceRow = ({
             }
             disabled={deleteDisabled}
             onClick={onDelete}
-          >
-            <Trash2 size={14} />
-          </button>
+          />
         ) : null}
       </span>
     </Wrapper>

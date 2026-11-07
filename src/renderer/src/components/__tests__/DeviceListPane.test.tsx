@@ -139,7 +139,7 @@ describe('DeviceListPane 空库文案（review P2-3/P3）', () => {
     expect(onSelectExternal).toHaveBeenCalledWith('X')
   })
 
-  it('出身过滤视图（plan 2026-10-12-device-list-origin-view-filter）：跨桶设备进折叠区，过渡态豁免，展开后独立分区', () => {
+  it('出身过滤视图（plan 2026-10-12-device-list-origin-view-filter）：跨桶设备进折叠区，过渡态豁免，展开后独立分区', async () => {
     const owned = { ...baseDevice, id: 'd-owned', name: '自有机' }
     const shared = {
       ...baseDevice,
@@ -174,7 +174,12 @@ describe('DeviceListPane 空库文案（review P2-3/P3）', () => {
     }) as HTMLButtonElement
     expect(sharedEdit.disabled).toBe(true)
     expect(sharedDelete.disabled).toBe(true)
-    expect(sharedEdit.title).toBe(copy.crossBucketBlockedTitle)
+    // popover 取代原生 title：悬停展开气泡说明跨桶只读
+    fireEvent.mouseEnter(sharedEdit.closest('.popover-icon-wrap')!)
+    await vi.waitFor(() => {
+      expect(screen.getByRole('tooltip').textContent).toContain(copy.crossBucketBlockedTitle)
+    })
+    fireEvent.mouseLeave(sharedEdit.closest('.popover-icon-wrap')!)
     const onCrossBucketBlocked = vi.fn()
     cleanup()
     renderPane({
