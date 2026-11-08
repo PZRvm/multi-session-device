@@ -100,7 +100,7 @@ description: Master index of the book — the map of every document. Regenerate 
 
 ### notes/issue/
 
-**Open (42)**
+**Open (43)**
 
 - [2026-10-06-向导独立窗口-review.md](notes/issue/2026-10-06-向导独立窗口-review.md) — 向导独立窗口分支（5 提交）的 code review 发现——两处注释腐化、span 嵌 h3 不合法、dead CSS、非 darwin 标题双显与两条备查信息
 - [2026-10-04-messageport-bridge-no-delivery.md](notes/issue/2026-10/2026-10-04-messageport-bridge-no-delivery.md) — MessagePortMain 经 contextBridge 回传后 port 对象可达但不投递消息——视频包通道退回 webContents.send（每帧拷贝），产品化时可再评估
@@ -143,6 +143,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-05-commit-msg-hook-not-executable.md](notes/issue/2026-11/2026-11-05-commit-msg-hook-not-executable.md) — 主仓库提交时提示 commit-msg hook 无执行权限而被忽略，本轮手动主题校验通过，未改 hook 权限
 - [2026-11-05-wireless-recovery-hardware-validation.md](notes/issue/2026-11/2026-11-05-wireless-recovery-hardware-validation.md) — 无线诊断修复的正式签名权限、TLS 真机、USB/运行中 AVD 与 IDE 调试人工验收尚未执行
 - [2026-11-06-bocode-directory-navigation.md](notes/issue/2026-11/2026-11-06-bocode-directory-navigation.md) — BoCode 原版升级的目录 README 少了项目专属 PRD、录屏接口和架构快照入口，文档本身与总索引仍完整
+- [2026-11-06-headless-auto-software-renderer.md](notes/issue/2026-11/2026-11-06-headless-auto-software-renderer.md) — 当前 Mac 的 headless AVD 在 auto 模式实际选择 swangle_indirect，而 Studio 同镜像选 host，桌面动画持续卡顿
 - [2026-11-06-hibernation-review-round.md](notes/issue/2026-11/2026-11-06-hibernation-review-round.md) — 休眠域评审轮发现：恢复后清单消费失败的陈旧投影风险、已休眠设备编辑无前置提示、quit 后 adb serial 残留影响紧接恢复
 
 **Resolved (84)**
@@ -340,6 +341,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-06-bocode-upgrade-project-adaptations.md](notes/learn/2026-11/2026-11-06-bocode-upgrade-project-adaptations.md) — 升级 BoCode 时保持四技能原文，把根路径、Git log 和状态模板差异写入项目规则，索引脚本必须合并而非覆盖
 - [2026-11-06-devices-harness-multidomain.md](notes/learn/2026-11/2026-11-06-devices-harness-multidomain.md) — devices 域测试 harness 的三个坑：多域测试 handlerFor 必须取最后注册、clearAllMocks 不清 per-test 实现、EmulatorRunner 工厂参数是 () => 值
 - [2026-11-06-emulator-snapshot-save-protocol.md](notes/learn/2026-11/2026-11-06-emulator-snapshot-save-protocol.md) — emulator console 的 snapshot save OK 只是受理而非写盘完成；缺失/半写/配置变化快照都会静默冷启动回退——完成判定与恢复复核的实测协议
+- [2026-11-06-headless-auto-gpu-selection.md](notes/learn/2026-11/2026-11-06-headless-auto-gpu-selection.md) — headless 模拟器的 auto 不保证主机 GPU；当前 M4 实测 auto 选 SwiftShader，必须以有效配置和 SurfaceFlinger 核验
 
 ### notes/summary/2026-10/
 
@@ -531,4 +533,4 @@ description: Master index of the book — the map of every document. Regenerate 
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 422 documents -->
+<!-- 424 documents -->
