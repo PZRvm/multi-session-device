@@ -100,7 +100,7 @@ description: Master index of the book — the map of every document. Regenerate 
 
 ### notes/issue/
 
-**Open (42)**
+**Open (43)**
 
 - [2026-10-06-向导独立窗口-review.md](notes/issue/2026-10-06-向导独立窗口-review.md) — 向导独立窗口分支（5 提交）的 code review 发现——两处注释腐化、span 嵌 h3 不合法、dead CSS、非 darwin 标题双显与两条备查信息
 - [2026-10-04-messageport-bridge-no-delivery.md](notes/issue/2026-10/2026-10-04-messageport-bridge-no-delivery.md) — MessagePortMain 经 contextBridge 回传后 port 对象可达但不投递消息——视频包通道退回 webContents.send（每帧拷贝），产品化时可再评估
@@ -144,6 +144,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-05-wireless-recovery-hardware-validation.md](notes/issue/2026-11/2026-11-05-wireless-recovery-hardware-validation.md) — 无线诊断修复的正式签名权限、TLS 真机、USB/运行中 AVD 与 IDE 调试人工验收尚未执行
 - [2026-11-06-bocode-directory-navigation.md](notes/issue/2026-11/2026-11-06-bocode-directory-navigation.md) — BoCode 原版升级的目录 README 少了项目专属 PRD、录屏接口和架构快照入口，文档本身与总索引仍完整
 - [2026-11-06-hibernation-review-round.md](notes/issue/2026-11/2026-11-06-hibernation-review-round.md) — 休眠域评审轮发现：恢复后清单消费失败的陈旧投影风险、已休眠设备编辑无前置提示、quit 后 adb serial 残留影响紧接恢复
+- [2026-11-09-post-delivery-review-round.md](notes/issue/2026-11/2026-11-09-post-delivery-review-round.md) — 休眠交付后六轮追加提交（GPU 默认/缺陷修复/Popover UI×4）的结构化代码评审：发现 7 项记录待办，无阻断性缺陷
 
 **Resolved (83)**
 
@@ -530,4 +531,4 @@ description: Master index of the book — the map of every document. Regenerate 
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 421 documents -->
+<!-- 422 documents -->
