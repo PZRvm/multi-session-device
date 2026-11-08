@@ -464,7 +464,7 @@ describe('ScrcpyManager（fake transport）', () => {
     }
   )
 
-  it('输入守卫：未激活拒绝；归属过期与尺寸不符拒绝', async () => {
+  it('输入守卫：未激活静默丢弃；归属过期与尺寸不符拒绝', async () => {
     const { manager } = await importManager()
     await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
     const input = await handlerFor(IPC_CHANNELS.screenInput)
@@ -478,7 +478,8 @@ describe('ScrcpyManager（fake transport）', () => {
       height: 2400,
       input: { kind: 'rotate' }
     }
-    await expect(input({}, request)).rejects.toThrow('当前没有活动视图')
+    // 评审 R5：拆除窗口的迟到输入静默丢弃（与 ack 同理），不再抛错刷控制台
+    await expect(input({}, request)).resolves.toBeUndefined()
 
     const activate = await handlerFor(IPC_CHANNELS.screenActivate)
     await activate({}, { id: 'd1', viewToken: 'vt-1' })

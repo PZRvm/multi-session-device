@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useId, type ReactNode } from 'react'
+import { useRef, useState, useEffect, useLayoutEffect, useId, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import styled from 'styled-components'
 
@@ -30,6 +30,7 @@ type PopoverIconButtonProps = {
 
 const SHOW_DELAY_MS = 120
 const GAP_PX = 8
+const EDGE_MARGIN_PX = 8
 const EST_HALF_WIDTH = 90
 const EST_HEIGHT = 52
 
@@ -52,6 +53,12 @@ export const PopoverIconButton = ({
     below: boolean
   } | null>(null)
   const bubbleId = useId()
+  const bubbleRef = useRef<HTMLSpanElement>(null)
+  // 视口钳制需要真实半宽（评审 R4）：max-width 240px 的长辅行超出估算值时重算
+  const [halfWidth, setHalfWidth] = useState(EST_HALF_WIDTH)
+  useLayoutEffect(() => {
+    if (bubbleRef.current !== null) setHalfWidth(bubbleRef.current.offsetWidth / 2)
+  }, [tip, label, detail])
 
   const hide = (): void => {
     if (timerRef.current !== null) {
@@ -107,7 +114,12 @@ export const PopoverIconButton = ({
       onBlur={hide}
     >
       {busy ? (
-        <span className="busy-slot" role="img" aria-label={accessibleName}>
+        <span
+          className="busy-slot"
+          role="img"
+          aria-label={accessibleName}
+          aria-describedby={tip !== null ? bubbleId : undefined}
+        >
           {icon}
         </span>
       ) : (
@@ -126,13 +138,14 @@ export const PopoverIconButton = ({
       {tip !== null
         ? createPortal(
             <Bubble
+              ref={bubbleRef}
               id={bubbleId}
               role="tooltip"
               $below={tip.below}
               style={{
                 left: Math.min(
-                  Math.max(tip.centerX, EST_HALF_WIDTH),
-                  window.innerWidth - EST_HALF_WIDTH
+                  Math.max(tip.centerX, halfWidth + EDGE_MARGIN_PX),
+                  window.innerWidth - halfWidth - EDGE_MARGIN_PX
                 ),
                 top: tip.anchorY
               }}

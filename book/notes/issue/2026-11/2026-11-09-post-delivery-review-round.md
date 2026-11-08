@@ -1,5 +1,5 @@
 ---
-status: open
+status: resolved
 description: 休眠交付后六轮追加提交（GPU 默认/缺陷修复/Popover UI×4）的结构化代码评审：发现 7 项记录待办，无阻断性缺陷
 created: 2026-11-09
 tags: [review, hibernation, popover, gpu, record-only]
@@ -43,6 +43,21 @@ tags: [review, hibernation, popover, gpu, record-only]
 | R5 | P3 | 迟到的 screenInput（非 ack）在会话拆除窗口仍以 inputStale 抛错进控制台——与 ack 同理可静默容忍 | scrcpy/ipc.ts screenInput |
 | R6 | P3 | 英文动词不一致：行内停止 'Shut down' vs 工具条电源 'Power off device'（两动作不同但措辞需统一审视）；zh 均为「关闭」系 | mainWindow.ts |
 | R7 | P3 | 两个无 MSD_DEV_PORT 的 dev 实例共享 'default' 后缀目录，第二个仍被拒（有日志说明，可接受）；busy 槽气泡未挂 aria-describedby（aria-label 已承载语义） | main/index.ts / PopoverIconButton |
+
+## 2026-11-09 处置（修复轮，R1–R7 全部落地）
+
+- R1 ✓ LogcatPanel 三按钮迁移 PopoverIconButton（bar-btn 体系保留，暂停键带 pressed）
+- R2 ✓ runner spawn 'error' 经 entry.spawnFailure 短路 boot 等待，不再耗满 240s
+- R3 ✓ settings-contract 非法 graphics 回退改为 capabilities.defaults.graphics 同源
+- R4 ✓ 气泡按实测宽度钳制视口（useLayoutEffect 测量）
+- R5 ✓ screenInput 拆除窗口静默丢弃（与 ack 同口径）；requireReadySession 死代码删除；
+  守卫测试改为断言静默
+- R6 ✓ EN powerOff 统一为 'Power off'（与行内 'Shut down' 成对）
+- R7 ✓ dev 无端口时后缀带工作区目录哈希（裸 dev 不再互踩 default 目录）；busy 槽
+  气泡挂 aria-describedby
+
+验证：typecheck/lint 零告警；vitest 1642 全绿；dev 装配 6182 正常。
+前轮（2026-11-06）P1/P2/P3 不在本轮范围，仍 open。
 
 ## 已验证无恙的重点项
 

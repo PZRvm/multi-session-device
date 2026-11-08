@@ -114,11 +114,11 @@ describe('LogcatPanel', () => {
   it('暂停期间批次不入视图但照常回执；恢复后从最新行接入并留断点标记', () => {
     render(<LogcatPanel deviceId="d1" runId="run-1" />)
     emitBatch(batchOf([[1, 'before']], { replay: true }))
-    fireEvent.click(screen.getByTitle(copy.logcatPause))
+    fireEvent.click(screen.getByRole('button', { name: copy.logcatPause }))
     emitBatch(batchOf([[2, 'during-pause']]))
     expect(screen.queryByText('during-pause')).toBeNull()
     expect(ack).toHaveBeenCalledWith({ deviceId: 'd1', upToSeq: 2 })
-    fireEvent.click(screen.getByTitle(copy.logcatResume))
+    fireEvent.click(screen.getByRole('button', { name: copy.logcatResume }))
     expect(screen.getByText(copy.logcatResumed)).toBeTruthy()
     emitBatch(batchOf([[3, 'after-resume']]))
     expect(screen.getByText('after-resume')).toBeTruthy()
@@ -134,7 +134,7 @@ describe('LogcatPanel', () => {
   it('清空只清视图；后续批次继续追加', () => {
     render(<LogcatPanel deviceId="d1" runId="run-1" />)
     emitBatch(batchOf([[1, 'gone-soon']], { replay: true }))
-    fireEvent.click(screen.getByTitle(copy.logcatClear))
+    fireEvent.click(screen.getByRole('button', { name: copy.logcatClear }))
     expect(screen.queryByText('gone-soon')).toBeNull()
     emitBatch(batchOf([[2, 'fresh']]))
     expect(screen.getByText('fresh')).toBeTruthy()
@@ -152,10 +152,10 @@ describe('LogcatPanel', () => {
   it('弹出按钮回调（dock 模式）；日志窗模式不渲染弹出入口', () => {
     const onPopOut = vi.fn()
     const { rerender } = render(<LogcatPanel deviceId="d1" runId="run-1" onPopOut={onPopOut} />)
-    fireEvent.click(screen.getByTitle(copy.logcatPopOut))
+    fireEvent.click(screen.getByRole('button', { name: copy.logcatPopOut }))
     expect(onPopOut).toHaveBeenCalledTimes(1)
     rerender(<LogcatPanel deviceId="d1" runId="run-1" />)
-    expect(screen.queryByTitle(copy.logcatPopOut)).toBeNull()
+    expect(screen.queryByRole('button', { name: copy.logcatPopOut })).toBeNull()
   })
 
   it('订阅失败展示错误条（设备未运行等）', async () => {

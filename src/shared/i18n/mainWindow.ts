@@ -663,7 +663,7 @@ const enUS: MainWindowCopy = {
   back: 'Back',
   home: 'Home',
   overview: 'Overview',
-  powerOff: 'Power off device',
+  powerOff: 'Power off',
   volumeUp: 'Volume up',
   volumeDown: 'Volume down',
   toolbarAria: 'Device buttons toolbar',

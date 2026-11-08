@@ -155,7 +155,7 @@ describe.each(['darwin', 'win32', 'linux'])('主窗日志 dock（%s）', (platfo
     render(<App />)
     fireEvent.click(toggleButton())
     await screen.findByRole('log')
-    fireEvent.click(screen.getByTitle(copy.logcatPopOut))
+    fireEvent.click(screen.getByRole('button', { name: copy.logcatPopOut }))
     await waitFor(() => expect(dialogShow).toHaveBeenCalledTimes(1))
     expect(dialogShow).toHaveBeenCalledWith(
       expect.objectContaining({ title: copy.openLogcatWindowFailed })
@@ -222,7 +222,7 @@ describe.each(['darwin', 'win32', 'linux'])('主窗日志 dock（%s）', (platfo
     render(<App />)
     fireEvent.click(toggleButton())
     await screen.findByRole('log')
-    fireEvent.click(screen.getByTitle(copy.logcatPopOut))
+    fireEvent.click(screen.getByRole('button', { name: copy.logcatPopOut }))
     expect(openLogcatWindow).toHaveBeenCalledWith('d1')
     await waitFor(() => expect(screen.queryByRole('log')).toBeNull())
     // 独立窗口态主窗宽度自由：dock 不可见即解锁

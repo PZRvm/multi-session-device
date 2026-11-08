@@ -222,6 +222,16 @@ describe('normalizeAdvancedSettings', () => {
     expect(bad.errors.orientation).toBeDefined()
     expect(bad.errors.frontCamera).toBeDefined()
     expect(bad.settings?.graphics).toBe('auto')
+    // 评审 R3：回退值跟能力默认同源（darwin=host/win=auto），不硬编码 auto
+    const hostDefaults = {
+      ...capabilitiesOf(),
+      defaults: { ...capabilitiesOf().defaults, graphics: 'host' as const }
+    }
+    const aligned = normalizeAdvancedSettings(
+      { ...valid, graphics: 'vulkan' as DeviceAdvancedSettings['graphics'] },
+      hostDefaults
+    )
+    expect(aligned.settings?.graphics).toBe('host')
   })
 
   it('网络预设逐字段校验：-netspeed none 与 -netdelay full 报错，不再共享并集（review P3）', () => {

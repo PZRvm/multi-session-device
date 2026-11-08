@@ -11,15 +11,7 @@ import { sendResync } from './media'
 import { runAdb } from './proc'
 import { ensureSession } from './session'
 import { cancelRecovery } from './recovery'
-import type { ManagerContext, StreamSession } from './types'
-
-const requireReadySession = (ctx: ManagerContext, sender: Electron.WebContents): StreamSession => {
-  if (!ctx.deps.isMainSender(sender)) throw new Error(msg('screenUnregisteredWindow'))
-  if (!ctx.active) throw new Error(msg('screenNoActiveView'))
-  const session = ctx.sessions.get(ctx.active.deviceId)
-  if (!session || session.state !== 'ready') throw new Error(msg('screenSessionNotReady'))
-  return session
-}
+import type { ManagerContext } from './types'
 
 export const registerIpc = (ctx: ManagerContext): void => {
   ipcMain.handle(
@@ -107,7 +99,12 @@ export const registerIpc = (ctx: ManagerContext): void => {
   })
 
   ipcMain.handle(IPC_CHANNELS.screenInput, async (event, raw: unknown): Promise<void> => {
-    const session = requireReadySession(ctx, event.sender)
+    // 与 ack 同理（评审 R5）：休眠/停止拆除窗口内 renderer 迟到的输入无副作用
+    // 可达——静默丢弃，不按错误收口刷控制台。载荷校验仍拒绝伪造形态。
+    if (!ctx.deps.isMainSender(event.sender)) throw new Error(msg('screenUnregisteredWindow'))
+    if (!ctx.active) return
+    const session = ctx.sessions.get(ctx.active.deviceId)
+    if (!session || session.state !== 'ready') return
     const request = validateInputRequest(raw)
     if (!request) throw new Error(msg('inputInvalidPayload'))
     if (

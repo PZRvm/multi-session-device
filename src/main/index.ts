@@ -1,5 +1,6 @@
 import { app, dialog } from 'electron'
-import { join } from 'node:path'
+import { createHash } from 'node:crypto'
+import { basename, join } from 'node:path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createMainWindow, getMainWindow } from './window'
 import {
@@ -29,8 +30,16 @@ let gotSingleInstanceLock = app.requestSingleInstanceLock()
 // 未打包的 dev 实例回退到按端口隔离的 userData 目录（自带独立锁）——多个 worktree
 // 或与安装版可同时调试；安装版语义不变（无锁即退出）。隔离目录首启为空库，属预期。
 if (!gotSingleInstanceLock && !app.isPackaged) {
+  // 后缀优先用 dev 端口；未带端口的实例按工作区目录区分（评审 R7：两个裸
+  // `npm run dev` 不再共享 default 目录互踩），跨启动稳定（同目录同后缀）
   const port = process.env['MSD_DEV_PORT']
-  const suffix = port !== undefined && /^\d+$/.test(port) ? `port-${port}` : 'default'
+  const suffix =
+    port !== undefined && /^\d+$/.test(port)
+      ? `port-${port}`
+      : `dir-${basename(process.cwd())}-${createHash('sha1')
+          .update(process.cwd())
+          .digest('hex')
+          .slice(0, 6)}`
   app.setPath('userData', join(app.getPath('userData'), 'dev-instances', suffix))
   gotSingleInstanceLock = app.requestSingleInstanceLock()
   if (gotSingleInstanceLock) {

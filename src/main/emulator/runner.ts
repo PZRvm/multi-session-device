@@ -55,6 +55,8 @@ export interface RunnerEntry {
   /** stop/cancel 共享同一份清理 Promise；失败后置空允许重试 */
   cleanup: Promise<void> | null
   closed: Promise<number | null>
+  /** spawn 失败（'error' 事件，无后续 'close'）——boot 等待据此短路，不等满超时 */
+  spawnFailure: Promise<never> | null
 }
 
 export interface RunnerDeps {
@@ -134,6 +136,9 @@ export const defaultBootProbe =
   }
 
 const defaultNow = (): number => Date.now()
+
+/** 永不落定的占位（race 用） */
+const NEVER: Promise<never> = new Promise(() => undefined)
 
 /** win32 树杀默认实现：taskkill /T 连启动器带 qemu 整树终止。恒 /F 硬杀——
  *  -no-window 模拟器无消息循环，taskkill 不带 /F 发不出 WM_CLOSE；优雅退出
@@ -218,7 +223,8 @@ export class EmulatorRunner {
         stderrChunks: [],
         stdoutChunks: [],
         cleanup: null,
-        closed: Promise.resolve(null)
+        closed: Promise.resolve(null),
+        spawnFailure: null
       }
       this.#entries.set(id, entry)
       this.#preparing.delete(id)
@@ -373,9 +379,14 @@ export class EmulatorRunner {
       child.once('close', (code) => resolve(code ?? null))
     })
     child.once('close', (code) => this.#onClosed(entry, code ?? -1))
-    // spawn 失败（ENOENT 等）只发 'error' 事件：无监听会以未捕获异常击穿主进程，
-    // 且 boot 等待侧毫无痕迹——记日志并按早期退出收口
-    child.once('error', (error) => console.error(`[runner] spawn 失败：${String(error)}`))
+    entry.spawnFailure = null
+    // spawn 失败（ENOENT 等）只发 'error' 事件且无后续 'close'：记日志并短路
+    // boot 等待（否则要耗满 BOOT_TIMEOUT 才收口——评审 R2）
+    child.once('error', (error) => {
+      console.error(`[runner] spawn 失败：${String(error)}`)
+      entry.spawnFailure = Promise.reject(new Error(`spawn: ${String(error)}`))
+      entry.spawnFailure.catch(() => undefined) // 竞败分支不产生 unhandled rejection
+    })
     child.stderr?.on('data', (chunk: Buffer) => pushTailChunk(entry.stderrChunks, chunk))
     child.stdout?.on('data', (chunk: Buffer) => pushTailChunk(entry.stdoutChunks, chunk))
   }
@@ -396,10 +407,13 @@ export class EmulatorRunner {
   async #runBoot(entry: RunnerEntry): Promise<void> {
     for (let attempt = 0; ; attempt += 1) {
       this.#spawnFor(entry)
-      // boot 等待与进程提前退出竞争：崩溃不能傻等超时
-      const earlyExit: Promise<never> = entry.closed.then((code): never => {
-        throw new EarlyExitError(code ?? -1)
-      })
+      // boot 等待与进程提前退出/spawn 失败竞争：崩溃不能傻等超时（评审 R2 短路）
+      const earlyExit: Promise<never> = Promise.race([
+        entry.closed.then((code): never => {
+          throw new EarlyExitError(code ?? -1)
+        }),
+        entry.spawnFailure ?? NEVER
+      ])
       earlyExit.catch(() => undefined) // 竞败分支不产生 unhandled rejection
       try {
         // 接纳结果先交回 devices 登记，再探测 boot；准备 Promise 的层数不影响此顺序。
