@@ -247,3 +247,27 @@ describe('useListDragReorder 手势（plan 2026-11-09-device-list-drag-reorder�
     expect(onReorder).not.toHaveBeenCalled()
   })
 })
+
+describe('useListDragReorder 瞬态对账（review P3-B 补全）', () => {
+  it('行在拖拽外消失：effect 即清瞬态，插入线不留到下一次拖拽', async () => {
+    const onReorder = vi.fn()
+    const view = render(<Harness ids={['a', 'b']} rendered={['a', 'b']} onReorder={onReorder} />)
+    const rowA = screen.getByTestId('row-a')
+    const rowB = screen.getByTestId('row-b')
+    stubMidpoint(rowB, true)
+    const dt = dataTransfer()
+    fireEvent.pointerDown(rowA)
+    fireEvent.dragStart(rowA, { dataTransfer: dt })
+    await act(async () => {
+      dragOverWith(rowB, 3, dt)
+    })
+    expect(rowB.getAttribute('data-drop-pos')).toBe('before')
+    // b 被删（ids 收缩）：插入线立即消失（读取时对账）；dragId 存活（a 仍在）拖拽继续
+    view.rerender(<Harness ids={['a']} rendered={['a']} onReorder={onReorder} />)
+    expect(document.querySelector('[data-drop-pos]')).toBeNull()
+    expect(rowA.className).toContain('drag-source')
+    // a 也被删：源行半透明同步消失
+    view.rerender(<Harness ids={[]} rendered={[]} onReorder={onReorder} />)
+    expect(document.querySelector('.drag-source')).toBeNull()
+  })
+})

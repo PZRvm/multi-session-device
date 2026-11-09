@@ -538,3 +538,48 @@ describe('DeviceListPane 拖拽挂接（plan 2026-11-09）', () => {
     vi.restoreAllMocks()
   })
 })
+
+describe('DeviceListPane review 修复批 2（P3-B/C/D）', () => {
+  it('review P3-D：deleting 行进重排宇宙（整单校验）但不挂标识不可拖不可锚', async () => {
+    const onReorderDevices = vi.fn()
+    renderPane({
+      devices: [
+        baseDevice,
+        { ...baseDevice, id: 'd-del', name: '删除中机', status: 'deleting' as const },
+        { ...baseDevice, id: 'd2', name: '第二台' }
+      ],
+      onReorderDevices,
+      sourceBucket: 'app-owned'
+    })
+    expect(document.querySelector('[data-avd-drag-id="d-del"]')).toBeNull()
+    const rowD1 = document.querySelector('[data-avd-drag-id="d1"]') as HTMLElement
+    const rowD2 = document.querySelector('[data-avd-drag-id="d2"]') as HTMLElement
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return { top: this === rowD2 ? 15 : 0, height: 0 } as DOMRect
+    })
+    const dt = dataTransferOf('application/x-msd-avd')
+    fireEvent.pointerDown(rowD1)
+    fireEvent.dragStart(rowD1, { dataTransfer: dt })
+    await act(async () => {
+      dragOverWith(rowD2, 20, dt)
+    })
+    fireEvent.drop(rowD2, { dataTransfer: dt })
+    // 全序含 deleting 行（相对位保持）：d1 移到 d2 之后
+    expect(onReorderDevices).toHaveBeenCalledWith(['d-del', 'd2', 'd1'])
+    vi.restoreAllMocks()
+  })
+
+  it('review P3-C：非空列表 + loadError 显示读取失败横条与重试；空库不重复显示', () => {
+    const onRetryLoad = vi.fn()
+    renderPane({ devices: [baseDevice], loadError: 'boom', onRetryLoad })
+    expect(screen.getByText(format(copy.loadFailed, { message: 'boom' }))).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: copy.retryLoad }))
+    expect(onRetryLoad).toHaveBeenCalledTimes(1)
+    cleanup()
+    // 空库：横条条件不成立，空分支既有提示不重复
+    renderPane({ loadError: 'boom' })
+    expect(screen.getAllByText(format(copy.loadFailed, { message: 'boom' }))).toHaveLength(1)
+  })
+})

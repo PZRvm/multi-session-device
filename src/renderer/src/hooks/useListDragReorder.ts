@@ -131,9 +131,12 @@ export const useListDragReorder = ({
       onDrop: handleDrop,
       onDragEnd: handleDragEnd
     },
+    // 视觉态读取时对 ids 对账（review P3-B 补全）：瞬态指向已消失行时不渲染——
+    // 拖拽外删除（dragend 不达容器）不留插入线/半透明滞留；内部瞬态由 dragover
+    // 自愈与下一次 dragstart 收口
     rowVisual: (id) => ({
-      isSource: dragId === id,
-      dropPos: hint?.id === id ? hint.pos : null
+      isSource: dragId !== null && ids.includes(dragId) && dragId === id,
+      dropPos: hint !== null && ids.includes(hint.id) && hint.id === id ? hint.pos : null
     })
   }
 }

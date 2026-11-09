@@ -290,13 +290,13 @@ const DeviceListPane = ({
   const { active, folded } = splitByOriginView(devices, sourceBucket)
   // 拖拽换序（plan 2026-11-09-device-list-drag-reorder）：AVD 主区可拖——hook 吃已提交
   // 设备全序（含折叠区设备），drop 移动可见子序列在全序中的相对位；折叠区行不带
-  // 标识不可拖不可锚；read-only 禁拖（canDrag 行级门 + 主进程 assertMetaWritable 双闸）
+  // 标识不可拖不可锚；read-only 禁拖（canDrag 行级门 + 主进程 assertMetaWritable 双闸）。
+  // 宇宙只排除 creating（pending 行不在 metas）；deleting 行仍在 acceptedMetas——
+  // 进宇宙保整单校验通过（review P3-D），行级仍不可拖不可锚（即将离场）
   const avdDrag = useListDragReorder({
     mime: 'application/x-msd-avd',
     rowAttr: 'data-avd-drag-id',
-    ids: devices
-      .filter((device) => device.status !== 'creating' && device.status !== 'deleting')
-      .map((device) => device.id),
+    ids: devices.filter((device) => device.status !== 'creating').map((device) => device.id),
     canDrag: () => metaWritable,
     onReorder: onReorderDevices
   })
@@ -386,6 +386,16 @@ const DeviceListPane = ({
       {/* 单一滚动容器：AVD 分区（或空库提示）之后紧跟真机区——不钉在栏底（用户
           2026-10-13 反馈：真机列表要贴上方列表下方） */}
       <div className="list">
+        {/* 重排失败且重拉也失败（review P3-C）：乐观序滞留时给出原因与重试——复用
+            空库同款文案与链接（零新词条）；重排成功但重拉成功时列表自行归位，不提示 */}
+        {devices.length > 0 && loadError !== null ? (
+          <div className="load-error-line" role="status">
+            {format(copy.loadFailed, { message: loadError })}{' '}
+            <button type="button" className="retry-link" onClick={onRetryLoad}>
+              {copy.retryLoad}
+            </button>
+          </div>
+        ) : null}
         {devices.length === 0 ? (
           loadError !== null ? (
             // invoke 级失败不经过 storeHealth——按读取失败展示并保留重试（plan 差距表）
@@ -407,8 +417,8 @@ const DeviceListPane = ({
           <>
             <div className="origin-main" {...avdDrag.listHandlers}>
               {active.map((device) => {
-                // 过渡行（creating/deleting 不在 acceptedMetas）不参与拖拽：无标识即
-                // 不可拖不可锚（plan 2026-11-09）
+                // creating（不在 metas）与 deleting（即将离场）行不可拖不可锚：
+                // 无标识即不参与手势；deleting 仍在重排宇宙里保整单校验（review P3-D）
                 const committed = device.status !== 'creating' && device.status !== 'deleting'
                 const visual = avdDrag.rowVisual(device.id)
                 return rowHandlers(
@@ -630,6 +640,15 @@ const Wrapper = styled.div`
     font-size: 12px;
     line-height: 1.7;
     color: var(--board-ink-dim);
+  }
+
+  /* 重排失败且重拉也失败（review P3-C）：非空列表上的读取失败横条 */
+  .load-error-line {
+    padding: 8px 12px;
+    font-size: 11px;
+    line-height: 1.7;
+    color: var(--danger);
+    border-bottom: 1px solid var(--board-hairline);
   }
 
   .retry-link {
