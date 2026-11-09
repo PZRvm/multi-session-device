@@ -1,6 +1,6 @@
 ---
 description: 左侧列表拖拽排序——AVD 主区与真机区行拖拽换序：AVD 走 devices:reorder 整单重排（数组序即持久化序，零 schema 变更），真机走 applyOrder 合并层 + external-order.json 偏好存储
-status: in_progress
+status: completed
 created: 2026-11-09
 ---
 
@@ -173,3 +173,15 @@ DeviceRow `Wrapper`（DeviceRow.tsx:416）与 DeviceListPane 的 `.external-row`
 - 既有改动：external.test 注册通道数 9→10（新增 reorder 通道）。
 - 全量 **1683 通过 / 8 原有跳过 / 0 失败**；typecheck 双侧 0 错；lint 0 告警；build 通过。
 - 真机验收**未做**（上方清单 ①–⑧）。
+
+### Phase 5：review（2026-11-09 合并前，只记录不修）
+
+结论总体 pass、无 P1——1 项 P2（陈旧拖拽态下外来源拖放可被接受且无效 drop 不拦 Electron 默认导航）+ 4 项 P3（瞬态滞留诱因根 / reorder 失败重拉失败时无提示 / 删除在途整单拒绝行弹回 / 档位边界核对），[处置记录](../notes/issue/2026-11/2026-11-09-device-list-drag-reorder-review.md)。
+
+### review 修复批（78ef1ce，2026-11-09）
+
+P2-A 清零 + P3-B 诱因根同批处理：dragover MIME 根闸 + drop 无条件拦默认导航 + dragover 自愈；新增 2 项回归，全量 1685 通过。P3 三项留置 open（reorder 失败提示 / deleting 在途弹回 / 档位边界），见 issue 文件。
+
+### Phase 6：收尾
+
+- **2026-11-09 用户真机验收通过**：Done criteria 清单 ①–⑧ 走查通过（AVD/真机重启保留、不误触按钮、重命名行不拖、read-only 禁拖、折叠区与过渡行不可锚、拔插回原位、状态翻转不冲序）。本 plan 翻 completed，随修复批一并合并 dev。

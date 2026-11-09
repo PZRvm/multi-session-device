@@ -23,5 +23,5 @@ description: 左侧列表拖拽排序交付——AVD 主区与真机区行拖拽
 
 ## 后续
 
-- 真机验收 ①–⑧ → plan 翻 completed；按 git-workflow squash 合回 dev。
-- Phase 5 review 未跑（本轮自测即 Phase 4；合并前可按流程补一轮只记录不修的 review）。
+- 2026-11-09 用户真机验收通过（①–⑧），plan 翻 completed。
+- Phase 5 review：总体 pass 无 P1；P2 一项（外来源拖放可被陈旧拖拽态误接受）随修复批 78ef1ce 清零，P3 三项留置 open（[issue 记录](../../../notes/issue/2026-11/2026-11-09-device-list-drag-reorder-review.md)）。合并 dev。

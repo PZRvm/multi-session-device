@@ -9,13 +9,13 @@ status: open
 
 ## Findings
 
-### P2-A（已修复——修复批 a6b0f75 后的 harden commit）
+### P2-A（已修复——修复批 78ef1ce，2026-11-09）
 
 **陈旧拖拽态下外来源拖放可被接受，且无效 drop 分支不拦 Electron 默认导航。** `useListDragReorder` 的 dragover 只以本地 dragId 判"本列表发起"：拖拽中源行被删（如删除在途完成）时 dragend 不达容器，dragId/hint 滞留；此后外来源拖放（典型：从 Finder 拖 APK 文件入列表）会被 dragover 误接受（preventDefault + 显示插入线），drop 落进无效分支直接 return（不 preventDefault）——Electron 对未拦的 drop 默认导航到文件，窗口白屏。低频（需删删竞窗 + 用户随后拖文件过列表）高损。
 
 **处理**：修复批三件——① dragover 加 MIME 根闸（`dataTransfer.types.includes(mime)`，外来源一律系统「不可投放」；AVD 与真机两列表 MIME 不同，跨列表互不干扰）；② drop 入口无条件 preventDefault（无效分支同样拦默认导航）；③ dragover 自愈：dragId 不在 ids 时 finish() 清瞬态。测试：外来源即使瞬态滞留也不被接受 / 自愈后无 hint 无 IPC / 无效 drop 被拦。全量回归绿。
 
-### P3-B（已修复，同修复批；诱因根仍留观察）
+### P3-B（已修复，同修复批 78ef1ce；视觉滞留边界留观察）
 
 P2-A 的诱因根：拖拽中源行被删 → dragend 不达容器 → hook 瞬态滞留，直到同列表下一次 dragstart 复位；期间插入线可能视觉滞留。修复批的自愈逻辑消除了危害路径（外来源不可再被接受），但「无后续交互时插入线视觉滞留」仍可能（下一次同列表拖拽即复位）。留观察，不另立任务。
 
