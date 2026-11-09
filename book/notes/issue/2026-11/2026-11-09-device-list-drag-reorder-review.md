@@ -15,19 +15,23 @@ status: open
 
 **处理**：修复批三件——① dragover 加 MIME 根闸（`dataTransfer.types.includes(mime)`，外来源一律系统「不可投放」；AVD 与真机两列表 MIME 不同，跨列表互不干扰）；② drop 入口无条件 preventDefault（无效分支同样拦默认导航）；③ dragover 自愈：dragId 不在 ids 时 finish() 清瞬态。测试：外来源即使瞬态滞留也不被接受 / 自愈后无 hint 无 IPC / 无效 drop 被拦。全量回归绿。
 
-### P3-B（已修复，同修复批 78ef1ce；视觉滞留边界留观察）
+### P3-B（已修复——修复批 78ef1ce 消除危害路径，修复批 2 消除视觉滞留）
 
-P2-A 的诱因根：拖拽中源行被删 → dragend 不达容器 → hook 瞬态滞留，直到同列表下一次 dragstart 复位；期间插入线可能视觉滞留。修复批的自愈逻辑消除了危害路径（外来源不可再被接受），但「无后续交互时插入线视觉滞留」仍可能（下一次同列表拖拽即复位）。留观察，不另立任务。
+P2-A 的诱因根：拖拽中源行被删 → dragend 不达容器 → hook 瞬态滞留，直到同列表下一次 dragstart 复位；期间插入线可能视觉滞留。修复批的自愈逻辑消除了危害路径（外来源不可再被接受），但「无后续交互时插入线视觉滞留」仍可能（下一次同列表拖拽即复位）。修复批 2（c4590b0）补全：rowVisual 读取时对 ids 对账——瞬态指向已消失行即不渲染，插入线/半透明不再滞留到下一次拖拽（effect 方案被 react-hooks/set-state-in-effect 拦下，读取时守卫零级联渲染）。
 
-### P3-C（open）
+### P3-C（已修复——修复批 2 c4590b0）
 
-`deviceStore.reorder` 失败且重拉也失败：`loadError` 只在列表为空时显示（DeviceListPane 空库提示分支），非空列表下乐观序滞留至下一次 `devices:changed` 推送修正。最终一致但过程无提示。建议方向：reorder 失败路径给一次性轻提示（对齐 browser 的 message.error 先例）——本项目无 toast 体系，另立任务定夺承载形式。
+`deviceStore.reorder` 失败且重拉也失败：`loadError` 只在列表为空时显示（DeviceListPane 空库提示分支），非空列表下乐观序滞留至下一次 `devices:changed` 推送修正。最终一致但过程无提示。
 
-### P3-D（open）
+**处理**：DeviceListPane 非空列表上方加读取失败横条（`loadError !== null && devices.length > 0`，复用 loadFailed/retryLoad 文案零新词条）——reorder 失败且重拉也失败时用户看到原因与重试入口；重拉成功的场景列表已自行归位（拖拽弹回本身即反馈），不打扰。设计取舍：按「过程无提示」的根因（重拉也失败）定向提示，而非对每次失败弹 toast。
 
-删除在途（deleting 行仍在 acceptedMetas）时发起拖拽重排：可拖宇宙按 plan 口径排除 deleting 行，ids 长度 ≠ metas 长度 → 主进程整单拒绝 → renderer 重拉 → 行弹回原位，无错误提示。低频竞窗。建议方向：整单拒绝路径按 id 集差异区分「陈旧」与「过渡态」给差异化文案，或 deleting 在途时暂时收窄重排范围。另立任务。
+### P3-D（已修复——修复批 2 c4590b0）
 
-### P3-E（open，不回填定档）
+删除在途（deleting 行仍在 acceptedMetas）时发起拖拽重排：可拖宇宙按 plan 口径排除 deleting 行，ids 长度 ≠ metas 长度 → 主进程整单拒绝 → renderer 重拉 → 行弹回原位，无错误提示。低频竞窗。
+
+**处理**：deleting 行仍在 acceptedMetas——纳入重排宇宙（ids 只排除 creating），拖拽期间删除完成也能整单校验通过不再弹回；行级仍不可拖不可锚（即将离场）。删除在 dragstart 与 drop 之间真正提交（meta 已移除）时，陈旧 ids 走既有整单拒绝 → 重拉收敛路径。
+
+### P3-E（open，定档备忘不回填——唯一留置项）
 
 档位边界：本批新增 2 条 IPC 通道，触及项目 always-L 域「shared IPC contracts」。hibernation 批（3 条通道）同形先例按 M 跑，仓库实践把"功能域内新增通道"按 M 档处理；若严格按 task-tiers 升 L，缺的门只有 ADR 触发检查——三项触发（难逆/合理人可另判/架构边界）均不成立。记录不回填；后续新增通道批可在一句话 motive 里显式核对该域。
 

@@ -185,3 +185,7 @@ P2-A 清零 + P3-B 诱因根同批处理：dragover MIME 根闸 + drop 无条件
 ### Phase 6：收尾
 
 - **2026-11-09 用户真机验收通过**：Done criteria 清单 ①–⑧ 走查通过（AVD/真机重启保留、不误触按钮、重命名行不拖、read-only 禁拖、折叠区与过渡行不可锚、拔插回原位、状态翻转不冲序）。本 plan 翻 completed，随修复批一并合并 dev。
+
+### review 修复批 2（c4590b0，2026-11-09——用户批复修复 review 遗留项）
+
+P3-B/C/D 清零：deleting 行纳入重排宇宙（仍不可拖不可锚，删除在途拖拽不再弹回）；非空列表读取失败横条（重拉也失败时给原因与重试，零新词条）；rowVisual 读取时对 ids 对账（拖拽外删除不留瞬态滞留；effect 方案被 react-hooks/set-state-in-effect 拦下改读取时守卫）。新增 3 项回归，全量 1688 通过。P3-E（档位备忘）按原裁定留置 open。
