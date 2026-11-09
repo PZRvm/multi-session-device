@@ -119,6 +119,7 @@ description: 一期 Android 需求唯一依据——应用内新建隔离模拟�
 - 作为测试人员，我要把物理设备接入同一套设备列表和投屏操控。
   - AC：USB 插入即出现在设备列表，手机授权后可投屏操控；无线调试支持 Android 11+ 的局域网扫描（`adb mdns services`）与手动 IP+端口+配对码，已配对直接连接；Android ≤10 仅支持已处 tcpip 5555 模式的直连。
   - AC：真机定位「操控同一台设备的窗口」：无账号隔离承诺，断开连接不关机、登录态不动；仅提供连接/断开/投屏，不提供创建/删除/改配置。
+  - AC：真机列表支持拖拽调序（plan 2026-11-09-device-list-drag-reorder）：用户序重启保留（external-order.json 偏好），断线设备重插回原位；插入/拔出与状态翻转不冲顺序。
   - AC：不引入 QtScrcpy 等外部投屏依赖，复用内置 scrcpy-server；无线发现以 mDNS 为主、手动 IP 为一等兜底（platform-tools 34–36 的 mDNS 回归在案）。
 
 ### 2.4 Non-Goals（一期不做）

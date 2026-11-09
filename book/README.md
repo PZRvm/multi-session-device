@@ -342,6 +342,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-06-devices-harness-multidomain.md](notes/learn/2026-11/2026-11-06-devices-harness-multidomain.md) — devices 域测试 harness 的三个坑：多域测试 handlerFor 必须取最后注册、clearAllMocks 不清 per-test 实现、EmulatorRunner 工厂参数是 () => 值
 - [2026-11-06-emulator-snapshot-save-protocol.md](notes/learn/2026-11/2026-11-06-emulator-snapshot-save-protocol.md) — emulator console 的 snapshot save OK 只是受理而非写盘完成；缺失/半写/配置变化快照都会静默冷启动回退——完成判定与恢复复核的实测协议
 - [2026-11-06-headless-auto-gpu-selection.md](notes/learn/2026-11/2026-11-06-headless-auto-gpu-selection.md) — headless 模拟器的 auto 不保证主机 GPU；当前 M4 实测 auto 选 SwiftShader，必须以有效配置和 SurfaceFlinger 核验
+- [2026-11-09-jsdom-drag-event-testing.md](notes/learn/2026-11/2026-11-09-jsdom-drag-event-testing.md) — jsdom 下测试 HTML5 拖拽手势的三道坎——fireEvent 透传不了 clientY（原生事件 + defineProperty + act）、rect 桩要走原型级 spy、vi.mock fs 配 resetModules 别用 importOriginal
 
 ### notes/summary/2026-10/
 
@@ -384,6 +385,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-05-wireless-recovery-review-fixes.md](notes/summary/2026-11/2026-11-05-wireless-recovery-review-fixes.md) — 三项无线修复 P2 已修正，1597 项测试通过，c2469d5 已 fast-forward 合并 dev 且合并前后门禁通过
 - [2026-11-06-bocode-upgrade.md](notes/summary/2026-11/2026-11-06-bocode-upgrade.md) — BoCode 已切换到 79426a9 官方英文四技能，同步任务分级及状态索引，保留项目布局和发布约定，目录导航一项 P3 待补
 - [2026-11-06-emulator-hibernation.md](notes/summary/2026-11/2026-11-06-emulator-hibernation.md) — 模拟器手动休眠（官方命名快照+进程退出）与停止态删除入口的完整交付：协议实证、状态机、门控与验证证据
+- [2026-11-09-device-list-drag-reorder.md](notes/summary/2026-11/2026-11-09-device-list-drag-reorder.md) — 左侧列表拖拽排序交付——AVD 主区与真机区行拖拽换序；AVD 走 devices:reorder 整单重排（数组序即持久化序），真机走 applyOrder 合并层 + external-order.json；手势零依赖照 multi-session-browser 先例
 
 ### notes/task/
 
@@ -534,4 +536,4 @@ description: Master index of the book — the map of every document. Regenerate 
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 425 documents -->
+<!-- 427 documents -->

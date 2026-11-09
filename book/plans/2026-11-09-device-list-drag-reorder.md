@@ -1,6 +1,6 @@
 ---
 description: 左侧列表拖拽排序——AVD 主区与真机区行拖拽换序：AVD 走 devices:reorder 整单重排（数组序即持久化序，零 schema 变更），真机走 applyOrder 合并层 + external-order.json 偏好存储
-status: draft
+status: in_progress
 created: 2026-11-09
 ---
 
@@ -152,3 +152,24 @@ DeviceRow `Wrapper`（DeviceRow.tsx:416）与 DeviceListPane 的 `.external-row`
 1. 全量测试、typecheck、lint、build 通过；无断言削弱。
 2. 真机验收：① AVD 拖 3 台换序 → 重启保留；② 真机拖序 → 重启保留；③ 拖拽不误触行内按钮；④ 重命名中的行不触发拖拽；⑤ read-only 态行不可拖；⑥ 折叠区与过渡行不可拖不可锚；⑦ 真机拔插后其余设备序位不变、重插回原位；⑧ unauthorized↔device 状态翻转不冲顺序。
 3. Phase 5/6 只记录不修；summary/learn 落 `book/notes/`；`npm run book:index` 通过。
+
+## 实施记录 — 2026-11-09（worktree feature/device-list-drag-reorder，Build 1–7 完成，真机验收待做）
+
+### Phase 3：实现
+
+- **externalOrder**（新 `src/main/devices/externalOrder.ts`）：theme/store.ts 骨架（load 即清零重读 / 损坏按缺省起步 / tmp+rename / 落盘串行队列、失败告警不回滚）；`applyOrder` 纯函数稳定合并；`ensureOrderLoaded` memoized 读盘门。
+- **external.ts**：applyList 首行合并层（`applyOrder(载荷, orderNow())`）；`devicesExternalReorder` handler（requireMain + 整单校验 + 断线条目保留合成新序 + broadcast）；注册尾 `ensureOrderLoaded().then(openSocket)`。
+- **AVD 链**：`reorder.ts`（新，照 renameDevice 形状：ensureLoaded → assertMetaWritable → commitMetas 内整单校验重排 → broadcastChanged → snapshotNow）；ipc handler（requireSender 'main' + isReorderInput）；`errors.ts` actionReorder 三语；`ipc-channels` 两通道。
+- **renderer**：`useListDragReorder`（新，事件委托 + pointerdown 原点取消 + 自定义 MIME + 中点锚定 + 零位移短路 + dragend 清态）；DeviceRow/ExternalRow 行根挂 `data-*-drag-id`/`draggable`/`data-drop-pos`/`drag-source`；DeviceListPane 双实例挂接（AVD 可拖宇宙 = 已提交设备含折叠区，过渡行不挂标识；真机区全状态可拖）；两 store reorder（乐观引用移动 + 失败重拉）；preload 两方法；App 传参。
+- **视觉**：DeviceRow Wrapper 与 `.external-row` 各加 `position: relative` + 禁选字/0.45 半透明/2px 墨级插入线三件，灰阶零动画零新 UI 文案。
+
+**偏差记录 1**：文件清单的「`src/main/ipc/index.ts` 装配先行」未按原文落地——改为 `ensureOrderLoaded` memoized 门挂 `registerExternalIpc` 尾（首连前读盘），比"装配处先调"更强：无论装配顺序如何首帧合并必有用户序，且 ipc/index.ts 零改动。
+
+**偏差记录 2**：i18n 实际改动为 errors.ts 一个错误键 `actionReorder`（三语，read-only 拒绝文案用），与简报"仅 errors.ts 加一个错误键"一致；UI 文案零新增，视觉三件无文本。
+
+### Phase 4：验证
+
+- 新增测试 33 项：externalOrder 12（读写往返/损坏回落/上限/串行/applyOrder 矩阵）+ external 域 6（载荷与整单校验/合法重排/帧不冲序/状态翻转/断线保留重插回位）+ AVD 域 5（合法重排 revision+1/陈旧全序拒绝不断队列/read-only/非主窗）+ 手势 hook 7（MIME 与源行/原点取消/canDrag/外来源放行/before-after 合成/零位移/源行消失）+ 挂接 5（标识矩阵/折叠区展开也不挂/read-only 行/真机行/两条 drop 链）+ DeviceRow 重命名禁拖 1 + store 5（AVD 乐观-失败-pending 跳过、真机乐观-失败）。
+- 既有改动：external.test 注册通道数 9→10（新增 reorder 通道）。
+- 全量 **1683 通过 / 8 原有跳过 / 0 失败**；typecheck 双侧 0 错；lint 0 告警；build 通过。
+- 真机验收**未做**（上方清单 ①–⑧）。
