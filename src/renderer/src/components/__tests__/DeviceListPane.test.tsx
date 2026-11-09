@@ -422,14 +422,18 @@ const dragOverWith = (el: Element, clientY: number, dt: unknown): boolean => {
   Object.defineProperty(event, 'dataTransfer', { value: dt })
   return el.dispatchEvent(event)
 }
-const dataTransferOf = (): {
+const dataTransferOf = (
+  mime: string
+): {
   setData: ReturnType<typeof vi.fn>
   effectAllowed: string
   dropEffect: string
+  types: string[]
 } => ({
   setData: vi.fn(),
   effectAllowed: '',
-  dropEffect: ''
+  dropEffect: '',
+  types: [mime]
 })
 
 describe('DeviceListPane 拖拽挂接（plan 2026-11-09）', () => {
@@ -494,7 +498,7 @@ describe('DeviceListPane 拖拽挂接（plan 2026-11-09）', () => {
     ) {
       return { top: this === rowD2 ? 15 : 0, height: 0 } as DOMRect
     })
-    const dt = dataTransferOf()
+    const dt = dataTransferOf('application/x-msd-avd')
     fireEvent.pointerDown(rowD1)
     fireEvent.dragStart(rowD1, { dataTransfer: dt })
     // d2 中点 15 < clientY 20 → after；一次拖放（首个 drop 即结束手势）
@@ -523,7 +527,7 @@ describe('DeviceListPane 拖拽挂接（plan 2026-11-09）', () => {
     ) {
       return { top: this === rowB ? 15 : 0, height: 0 } as DOMRect
     })
-    const dt = dataTransferOf()
+    const dt = dataTransferOf('application/x-msd-external')
     fireEvent.pointerDown(rowA)
     fireEvent.dragStart(rowA, { dataTransfer: dt })
     await act(async () => {

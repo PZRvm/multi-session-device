@@ -75,8 +75,14 @@ export const useListDragReorder = ({
   }
 
   const handleDragOver = (event: DragEvent<HTMLElement>): void => {
-    // 非本容器发起的拖拽（外来源/跨区）不 preventDefault——系统「不可投放」光标
-    if (dragId === null) return
+    // 非本容器发起的拖拽（外来源/跨区）不 preventDefault——系统「不可投放」光标；
+    // MIME 复核是根闸：瞬态滞留（拖拽中源行被删，review P2-A）后外来源拖放不得被接受
+    if (dragId === null || !event.dataTransfer.types.includes(mime)) return
+    // 自愈：源行已消失（review P3-B）→ 滞留瞬态即清，此后外来源由 MIME 门挡住
+    if (!ids.includes(dragId)) {
+      finish()
+      return
+    }
     const row = rowOf(event.target)
     const id = row?.getAttribute(rowAttr) ?? null
     if (row === null || id === null) {
@@ -97,11 +103,12 @@ export const useListDragReorder = ({
   }
 
   const handleDrop = (event: DragEvent<HTMLElement>): void => {
+    // 无条件拦 Electron 默认 drop 导航（白屏，review P2-A）：无效分支同样拦下
+    event.preventDefault()
     if (dragId === null || hint === null || !ids.includes(dragId) || !ids.includes(hint.id)) {
       finish()
       return
     }
-    event.preventDefault()
     const without = ids.filter((entry) => entry !== dragId)
     const anchorIdx = without.indexOf(hint.id)
     if (anchorIdx >= 0) {
