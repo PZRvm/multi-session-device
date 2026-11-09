@@ -4,6 +4,7 @@ import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
 import type { Device, DeviceAvailability, DeviceStatus } from '@shared/types'
 import { useCopy } from '../hooks/useCopy'
+import type { RowDragProps } from '../hooks/useListDragReorder'
 import Input from './Input'
 import RecordingStatus from './RecordingStatus'
 import { PopoverIconButton } from './PopoverIconButton'
@@ -45,8 +46,11 @@ type DeviceRowProps = {
   onEdit: () => void
   /** read-only 下尝试重命名（双击/F2）时的反馈入口（review P3——静默 no-op 无说明） */
   onRenameBlocked?: () => void
-  /** 跨来源桶下尝试修改（重命名路径）时的反馈入口 */
+  /** 跨来源桶设备尝试修改（重命名路径）时的反馈入口 */
   onCrossBucketBlocked?: () => void
+  /** 拖拽换序（plan 2026-11-09）：行根挂标识与视觉态；折叠区/过渡行不传即不可拖
+   *  不可锚；renaming 态行内自禁拖（输入框需可选可编辑） */
+  drag?: RowDragProps
 }
 
 /** 设备行：ListRow 视觉（选中整行反白）+ 状态点 + 行内启停/取消/复制/删除 + 双击/F2/选中态 Enter 行内重命名。
@@ -69,7 +73,8 @@ const DeviceRow = ({
   onRename,
   onEdit,
   onRenameBlocked,
-  onCrossBucketBlocked
+  onCrossBucketBlocked,
+  drag
 }: DeviceRowProps): React.JSX.Element => {
   const [renaming, setRenaming] = useState(false)
   const [draft, setDraft] = useState(device.name)
@@ -150,6 +155,10 @@ const DeviceRow = ({
       aria-keyshortcuts="F2"
       title={device.lastError?.message}
       tabIndex={0}
+      data-avd-drag-id={drag ? device.id : undefined}
+      draggable={drag ? drag.draggable && !renaming : undefined}
+      data-drop-pos={drag?.dropPos ?? undefined}
+      className={drag?.isSource ? 'drag-source' : undefined}
       onClick={onSelect}
       onDoubleClick={startRename}
       onKeyDown={(event) => {
@@ -414,6 +423,7 @@ const DeviceRow = ({
 }
 
 const Wrapper = styled.div`
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -425,6 +435,35 @@ const Wrapper = styled.div`
 
   &:hover {
     background: var(--board-bg-raised);
+  }
+
+  /* 拖拽换序（plan 2026-11-09）：可拖行禁选字（编辑态行 draggable=false 天然可选可编）；
+     源行半透明 + 目标行插入线——灰阶墨级，排序是纯结构操作不进主题强调色 */
+  &[draggable='true'] {
+    user-select: none;
+  }
+
+  &.drag-source {
+    opacity: 0.45;
+  }
+
+  &[data-drop-pos='before']::before,
+  &[data-drop-pos='after']::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--board-ink);
+    pointer-events: none;
+  }
+
+  &[data-drop-pos='before']::before {
+    top: -1px;
+  }
+
+  &[data-drop-pos='after']::after {
+    bottom: -1px;
   }
 
   &[aria-current] {

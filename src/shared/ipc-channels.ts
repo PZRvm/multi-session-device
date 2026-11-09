@@ -31,6 +31,8 @@ export const IPC_CHANNELS = {
   devicesStart: 'devices:start',
   devicesStop: 'devices:stop',
   devicesCancelStart: 'devices:cancel-start',
+  /** 整单重排（plan 2026-11-09）：数组序即持久化序，零 schema 变更 */
+  devicesReorder: 'devices:reorder',
   // ---- 休眠域（plan 2026-11-06-emulator-hibernation；仅登记主窗）----
   /** 运行设备手动休眠：保存命名快照 → 优雅退出进程 → 投影 hibernated */
   devicesHibernate: 'devices:hibernate',
@@ -48,6 +50,8 @@ export const IPC_CHANNELS = {
   devicesExternalList: 'devices:external-list',
   /** main → 主窗：外部设备全量推送（main 侧 diff，变化才推） */
   devicesExternalChanged: 'devices:external-changed',
+  /** 真机用户序重排（plan 2026-11-09；整单校验，内存序即时生效，external-order.json 尽力落盘） */
+  devicesExternalReorder: 'devices:external-reorder',
   // ---- 真机无线域（plan 2026-10-15-real-device-wireless；仅登记主窗）----
   /** 无线扫描：mDNS 服务 + 本网段 5555 探活，返回候选列表 */
   wirelessRecoveryGet: 'wireless:recovery-get',

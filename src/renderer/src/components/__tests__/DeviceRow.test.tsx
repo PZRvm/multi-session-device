@@ -698,3 +698,32 @@ describe('WHPX 缺失引导按钮（plan 2026-10-22-windows-emulator-env）', ()
     expect(screen.queryByRole('button', { name: copy.openWindowsFeatures })).toBeNull()
   })
 })
+
+it('拖拽挂接（plan 2026-11-09）：drag prop 挂行根标识与可拖态；重命名中禁拖', () => {
+  const { container } = render(
+    <DeviceRow
+      device={baseDevice}
+      selected={false}
+      storeTrusted
+      metaWritable
+      onSelect={vi.fn()}
+      onStart={vi.fn()}
+      onStop={vi.fn()}
+      onCancelStart={vi.fn()}
+      onHibernate={vi.fn()}
+      onResume={vi.fn()}
+      onCopySerial={vi.fn()}
+      onDelete={vi.fn()}
+      onRename={vi.fn()}
+      onEdit={vi.fn()}
+      drag={{ draggable: true, isSource: false, dropPos: null }}
+    />
+  )
+  const row = container.firstElementChild as HTMLElement
+  expect(row.getAttribute('data-avd-drag-id')).toBe('d1')
+  expect(row.getAttribute('draggable')).toBe('true')
+  // 双击进重命名：输入框需可选可编，行内禁拖
+  fireEvent.dblClick(row)
+  expect(screen.getByRole('textbox')).toBeTruthy()
+  expect(row.getAttribute('draggable')).toBe('false')
+})

@@ -12,6 +12,7 @@ import type {
 } from '@shared/types'
 import { toApiResult } from '../api'
 import { useCopy } from '../hooks/useCopy'
+import { useListDragReorder, type RowDragProps } from '../hooks/useListDragReorder'
 import { spinKeyframes } from '../styles/animations'
 import DeviceRow from './DeviceRow'
 import RecordingStatus from './RecordingStatus'
@@ -52,6 +53,10 @@ type DeviceListPaneProps = {
   onRenameBlocked?: () => void
   /** 跨来源桶设备尝试修改（重命名路径）时的反馈入口（用户复核 5） */
   onCrossBucketBlocked?: () => void
+  /** AVD 整单重排（plan 2026-11-09）：主区拖拽 drop 合成的已提交设备全序 */
+  onReorderDevices: (ids: string[]) => void
+  /** 真机整单重排：真机区拖拽 drop 合成的全序 */
+  onReorderExternal: (ids: string[]) => void
 }
 
 const rowHandlers = (
@@ -74,7 +79,8 @@ const rowHandlers = (
     | 'onEdit'
     | 'onRenameBlocked'
     | 'onCrossBucketBlocked'
-  >
+  >,
+  drag?: RowDragProps
 ): React.JSX.Element => (
   <DeviceRow
     key={device.id}
@@ -95,6 +101,7 @@ const rowHandlers = (
     onEdit={() => shared.onEdit(device.id)}
     onRenameBlocked={shared.onRenameBlocked}
     onCrossBucketBlocked={shared.onCrossBucketBlocked}
+    drag={drag}
   />
 )
 
@@ -113,7 +120,8 @@ const ExternalRow = ({
   onSelect,
   promoteState,
   onPromote,
-  onDisconnect
+  onDisconnect,
+  drag
 }: {
   device: ExternalDevice
   selected: boolean
@@ -121,6 +129,8 @@ const ExternalRow = ({
   promoteState?: PromoteState
   onPromote?: (serial: string) => void
   onDisconnect?: (serial: string) => void
+  /** 拖拽换序（plan 2026-11-09）：真机行任意状态可拖 */
+  drag?: RowDragProps
 }): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
   const stateText =
@@ -135,8 +145,11 @@ const ExternalRow = ({
     <div
       role="button"
       tabIndex={0}
-      className="external-row"
+      className={`external-row${drag?.isSource ? ' drag-source' : ''}`}
       aria-current={selected || undefined}
+      data-external-drag-id={drag ? device.id : undefined}
+      draggable={drag?.draggable}
+      data-drop-pos={drag?.dropPos ?? undefined}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -255,7 +268,9 @@ const DeviceListPane = ({
   onRename,
   onEdit,
   onRenameBlocked,
-  onCrossBucketBlocked
+  onCrossBucketBlocked,
+  onReorderDevices,
+  onReorderExternal
 }: DeviceListPaneProps): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
   const recoveryCopy = useCopy(WIRELESS_RECOVERY_COPY)
@@ -273,6 +288,25 @@ const DeviceListPane = ({
   // 断开/删除失败反馈（P3-3）：serial → 文案（map——P3-10：多台先后失败并存不覆盖）
   const [disconnectErrors, setDisconnectErrors] = useState<Record<string, string>>({})
   const { active, folded } = splitByOriginView(devices, sourceBucket)
+  // 拖拽换序（plan 2026-11-09-device-list-drag-reorder）：AVD 主区可拖——hook 吃已提交
+  // 设备全序（含折叠区设备），drop 移动可见子序列在全序中的相对位；折叠区行不带
+  // 标识不可拖不可锚；read-only 禁拖（canDrag 行级门 + 主进程 assertMetaWritable 双闸）
+  const avdDrag = useListDragReorder({
+    mime: 'application/x-msd-avd',
+    rowAttr: 'data-avd-drag-id',
+    ids: devices
+      .filter((device) => device.status !== 'creating' && device.status !== 'deleting')
+      .map((device) => device.id),
+    canDrag: () => metaWritable,
+    onReorder: onReorderDevices
+  })
+  // 真机区：任意状态可拖；顺序经主进程合并层防 track 帧冲刷（断线条目保留原位）
+  const externalDrag = useListDragReorder({
+    mime: 'application/x-msd-external',
+    rowAttr: 'data-external-drag-id',
+    ids: externalDevices.map((device) => device.id),
+    onReorder: onReorderExternal
+  })
   // 自清定时器登记（P3-9）：卸载统一清理（对齐 inputErrorTimerRef 先例）
   const timersRef = useRef(new Set<number>())
   useEffect(() => {
@@ -371,27 +405,35 @@ const DeviceListPane = ({
           )
         ) : (
           <>
-            <div className="origin-main">
-              {active.map((device) =>
-                rowHandlers(device, {
-                  selectedId,
-                  storeTrusted,
-                  metaWritable,
-                  sourceBucket,
-                  onSelect,
-                  onStart,
-                  onStop,
-                  onCancelStart,
-                  onHibernate,
-                  onResume,
-                  onCopySerial,
-                  onDelete,
-                  onRename,
-                  onEdit,
-                  onRenameBlocked,
-                  onCrossBucketBlocked
-                })
-              )}
+            <div className="origin-main" {...avdDrag.listHandlers}>
+              {active.map((device) => {
+                // 过渡行（creating/deleting 不在 acceptedMetas）不参与拖拽：无标识即
+                // 不可拖不可锚（plan 2026-11-09）
+                const committed = device.status !== 'creating' && device.status !== 'deleting'
+                const visual = avdDrag.rowVisual(device.id)
+                return rowHandlers(
+                  device,
+                  {
+                    selectedId,
+                    storeTrusted,
+                    metaWritable,
+                    sourceBucket,
+                    onSelect,
+                    onStart,
+                    onStop,
+                    onCancelStart,
+                    onHibernate,
+                    onResume,
+                    onCopySerial,
+                    onDelete,
+                    onRename,
+                    onEdit,
+                    onRenameBlocked,
+                    onCrossBucketBlocked
+                  },
+                  committed ? { draggable: metaWritable, ...visual } : undefined
+                )
+              })}
             </div>
             {foldedLine !== null ? (
               <div className="origin-folded">
@@ -480,7 +522,7 @@ const DeviceListPane = ({
             </div>
           ) : null}
           {realOpen ? (
-            <div className="real-body">
+            <div className="real-body" {...externalDrag.listHandlers}>
               {externalDevices.length === 0 ? (
                 <p className="real-empty">
                   {copy.realDeviceEmpty}
@@ -514,6 +556,7 @@ const DeviceListPane = ({
                       promoteState={rowFeedback}
                       onPromote={handlePromote}
                       onDisconnect={handleDisconnect}
+                      drag={{ draggable: true, ...externalDrag.rowVisual(device.id) }}
                     />
                   )
                 })
@@ -756,6 +799,7 @@ const Wrapper = styled.div`
   }
 
   .external-row {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -764,6 +808,34 @@ const Wrapper = styled.div`
     color: var(--board-ink);
     cursor: pointer;
     transition: background-color 0.12s;
+
+    /* 拖拽换序（plan 2026-11-09）：与 DeviceRow 同款三件——禁选字/半透明/插入线 */
+    &[draggable='true'] {
+      user-select: none;
+    }
+
+    &.drag-source {
+      opacity: 0.45;
+    }
+
+    &[data-drop-pos='before']::before,
+    &[data-drop-pos='after']::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--board-ink);
+      pointer-events: none;
+    }
+
+    &[data-drop-pos='before']::before {
+      top: -1px;
+    }
+
+    &[data-drop-pos='after']::after {
+      bottom: -1px;
+    }
 
     &:hover {
       background: var(--board-bg-raised);

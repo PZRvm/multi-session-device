@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Device, ExternalDevice } from '@shared/types'
 import DeviceListPane from '../DeviceListPane'
@@ -47,6 +47,8 @@ const renderPane = (overrides: Partial<Parameters<typeof DeviceListPane>[0]>): v
       onDelete={vi.fn()}
       onRename={vi.fn()}
       onEdit={vi.fn()}
+      onReorderDevices={vi.fn()}
+      onReorderExternal={vi.fn()}
       {...overrides}
     />
   )
@@ -103,6 +105,8 @@ describe('DeviceListPane 空库文案（review P2-3/P3）', () => {
         onDelete={vi.fn()}
         onRename={vi.fn()}
         onEdit={vi.fn()}
+        onReorderDevices={vi.fn()}
+        onReorderExternal={vi.fn()}
       />
     )
     expect(screen.getByText('Pixel test')).toBeTruthy()
@@ -369,7 +373,9 @@ describe('真机区无线入口（plan 2026-10-15-real-device-wireless）', () =
       onCopySerial: vi.fn(),
       onDelete: vi.fn(),
       onRename: vi.fn(),
-      onEdit: vi.fn()
+      onEdit: vi.fn(),
+      onReorderDevices: vi.fn(),
+      onReorderExternal: vi.fn()
     }
     const { rerender } = render(<DeviceListPane {...defaults} />)
     fireEvent.click(screen.getByRole('button', { name: copy.wirelessPromote }))
@@ -405,4 +411,126 @@ it('renders one stable recovery action group outside the section toggle', async 
   const action = await screen.findByRole('button', { name: '修复连接' })
   expect(screen.getAllByRole('button', { name: '修复连接' })).toHaveLength(1)
   expect(action.parentElement?.closest('button')).toBeNull()
+})
+
+// ---- 拖拽换序挂接（plan 2026-11-09-device-list-drag-reorder）----
+
+/** jsdom 无 DragEvent 构造，clientY 需原生事件直达（同 useListDragReorder.test 手法） */
+const dragOverWith = (el: Element, clientY: number, dt: unknown): boolean => {
+  const event = new Event('dragover', { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'clientY', { value: clientY })
+  Object.defineProperty(event, 'dataTransfer', { value: dt })
+  return el.dispatchEvent(event)
+}
+const dataTransferOf = (): {
+  setData: ReturnType<typeof vi.fn>
+  effectAllowed: string
+  dropEffect: string
+} => ({
+  setData: vi.fn(),
+  effectAllowed: '',
+  dropEffect: ''
+})
+
+describe('DeviceListPane 拖拽挂接（plan 2026-11-09）', () => {
+  it('主区已提交行挂标识且可拖；creating 过渡行与折叠区行不挂（不可拖不可锚）', () => {
+    renderPane({
+      devices: [
+        baseDevice,
+        { ...baseDevice, id: 'd2', name: 'Creating 机', status: 'creating' },
+        { ...baseDevice, id: 'd3', name: '他桶机', imageSourceOrigin: 'shared-studio' }
+      ],
+      sourceBucket: 'app-owned'
+    })
+    const committed = document.querySelector('[data-avd-drag-id="d1"]')
+    expect(committed).not.toBeNull()
+    expect(committed?.getAttribute('draggable')).toBe('true')
+    expect(document.querySelector('[data-avd-drag-id="d2"]')).toBeNull()
+    // 他桶机在折叠区（默认收起不渲染）；展开后也不挂标识
+    expect(document.querySelector('[data-avd-drag-id="d3"]')).toBeNull()
+    fireEvent.click(
+      screen.getByRole('button', { name: format(copy.otherOriginStudio, { count: 1 }) })
+    )
+    expect(screen.getByText('他桶机')).toBeTruthy()
+    expect(document.querySelector('[data-avd-drag-id="d3"]')).toBeNull()
+  })
+
+  it('read-only（metaWritable=false）行 draggable=false（行级门）', () => {
+    renderPane({ devices: [baseDevice], metaWritable: false })
+    expect(document.querySelector('[data-avd-drag-id="d1"]')?.getAttribute('draggable')).toBe(
+      'false'
+    )
+  })
+
+  it('真机行挂真机标识且任意状态可拖', () => {
+    renderPane({
+      externalDevices: [
+        { id: 'R58N', serial: 'R58N', transport: 'usb', state: 'device', model: 'Pixel' }
+      ]
+    })
+    const row = document.querySelector('[data-external-drag-id="R58N"]')
+    expect(row).not.toBeNull()
+    expect(row?.getAttribute('draggable')).toBe('true')
+  })
+
+  it('AVD drop 合成已提交全序提交 onReorderDevices（折叠区设备相对位不变）', async () => {
+    const onReorderDevices = vi.fn()
+    const shared = {
+      ...baseDevice,
+      id: 'd-folded',
+      name: '他桶机',
+      imageSourceOrigin: 'shared-studio' as const
+    }
+    const second = { ...baseDevice, id: 'd2', name: '第二台' }
+    renderPane({
+      devices: [baseDevice, second, shared],
+      onReorderDevices,
+      sourceBucket: 'app-owned'
+    })
+    const rowD1 = document.querySelector('[data-avd-drag-id="d1"]') as HTMLElement
+    const rowD2 = document.querySelector('[data-avd-drag-id="d2"]') as HTMLElement
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return { top: this === rowD2 ? 15 : 0, height: 0 } as DOMRect
+    })
+    const dt = dataTransferOf()
+    fireEvent.pointerDown(rowD1)
+    fireEvent.dragStart(rowD1, { dataTransfer: dt })
+    // d2 中点 15 < clientY 20 → after；一次拖放（首个 drop 即结束手势）
+    await act(async () => {
+      dragOverWith(rowD2, 20, dt)
+    })
+    fireEvent.drop(rowD2, { dataTransfer: dt })
+    // 全序含折叠区的 d-folded（不在 DOM，相对位保持）：d1 移到 d2 之后
+    expect(onReorderDevices).toHaveBeenCalledWith(['d2', 'd1', 'd-folded'])
+    vi.restoreAllMocks()
+  })
+
+  it('真机 drop 提交 onReorderExternal', async () => {
+    const onReorderExternal = vi.fn()
+    renderPane({
+      externalDevices: [
+        { id: 'A', serial: 'A', transport: 'usb', state: 'device', model: null },
+        { id: 'B', serial: 'B', transport: 'usb', state: 'device', model: null }
+      ],
+      onReorderExternal
+    })
+    const rowA = document.querySelector('[data-external-drag-id="A"]') as HTMLElement
+    const rowB = document.querySelector('[data-external-drag-id="B"]') as HTMLElement
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return { top: this === rowB ? 15 : 0, height: 0 } as DOMRect
+    })
+    const dt = dataTransferOf()
+    fireEvent.pointerDown(rowA)
+    fireEvent.dragStart(rowA, { dataTransfer: dt })
+    await act(async () => {
+      dragOverWith(rowB, 20, dt) // 中点 15 < 20 → after
+    })
+    fireEvent.drop(rowB, { dataTransfer: dt })
+    expect(onReorderExternal).toHaveBeenCalledWith(['B', 'A'])
+    vi.restoreAllMocks()
+  })
 })

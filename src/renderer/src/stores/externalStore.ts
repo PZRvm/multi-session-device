@@ -18,9 +18,11 @@ interface ExternalStoreState {
   apply: (devices: ExternalDevice[]) => void
   applyNetworkState: (id: string, state: NetworkState) => void
   select: (id: string | null) => void
+  /** 整单重排（plan 2026-11-09）：乐观换序 + 单次 IPC，应答与推送全量替换收敛 */
+  reorder: (ids: string[]) => void
 }
 
-export const useExternalStore = create<ExternalStoreState>((set) => ({
+export const useExternalStore = create<ExternalStoreState>((set, get) => ({
   recovery: { phase: 'idle', blocked: [] },
   applyRecovery: (recovery) => set({ recovery }),
   devices: [],
@@ -50,5 +52,23 @@ export const useExternalStore = create<ExternalStoreState>((set) => ({
         ? { network: { ...current.network, [id]: entry } }
         : current
     ),
-  select: (id) => set({ selectedId: id })
+  select: (id) => set({ selectedId: id }),
+  reorder: (ids) => {
+    const prev = get().devices
+    // 乐观换序：仅当 ids 与当前设备集相等（防御拔线竞态）；选中态不动
+    const byId = new Map(prev.map((device) => [device.id, device]))
+    if (ids.length === prev.length && ids.every((id) => byId.has(id))) {
+      set({ devices: ids.map((id) => byId.get(id)!) })
+    }
+    void window.api.devices
+      .reorderExternal(ids)
+      .then((devices) => get().apply(devices))
+      .catch(() => {
+        // 失败重拉收敛（track 帧也会带最新序，双保险）
+        void window.api.devices
+          .listExternal()
+          .then((devices) => get().apply(devices))
+          .catch(() => undefined)
+      })
+  }
 }))

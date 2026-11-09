@@ -70,6 +70,9 @@ interface DeviceState {
   resume: (id: string) => Promise<ApiResult<DeviceSnapshot>>
   /** 放弃休眠状态（删快照与清单 → stopped） */
   discardHibernation: (id: string) => Promise<ApiResult<DeviceSnapshot>>
+  /** 整单重排（plan 2026-11-09）：乐观换序（对象引用原样移动）+ 单次 IPC；
+   *  失败重拉收敛（主进程快照权威接管） */
+  reorder: (ids: string[]) => Promise<ApiResult<DeviceSnapshot>>
   setSelected: (id: string) => void
   /** 主进程 changed 推送与命令响应共用的快照入口（按 revision 幂等） */
   applySnapshot: (snapshot: DeviceSnapshot) => void
@@ -142,6 +145,24 @@ export const useDeviceStore = create<DeviceState>()((set, get) => {
     hibernate: (id) => runCommand(() => window.api.devices.hibernate(id)),
     resume: (id) => runCommand(() => window.api.devices.resume(id)),
     discardHibernation: (id) => runCommand(() => window.api.devices.discardHibernation(id)),
+    reorder: async (ids) => {
+      const prev = get().devices
+      // 乐观换序：ids 与当前设备集相同时才动（防御并发快照）；revision 不动——
+      // 应答快照与 changed 推送仍按既有守卫应用。pending 行在场时 ids 是已提交
+      // 子集，跳过乐观直发（主进程整单校验为准）
+      const byId = new Map(prev.map((device) => [device.id, device]))
+      if (ids.length === prev.length && ids.every((id) => byId.has(id))) {
+        set({ devices: ids.map((id) => byId.get(id) as Device) })
+      }
+      const result = await toApiResult(window.api.devices.reorder(ids))
+      if (result.ok) {
+        apply(result.data)
+        return result
+      }
+      // 失败重拉收敛（重拉也失败则保持乐观序，下一次 changed 推送修正）
+      await get().load()
+      return result
+    },
     setSelected: (id) => set({ selectedId: id }),
     applySnapshot: apply,
     applyNetworkState: (deviceId, state) =>

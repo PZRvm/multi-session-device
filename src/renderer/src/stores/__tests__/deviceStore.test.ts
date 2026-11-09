@@ -39,6 +39,7 @@ const snapshot = (
 
 const apiCalls = {
   list: vi.fn<() => Promise<DeviceSnapshot>>(),
+  reorder: vi.fn<(ids: string[]) => Promise<DeviceSnapshot>>(),
   create: vi.fn<() => Promise<CreateDeviceResult>>(),
   rename: vi.fn<() => Promise<DeviceSnapshot>>(),
   remove: vi.fn<() => Promise<DeviceSnapshot>>(),
@@ -307,5 +308,44 @@ describe('活动来源桶（plan 2026-10-12-device-list-origin-view-filter）', 
     // 快照缺席 sourceBucket → 回落当前值（?? 语义）
     useDeviceStore.getState().applySnapshot(snapshot([], 7, { sourceBucket: undefined }))
     expect(useDeviceStore.getState().sourceBucket).toBe('shared-studio')
+  })
+})
+
+describe('deviceStore.reorder（plan 2026-11-09：乐观换序 + 失败重拉收敛）', () => {
+  it('乐观换序（对象引用原样移动）+ 应答快照应用', async () => {
+    const d1 = device()
+    const d2 = device({ id: 'd2' })
+    useDeviceStore.setState({ devices: [d1, d2], revision: 1 })
+    apiCalls.reorder.mockResolvedValue(snapshot([d2, d1], 2))
+    const result = await useDeviceStore.getState().reorder(['d2', 'd1'])
+    expect(result.ok).toBe(true)
+    expect(apiCalls.reorder).toHaveBeenCalledWith(['d2', 'd1'])
+    expect(useDeviceStore.getState().devices[0]).toBe(d2)
+    expect(useDeviceStore.getState().revision).toBe(2)
+  })
+
+  it('失败重拉收敛（主进程快照权威接管）', async () => {
+    const d1 = device()
+    const d2 = device({ id: 'd2' })
+    useDeviceStore.setState({ devices: [d1, d2], revision: 1 })
+    apiCalls.reorder.mockRejectedValue(new Error('stale'))
+    apiCalls.list.mockResolvedValue(snapshot([d1, d2], 1))
+    const result = await useDeviceStore.getState().reorder(['d2', 'd1'])
+    expect(result.ok).toBe(false)
+    expect(apiCalls.list).toHaveBeenCalled()
+    expect(useDeviceStore.getState().devices.map((entry) => entry.id)).toEqual(['d1', 'd2'])
+  })
+
+  it('ids 与当前设备集不等（creating pending 行在场）跳过乐观、仍整单发送', async () => {
+    const d1 = device()
+    const creating = device({ id: 'd2', status: 'creating' })
+    useDeviceStore.setState({ devices: [d1, creating], revision: 1 })
+    apiCalls.reorder.mockResolvedValue(snapshot([d1, creating], 2))
+    const pending = useDeviceStore.getState().reorder(['d1'])
+    // 同步观察点：乐观被跳过（devices 保持原序原引用），随后应答快照接管
+    expect(useDeviceStore.getState().devices).toEqual([d1, creating])
+    await pending
+    expect(apiCalls.reorder).toHaveBeenCalledWith(['d1'])
+    expect(useDeviceStore.getState().devices.map((entry) => entry.id)).toEqual(['d1', 'd2'])
   })
 })

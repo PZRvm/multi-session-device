@@ -566,6 +566,10 @@ const App = (): React.JSX.Element => {
           onEdit={handleEdit}
           onRenameBlocked={handleRenameBlocked}
           onCrossBucketBlocked={handleCrossBucketBlocked}
+          onReorderDevices={(ids) => {
+            void useDeviceStore.getState().reorder(ids)
+          }}
+          onReorderExternal={(ids) => useExternalStore.getState().reorder(ids)}
         />
         <footer className="foot">
           <Button

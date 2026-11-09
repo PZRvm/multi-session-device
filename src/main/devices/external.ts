@@ -27,6 +27,7 @@ import {
   tcpConnect
 } from '../emulator/adb'
 import { requireAdb } from './environment'
+import { applyOrder, commitOrder, ensureOrderLoaded, orderNow } from './externalOrder'
 import { isMigrationActive } from '../emulator/sdkMigration'
 
 // 真机域（plan 2026-10-13-real-device-usb-and-apk-install；stage06 第一批）：
@@ -34,7 +35,9 @@ import { isMigrationActive } from '../emulator/sdkMigration'
 // 首帧 OKAY + hex4 + 列表，此后每次变化一帧 hex4 + 列表），diff 后更新缓存、推主窗、
 // 发会话桥事件（迁入 device 态建投屏会话、消失或迁出销毁）。
 // 红线：track 是普通订阅连接，不改变共享 server 生命周期；server 不在时经
-// ensureSharedServer 拉起（只 start 不 kill）。纯内存状态，不进 DeviceSnapshot。
+// ensureSharedServer 拉起（只 start 不 kill）。纯内存状态，不进 DeviceSnapshot；
+// 列表用户序是唯一例外（plan 2026-11-09-device-list-drag-reorder）——经
+// externalOrder 偏好合并落盘，存 UI 偏好非设备记录。
 
 /** track 载荷单行解析结果（state 保留原文，映射收口在 toExternalDevices） */
 export interface TrackDeviceEntry {
@@ -257,7 +260,9 @@ const emitConnected = (device: ExternalDevice): void => {
 }
 
 const applyList = (payload: string, reconnected: boolean): number => {
-  const next = toExternalDevices(parseTrackDevices(payload))
+  // 用户序合并层（plan 2026-11-09）：track 帧每次重建列表，按 external-order 记忆
+  // 稳定合并——已知条目守用户序、新条目落尾，帧序永不覆盖用户序
+  const next = applyOrder(toExternalDevices(parseTrackDevices(payload)), orderNow())
   // 消失或迁出 device 态 → 销毁会话（重连首帧同样结算断线期间的消失，漏帧不泄漏）
   for (const before of cache) {
     if (before.state !== 'device') continue
@@ -542,6 +547,26 @@ export function registerExternalIpc(input: ExternalDeps): void {
     requireMain(IPC_CHANNELS.devicesExternalList, event.sender)
     return cache
   })
+  // 真机用户序重排（plan 2026-11-09）：整单校验（与 cache id 集相等）后换序——
+  // 会话桥零事件（顺序与 runId 无关）；新记忆 = 当前全序 + 原记忆仍缺席条目
+  // （断线序位保留）；落盘尽力（commitOrder 内存先行，失败仅告警）
+  ipcMain.handle(IPC_CHANNELS.devicesExternalReorder, (event, raw: unknown): ExternalDevice[] => {
+    requireMain(IPC_CHANNELS.devicesExternalReorder, event.sender)
+    const ids = parseReorderIds(raw)
+    const byId = new Map(cache.map((device) => [device.id, device]))
+    if (
+      ids.length !== cache.length ||
+      new Set(ids).size !== ids.length ||
+      ids.some((id) => !byId.has(id))
+    ) {
+      throw new Error(`${IPC_CHANNELS.devicesExternalReorder}${msg('invalidPayload')}`)
+    }
+    cache = ids.map((id) => byId.get(id) as ExternalDevice)
+    const present = new Set(ids)
+    void commitOrder([...ids, ...orderNow().filter((id) => !present.has(id))])
+    ;(deps?.broadcast ?? broadcastDefault)(cache)
+    return cache
+  })
   // ---- 无线域通道（plan 2026-10-15-real-device-wireless）：失败是结果不是错误，
   // outcome 判别联合直达 renderer；载荷非法才 throw（对齐其余通道惯例）----
   ipcMain.handle(IPC_CHANNELS.devicesExternalScan, (event): Promise<WirelessCandidate[]> => {
@@ -604,7 +629,8 @@ export function registerExternalIpc(input: ExternalDeps): void {
       await disconnectWirelessDevice((raw as { serial: string }).serial, input.wireless)
     }
   )
-  void openSocket()
+  // 用户序读盘先行（plan 2026-11-09）：首连首帧前序已就绪，重连/退避路径无需再等
+  void ensureOrderLoaded().then(() => openSocket())
 }
 
 /** before-quit 收口：断 socket、清定时器；removeAllListeners 保证 close 不再触发重连 */
@@ -936,6 +962,15 @@ export const disconnectWirelessDevice = async (
 }
 
 // ---- 通道载荷校验（host 限点分 IPv4；端口 1–65535 整数；配对码短非空串）----
+
+/** reorder 载荷：{ ids: string[] } 条目非空串；重复/未知/缺项在 handler 内对 cache 整单校验 */
+const parseReorderIds = (raw: unknown): string[] => {
+  const ids = (raw as { ids?: unknown } | null | undefined)?.ids
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string' || id.length === 0)) {
+    throw new Error(`${IPC_CHANNELS.devicesExternalReorder}${msg('invalidPayload')}`)
+  }
+  return ids
+}
 
 export const isWirelessConnectInput = (raw: unknown): raw is WirelessConnectInput => {
   if (typeof raw !== 'object' || raw === null) return false

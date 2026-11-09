@@ -15,6 +15,7 @@ import {
   isCreateDeviceInput,
   isDeviceIdInput,
   isRenameInput,
+  isReorderInput,
   isUpdateDeviceInput,
   normalizeName
 } from './environment'
@@ -32,6 +33,7 @@ import {
 } from './lifecycle'
 import { createDevice, renameDevice } from './create'
 import { readDeviceConfig, updateDeviceConfig } from './edit'
+import { reorderDevices } from './reorder'
 
 // ---- sender 白名单：启停/删除/复制/对账仅登记主窗；创建允许主窗与 create 向导；
 // 配置读写仅绑定目标设备的编辑窗（主窗不直接写附加配置）----
@@ -98,6 +100,17 @@ export function registerDevicesIpc(): void {
         throw new Error(`${IPC_CHANNELS.devicesDelete}${msg('invalidPayload')}`)
       }
       return deleteDevice(raw.id)
+    }
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.devicesReorder,
+    async (event, raw: unknown): Promise<DeviceSnapshot> => {
+      requireSender(IPC_CHANNELS.devicesReorder, event, 'main')
+      if (!isReorderInput(raw)) {
+        throw new Error(`${IPC_CHANNELS.devicesReorder}${msg('invalidPayload')}`)
+      }
+      return reorderDevices(raw.ids)
     }
   )
 

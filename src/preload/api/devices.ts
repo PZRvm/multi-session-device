@@ -52,6 +52,9 @@ export const devicesApi = {
     ipcRenderer.invoke(IPC_CHANNELS.devicesStop, { id }),
   cancelStart: (id: string): Promise<DeviceSnapshot> =>
     ipcRenderer.invoke(IPC_CHANNELS.devicesCancelStart, { id }),
+  /** 整单重排（plan 2026-11-09）：已提交设备全序；devices.json 数组序即持久化序 */
+  reorder: (ids: string[]): Promise<DeviceSnapshot> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesReorder, { ids }),
   /** 手动休眠：保存命名快照并优雅退出实例（不传路径/端口/快照名——main 单源） */
   hibernate: (id: string): Promise<DeviceSnapshot> =>
     ipcRenderer.invoke(IPC_CHANNELS.devicesHibernate, { id }),
@@ -96,6 +99,9 @@ export const devicesApi = {
   /** 外部设备快照（main 内存缓存；track-devices-l 跟踪） */
   listExternal: (): Promise<ExternalDevice[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.devicesExternalList),
+  /** 真机用户序重排（plan 2026-11-09）：返回重排后的全量列表 */
+  reorderExternal: (ids: string[]): Promise<ExternalDevice[]> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesExternalReorder, { ids }),
   /** 外部设备变化订阅（main 侧 diff，变化才推全量），返回解绑函数 */
   onExternalChanged: (callback: (devices: ExternalDevice[]) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, devices: ExternalDevice[]): void => {
