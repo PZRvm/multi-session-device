@@ -117,6 +117,16 @@ const disabled = (reason: string): SettingFieldCapability => ({
 })
 
 /**
+ * 创建默认 GPU 后端：Mac 实证 headless 下 auto 会回落 SwiftShader 软件渲染
+ * （learn 2026-11-06-headless-auto-gpu-selection），且休眠能力仅验证过 host
+ * （ADR-007）→ darwin 默认 host；win32 未实证，维持 auto（保留官方在 GPU
+ * 不可用时的回退路径，不把 Mac 结果外推）。
+ */
+export const defaultGraphicsFor = (
+  platform: NodeJS.Platform
+): DeviceAdvancedSettings['graphics'] => (platform === 'darwin' ? 'host' : 'auto')
+
+/**
  * 能力集：默认值 + 字段边界。RAM 默认跟随画像（XML ramMiB）并核验镜像
  * 最低要求（Android Q+ 镜像 2GB，PRD B）；CPU 上限取宿主逻辑核数。
  * 皮肤/真实摄像头/Quick 按各自批次开放前禁用并说明。
@@ -149,7 +159,7 @@ export const buildCapabilities = (input: {
     bootMode: 'cold',
     internalStorageMiB: DEFAULT_INTERNAL_STORAGE_MIB,
     cpuCores: DEFAULT_CPU_CORES,
-    graphics: 'auto',
+    graphics: defaultGraphicsFor(process.platform),
     ramMiB: ramDefault,
     vmHeapMiB: Math.min(DEFAULT_VM_HEAP_MIB, Math.floor(ramDefault / 2)),
     preferredAbi: 'optimal'

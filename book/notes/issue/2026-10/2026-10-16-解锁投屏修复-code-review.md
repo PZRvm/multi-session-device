@@ -1,7 +1,7 @@
 ---
 description: 解锁投屏 Phase 5 的三项发现已修复并正式回归：本地手势随代次取消、零帧有界恢复与可重试错误态、ACK 安全整数校验；全量 1254 项通过
 created: 2026-10-16
-status: closed
+status: resolved
 tags: [scrcpy, review, resync, gesture, ACK, recovery]
 ---
 

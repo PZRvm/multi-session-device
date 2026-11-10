@@ -91,6 +91,13 @@ export const isDeviceIdInput = (value: unknown): value is { id: string } => {
   return typeof input.id === 'string' && input.id.length > 0
 }
 
+/** reorder 载荷（plan 2026-11-09）：ids 非空串数组；重复/未知/缺项在服务内对 metas 整单校验 */
+export const isReorderInput = (value: unknown): value is { ids: string[] } => {
+  if (typeof value !== 'object' || value === null) return false
+  const ids = (value as Record<string, unknown>).ids
+  return Array.isArray(ids) && ids.every((id) => typeof id === 'string' && id.length > 0)
+}
+
 // ---- 共享 adb 可执行文件（解析一次；start 前经 ensureSharedServer 验兼容）----
 
 let adbExecutable: AdbExecutable | null = null

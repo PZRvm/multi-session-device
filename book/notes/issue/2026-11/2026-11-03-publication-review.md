@@ -1,4 +1,5 @@
 ---
+status: open
 description: 首次公开发布检查发现 Logcat 测试偶发失败、hook 未执行和旧产品说明待核对
 ---
 

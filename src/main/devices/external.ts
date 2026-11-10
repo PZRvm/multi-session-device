@@ -1,4 +1,8 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, clipboard, dialog, ipcMain, webContents } from 'electron'
+import { WirelessRecovery } from './wirelessRecovery'
+import { adbRecovery } from '../emulator/adbRecovery'
+import { WIRELESS_RECOVERY_COPY } from '@shared/wirelessRecovery'
+import { getLocaleState } from '../locale/store'
 import { networkInterfaces } from 'node:os'
 import type { Socket } from 'node:net'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
@@ -23,6 +27,7 @@ import {
   tcpConnect
 } from '../emulator/adb'
 import { requireAdb } from './environment'
+import { applyOrder, commitOrder, ensureOrderLoaded, orderNow } from './externalOrder'
 import { isMigrationActive } from '../emulator/sdkMigration'
 
 // 真机域（plan 2026-10-13-real-device-usb-and-apk-install；stage06 第一批）：
@@ -30,7 +35,9 @@ import { isMigrationActive } from '../emulator/sdkMigration'
 // 首帧 OKAY + hex4 + 列表，此后每次变化一帧 hex4 + 列表），diff 后更新缓存、推主窗、
 // 发会话桥事件（迁入 device 态建投屏会话、消失或迁出销毁）。
 // 红线：track 是普通订阅连接，不改变共享 server 生命周期；server 不在时经
-// ensureSharedServer 拉起（只 start 不 kill）。纯内存状态，不进 DeviceSnapshot。
+// ensureSharedServer 拉起（只 start 不 kill）。纯内存状态，不进 DeviceSnapshot；
+// 列表用户序是唯一例外（plan 2026-11-09-device-list-drag-reorder）——经
+// externalOrder 偏好合并落盘，存 UI 偏好非设备记录。
 
 /** track 载荷单行解析结果（state 保留原文，映射收口在 toExternalDevices） */
 export interface TrackDeviceEntry {
@@ -58,6 +65,7 @@ export interface ExternalDeps {
   migrationActive?: () => boolean
   /** 无线域接缝组（测试替身注入；缺省用本文件 wirelessDefaults） */
   wireless?: Partial<WirelessDeps>
+  recovery?: { busy: () => string[]; suspend: () => Promise<void>; resume: () => Promise<void> }
   /** 无线连接窗 sender 判定（五个无线通道同时接受主窗与连接窗——连接窗是原生弹窗
    *  化后的调用方，2026-10-15 用户裁定） */
   isWirelessSender?: (sender: Electron.WebContents) => boolean
@@ -252,7 +260,9 @@ const emitConnected = (device: ExternalDevice): void => {
 }
 
 const applyList = (payload: string, reconnected: boolean): number => {
-  const next = toExternalDevices(parseTrackDevices(payload))
+  // 用户序合并层（plan 2026-11-09）：track 帧每次重建列表，按 external-order 记忆
+  // 稳定合并——已知条目守用户序、新条目落尾，帧序永不覆盖用户序
+  const next = applyOrder(toExternalDevices(parseTrackDevices(payload)), orderNow())
   // 消失或迁出 device 态 → 销毁会话（重连首帧同样结算断线期间的消失，漏帧不泄漏）
   for (const before of cache) {
     if (before.state !== 'device') continue
@@ -323,9 +333,11 @@ const ensureServerDefault = async (): Promise<unknown> => {
   }
 }
 
+let trackingPaused = false
 const openSocket = async (): Promise<void> => {
+  if (trackingPaused || adbRecovery.active) return
   const current = deps
-  if (!current || socket || reconnectTimer) return
+  if (trackingPaused || adbRecovery.active || !current || socket || reconnectTimer) return
   // 迁移在途不 ensure（会 start-server 重生 adb，挡住 win32 删源——issue
   // 2026-10-31-orphan-emulator-after-app-restart）：只按退避续排，journal 清除后
   // 的下一次重连自然恢复（最长一个退避节拍，上限 MAX_BACKOFF_MS）
@@ -339,7 +351,7 @@ const openSocket = async (): Promise<void> => {
     scheduleReconnect()
     return
   }
-  if (!current || socket || reconnectTimer) return
+  if (trackingPaused || adbRecovery.active || !current || socket || reconnectTimer) return
   const reconnected = backoffStep > 0
   await new Promise<void>((resolve) => {
     let sock: Socket
@@ -427,31 +439,144 @@ const openSocket = async (): Promise<void> => {
 export function registerExternalIpc(input: ExternalDeps): void {
   if (deps) return
   deps = input
+  const recovery = new WirelessRecovery({
+    run: input.wireless?.runCmd ?? runCmdDefault,
+    connect: (target, runCmd) => connectWirelessDevice(target, { ...input.wireless, runCmd }),
+    busy: () => input.recovery?.busy() ?? [],
+    alive: (owner) => !!webContents.fromId(owner) && !webContents.fromId(owner)!.isDestroyed(),
+    confirm: async (owner) => {
+      const sender = webContents.fromId(owner)
+      const parent = sender && BrowserWindow.fromWebContents(sender)
+      if (!parent || parent.isDestroyed()) return false
+      const copy = WIRELESS_RECOVERY_COPY[getLocaleState()]
+      const result = await dialog.showMessageBox(parent, {
+        type: 'warning',
+        message: copy.confirm,
+        detail: copy.impact,
+        buttons: [copy.cancel, copy.proceed],
+        defaultId: 0,
+        cancelId: 0
+      })
+      return result.response === 1 && !parent.isDestroyed()
+    },
+    suspend: async () => {
+      trackingPaused = true
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer)
+        reconnectTimer = null
+      }
+      clearHandshakeTimer()
+      clearNudgeTimer()
+      if (socket) {
+        socket.removeAllListeners()
+        socket.destroy()
+        socket = null
+      }
+      await input.recovery?.suspend()
+    },
+    resume: async () => {
+      trackingPaused = false
+      backoffStep = Math.max(1, backoffStep)
+      void openSocket()
+      await input.recovery?.resume()
+    },
+    restart: async () => {
+      const exec = await requireAdb()
+      const killed = await runAdb(exec.path, ['kill-server'], { timeoutMs: 10_000 })
+      if (killed.code !== 0) throw new Error(killed.stderr || `exit ${killed.code}`)
+      await ensureSharedServer(exec)
+    },
+    changed: (state) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (input.isMainSender(window.webContents) || input.isWirelessSender?.(window.webContents))
+          window.webContents.send(IPC_CHANNELS.wirelessRecoveryChanged, state)
+      }
+    },
+    copy: (text) => clipboard.writeText(text)
+  })
   const requireMain = (channel: string, sender: Electron.WebContents): void => {
     if (!input.isMainSender(sender)) {
       throw new Error(`${channel}: ${msg('unregisteredWindowSuffix')}`)
     }
   }
   // 无线五通道的守卫放行主窗与无线连接窗（后者是原生弹窗化后的发起方）
-  const requireWirelessCaller = (channel: string, sender: Electron.WebContents): void => {
+  const requireWirelessCaller = (
+    channel: string,
+    sender: Electron.WebContents,
+    frame?: Electron.WebFrameMain | null
+  ): void => {
+    if (frame !== sender.mainFrame) throw new Error(msg('invalidPayload'))
     if (!input.isMainSender(sender) && !(input.isWirelessSender?.(sender) ?? false)) {
       throw new Error(`${channel}: ${msg('unregisteredWindowSuffix')}`)
     }
   }
+  const observedOwners = new WeakSet<Electron.WebContents>()
+  const observeOwner = (sender: Electron.WebContents): void => {
+    if (observedOwners.has(sender)) return
+    observedOwners.add(sender)
+    sender.once?.('destroyed', () => recovery.forget(sender.id))
+  }
+  const recoveryCaller = (event: Electron.IpcMainInvokeEvent): void => {
+    requireWirelessCaller(IPC_CHANNELS.wirelessRecoveryGet, event.sender, event.senderFrame)
+    if (event.senderFrame !== event.sender.mainFrame) throw new Error(msg('invalidPayload'))
+  }
+  const attemptId = (raw: unknown): string => {
+    if (
+      !raw ||
+      typeof raw !== 'object' ||
+      !('attemptId' in raw) ||
+      typeof raw.attemptId !== 'string' ||
+      raw.attemptId.length > 64
+    )
+      throw new Error(msg('invalidPayload'))
+    return raw.attemptId
+  }
+  ipcMain.handle(IPC_CHANNELS.wirelessRecoveryGet, (event) => {
+    recoveryCaller(event)
+    return recovery.state()
+  })
+  ipcMain.handle(IPC_CHANNELS.wirelessRecoveryRepair, (event, raw: unknown) => {
+    recoveryCaller(event)
+    return recovery.repair(attemptId(raw), event.sender.id)
+  })
+  ipcMain.handle(IPC_CHANNELS.wirelessRecoveryCopy, (event, raw: unknown) => {
+    recoveryCaller(event)
+    recovery.copyDiagnostics(attemptId(raw), event.sender.id)
+  })
   ipcMain.handle(IPC_CHANNELS.devicesExternalList, (event): ExternalDevice[] => {
     requireMain(IPC_CHANNELS.devicesExternalList, event.sender)
+    return cache
+  })
+  // 真机用户序重排（plan 2026-11-09）：整单校验（与 cache id 集相等）后换序——
+  // 会话桥零事件（顺序与 runId 无关）；新记忆 = 当前全序 + 原记忆仍缺席条目
+  // （断线序位保留）；落盘尽力（commitOrder 内存先行，失败仅告警）
+  ipcMain.handle(IPC_CHANNELS.devicesExternalReorder, (event, raw: unknown): ExternalDevice[] => {
+    requireMain(IPC_CHANNELS.devicesExternalReorder, event.sender)
+    const ids = parseReorderIds(raw)
+    const byId = new Map(cache.map((device) => [device.id, device]))
+    if (
+      ids.length !== cache.length ||
+      new Set(ids).size !== ids.length ||
+      ids.some((id) => !byId.has(id))
+    ) {
+      throw new Error(`${IPC_CHANNELS.devicesExternalReorder}${msg('invalidPayload')}`)
+    }
+    cache = ids.map((id) => byId.get(id) as ExternalDevice)
+    const present = new Set(ids)
+    void commitOrder([...ids, ...orderNow().filter((id) => !present.has(id))])
+    ;(deps?.broadcast ?? broadcastDefault)(cache)
     return cache
   })
   // ---- 无线域通道（plan 2026-10-15-real-device-wireless）：失败是结果不是错误，
   // outcome 判别联合直达 renderer；载荷非法才 throw（对齐其余通道惯例）----
   ipcMain.handle(IPC_CHANNELS.devicesExternalScan, (event): Promise<WirelessCandidate[]> => {
-    requireWirelessCaller(IPC_CHANNELS.devicesExternalScan, event.sender)
+    requireWirelessCaller(IPC_CHANNELS.devicesExternalScan, event.sender, event.senderFrame)
     return scanWireless(input.wireless)
   })
   ipcMain.handle(
     IPC_CHANNELS.devicesExternalPair,
     (event, raw: unknown): Promise<WirelessPairOutcome> => {
-      requireWirelessCaller(IPC_CHANNELS.devicesExternalPair, event.sender)
+      requireWirelessCaller(IPC_CHANNELS.devicesExternalPair, event.sender, event.senderFrame)
       if (!isWirelessPairInput(raw)) {
         throw new Error(`${IPC_CHANNELS.devicesExternalPair}${msg('invalidPayload')}`)
       }
@@ -461,17 +586,21 @@ export function registerExternalIpc(input: ExternalDeps): void {
   ipcMain.handle(
     IPC_CHANNELS.devicesExternalConnect,
     (event, raw: unknown): Promise<WirelessConnectOutcome> => {
-      requireWirelessCaller(IPC_CHANNELS.devicesExternalConnect, event.sender)
+      requireWirelessCaller(IPC_CHANNELS.devicesExternalConnect, event.sender, event.senderFrame)
       if (!isWirelessConnectInput(raw)) {
         throw new Error(`${IPC_CHANNELS.devicesExternalConnect}${msg('invalidPayload')}`)
       }
-      return connectWirelessDevice(raw, input.wireless)
+      assertWirelessOpen()
+      observeOwner(event.sender)
+      return recovery.attempt(event.sender.id, (runCmd) =>
+        connectWirelessDevice(raw, { ...input.wireless, runCmd })
+      )
     }
   )
   ipcMain.handle(
     IPC_CHANNELS.devicesExternalPromote,
     (event, raw: unknown): Promise<WirelessConnectOutcome> => {
-      requireWirelessCaller(IPC_CHANNELS.devicesExternalPromote, event.sender)
+      requireWirelessCaller(IPC_CHANNELS.devicesExternalPromote, event.sender, event.senderFrame)
       if (
         typeof raw !== 'object' ||
         raw === null ||
@@ -479,13 +608,17 @@ export function registerExternalIpc(input: ExternalDeps): void {
       ) {
         throw new Error(`${IPC_CHANNELS.devicesExternalPromote}${msg('invalidPayload')}`)
       }
-      return promoteToWireless(raw as WirelessPromoteInput, input.wireless)
+      assertWirelessOpen()
+      observeOwner(event.sender)
+      return recovery.attempt(event.sender.id, (runCmd) =>
+        promoteToWireless(raw as WirelessPromoteInput, { ...input.wireless, runCmd })
+      )
     }
   )
   ipcMain.handle(
     IPC_CHANNELS.devicesExternalDisconnect,
     async (event, raw: unknown): Promise<void> => {
-      requireWirelessCaller(IPC_CHANNELS.devicesExternalDisconnect, event.sender)
+      requireWirelessCaller(IPC_CHANNELS.devicesExternalDisconnect, event.sender, event.senderFrame)
       if (
         typeof raw !== 'object' ||
         raw === null ||
@@ -496,7 +629,8 @@ export function registerExternalIpc(input: ExternalDeps): void {
       await disconnectWirelessDevice((raw as { serial: string }).serial, input.wireless)
     }
   )
-  void openSocket()
+  // 用户序读盘先行（plan 2026-11-09）：首连首帧前序已就绪，重连/退避路径无需再等
+  void ensureOrderLoaded().then(() => openSocket())
 }
 
 /** before-quit 收口：断 socket、清定时器；removeAllListeners 保证 close 不再触发重连 */
@@ -562,7 +696,9 @@ const HOST_PATTERN =
   /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/
 
 const runCmdDefault = async (args: string[], timeoutMs = 15_000): Promise<AdbRunResult> => {
+  assertWirelessOpen()
   const exec = await requireAdb()
+  assertWirelessOpen()
   return runAdb(exec.path, args, { timeoutMs })
 }
 
@@ -696,6 +832,7 @@ const transportStateOf = async (
 /** 无线域 adb 客户端命令会自动拉起共享 server——迁移在途时等价绕过跟踪器门
  *  （review P3-5）：入口统一拒绝，journal 清除后自然恢复 */
 const assertWirelessOpen = (): void => {
+  adbRecovery.assertOpen()
   if (isMigrationActive()) throw new Error(msg('sdkMigrationBusy'))
 }
 
@@ -710,6 +847,12 @@ export const connectWirelessDevice = async (
   const serial = `${host}:${port}`
   for (let attempt = 0; ; attempt++) {
     const result = await runCmd(['connect', serial], 10_000)
+    if (
+      /failed to authenticate|authentication failed|unauthorized|failed to authorize/i.test(
+        result.stdout + result.stderr
+      )
+    )
+      return { ok: false, reason: 'unauthorized', host }
     if (/(?:^|\n)(?:connected|already connected) to /.test(result.stdout)) {
       const state = await transportStateOf(runCmd, serial)
       if (state === 'device') return { ok: true, serial }
@@ -747,7 +890,9 @@ export const promoteToWireless = async (
   const route = await runCmd(['-s', input.serial, 'shell', 'ip', 'route'], 10_000)
   const host = /wlan0[^\n]*\bsrc (\d{1,3}(?:\.\d{1,3}){3})/.exec(route.stdout)?.[1]
   if (!host) return { ok: false, reason: 'no-wifi', host: input.serial }
-  await runCmd(['-s', input.serial, 'tcpip', String(WIRELESS_PORT)], 10_000)
+  const switched = await runCmd(['-s', input.serial, 'tcpip', String(WIRELESS_PORT)], 10_000)
+  if (switched.code !== 0 || /error|failed/i.test(switched.stdout + switched.stderr))
+    return { ok: false, reason: 'tcpip-failed', host }
   return connectWirelessDevice({ host, port: WIRELESS_PORT }, overrides)
 }
 
@@ -817,6 +962,15 @@ export const disconnectWirelessDevice = async (
 }
 
 // ---- 通道载荷校验（host 限点分 IPv4；端口 1–65535 整数；配对码短非空串）----
+
+/** reorder 载荷：{ ids: string[] } 条目非空串；重复/未知/缺项在 handler 内对 cache 整单校验 */
+const parseReorderIds = (raw: unknown): string[] => {
+  const ids = (raw as { ids?: unknown } | null | undefined)?.ids
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string' || id.length === 0)) {
+    throw new Error(`${IPC_CHANNELS.devicesExternalReorder}${msg('invalidPayload')}`)
+  }
+  return ids
+}
 
 export const isWirelessConnectInput = (raw: unknown): raw is WirelessConnectInput => {
   if (typeof raw !== 'object' || raw === null) return false

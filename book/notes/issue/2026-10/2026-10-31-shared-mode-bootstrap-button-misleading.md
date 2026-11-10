@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: 共享模式缺 cmdline-tools 时向导仍出「完成 SDK 引导」按钮——点击必被共享只读守卫拒绝；应显示「去 SDK Manager 补装」指引（sdkSharedNotReady 文案已备而未接）
 created: 2026-10-31
 tags: [windows, shared-mode, wizard, ux, acceptance]

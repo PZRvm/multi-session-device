@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useExternalStore } from '../externalStore'
 import type { ExternalDevice } from '@shared/types'
 
@@ -62,5 +62,34 @@ describe('externalStore（真机列表状态）', () => {
       .getState()
       .applyNetworkState('A', { airplane: false, wifi: false, data: false })
     expect(useExternalStore.getState().network).toEqual({})
+  })
+})
+
+describe('externalStore.reorder（plan 2026-11-09：乐观换序 + 失败重拉收敛）', () => {
+  afterEach(() => {
+    delete (window as unknown as { api?: unknown }).api
+  })
+
+  it('乐观换序（引用原样移动、选中保留）+ 应答全量替换收敛', async () => {
+    const a = device('A')
+    const b = device('B')
+    useExternalStore.setState({ devices: [a, b], selectedId: 'A' })
+    const reorderExternal = vi.fn().mockResolvedValue([b, a])
+    ;(window as unknown as { api: unknown }).api = { devices: { reorderExternal } }
+    useExternalStore.getState().reorder(['B', 'A'])
+    expect(useExternalStore.getState().devices[0]).toBe(b)
+    await vi.waitFor(() => expect(reorderExternal).toHaveBeenCalled())
+    expect(useExternalStore.getState().devices.map((entry) => entry.id)).toEqual(['B', 'A'])
+    expect(useExternalStore.getState().selectedId).toBe('A')
+  })
+
+  it('失败重拉收敛', async () => {
+    useExternalStore.setState({ devices: [device('A'), device('B')] })
+    const reorderExternal = vi.fn().mockRejectedValue(new Error('race'))
+    const listExternal = vi.fn().mockResolvedValue([device('A'), device('B')])
+    ;(window as unknown as { api: unknown }).api = { devices: { reorderExternal, listExternal } }
+    useExternalStore.getState().reorder(['B', 'A'])
+    await vi.waitFor(() => expect(listExternal).toHaveBeenCalled())
+    expect(useExternalStore.getState().devices.map((entry) => entry.id)).toEqual(['A', 'B'])
   })
 })

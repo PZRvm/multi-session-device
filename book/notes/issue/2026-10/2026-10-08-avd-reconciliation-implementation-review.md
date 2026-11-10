@@ -1,4 +1,5 @@
 ---
+status: open
 description: 持久化对账实现轮的自查记录——三项观察（重扫放弃时 availability 陈旧、root 环境下 EACCES 用例降级、弹窗前关窗会重弹一次），均按只记录不修复处理
 created: 2026-10-08
 ---

@@ -6,6 +6,8 @@ created: 2026-10-15
 
 # 真机无线接入（stage06 第二批）— plan
 
+> 2026-11-05 后续裁决：默认“只 start 不 kill”保留；用户选择 B，仅显式点击修复并经主进程确认时允许重启共享服务。新行为与任务保护见 [诊断与修复 plan](2026-11-05-wireless-diagnostics-and-recovery.md)，以下保留本批原始设计记录。
+
 > 2026-10-15 实施完成（S1—S4 四步独立提交，分支 feature/real-device-wireless，
 > typecheck/lint/全量 1230 测试全绿，基线 +38；开发期 dev 冒烟通过）。对设计的两处
 > 实现补充：①`devices:external-promote` 第五通道——plan 通道清单漏列「转无线」的

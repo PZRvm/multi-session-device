@@ -1,4 +1,5 @@
 ---
+status: open
 description: GitHub 提示 checkout 和 setup-node v4 使用已弃用的 Node 20 运行时，目前由平台强制切换到 Node 24 并构建成功
 ---
 

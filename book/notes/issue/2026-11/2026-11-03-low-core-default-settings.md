@@ -1,4 +1,5 @@
 ---
+status: open
 description: 少于四核的宿主会产生超出自身能力范围的默认模拟器 CPU 配置，首次发布 CI 暴露此问题
 ---
 

@@ -241,7 +241,10 @@ export const normalizeAdvancedSettings = (
       bootMode,
       internalStorageMiB: storage,
       cpuCores: cpu,
-      graphics: isGpuMode(raw.graphics) ? raw.graphics : 'auto',
+      // 非法值回退到能力默认（darwin=host/win=auto），不硬编码 auto——与创建默认同源
+      graphics: isGpuMode(raw.graphics)
+        ? raw.graphics
+        : (capabilities.defaults?.graphics ?? 'auto'),
       ramMiB: ram,
       vmHeapMiB: heap,
       preferredAbi: raw.preferredAbi === 'arm64-v8a' ? 'arm64-v8a' : 'optimal'

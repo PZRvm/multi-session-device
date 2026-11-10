@@ -1,3 +1,4 @@
+import { adbRecovery } from '../emulator/adbRecovery'
 import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { ScreenAckMessage, ScreenStateMessage } from '@shared/types'
@@ -10,20 +11,13 @@ import { sendResync } from './media'
 import { runAdb } from './proc'
 import { ensureSession } from './session'
 import { cancelRecovery } from './recovery'
-import type { ManagerContext, StreamSession } from './types'
-
-const requireReadySession = (ctx: ManagerContext, sender: Electron.WebContents): StreamSession => {
-  if (!ctx.deps.isMainSender(sender)) throw new Error(msg('screenUnregisteredWindow'))
-  if (!ctx.active) throw new Error(msg('screenNoActiveView'))
-  const session = ctx.sessions.get(ctx.active.deviceId)
-  if (!session || session.state !== 'ready') throw new Error(msg('screenSessionNotReady'))
-  return session
-}
+import { ACK_STALL_MS, type ManagerContext } from './types'
 
 export const registerIpc = (ctx: ManagerContext): void => {
   ipcMain.handle(
     IPC_CHANNELS.screenActivate,
     async (event, raw: unknown): Promise<ScreenStateMessage | null> => {
+      adbRecovery.assertOpen()
       if (!ctx.deps.isMainSender(event.sender)) throw new Error(msg('screenUnregisteredWindow'))
       if (typeof raw !== 'object' || raw === null) throw new Error(msg('activateInvalidPayload'))
       const value = raw as Record<string, unknown>
@@ -49,7 +43,6 @@ export const registerIpc = (ctx: ManagerContext): void => {
       }
       // 激活即换绑视图：突发回放衔接（监听已由 renderer 先装好），seq 从回放起连续
       session.outbox = []
-      session.lastAckAt = Date.now()
       session.resyncArmed = false
       sendResync(ctx, session, true)
       return { ...ctx.buildState(session), viewToken }
@@ -72,7 +65,12 @@ export const registerIpc = (ctx: ManagerContext): void => {
   })
 
   ipcMain.handle(IPC_CHANNELS.screenAck, (event, raw: unknown): void => {
-    const session = requireReadySession(ctx, event.sender)
+    // ACK 是纯流控回执：会话在拆除窗口（休眠/停止/切换视图）被销毁后，renderer
+    // 迟到的 ACK 无任何副作用可撤销——静默忽略，不按错误收口（休眠冒烟实测）
+    if (!ctx.deps.isMainSender(event.sender)) throw new Error(msg('screenUnregisteredWindow'))
+    if (!ctx.active) return
+    const session = ctx.sessions.get(ctx.active.deviceId)
+    if (!session || session.state !== 'ready') return
     const ack = raw as Partial<ScreenAckMessage> | null
     if (
       !ack ||
@@ -94,13 +92,42 @@ export const registerIpc = (ctx: ManagerContext): void => {
       sendResync(ctx, session, true)
       return
     }
+    const advanced = session.outbox.some((packet) => packet.seq <= (ack.throughSeq as number))
     session.outbox = session.outbox.filter((packet) => packet.seq > (ack.throughSeq as number))
-    session.lastAckAt = Date.now()
+    const progress = session.recoveryProgress
+    // 同一缓存链反复回放会重新进入发送窗，但没有新的视频进展。
+    if (
+      advanced &&
+      (!progress || (ack.throughSeq as number) > progress.throughSeq) &&
+      !session.waitingResync &&
+      !session.recovery &&
+      session.resetAttempts > 0
+    ) {
+      const now = Date.now()
+      if (!progress || now - progress.lastAckAt > ACK_STALL_MS) {
+        session.recoveryProgress = {
+          since: now,
+          lastAckAt: now,
+          throughSeq: ack.throughSeq as number
+        }
+      } else if (now - progress.since >= ACK_STALL_MS) {
+        session.resetAttempts = 0
+        session.recoveryProgress = null
+      } else {
+        progress.lastAckAt = now
+        progress.throughSeq = ack.throughSeq as number
+      }
+    }
     session.resyncArmed = true
   })
 
   ipcMain.handle(IPC_CHANNELS.screenInput, async (event, raw: unknown): Promise<void> => {
-    const session = requireReadySession(ctx, event.sender)
+    // 与 ack 同理（评审 R5）：休眠/停止拆除窗口内 renderer 迟到的输入无副作用
+    // 可达——静默丢弃，不按错误收口刷控制台。载荷校验仍拒绝伪造形态。
+    if (!ctx.deps.isMainSender(event.sender)) throw new Error(msg('screenUnregisteredWindow'))
+    if (!ctx.active) return
+    const session = ctx.sessions.get(ctx.active.deviceId)
+    if (!session || session.state !== 'ready') return
     const request = validateInputRequest(raw)
     if (!request) throw new Error(msg('inputInvalidPayload'))
     if (

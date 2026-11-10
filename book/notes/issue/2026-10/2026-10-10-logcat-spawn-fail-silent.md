@@ -1,7 +1,7 @@
 ---
 description: 日志域 adb 进程 spawn 同步失败时保留空会话，订阅者只见「暂无日志」空态，无任何错误提示
 created: 2026-10-10
-status: closed
+status: resolved
 ---
 
 # 日志会话 spawn 失败静默为空态

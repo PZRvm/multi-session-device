@@ -1,4 +1,5 @@
 ---
+status: open
 description: MessagePortMain 经 contextBridge 回传后 port 对象可达但不投递消息——视频包通道退回 webContents.send（每帧拷贝），产品化时可再评估
 ---
 

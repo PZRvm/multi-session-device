@@ -1,4 +1,5 @@
 ---
+status: open
 description: 皮肤和摄像头后续调研发现——37.2 webcam 输出不被旧正则解析；Pixel 7 屏幕偏移取错 part；横屏首布局被拒，rotation 单位测试也偏离官方格式
 tags: [camera, skin, layout, fixtures, parsing]
 ---

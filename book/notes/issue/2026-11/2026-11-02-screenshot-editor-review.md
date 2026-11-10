@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: 截图编辑器阶段 5 评审——八项检查与 plan 专项全部通过，无 P1/P2；1 项 P3（导出防重 React state 理论重入窗口，来源同款，main 侧占位兜底）
 created: 2026-11-02
 tags: [review, p3, screenshot, editor, race]

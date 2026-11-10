@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: 旋转 review 的两项 P2 已修复；电源按用户要求改为停止模拟器并只从左侧启动
 tags: [review, scrcpy, rotation, race, input, error]
 ---

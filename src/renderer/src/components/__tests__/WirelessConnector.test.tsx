@@ -27,7 +27,11 @@ beforeEach(() => {
     devices: {
       scanExternalWireless: scanFn,
       connectExternalWireless: connectFn,
-      pairExternalWireless: pairFn
+      pairExternalWireless: pairFn,
+      onWirelessRecoveryChanged: () => () => {},
+      getWirelessRecoveryState: async () => ({ phase: 'idle', blocked: [] }),
+      repairWirelessConnection: vi.fn(),
+      copyWirelessDiagnostics: vi.fn()
     }
   }
 })

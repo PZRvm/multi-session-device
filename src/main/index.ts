@@ -1,4 +1,6 @@
 import { app, dialog } from 'electron'
+import { createHash } from 'node:crypto'
+import { basename, join } from 'node:path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createMainWindow, getMainWindow } from './window'
 import {
@@ -23,7 +25,27 @@ import { msg } from './locale'
 
 // 单实例锁（issue 2026-10-22-windows-quit-stay-no-window）：win32「留在应用」折返后主窗
 // 已销毁、无托盘无 dock——二次启动经 second-instance 唤回/聚焦主窗；被拒的第二实例直接退出
-const gotSingleInstanceLock = app.requestSingleInstanceLock()
+let gotSingleInstanceLock = app.requestSingleInstanceLock()
+// dev 多实例（issue 2026-11-02-worktree单实例锁互斥）：共享 userData 的锁被占时，
+// 未打包的 dev 实例回退到按端口隔离的 userData 目录（自带独立锁）——多个 worktree
+// 或与安装版可同时调试；安装版语义不变（无锁即退出）。隔离目录首启为空库，属预期。
+if (!gotSingleInstanceLock && !app.isPackaged) {
+  // 后缀优先用 dev 端口；未带端口的实例按工作区目录区分（评审 R7：两个裸
+  // `npm run dev` 不再共享 default 目录互踩），跨启动稳定（同目录同后缀）
+  const port = process.env['MSD_DEV_PORT']
+  const suffix =
+    port !== undefined && /^\d+$/.test(port)
+      ? `port-${port}`
+      : `dir-${basename(process.cwd())}-${createHash('sha1')
+          .update(process.cwd())
+          .digest('hex')
+          .slice(0, 6)}`
+  app.setPath('userData', join(app.getPath('userData'), 'dev-instances', suffix))
+  gotSingleInstanceLock = app.requestSingleInstanceLock()
+  if (gotSingleInstanceLock) {
+    console.log(`[dev] 单实例锁被占，已回退隔离数据目录：${app.getPath('userData')}`)
+  }
+}
 if (!gotSingleInstanceLock) {
   app.quit()
 } else {

@@ -37,6 +37,8 @@ type SetupHandlers = {
   onStart: Mock<() => void>
   onStop: Mock<() => void>
   onCancelStart: Mock<() => void>
+  onHibernate: Mock<() => void>
+  onResume: Mock<() => void>
   onCopySerial: Mock<() => void>
   onDelete: Mock<() => void>
   onRename: Mock<(name: string) => void>
@@ -54,6 +56,8 @@ const setup = ({
     onStart: vi.fn(),
     onStop: vi.fn(),
     onCancelStart: vi.fn(),
+    onHibernate: vi.fn(),
+    onResume: vi.fn(),
     onCopySerial: vi.fn(),
     onDelete: vi.fn(),
     onRename: vi.fn(),
@@ -69,6 +73,8 @@ const setup = ({
       onStart={handlers.onStart}
       onStop={handlers.onStop}
       onCancelStart={handlers.onCancelStart}
+      onHibernate={handlers.onHibernate}
+      onResume={handlers.onResume}
       onCopySerial={handlers.onCopySerial}
       onDelete={handlers.onDelete}
       onRename={handlers.onRename}
@@ -76,6 +82,16 @@ const setup = ({
     />
   )
   return handlers
+}
+
+/** 悬停行内图标后读取气泡全文（PopoverIconButton 的 portal tooltip） */
+const popoverTextOf = async (label: string): Promise<string> => {
+  const button = screen.getByRole('button', { name: label })
+  fireEvent.mouseEnter(button.closest('.popover-icon-wrap')!)
+  await vi.waitFor(() => expect(screen.getByRole('tooltip')).toBeTruthy())
+  const text = screen.getByRole('tooltip').textContent ?? ''
+  fireEvent.mouseLeave(button.closest('.popover-icon-wrap')!)
+  return text
 }
 
 describe('DeviceRow', () => {
@@ -132,16 +148,13 @@ describe('DeviceRow', () => {
       screen.getByRole('button', { name: format(copy.cancelStartAria, { name: 'Pixel 8 API 34' }) })
     )
     expect(onCancelStart).toHaveBeenCalledTimes(1)
+    // stopped-only 删除入口（plan 2026-11-06 设计 E）：启动中无删除按钮（非禁用）
     expect(
-      (
-        screen.getByRole('button', {
-          name: format(copy.deleteAria, { name: 'Pixel 8 API 34' })
-        }) as HTMLButtonElement
-      ).disabled
-    ).toBe(true)
+      screen.queryByRole('button', { name: format(copy.deleteAria, { name: 'Pixel 8 API 34' }) })
+    ).toBeNull()
   })
 
-  it('停止中：重试停止入口在；删除禁用；lastError 行内可见', () => {
+  it('停止中：重试停止入口在；无删除入口；lastError 行内可见', () => {
     const { onStop } = setup({
       device: {
         ...baseDevice,
@@ -155,12 +168,8 @@ describe('DeviceRow', () => {
     )
     expect(onStop).toHaveBeenCalledTimes(1)
     expect(
-      (
-        screen.getByRole('button', {
-          name: format(copy.deleteAria, { name: 'Pixel 8 API 34' })
-        }) as HTMLButtonElement
-      ).disabled
-    ).toBe(true)
+      screen.queryByRole('button', { name: format(copy.deleteAria, { name: 'Pixel 8 API 34' }) })
+    ).toBeNull()
   })
 
   it('摄像头回退通知行内可见（启动仲裁命中的运行会话提示）', () => {
@@ -174,19 +183,17 @@ describe('DeviceRow', () => {
     expect(screen.getByText('前置摄像头被设备「先启机」占用，本次以模拟画面运行')).toBeTruthy()
   })
 
-  it('创建中/删除中：无启停钮、删除禁用、双击不进重命名', () => {
+  it('创建中/删除中：无启停钮、无删除入口、双击不进重命名', () => {
     for (const status of ['creating', 'deleting'] as const) {
       setup({ device: { ...baseDevice, status } })
       expect(
         screen.queryByRole('button', { name: format(copy.startAria, { name: 'Pixel 8 API 34' }) })
       ).toBeNull()
       expect(
-        (
-          screen.getByRole('button', {
-            name: format(copy.deleteAria, { name: 'Pixel 8 API 34' })
-          }) as HTMLButtonElement
-        ).disabled
-      ).toBe(true)
+        screen.queryByRole('button', {
+          name: format(copy.deleteAria, { name: 'Pixel 8 API 34' })
+        })
+      ).toBeNull()
       fireEvent.doubleClick(screen.getByText('Pixel 8 API 34'))
       expect(screen.queryByLabelText(copy.renameAria)).toBeNull()
       cleanup()
@@ -204,7 +211,7 @@ describe('DeviceRow', () => {
   })
 
   describe('文件健康（对账）', () => {
-    it('missing：健康原因行可见；停止态启动钮禁用并说明', () => {
+    it('missing：健康原因行可见；停止态启动钮禁用并说明', async () => {
       const { onStart } = setup({
         device: {
           ...baseDevice,
@@ -229,12 +236,14 @@ describe('DeviceRow', () => {
         name: format(copy.startAria, { name: 'Pixel 8 API 34' })
       }) as HTMLButtonElement
       expect(start.disabled).toBe(true)
-      expect(start.title).toContain('重新检查')
+      expect(await popoverTextOf(format(copy.startAria, { name: 'Pixel 8 API 34' }))).toContain(
+        '重新检查'
+      )
       fireEvent.click(start)
       expect(onStart).not.toHaveBeenCalled()
     })
 
-    it('checking：停止态启动禁用（检查完成前不放行）', () => {
+    it('checking：停止态启动禁用（检查完成前不放行）', async () => {
       const { onStart } = setup({
         device: {
           ...baseDevice,
@@ -249,7 +258,7 @@ describe('DeviceRow', () => {
       expect(onStart).not.toHaveBeenCalled()
     })
 
-    it('运行中文件异常：停止/复制入口保留，原因行可见（不清画面）', () => {
+    it('运行中文件异常：停止/复制入口保留，原因行可见（不清画面）', async () => {
       const { onStop } = setup({
         device: {
           ...baseDevice,
@@ -276,7 +285,7 @@ describe('DeviceRow', () => {
       expect(onStop).toHaveBeenCalledTimes(1)
     })
 
-    it('库不可信（store error）：停止态启动禁用', () => {
+    it('库不可信（store error）：停止态启动禁用', async () => {
       const { onStart } = setup({ storeTrusted: false })
       const start = screen.getByRole('button', {
         name: format(copy.startAria, { name: 'Pixel 8 API 34' })
@@ -286,13 +295,15 @@ describe('DeviceRow', () => {
       expect(onStart).not.toHaveBeenCalled()
     })
 
-    it('库只读（read-only）：删除禁用并说明；双击/F2 不进重命名', () => {
+    it('库只读（read-only）：删除禁用并说明；双击/F2 不进重命名', async () => {
       setup({ metaWritable: false })
       const del = screen.getByRole('button', {
         name: format(copy.deleteAria, { name: 'Pixel 8 API 34' })
       }) as HTMLButtonElement
       expect(del.disabled).toBe(true)
-      expect(del.title).toContain('冻结')
+      expect(await popoverTextOf(format(copy.deleteAria, { name: 'Pixel 8 API 34' }))).toContain(
+        '冻结'
+      )
       fireEvent.doubleClick(screen.getByText('Pixel 8 API 34'))
       expect(screen.queryByLabelText(copy.renameAria)).toBeNull()
       fireEvent.keyDown(screen.getByText('Pixel 8 API 34').parentElement!, { key: 'F2' })
@@ -432,6 +443,8 @@ describe('DeviceRow（review 修复轮）', () => {
         onStart={vi.fn()}
         onStop={vi.fn()}
         onCancelStart={vi.fn()}
+        onHibernate={vi.fn()}
+        onResume={vi.fn()}
         onCopySerial={vi.fn()}
         onDelete={vi.fn()}
         onRename={onRename}
@@ -447,7 +460,7 @@ describe('DeviceRow（review 修复轮）', () => {
     expect(onRename).not.toHaveBeenCalled()
   })
 
-  it('跨来源桶（用户复核 5）：编辑/删除禁用带说明，重命名路径拦截反馈；停止不受限', () => {
+  it('跨来源桶（用户复核 5）：编辑/删除禁用带说明，重命名路径拦截反馈；停止不受限', async () => {
     const onCrossBucketBlocked = vi.fn()
     // 停止态跨桶：编辑/删除禁用 + tooltip 指路；F2 重命名走拦截回调不进输入框
     render(
@@ -461,6 +474,8 @@ describe('DeviceRow（review 修复轮）', () => {
         onStart={vi.fn()}
         onStop={vi.fn()}
         onCancelStart={vi.fn()}
+        onHibernate={vi.fn()}
+        onResume={vi.fn()}
         onCopySerial={vi.fn()}
         onDelete={vi.fn()}
         onRename={vi.fn()}
@@ -477,8 +492,12 @@ describe('DeviceRow（review 修复轮）', () => {
     }) as HTMLButtonElement
     expect(edit.disabled).toBe(true)
     expect(del.disabled).toBe(true)
-    expect(edit.title).toBe(copy.crossBucketBlockedTitle)
-    expect(del.title).toBe(copy.crossBucketBlockedTitle)
+    expect(await popoverTextOf(format(copy.editAria, { name: 'Pixel 8 API 34' }))).toContain(
+      copy.crossBucketBlockedTitle
+    )
+    expect(await popoverTextOf(format(copy.deleteAria, { name: 'Pixel 8 API 34' }))).toContain(
+      copy.crossBucketBlockedTitle
+    )
     fireEvent.keyDown(screen.getByText('Pixel 8 API 34').parentElement!, { key: 'F2' })
     expect(onCrossBucketBlocked).toHaveBeenCalledTimes(1)
     expect(screen.queryByLabelText(copy.renameAria)).toBeNull()
@@ -495,6 +514,8 @@ describe('DeviceRow（review 修复轮）', () => {
         onStart={vi.fn()}
         onStop={vi.fn()}
         onCancelStart={vi.fn()}
+        onHibernate={vi.fn()}
+        onResume={vi.fn()}
         onCopySerial={vi.fn()}
         onDelete={vi.fn()}
         onRename={vi.fn()}
@@ -517,14 +538,10 @@ describe('DeviceRow（review 修复轮）', () => {
         }) as HTMLButtonElement
       ).disabled
     ).toBe(false)
-    // 删除仍是修改行为：跨桶运行设备禁用
+    // 删除入口仅停止态渲染（plan 2026-11-06 设计 E）：运行中无按钮可聚焦
     expect(
-      (
-        screen.getByRole('button', {
-          name: format(copy.deleteAria, { name: 'Pixel 8 API 34' })
-        }) as HTMLButtonElement
-      ).disabled
-    ).toBe(true)
+      screen.queryByRole('button', { name: format(copy.deleteAria, { name: 'Pixel 8 API 34' }) })
+    ).toBeNull()
   })
 
   it('出身徽标：shared-studio 出身显示（aria/tooltip 三语全称）；app-owned 与缺席不显示', () => {
@@ -536,6 +553,115 @@ describe('DeviceRow（review 修复轮）', () => {
     cleanup()
     setup()
     expect(screen.queryByLabelText(copy.deviceOriginStudio)).toBeNull()
+  })
+})
+
+describe('休眠域行内动作（plan 2026-11-06-emulator-hibernation）', () => {
+  it('运行中：休眠钮在，可用（Mac + host 能力）', () => {
+    const { onHibernate } = setup({
+      device: {
+        ...baseDevice,
+        status: 'running',
+        serial: 'emulator-5554',
+        hibernationAvailable: true
+      }
+    })
+    const button = screen.getByRole('button', {
+      name: format(copy.hibernateAria, { name: 'Pixel 8 API 34' })
+    }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+    fireEvent.click(button)
+    expect(onHibernate).toHaveBeenCalledTimes(1)
+  })
+
+  it('运行中（能力关闭）：休眠钮禁用，tooltip 带原因', async () => {
+    setup({
+      device: {
+        ...baseDevice,
+        status: 'running',
+        serial: 'emulator-5554',
+        hibernationAvailable: false,
+        hibernationDisabledReason: copy.hibernateUnsupported
+      }
+    })
+    const button = screen.getByRole('button', {
+      name: format(copy.hibernateAria, { name: 'Pixel 8 API 34' })
+    }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    expect(await popoverTextOf(format(copy.hibernateAria, { name: 'Pixel 8 API 34' }))).toContain(
+      copy.hibernateUnsupported
+    )
+  })
+
+  it('休眠中：忙态槽位；无删除/启动入口；退出失败出现重试与停止出口', () => {
+    const busy = setup({ device: { ...baseDevice, status: 'hibernating' } })
+    expect(
+      screen.getByRole('img', { name: format(copy.hibernatingAria, { name: 'Pixel 8 API 34' }) })
+    ).toBeTruthy()
+    expect(
+      screen.queryByRole('button', { name: format(copy.deleteAria, { name: 'Pixel 8 API 34' }) })
+    ).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: format(copy.startAria, { name: 'Pixel 8 API 34' }) })
+    ).toBeNull()
+    expect(
+      screen.queryByRole('button', {
+        name: format(copy.retryHibernateAria, { name: 'Pixel 8 API 34' })
+      })
+    ).toBeNull()
+    cleanup()
+
+    const retry = setup({
+      device: {
+        ...baseDevice,
+        status: 'hibernating',
+        lastError: { code: 'hibernate-exit-failed', message: '快照已保存，但进程未退出' }
+      }
+    })
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: format(copy.retryHibernateAria, { name: 'Pixel 8 API 34' })
+      })
+    )
+    expect(retry.onHibernate).toHaveBeenCalledTimes(1)
+    fireEvent.click(
+      screen.getByRole('button', { name: format(copy.stopAria, { name: 'Pixel 8 API 34' }) })
+    )
+    expect(retry.onStop).toHaveBeenCalledTimes(1)
+    void busy
+  })
+
+  it('已休眠：恢复钮在；无停止/删除/启动入口', () => {
+    const { onResume } = setup({ device: { ...baseDevice, status: 'hibernated' } })
+    fireEvent.click(
+      screen.getByRole('button', { name: format(copy.resumeAria, { name: 'Pixel 8 API 34' }) })
+    )
+    expect(onResume).toHaveBeenCalledTimes(1)
+    expect(
+      screen.queryByRole('button', { name: format(copy.stopAria, { name: 'Pixel 8 API 34' }) })
+    ).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: format(copy.deleteAria, { name: 'Pixel 8 API 34' }) })
+    ).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: format(copy.startAria, { name: 'Pixel 8 API 34' }) })
+    ).toBeNull()
+  })
+
+  it('恢复中：忙态 + 取消恢复钮（不出现停止）', () => {
+    const { onCancelStart } = setup({ device: { ...baseDevice, status: 'resuming' } })
+    expect(
+      screen.getByRole('img', { name: format(copy.resumingAria, { name: 'Pixel 8 API 34' }) })
+    ).toBeTruthy()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: format(copy.cancelResumeAria, { name: 'Pixel 8 API 34' })
+      })
+    )
+    expect(onCancelStart).toHaveBeenCalledTimes(1)
+    expect(
+      screen.queryByRole('button', { name: format(copy.stopAria, { name: 'Pixel 8 API 34' }) })
+    ).toBeNull()
   })
 })
 
@@ -571,4 +697,33 @@ describe('WHPX 缺失引导按钮（plan 2026-10-22-windows-emulator-env）', ()
     })
     expect(screen.queryByRole('button', { name: copy.openWindowsFeatures })).toBeNull()
   })
+})
+
+it('拖拽挂接（plan 2026-11-09）：drag prop 挂行根标识与可拖态；重命名中禁拖', () => {
+  const { container } = render(
+    <DeviceRow
+      device={baseDevice}
+      selected={false}
+      storeTrusted
+      metaWritable
+      onSelect={vi.fn()}
+      onStart={vi.fn()}
+      onStop={vi.fn()}
+      onCancelStart={vi.fn()}
+      onHibernate={vi.fn()}
+      onResume={vi.fn()}
+      onCopySerial={vi.fn()}
+      onDelete={vi.fn()}
+      onRename={vi.fn()}
+      onEdit={vi.fn()}
+      drag={{ draggable: true, isSource: false, dropPos: null }}
+    />
+  )
+  const row = container.firstElementChild as HTMLElement
+  expect(row.getAttribute('data-avd-drag-id')).toBe('d1')
+  expect(row.getAttribute('draggable')).toBe('true')
+  // 双击进重命名：输入框需可选可编，行内禁拖
+  fireEvent.dblClick(row)
+  expect(screen.getByRole('textbox')).toBeTruthy()
+  expect(row.getAttribute('draggable')).toBe('false')
 })

@@ -124,3 +124,65 @@ describe('CanvasPlaceholder（review 修复轮）', () => {
     ).toBe(true)
   })
 })
+
+describe('CanvasPlaceholder 休眠占位（plan 2026-11-06-emulator-hibernation）', () => {
+  const hibernatedDevice = (overrides: Partial<Device> = {}): Device =>
+    ({
+      id: 'd1',
+      name: 'Pixel 8 API 34',
+      profileId: 'pixel_8',
+      profileLabel: 'Pixel 8',
+      imagePackageName: 'system-images;android-34;google_apis;arm64-v8a',
+      apiDisplay: '34',
+      formFactor: 'phone',
+      screenSummary: null,
+      advancedSettings: null,
+      snapshotReadyAt: null,
+      createdAt: 0,
+      status: 'hibernated',
+      hibernationAvailable: true,
+      ...overrides
+    }) as Device
+
+  it('已休眠：说明资源已释放，提供恢复与放弃入口', () => {
+    const onResume = vi.fn()
+    const onDiscard = vi.fn()
+    render(
+      <CanvasPlaceholder
+        device={hibernatedDevice()}
+        onCreate={vi.fn()}
+        onRecheck={vi.fn()}
+        storeState="ok"
+        onResume={onResume}
+        onDiscard={onDiscard}
+      />
+    )
+    expect(screen.getByText(copy.hintHibernated)).toBeTruthy()
+    expect(screen.getByText(copy.hibernatedBody)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.hibernatedResume) }))
+    expect(onResume).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.hibernatedDiscard) }))
+    expect(onDiscard).toHaveBeenCalledTimes(1)
+  })
+
+  it('能力关闭（如 GPU 非 host）：恢复钮禁用并展示原因', () => {
+    render(
+      <CanvasPlaceholder
+        device={hibernatedDevice({
+          hibernationAvailable: false,
+          hibernationDisabledReason: copy.hibernateUnsupported
+        })}
+        onCreate={vi.fn()}
+        onRecheck={vi.fn()}
+        storeState="ok"
+        onResume={vi.fn()}
+        onDiscard={vi.fn()}
+      />
+    )
+    const resume = screen.getByRole('button', {
+      name: new RegExp(copy.hibernatedResume)
+    }) as HTMLButtonElement
+    expect(resume.disabled).toBe(true)
+    expect(screen.getByText(copy.hibernateUnsupported)).toBeTruthy()
+  })
+})

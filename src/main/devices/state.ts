@@ -55,6 +55,25 @@ export function attachDeviceStreamBridge(bridge: typeof streamBridge): void {
   Object.assign(streamBridge, bridge)
 }
 
+/**
+ * 休眠事务门（ipc 层装配；plan 2026-11-06 设计 D2-D4）：逐设备忙态查询与
+ * 输入释放/截图排空接缝——devices 域不反向依赖安装/录制/截屏/scrcpy 模块。
+ */
+export const hibernationGate: {
+  /** 该设备 APK 安装进行中（休眠拒绝，用户先完成安装） */
+  installerBusyFor?: (id: string) => boolean
+  /** 该设备录屏进行中（含暂停录制；成品封装任务不阻塞） */
+  recordingActiveFor?: (id: string) => boolean
+  /** 释放已按下按键与触点（保存前调用，避免按住状态进快照） */
+  releaseInputs?: (id: string) => Promise<void>
+  /** 有界排空在途截图/编辑保存副作用 */
+  drainScreenshots?: (id: string) => Promise<void>
+} = {}
+
+export function attachHibernationGate(gate: typeof hibernationGate): void {
+  Object.assign(hibernationGate, gate)
+}
+
 /** 内存设备列表（元素可就地变更；整体替换走 setDevices——跨 await 的提交路径会重建数组） */
 export const devicesNow = (): Device[] => devices
 export const setDevices = (next: Device[]): void => {
@@ -170,9 +189,37 @@ export const reconciliationSummaryNow = (): ReconciliationSummary => ({
   pendingNotification: lastReport?.pendingNotification ?? false
 })
 
+/**
+ * 休眠能力门控（ADR-007）：PoC 只验证过 Mac + host GPU 后端；auto 在 headless 下
+ * 实际可回落软件渲染（learn 2026-11-06），未验证组合一律不展示可执行入口。
+ * legacy（无附加设置）argv 固定 -gpu host，视为已验证后端。
+ */
+export const hibernationCapabilityOf = (
+  device: Device
+): { available: boolean; disabledReason: string | null } => {
+  if (process.platform !== 'darwin') {
+    return { available: false, disabledReason: msg('hibernationUnsupportedPlatform') }
+  }
+  const gpu =
+    device.advancedSettings === null || device.advancedSettings === undefined
+      ? 'host'
+      : device.advancedSettings.graphics
+  if (gpu !== 'host') {
+    return { available: false, disabledReason: msg('hibernationUnsupportedGpu', { gpu }) }
+  }
+  return { available: true, disabledReason: null }
+}
+
 export const snapshotNow = (): DeviceSnapshot => ({
   revision,
-  devices: devices.map((device) => ({ ...device })),
+  devices: devices.map((device) => {
+    const capability = hibernationCapabilityOf(device)
+    return {
+      ...device,
+      hibernationAvailable: capability.available,
+      hibernationDisabledReason: capability.disabledReason
+    }
+  }),
   storeHealth,
   reconciliation: reconciliationSummaryNow(),
   // 活动来源桶（出身过滤视图）：切来源后的重查轮快照自然翻转到新桶

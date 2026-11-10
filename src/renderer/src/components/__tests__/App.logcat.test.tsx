@@ -106,7 +106,7 @@ describe.each(['darwin', 'win32', 'linux'])('主窗日志 dock（%s）', (platfo
     setViewport(1024)
   })
 
-  const toggleButton = (): HTMLElement => screen.getByTitle(copy.logcatTitle)
+  const toggleButton = (): HTMLElement => screen.getByRole('button', { name: copy.logcatTitle })
 
   it('板头留在列表内，Windows 开关浮在右上且不创建独立顶部行', async () => {
     const { container } = render(<App />)
@@ -155,7 +155,7 @@ describe.each(['darwin', 'win32', 'linux'])('主窗日志 dock（%s）', (platfo
     render(<App />)
     fireEvent.click(toggleButton())
     await screen.findByRole('log')
-    fireEvent.click(screen.getByTitle(copy.logcatPopOut))
+    fireEvent.click(screen.getByRole('button', { name: copy.logcatPopOut }))
     await waitFor(() => expect(dialogShow).toHaveBeenCalledTimes(1))
     expect(dialogShow).toHaveBeenCalledWith(
       expect.objectContaining({ title: copy.openLogcatWindowFailed })
@@ -222,7 +222,7 @@ describe.each(['darwin', 'win32', 'linux'])('主窗日志 dock（%s）', (platfo
     render(<App />)
     fireEvent.click(toggleButton())
     await screen.findByRole('log')
-    fireEvent.click(screen.getByTitle(copy.logcatPopOut))
+    fireEvent.click(screen.getByRole('button', { name: copy.logcatPopOut }))
     expect(openLogcatWindow).toHaveBeenCalledWith('d1')
     await waitFor(() => expect(screen.queryByRole('log')).toBeNull())
     // 独立窗口态主窗宽度自由：dock 不可见即解锁
@@ -265,7 +265,7 @@ describe.each(['darwin', 'win32', 'linux'])('主窗日志 dock（%s）', (platfo
       useDeviceStore.setState({ devices: [stopped] })
     })
     rerender(<App />)
-    expect(screen.queryByTitle(copy.logcatTitle)).toBeNull()
+    expect(screen.queryByRole('button', { name: copy.logcatTitle })).toBeNull()
     // dock 自动收起（不再保留空态挂死）
     expect(screen.queryByRole('log')).toBeNull()
     // 解锁随 dockVisible 变 false 发出

@@ -71,6 +71,7 @@ const zhCN = {
   actionCreate: '创建设备',
   actionDelete: '删除设备',
   actionRename: '重命名设备',
+  actionReorder: '调整设备顺序',
   deviceCrossOriginBlocked:
     '该设备属于另一 SDK 来源——切换到对应来源后才能修改（改名/删除/编辑保存）',
   storeErrorBlocked: '设备数据读取失败（{issues}），不能{action}；请先修复 devices.json 后重新检查',
@@ -138,6 +139,40 @@ const zhCN = {
   runnerStopTimeout: '停止超时：模拟器进程组未在限期内退出',
   runnerStartCancelled: '启动已取消',
   runnerNoInstance: '设备没有运行中的实例',
+  // ---- 休眠域（plan 2026-11-06-emulator-hibernation）----
+  hibernateNotRunning: '设备不在运行中，无法休眠',
+  hibernateBusy: '休眠操作正在进行中，请等待完成',
+  hibernateBlockedByInstall: '该设备正在安装应用，完成安装后再休眠',
+  hibernateBlockedByRecording: '该设备正在录屏（含暂停录制），结束录屏后再休眠',
+  hibernateProcessLost: '模拟器进程不在登记中（可能已崩溃），请检查设备状态',
+  hibernateSaveRejected: '模拟器拒绝了快照保存：{response}',
+  hibernateSaveFailed: '休眠保存失败，设备已恢复运行：{message}',
+  hibernateExitFailed:
+    '快照已保存，但模拟器进程未能退出：{message}；可重试完成休眠，或停止设备放弃休眠',
+  hibernatePortHeldWarning:
+    '进程已退出，但端口 {port} 仍被监听（疑似外部占用）；休眠已完成，可正常恢复或放弃',
+  hibernateAbortedProcessLost: '休眠中断（实例进程丢失）：{message}',
+  hibernateRetryRecordLost: '休眠记录已不可用，无法重试退出；请停止设备后重新开始',
+  hibernateKillRejected: '模拟器控制台拒绝了退出命令：{response}',
+  hibernateQuitTimeout: '模拟器未在限期内优雅退出',
+  stopWhileResuming: '设备正在从休眠恢复，请先取消恢复',
+  resumeNotHibernated: '设备不在休眠状态，无法恢复',
+  hibernateRecordInvalid: '休眠记录缺失或不可用，无法恢复',
+  resumeIncompatibleImage: '设备镜像已变化，休眠快照不再兼容；请放弃休眠状态后重新启动',
+  resumeSnapshotMissing: '休眠快照文件缺失，无法恢复；请放弃休眠状态后重新启动',
+  resumeIncompatibleFingerprint:
+    '设备配置或 SDK 已变化，休眠快照不再兼容；请放弃休眠状态后重新启动',
+  hibernateResumeFailed: '休眠恢复失败：{detail}；快照已保留，可重试或放弃',
+  hibernateBootIdUnavailable: '无法读取设备内核 boot_id，休眠/恢复校验不可用',
+  hibernateBootIdMismatch: '恢复校验失败：内核 boot_id 与快照不一致（{bootId}），疑似回退冷启动',
+  hibernateCrashed: '休眠过程中模拟器进程异常退出：{detail}',
+  discardNotHibernated: '设备不在休眠状态，无可放弃的休眠现场',
+  deleteNotStopped: '设备不在停止状态，不能删除；请先停止设备（休眠设备需先放弃休眠状态）',
+  hibernationUnsupportedPlatform: '休眠能力尚未在当前操作系统上验证，暂不开放',
+  hibernationUnsupportedGpu: '休眠仅支持硬件加速 GPU（host）后端；当前为 {gpu}',
+  hibernationRecordCorrupt: '休眠记录损坏（{reason}），已清除；设备回到停止状态',
+  hibernationInterrupted: '上次休眠未完成（保存中断），设备回到停止状态；未保存的现场不再恢复',
+  hibernationSnapshotMissing: '休眠快照文件缺失，设备回到停止状态',
   // ---- 投屏（scrcpy）----
   clipboardChannelClosed: '剪贴板控制通道已关闭',
   clipboardWriteTimeout: '剪贴板控制写入超时，请重新连接设备',
@@ -556,6 +591,7 @@ const zhTW: ErrorsCopy = {
   actionCreate: '建立裝置',
   actionDelete: '刪除裝置',
   actionRename: '重新命名裝置',
+  actionReorder: '調整裝置順序',
   deviceCrossOriginBlocked:
     '該裝置屬於另一 SDK 來源——切換到對應來源後才能修改（改名/刪除/編輯儲存）',
   storeErrorBlocked: '裝置資料讀取失敗（{issues}），不能{action}；請先修復 devices.json 後重新檢查',
@@ -620,6 +656,40 @@ const zhTW: ErrorsCopy = {
   runnerStopTimeout: '停止逾時：模擬器處理程序群組未在限期內退出',
   runnerStartCancelled: '啟動已取消',
   runnerNoInstance: '裝置沒有執行中的執行個體',
+  // ---- 休眠域（plan 2026-11-06-emulator-hibernation）----
+  hibernateNotRunning: '裝置不在執行中，無法休眠',
+  hibernateBusy: '休眠操作正在進行中，請等待完成',
+  hibernateBlockedByInstall: '該裝置正在安裝應用，完成安裝後再休眠',
+  hibernateBlockedByRecording: '該裝置正在錄影（含暫停錄製），結束錄影後再休眠',
+  hibernateProcessLost: '模擬器處理程序不在登記中（可能已當機），請檢查裝置狀態',
+  hibernateSaveRejected: '模擬器拒絕了快照儲存：{response}',
+  hibernateSaveFailed: '休眠儲存失敗，裝置已恢復執行：{message}',
+  hibernateExitFailed:
+    '快照已儲存，但模擬器處理程序未能退出：{message}；可重試完成休眠，或停止裝置放棄休眠',
+  hibernatePortHeldWarning:
+    '處理程序已退出，但連接埠 {port} 仍被監聽（疑似外部占用）；休眠已完成，可正常恢復或放棄',
+  hibernateAbortedProcessLost: '休眠中斷（執行個體處理程序遺失）：{message}',
+  hibernateRetryRecordLost: '休眠記錄已不可用，無法重試退出；請停止裝置後重新開始',
+  hibernateKillRejected: '模擬器主控台拒絕了退出命令：{response}',
+  hibernateQuitTimeout: '模擬器未在限期內優雅退出',
+  stopWhileResuming: '裝置正在從休眠恢復，請先取消恢復',
+  resumeNotHibernated: '裝置不在休眠狀態，無法恢復',
+  hibernateRecordInvalid: '休眠記錄缺失或不可用，無法恢復',
+  resumeIncompatibleImage: '裝置映像檔已變化，休眠快照不再相容；請放棄休眠狀態後重新啟動',
+  resumeSnapshotMissing: '休眠快照檔案缺失，無法恢復；請放棄休眠狀態後重新啟動',
+  resumeIncompatibleFingerprint:
+    '裝置設定或 SDK 已變化，休眠快照不再相容；請放棄休眠狀態後重新啟動',
+  hibernateResumeFailed: '休眠恢復失敗：{detail}；快照已保留，可重試或放棄',
+  hibernateBootIdUnavailable: '無法讀取裝置核心 boot_id，休眠/恢復校驗不可用',
+  hibernateBootIdMismatch: '恢復校驗失敗：核心 boot_id 與快照不一致（{bootId}），疑似回退冷啟動',
+  hibernateCrashed: '休眠過程中模擬器處理程序異常退出：{detail}',
+  discardNotHibernated: '裝置不在休眠狀態，無可放棄的休眠現場',
+  deleteNotStopped: '裝置不在停止狀態，不能刪除；請先停止裝置（休眠裝置需先放棄休眠狀態）',
+  hibernationUnsupportedPlatform: '休眠能力尚未在目前作業系統上驗證，暫不開放',
+  hibernationUnsupportedGpu: '休眠僅支援硬體加速 GPU（host）後端；目前為 {gpu}',
+  hibernationRecordCorrupt: '休眠記錄損壞（{reason}），已清除；裝置回到停止狀態',
+  hibernationInterrupted: '上次休眠未完成（儲存中斷），裝置回到停止狀態；未儲存的現場不再恢復',
+  hibernationSnapshotMissing: '休眠快照檔案缺失，裝置回到停止狀態',
   clipboardChannelClosed: '剪貼簿控制通道已關閉',
   clipboardWriteTimeout: '剪貼簿控制寫入逾時，請重新連接裝置',
   clipboardSyncReadFailed: '無法讀取電腦剪貼簿，稍後會自動重試',
@@ -1030,6 +1100,7 @@ const enUS: ErrorsCopy = {
   actionCreate: 'create a device',
   actionDelete: 'delete a device',
   actionRename: 'rename a device',
+  actionReorder: 'reorder devices',
   deviceCrossOriginBlocked:
     'This device belongs to the other SDK source — switch to that source to modify it (rename/delete/edit-save)',
   storeErrorBlocked:
@@ -1104,6 +1175,54 @@ const enUS: ErrorsCopy = {
   runnerStopTimeout: 'Stop timed out: the emulator process group did not exit in time',
   runnerStartCancelled: 'Start was canceled',
   runnerNoInstance: 'The device has no running instance',
+  // ---- Hibernation (plan 2026-11-06-emulator-hibernation) ----
+  hibernateNotRunning: 'The device is not running; it cannot hibernate',
+  hibernateBusy: 'A hibernation operation is already in progress; wait for it to finish',
+  hibernateBlockedByInstall:
+    'An app installation is running on this device; finish it before hibernating',
+  hibernateBlockedByRecording:
+    'A screen recording (including a paused one) is active on this device; finish it before hibernating',
+  hibernateProcessLost:
+    'The emulator process is not registered (it may have crashed); check the device state',
+  hibernateSaveRejected: 'The emulator rejected the snapshot save: {response}',
+  hibernateSaveFailed: 'Hibernation save failed; the device is running again: {message}',
+  hibernateExitFailed:
+    'The snapshot was saved, but the emulator process failed to exit: {message}; retry to finish hibernating, or stop the device to abandon it',
+  hibernatePortHeldWarning:
+    'The process exited, but port {port} is still listening (likely held by another program); hibernation completed and can be resumed or discarded normally',
+  hibernateAbortedProcessLost: 'Hibernation aborted (the instance process was lost): {message}',
+  hibernateRetryRecordLost:
+    'The hibernation record is no longer usable; stop the device and start over',
+  hibernateKillRejected: 'The emulator console rejected the quit command: {response}',
+  hibernateQuitTimeout: 'The emulator did not exit gracefully within the deadline',
+  stopWhileResuming: 'The device is resuming from hibernation; cancel the resume first',
+  resumeNotHibernated: 'The device is not hibernated; it cannot resume',
+  hibernateRecordInvalid: 'The hibernation record is missing or unusable; it cannot resume',
+  resumeIncompatibleImage:
+    'The system image changed; the hibernation snapshot is no longer compatible. Discard the hibernation state and start again',
+  resumeSnapshotMissing:
+    'The hibernation snapshot files are missing. Discard the hibernation state and start again',
+  resumeIncompatibleFingerprint:
+    'The device configuration or SDK changed; the hibernation snapshot is no longer compatible. Discard the hibernation state and start again',
+  hibernateResumeFailed:
+    'Hibernation resume failed: {detail}; the snapshot is kept — retry or discard',
+  hibernateBootIdUnavailable:
+    'Cannot read the guest kernel boot_id; hibernation/resume verification is unavailable',
+  hibernateBootIdMismatch:
+    'Resume verification failed: the kernel boot_id differs from the snapshot ({bootId}); the emulator appears to have fallen back to a cold boot',
+  hibernateCrashed: 'The emulator process exited unexpectedly during hibernation: {detail}',
+  discardNotHibernated: 'The device is not hibernated; there is no hibernation state to discard',
+  deleteNotStopped:
+    'The device is not stopped; it cannot be deleted. Stop it first (hibernated devices must discard the hibernation state first)',
+  hibernationUnsupportedPlatform:
+    'Hibernation has not been verified on this operating system yet; it is disabled',
+  hibernationUnsupportedGpu:
+    'Hibernation only supports the hardware GPU (host) backend; the current setting is {gpu}',
+  hibernationRecordCorrupt:
+    'The hibernation record is corrupt ({reason}) and was removed; the device is stopped',
+  hibernationInterrupted:
+    'The last hibernation did not finish (the save was interrupted); the device is stopped and the unsaved state is gone',
+  hibernationSnapshotMissing: 'The hibernation snapshot files are missing; the device is stopped',
   clipboardChannelClosed: 'The clipboard control channel is closed',
   clipboardWriteTimeout: 'Clipboard control write timed out; reconnect the device',
   clipboardSyncReadFailed: 'Could not read the computer clipboard; retrying automatically',

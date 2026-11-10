@@ -14,12 +14,12 @@
 // （马赛克滤镜在节点缓存画布中随导出合成；导出前隐藏裁剪浮层）→ editCopy /
 // editDownload（captureId 对账）。成功后窗内 inline 结果反馈（头部位短文案 2.1s
 // 起淡出、2.6s 移除，不弹浮层**不自动关窗**——用户裁决）；失败显示在窗内错误条、
-// 留在编辑态（编辑期并发新截图 → 主进程报「截图已过期」如实呈现，不伪造成功）。
+// 留在编辑态（会话已失效 → 主进程报「截图已过期」如实呈现，不伪造成功）。
 //
 // 产出后续编（实现细节，计划未明示的必要补全）：edit-copy/edit-download 成功后
-// 主进程回写单槽并**换新 captureId**（「单槽 = 最近一次成品」契约）——旧引用随即
+// 主进程回写本窗会话并**换新 captureId**——旧引用随即
 // 过期，若不刷新则用户复制后再点下载必报「截图已过期」（假错误）。故每次产出
-// 成功后重取 getEditImage 把编辑基准续到新单槽：成品已含全部标注（标注数组清零、
+// 成功后重取 getEditImage 把编辑基准续到本窗新版本：成品已含全部标注（标注数组清零、
 // 撤销栈重置、AnnotationStage 按 captureId 重挂清内部草稿态），画布视觉不变、可
 // 继续叠加标注。续编取图失败如实上错误条、已示成功 flash 不撤——输出成功与续编
 // 失败分别呈现，不把已落盘误报为未保存。
@@ -281,9 +281,8 @@ function EditorWindow(): React.JSX.Element {
     )
   }
 
-  /** 产出成功后续编（见模块头注）：重取单槽换新 captureId，标注已烘入成品故清零。
-   *  弱校验（审查低-1 闭环）：返回尺寸 ≠ 本窗视口尺寸说明取到的是并发新截图而非
-   *  本窗成品——如实以 flash 告知「已切换到最新截图」，不静默跳变 */
+  /** 产出成功后续编（见模块头注）：重取本窗会话换新 captureId，标注已烘入成品故清零。
+   *  返回尺寸与本窗视口不符时保留防御提示；取图绑定本窗会话，其他截图不会替换它。 */
   async function refreshSlotAfterApply(): Promise<void> {
     const result = await toApiResult(window.api.screenshot.getEditImage())
     if (!result.ok) throw new Error(result.error)

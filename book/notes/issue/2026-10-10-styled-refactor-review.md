@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: styled 单 Wrapper 重排过程中发现的既有问题——发丝线隐式 DOM 契约、选中态状态点对比度、重复 CSS 与死钩子等（只记录，未修复）
 tags: [styled-components, 债务, review]
 ---

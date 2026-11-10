@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: 全仓库缺 requestSingleInstanceLock——主仓库与 worktree 的 dev 构建同包名共享同一 userData，双实例并行互踩 devices.json/avd-home（删除被复活、互相触发冻结）
 created: 2026-10-12
 tags: [electron, single-instance, worktree, dev-workflow, data-safety]

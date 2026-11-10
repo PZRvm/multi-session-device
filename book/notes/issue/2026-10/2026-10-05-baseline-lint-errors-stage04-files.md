@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: stage04 基线上 npm run lint 有存量 10 errors / 7 warnings（react-hooks 渲染纪律 + 显式返回类型），全部位于已提交的 scrcpy 与投屏 renderer 文件
 ---
 

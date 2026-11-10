@@ -3,10 +3,18 @@
 // 分层：environment/state → persistence → scan/startup/lifecycle/create/edit
 // → queries/ipc → 本文件；状态单例语义依赖本入口的依赖图整体加载。
 export { adbBinaryPath, androidToolEnv } from './environment'
-export { attachDeviceStreamBridge } from './state'
+export { attachDeviceStreamBridge, attachHibernationGate } from './state'
 export { triggerSourceChangeReconcile } from './scan'
 export { runningDeviceCount } from './startup'
-export { prepareAppShutdown, purgeAppOwnedDevices, resumeAfterShutdown } from './lifecycle'
+export {
+  deleteDevice,
+  discardHibernationDevice,
+  hibernateDevice,
+  prepareAppShutdown,
+  purgeAppOwnedDevices,
+  resumeAfterShutdown,
+  resumeDevice
+} from './lifecycle'
 export { assertEditorTarget } from './edit'
 export {
   appOwnedDeviceCount,

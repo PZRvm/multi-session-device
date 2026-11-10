@@ -18,6 +18,7 @@ export interface ScreenViewRef {
 }
 
 const ACK_INTERVAL_PACKETS = 8
+const ACK_DELAY_MS = 100
 /** 首批解码启动与回放允许两个 ACK 批次，超过后显式请求新链。 */
 const MAX_DECODE_QUEUE_PACKETS = ACK_INTERVAL_PACKETS * 2
 
@@ -64,6 +65,7 @@ export function useDeviceScreen(device: ScreenTarget | null): {
   const expectedSeqRef = useRef<number | null>(0)
   const resyncNeededRef = useRef(false)
   const ackCountRef = useRef(0)
+  const cancelAckRef = useRef<(() => void) | null>(null)
   const generationRef = useRef(0)
   const generationListenersRef = useRef(new Set<() => void>())
   const screenRef = useRef<ScreenViewRef>({ envelope: null, width: 0, height: 0 })
@@ -102,21 +104,41 @@ export function useDeviceScreen(device: ScreenTarget | null): {
     const decoder = new StreamDecoder({ onFrame: drawFrame, onError: () => undefined })
     decoderRef.current = decoder
 
+    let ackTimer: ReturnType<typeof setTimeout> | null = null
+    let pendingAck: ScreenPacketMessage | null = null
+    const cancelPendingAck = (): void => {
+      if (ackTimer !== null) clearTimeout(ackTimer)
+      ackTimer = null
+      pendingAck = null
+      ackCountRef.current = 0
+    }
+    cancelAckRef.current = cancelPendingAck
+
+    const flushAck = (): void => {
+      const message = pendingAck
+      cancelPendingAck()
+      if (!message) return
+      void window.api.screen
+        .ack({
+          viewToken: message.viewToken,
+          generation: message.generation,
+          throughSeq: message.seq
+        })
+        .catch(() => undefined)
+    }
+
     const sendAck = (message: ScreenPacketMessage): void => {
+      pendingAck = message
       ackCountRef.current += 1
       if (ackCountRef.current >= ACK_INTERVAL_PACKETS) {
-        ackCountRef.current = 0
-        void window.api.screen
-          .ack({
-            viewToken: message.viewToken,
-            generation: message.generation,
-            throughSeq: message.seq
-          })
-          .catch(() => undefined)
+        flushAck()
+      } else if (ackTimer === null) {
+        ackTimer = setTimeout(flushAck, ACK_DELAY_MS)
       }
     }
 
     const requestResync = (message: ScreenPacketMessage): void => {
+      cancelPendingAck()
       resyncNeededRef.current = true
       // 不依赖下一批 ACK 或主进程超时：回放未确认时主进程可能尚未重新武装。
       void window.api.screen
@@ -138,7 +160,7 @@ export function useDeviceScreen(device: ScreenTarget | null): {
         // 配置包 = 同步点：旋转/重同步都从这里重新开始
         expectedSeqRef.current = null
         resyncNeededRef.current = false
-        ackCountRef.current = 0
+        cancelPendingAck()
         // 归属信封随包同步：generation 变化（旋转/重配置）后输入守卫才不会误判过期
         const view = screenRef.current
         if (
@@ -194,6 +216,7 @@ export function useDeviceScreen(device: ScreenTarget | null): {
     const onState = (message: ScreenStateMessage): void => {
       if (message.deviceId !== deviceRef.current?.id) return
       if (message.viewToken !== '' && message.viewToken !== viewToken) return
+      if (message.status !== 'ready') cancelPendingAck()
       // 本视图的活动归属（streamId/generation 随重建与旋转更新，输入守卫依赖它）
       if (message.viewToken === viewToken && screenRef.current.envelope) {
         screenRef.current.envelope.streamId = message.streamId
@@ -221,6 +244,8 @@ export function useDeviceScreen(device: ScreenTarget | null): {
     const unsubscribeState = window.api.screen.onState(onState)
     const unsubscribePacket = window.api.screen.onPacket(onPacket)
     return () => {
+      cancelPendingAck()
+      cancelAckRef.current = null
       unsubscribeState()
       unsubscribePacket()
       decoder.close()
@@ -233,6 +258,7 @@ export function useDeviceScreen(device: ScreenTarget | null): {
   // 状态变迁由下方 target 派生承担，本效果只做副作用：信封维护与 IPC 往返
   useEffect(() => {
     const viewToken = viewTokenRef.current
+    cancelAckRef.current?.()
     if (device?.status === 'running') {
       const key = targetKeyOf(device.id, device.runId)
       screenRef.current.envelope = {

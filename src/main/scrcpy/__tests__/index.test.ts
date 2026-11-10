@@ -251,6 +251,25 @@ describe('ScrcpyManager（fake transport）', () => {
     await manager.destroyAll()
   })
 
+  it('迟到的 ACK 静默容忍：无活动视图/会话已销毁不抛错（休眠拆除窗口实测缺陷）', async () => {
+    const { manager, transportOf } = await importManager()
+    try {
+      const ack = await handlerFor(IPC_CHANNELS.screenAck)
+      const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+      // 无活动视图（从未激活）
+      expect(() => ack({}, { viewToken: 'vt-1', generation: 1, throughSeq: 0 })).not.toThrow()
+      // 激活后销毁会话（休眠/停止的拆除路径），ACK 迟到到达
+      await activate({}, { id: 'd1', viewToken: 'vt-1' })
+      await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+      await new Promise((resolve) => setImmediate(resolve))
+      void transportOf
+      await manager.destroySession('d1')
+      expect(() => ack({}, { viewToken: 'vt-1', generation: 1, throughSeq: 0 })).not.toThrow()
+    } finally {
+      await manager.destroyAll()
+    }
+  })
+
   it('renderer 请求重同步：合法视图立即丢弃可回放链并重建；旧归属/伪造标志忽略，等待期间去重', async () => {
     const { manager, transportOf } = await importManager()
     try {
@@ -445,7 +464,7 @@ describe('ScrcpyManager（fake transport）', () => {
     }
   )
 
-  it('输入守卫：未激活拒绝；归属过期与尺寸不符拒绝', async () => {
+  it('输入守卫：未激活静默丢弃；归属过期与尺寸不符拒绝', async () => {
     const { manager } = await importManager()
     await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
     const input = await handlerFor(IPC_CHANNELS.screenInput)
@@ -459,7 +478,8 @@ describe('ScrcpyManager（fake transport）', () => {
       height: 2400,
       input: { kind: 'rotate' }
     }
-    await expect(input({}, request)).rejects.toThrow('当前没有活动视图')
+    // 评审 R5：拆除窗口的迟到输入静默丢弃（与 ack 同理），不再抛错刷控制台
+    await expect(input({}, request)).resolves.toBeUndefined()
 
     const activate = await handlerFor(IPC_CHANNELS.screenActivate)
     await activate({}, { id: 'd1', viewToken: 'vt-1' })
@@ -984,6 +1004,37 @@ describe('ScrcpyManager（fake transport）', () => {
       }
     })
   })
+  it('ADB repair rebuilds the same AVD run while preserving its active view token', async () => {
+    const { manager, transportOf } = await importManager()
+    manager.registerIpc()
+    const device = { id: 'd1', runId: 'r1', serial: 'emulator-5554' }
+    await manager.ensureSession(device)
+    await vi.waitFor(() =>
+      expect(collect().states.some((state) => state.status === 'ready')).toBe(true)
+    )
+    const firstStream = collect().states.find((state) => state.status === 'ready')!.streamId
+    const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+    await activate({}, { id: 'd1', viewToken: 'repair-view' })
+    await manager.suspendForAdbRecovery()
+    await manager.ensureSession(device)
+    await vi.waitFor(() =>
+      expect(
+        collect().states.some((state) => state.status === 'ready' && state.streamId !== firstStream)
+      ).toBe(true)
+    )
+    expect(manager.activeDeviceId()).toBe('d1')
+    transportOf('emulator-5554').__push({ type: 'configuration', data: new Uint8Array([1]) })
+    transportOf('emulator-5554').__push({
+      type: 'data',
+      pts: 0n,
+      keyframe: true,
+      data: new Uint8Array(10)
+    })
+    await vi.waitFor(() =>
+      expect(collect().packets.some((packet) => packet.viewToken === 'repair-view')).toBe(true)
+    )
+    await manager.destroyAll()
+  })
 })
 
 describe('息屏唤醒冻结回归（2026-10-15 真机 Wi-Fi 投屏调查）', () => {
@@ -1331,4 +1382,209 @@ describe('recording source subscriptions', () => {
     expect(ended.mock.calls[0][0]).toBeTruthy()
     await vi.waitFor(() => expect(manager.getRecordingSource('r')).toBeNull())
   })
+})
+
+describe('静置与连续重建回归', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.windowRef.current = {
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    } as unknown as BrowserWindow
+  })
+  it.each([false, true])(
+    '所有旧包已确认：静置首帧 keyframe=%s 连续五轮不重建',
+    async (keyframeFirst) => {
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
+      const reset = vi.spyOn(SafeControlMessageWriter.prototype, 'resetVideo')
+      const { manager, transportOf } = await importManager()
+      const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+      try {
+        await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+        await flush()
+        const transport = transportOf('emulator-5554')
+        const push = transport.__push
+        push({ type: 'configuration', data: new Uint8Array([1]) })
+        for (let i = 0; i < 8; i++)
+          push({
+            type: 'data',
+            pts: BigInt(i * 33000),
+            keyframe: i === 0,
+            data: new Uint8Array(10)
+          })
+        await flush()
+        const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+        const ack = await handlerFor(IPC_CHANNELS.screenAck)
+        await activate({}, { id: 'd1', viewToken: 'probe' })
+        const send = (
+          mocks.windowRef.current!.webContents as unknown as { send: ReturnType<typeof vi.fn> }
+        ).send
+        const packets = (): ScreenPacketMessage[] =>
+          send.mock.calls.filter(([ch]) => ch === IPC_CHANNELS.screenPacket).map(([, p]) => p)
+        await ack({}, { viewToken: 'probe', generation: 1, throughSeq: packets().at(-1)!.seq })
+        for (let cycle = 0; cycle < 5; cycle++) {
+          const pts = BigInt(cycle) * 10000000n
+          // 静置前的尾包也已确认，排除真正的在途超时。
+          push({ type: 'data', pts: pts + 250000n, keyframe: false, data: new Uint8Array(10) })
+          await flush()
+          {
+            const last = packets().at(-1)!
+            await ack({}, { viewToken: 'probe', generation: last.generation, throughSeq: last.seq })
+          }
+          clock.mockReturnValue(11000 + cycle * 10000)
+          // 静置后的首帧，没有丢包或解码积压。
+          push({
+            type: 'data',
+            pts: pts + 10000000n,
+            keyframe: keyframeFirst,
+            data: new Uint8Array(10)
+          })
+          await flush()
+          expect(reset).toHaveBeenCalledTimes(0)
+          // 后续正常关键帧与其他帧继续到达，并全部确认。
+          for (let i = 0; i < 8; i++)
+            push({
+              type: 'data',
+              pts: pts + 10000000n + BigInt(i * 33000),
+              keyframe: i === 0,
+              data: new Uint8Array(10)
+            })
+          await flush()
+          const last = packets().at(-1)!
+          await ack({}, { viewToken: 'probe', generation: last.generation, throughSeq: last.seq })
+        }
+      } finally {
+        clock.mockRestore()
+        reset.mockRestore()
+        await manager.destroyAll()
+      }
+    }
+  )
+  it('新配置不重置连续恢复预算：十轮请求最多三次 reset 并报错', async () => {
+    const reset = vi.spyOn(SafeControlMessageWriter.prototype, 'resetVideo')
+    const { manager, transportOf } = await importManager()
+    const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+    try {
+      await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+      await flush()
+      const transport = transportOf('emulator-5554')
+      transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+      transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+      await flush()
+      const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+      const ack = await handlerFor(IPC_CHANNELS.screenAck)
+      await activate({}, { id: 'd1', viewToken: 'probe' })
+      const send = (
+        mocks.windowRef.current!.webContents as unknown as { send: ReturnType<typeof vi.fn> }
+      ).send
+      for (let cycle = 0; cycle < 10; cycle++) {
+        const last = send.mock.calls
+          .filter(([ch]) => ch === IPC_CHANNELS.screenPacket)
+          .at(-1)![1] as ScreenPacketMessage
+        await ack(
+          {},
+          { viewToken: 'probe', generation: last.generation, throughSeq: last.seq, resync: true }
+        )
+        await flush()
+        transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+        transport.__push({
+          type: 'data',
+          pts: BigInt(cycle + 1) * 33000n,
+          keyframe: true,
+          data: new Uint8Array(10)
+        })
+        await flush()
+      }
+      expect(reset).toHaveBeenCalledTimes(3)
+      const errors = send.mock.calls.filter(
+        ([ch, p]) => ch === IPC_CHANNELS.screenState && p.status === 'error'
+      )
+      expect(errors).toHaveLength(1)
+    } finally {
+      reset.mockRestore()
+      await manager.destroyAll()
+    }
+  })
+  it.each(['progress', 'duplicate', 'replay', 'gaps'] as const)(
+    '恢复预算只在稳定推进的回执后释放：%s',
+    async (mode) => {
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
+      const reset = vi.spyOn(SafeControlMessageWriter.prototype, 'resetVideo')
+      const { manager, transportOf } = await importManager()
+      const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+      try {
+        await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+        await flush()
+        const transport = transportOf('emulator-5554')
+        const push = transport.__push
+        push({ type: 'configuration', data: new Uint8Array([1]) })
+        push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+        await flush()
+        const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+        const ack = await handlerFor(IPC_CHANNELS.screenAck)
+        await activate({}, { id: 'd1', viewToken: 'probe' })
+        const send = (
+          mocks.windowRef.current!.webContents as unknown as { send: ReturnType<typeof vi.fn> }
+        ).send
+        const last = (): ScreenPacketMessage =>
+          send.mock.calls.filter(([ch]) => ch === IPC_CHANNELS.screenPacket).at(-1)![1]
+        const confirm = async (): Promise<void> => {
+          const packet = last()
+          await ack(
+            {},
+            { viewToken: 'probe', generation: packet.generation, throughSeq: packet.seq }
+          )
+        }
+        const resync = async (): Promise<void> => {
+          const packet = last()
+          await ack(
+            {},
+            {
+              viewToken: 'probe',
+              generation: packet.generation,
+              throughSeq: packet.seq,
+              resync: true
+            }
+          )
+          await flush()
+        }
+        for (let i = 0; i < 3; i++) {
+          await resync()
+          push({ type: 'configuration', data: new Uint8Array([1]) })
+          push({
+            type: 'data',
+            pts: BigInt(i + 1) * 33000n,
+            keyframe: true,
+            data: new Uint8Array(10)
+          })
+          await flush()
+        }
+        await confirm()
+        for (let i = 1; i <= 3; i++) {
+          clock.mockReturnValue(mode === 'gaps' ? 1000 + i * 4000 : 1000 + i * 1000)
+          if (mode === 'replay') await activate({}, { id: 'd1', viewToken: 'probe' })
+          if (mode !== 'duplicate' && mode !== 'replay') {
+            push({
+              type: 'data',
+              pts: BigInt(i + 4) * 33000n,
+              keyframe: true,
+              data: new Uint8Array(10)
+            })
+            await flush()
+          }
+          await confirm()
+        }
+        await resync()
+        expect(reset).toHaveBeenCalledTimes(mode === 'progress' ? 4 : 3)
+        const errors = send.mock.calls.filter(
+          ([ch, p]) => ch === IPC_CHANNELS.screenState && p.status === 'error'
+        )
+        expect(errors).toHaveLength(mode === 'progress' ? 0 : 1)
+      } finally {
+        clock.mockRestore()
+        reset.mockRestore()
+        await manager.destroyAll()
+      }
+    }
+  )
 })

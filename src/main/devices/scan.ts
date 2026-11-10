@@ -1,8 +1,13 @@
 import type { ReconcileReport, ReconcileResult } from '@shared/types'
 import { runReconciliation, type ReconcileOutcome } from '../emulator/reconcile'
+import {
+  hibernationSnapshotExists,
+  readHibernationManifest,
+  removeHibernationManifest
+} from '../emulator/hibernation'
 import { readDeviceStore } from '../store'
 import { msg } from '../locale'
-import { ensureFrameIndex, messageOf, reconcileDirs } from './environment'
+import { avdDirs, ensureFrameIndex, messageOf, reconcileDirs } from './environment'
 import {
   applyFrozenTargets,
   enqueueStoreTask,
@@ -68,7 +73,47 @@ const loadAndScan = async (): Promise<void> => {
   setAcceptedMetas(read.health.state === 'error' ? null : read.metas)
   setDevices(rebuildDevices(read.metas))
   applyFrozenTargets(devicesNow())
+  await applyHibernationRecords()
   applyScan(await scanCurrent())
+}
+
+/**
+ * 启动扫描的休眠投影（plan 2026-11-06 设计 B）：saved/hibernated 清单（进程退出
+ * 已确认或保存已完成）→ hibernated；saving 中断/清单损坏/快照文件缺失 → stopped
+ * 附明确原因并清理不可恢复的记录——不一律重置，也不把中断伪装成已休眠。
+ */
+const applyHibernationRecords = async (): Promise<void> => {
+  for (const device of devicesNow()) {
+    if (device.status !== 'stopped') continue
+    const record = await readHibernationManifest(device.id, avdDirs())
+    if (record.kind === 'none') continue
+    if (record.kind === 'corrupt') {
+      device.lastError = {
+        code: 'hibernation-corrupt',
+        message: msg('hibernationRecordCorrupt', { reason: record.reason })
+      }
+      await removeHibernationManifest(device.id, avdDirs())
+      continue
+    }
+    const manifest = record.manifest
+    if (manifest.stage === 'saving') {
+      device.lastError = {
+        code: 'hibernation-interrupted',
+        message: msg('hibernationInterrupted')
+      }
+      await removeHibernationManifest(device.id, avdDirs())
+      continue
+    }
+    if (await hibernationSnapshotExists(device.id, manifest.snapshotName, avdDirs())) {
+      device.status = 'hibernated'
+    } else {
+      device.lastError = {
+        code: 'hibernation-snapshot-missing',
+        message: msg('hibernationSnapshotMissing')
+      }
+      await removeHibernationManifest(device.id, avdDirs())
+    }
+  }
 }
 
 /** 文件扫描（长任务，writeQueue 外运行）；服务异常收敛为 scanError 不 reject。

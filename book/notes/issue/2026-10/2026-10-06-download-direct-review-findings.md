@@ -1,4 +1,5 @@
 ---
+status: open
 description: 下载进度修复（fix/download-progress-zero）的 Phase 5 code review 发现——写流错误未监听可致 main 崩溃（P1）、.install-bak 可被清单扫描误读（P2）、自生成 package.xml 元素顺序与官方 XSD 不一致（P2）；按纪律只记录不修复
 tags: [review, downloader, stream-error, scan-local-images, package-xml]
 ---

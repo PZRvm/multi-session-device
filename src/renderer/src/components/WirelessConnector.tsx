@@ -1,8 +1,10 @@
+import WirelessRecoveryFeedback from './WirelessRecoveryFeedback'
+import { WIRELESS_RECOVERY_COPY } from '@shared/wirelessRecovery'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Loader2, RefreshCw } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
-import type { WirelessCandidate } from '@shared/types'
+import type { WirelessCandidate, WirelessConnectOutcome } from '@shared/types'
 import { toApiResult } from '../api'
 import { useCopy } from '../hooks/useCopy'
 import { spinKeyframes } from '../styles/animations'
@@ -29,6 +31,7 @@ const HOST_RE = /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\
  *  自然出现在列表，不在本层重复呈现。 */
 const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
+  const recoveryCopy = useCopy(WIRELESS_RECOVERY_COPY)
   const [scanning, setScanning] = useState(true)
   const [candidates, setCandidates] = useState<WirelessCandidate[]>([])
   const [connectingKey, setConnectingKey] = useState<string | null>(null)
@@ -40,6 +43,12 @@ const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Eleme
   const [pairCode, setPairCode] = useState('')
   const [pairing, setPairing] = useState(false)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
+  const [failedAttempt, setFailedAttempt] = useState<{
+    outcome: Extract<WirelessConnectOutcome, { ok: false }>
+    host: string
+    port?: number
+  } | null>(null)
+  const requestRef = useRef(0)
   const firstFieldRef = useRef<HTMLButtonElement | null>(null)
 
   const scan = useCallback(async (): Promise<void> => {
@@ -54,12 +63,19 @@ const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Eleme
     // 微任务起扫：不在 effect 体内同步 setState（级联渲染防线）
     void Promise.resolve().then(scan)
     firstFieldRef.current?.focus()
+    const request = requestRef
+    return () => {
+      request.current++
+    }
   }, [scan])
 
   const connect = useCallback(
     async (host: string, port: number | undefined, key: string): Promise<void> => {
+      const request = ++requestRef.current
+      setFailedAttempt(null)
       setConnectingKey(key)
       const result = await toApiResult(window.api.devices.connectExternalWireless({ host, port }))
+      if (request !== requestRef.current) return
       setConnectingKey(null)
       if (!result.ok) {
         setFeedback({ kind: 'fail', text: result.error })
@@ -69,9 +85,13 @@ const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Eleme
         onClose()
         return
       }
-      setFeedback({ kind: 'fail', text: wirelessConnectFailureText(copy, result.data) })
+      setFailedAttempt({ outcome: result.data, host, port })
+      setFeedback({
+        kind: 'fail',
+        text: wirelessConnectFailureText(copy, result.data, recoveryCopy)
+      })
     },
-    [copy, onClose]
+    [copy, recoveryCopy, onClose]
   )
 
   const pair = useCallback(async (): Promise<void> => {
@@ -280,6 +300,20 @@ const WirelessConnector = ({ onClose }: WirelessConnectorProps): React.JSX.Eleme
           ) : null}
         </div>
 
+        {failedAttempt?.outcome.attemptId ? (
+          <WirelessRecoveryFeedback
+            key={failedAttempt.outcome.attemptId}
+            outcome={failedAttempt.outcome}
+            onRetry={() =>
+              void connect(
+                failedAttempt.host,
+                failedAttempt.port,
+                `${failedAttempt.host}:${failedAttempt.port ?? 5555}`
+              )
+            }
+            onRecovered={() => onClose()}
+          />
+        ) : null}
         {feedback ? (
           <p className="feedback" role="status" aria-live="polite">
             {feedback.kind === 'ok'

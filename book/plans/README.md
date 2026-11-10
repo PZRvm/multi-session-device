@@ -1,49 +1,43 @@
 ---
-description: plans 目录用法——Phase 2 批准后实现计划落在这里，含命名和计划模板
+description: Plans directory usage — implementation plans land here once the Phase 2 design is complete, with naming and the plan template
 ---
 
 # Plans
 
-实现计划住在这里。每个功能的详细计划在 Phase 2 设计定稿后落进本目录——plan 是 agent 照着施工的蓝图。
+Implementation plans live here. Each feature's detailed plan lands in this folder once its Phase 2 design is settled — the plan is the construction blueprint the agent builds from.
 
-## 命名
+## Naming
 
 `YYYY-MM-DD-<feature-name>.md`
 
-## 模板
+## Template
 
 ```markdown
 ---
-description: <一行说人话的内容摘要>
+description: <one plain-language line about the content>
 status: draft | approved | in_progress | completed
 ---
 
-# <功能> — plan
+# <feature> — plan
 
 ## Requirements brief
-
-<Step 0 的要点——背景、作用域、排除项>
+<the essentials from Step 0 — background, scope, exclusions>
 
 ## Impact range
-
-<Phase 1 产出：受影响的文件、模块、数据流>
+<Phase 1 output: files, modules, data flows affected>
 
 ## Design
-
-<Phase 2 产出：数据流、文件清单、接口>
+<Phase 2 output: data flow, file list, interfaces>
 
 ## Build order
-
-1. <步骤，每步带自己的验证>
+1. <step, each with its verification>
 2. ...
 
 ## Test plan
-
-<Phase 4 的覆盖维度>
+<Phase 4 coverage dimensions>
 
 ## Done criteria
-
-<明确的终点线——测试全绿、review 记录在案、book 已同步、索引已重建，加上功能特有的一切>
+<the explicit finish line — tests green, review recorded, book synced, index rebuilt, plus anything feature-specific>
 ```
 
-一份计划写出来就能执行：每一步都小到可以单独验证。done-criteria 槽位是终点线——agent 在文字停下的地方停，所以一条明确的终点线防止过早停车。读起来为真时，把 `status` 翻成 `completed`；plan 随之兼作"当时打算做什么"的记录，实际发生了什么由 `stage/` 对应步骤的勾选结果记录。
+A plan is executable as written: each step small enough to verify on its own. The done-criteria slot is the finish line — agents stop where the text stops, so an explicit finish line prevents premature stops. When it reads true, flip `status` to `completed`; the plan then doubles as the record of what was intended, next to the summary of what happened.

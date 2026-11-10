@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { Building2, Copy, Loader2, Play, Settings2, Square, Trash2, X } from 'lucide-react'
+import { Building2, Copy, Loader2, Pause, Play, Settings2, Square, Trash2, X } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
 import type { Device, DeviceAvailability, DeviceStatus } from '@shared/types'
 import { useCopy } from '../hooks/useCopy'
+import type { RowDragProps } from '../hooks/useListDragReorder'
 import Input from './Input'
 import RecordingStatus from './RecordingStatus'
+import { PopoverIconButton } from './PopoverIconButton'
 
 /** 健康原因行：优先展示阻断原因；warning（如镜像身份不同）也提示 */
 const availabilityReason = (
@@ -33,6 +35,10 @@ type DeviceRowProps = {
   onStart: () => void
   onStop: () => void
   onCancelStart: () => void
+  /** 手动休眠（保存快照释放进程）；退出失败后的重试共用本入口 */
+  onHibernate: () => void
+  /** 从休眠恢复 */
+  onResume: () => void
   onCopySerial: () => void
   onDelete: () => void
   onRename: (name: string) => void
@@ -40,8 +46,11 @@ type DeviceRowProps = {
   onEdit: () => void
   /** read-only 下尝试重命名（双击/F2）时的反馈入口（review P3——静默 no-op 无说明） */
   onRenameBlocked?: () => void
-  /** 跨来源桶下尝试修改（重命名路径）时的反馈入口 */
+  /** 跨来源桶设备尝试修改（重命名路径）时的反馈入口 */
   onCrossBucketBlocked?: () => void
+  /** 拖拽换序（plan 2026-11-09）：行根挂标识与视觉态；折叠区/过渡行不传即不可拖
+   *  不可锚；renaming 态行内自禁拖（输入框需可选可编辑） */
+  drag?: RowDragProps
 }
 
 /** 设备行：ListRow 视觉（选中整行反白）+ 状态点 + 行内启停/取消/复制/删除 + 双击/F2/选中态 Enter 行内重命名。
@@ -57,12 +66,15 @@ const DeviceRow = ({
   onStart,
   onStop,
   onCancelStart,
+  onHibernate,
+  onResume,
   onCopySerial,
   onDelete,
   onRename,
   onEdit,
   onRenameBlocked,
-  onCrossBucketBlocked
+  onCrossBucketBlocked,
+  drag
 }: DeviceRowProps): React.JSX.Element => {
   const [renaming, setRenaming] = useState(false)
   const [draft, setDraft] = useState(device.name)
@@ -74,7 +86,10 @@ const DeviceRow = ({
     starting: copy.statusStarting,
     running: copy.statusRunning,
     stopping: copy.statusStopping,
-    deleting: copy.statusDeleting
+    deleting: copy.statusDeleting,
+    hibernating: copy.statusHibernating,
+    hibernated: copy.statusHibernated,
+    resuming: copy.statusResuming
   }
   const availabilityLabels: Record<DeviceAvailability['state'], string> = {
     checking: copy.availChecking,
@@ -97,8 +112,11 @@ const DeviceRow = ({
   const startDisabled =
     device.status === 'stopped' &&
     (crossBucket || !storeTrusted || availability === null || availability.state !== 'valid')
-  const deleteDisabled =
-    !metaWritable || crossBucket || (device.status !== 'stopped' && device.status !== 'running')
+  // 用户删除入口仅停止态渲染（plan 2026-11-06 设计 E）：运行/过渡/休眠态无 DOM 焦点入口
+  const deleteRenderable = device.status === 'stopped'
+  const deleteDisabled = !metaWritable || crossBucket
+  // 休眠能力门控（main 派生字段）：不可用时按钮禁用并以原因说明，不放行可执行入口
+  const hibernateDisabled = device.hibernationAvailable !== true
 
   const startRename = (): void => {
     if (device.status === 'creating' || device.status === 'deleting') return
@@ -137,6 +155,10 @@ const DeviceRow = ({
       aria-keyshortcuts="F2"
       title={device.lastError?.message}
       tabIndex={0}
+      data-avd-drag-id={drag ? device.id : undefined}
+      draggable={drag ? drag.draggable && !renaming : undefined}
+      data-drop-pos={drag?.dropPos ?? undefined}
+      className={drag?.isSource ? 'drag-source' : undefined}
       onClick={onSelect}
       onDoubleClick={startRename}
       onKeyDown={(event) => {
@@ -232,96 +254,145 @@ const DeviceRow = ({
         onDoubleClick={(event) => event.stopPropagation()}
       >
         {device.status === 'stopped' ? (
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={format(copy.startAria, { name: device.name })}
-            title={
+          <PopoverIconButton
+            icon={<Play size={14} />}
+            label={copy.start}
+            ariaLabel={format(copy.startAria, { name: device.name })}
+            detail={
               crossBucket && device.status === 'stopped'
                 ? copy.crossBucketBlockedTitle
                 : startDisabled
                   ? copy.startDisabledTitle
-                  : copy.start
+                  : null
             }
             disabled={startDisabled}
             onClick={onStart}
-          >
-            <Play size={14} />
-          </button>
+          />
         ) : null}
         {device.status === 'starting' ? (
           <>
-            <span
-              className="busy-slot"
-              role="img"
-              aria-label={format(copy.startingAria, { name: device.name })}
-            >
-              <Loader2 size={14} aria-hidden="true" className="busy-icon" />
-            </span>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={format(copy.cancelStartAria, { name: device.name })}
-              title={copy.cancelStart}
+            <PopoverIconButton
+              busy
+              icon={<Loader2 size={14} aria-hidden="true" className="busy-icon" />}
+              label={statusLabels.starting}
+              ariaLabel={format(copy.startingAria, { name: device.name })}
+            />
+            <PopoverIconButton
+              icon={<X size={14} />}
+              label={copy.cancelStart}
+              ariaLabel={format(copy.cancelStartAria, { name: device.name })}
               onClick={onCancelStart}
-            >
-              <X size={14} />
-            </button>
+            />
           </>
         ) : null}
         {device.status === 'running' ? (
           <>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={format(copy.stopAria, { name: device.name })}
-              title={copy.stop}
+            <PopoverIconButton
+              icon={<Pause size={14} />}
+              label={copy.hibernateAction}
+              ariaLabel={format(copy.hibernateAria, { name: device.name })}
+              detail={
+                hibernateDisabled
+                  ? (device.hibernationDisabledReason ?? copy.hibernateUnsupported)
+                  : null
+              }
+              disabled={hibernateDisabled}
+              onClick={onHibernate}
+            />
+            <PopoverIconButton
+              icon={<Square size={14} />}
+              label={copy.stop}
+              ariaLabel={format(copy.stopAria, { name: device.name })}
               onClick={onStop}
-            >
-              <Square size={14} />
-            </button>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={format(copy.copySerialAria, { serial: device.serial ?? '' })}
-              title={copy.copySerial}
+            />
+            <PopoverIconButton
+              icon={<Copy size={14} />}
+              label={copy.copySerial}
+              ariaLabel={format(copy.copySerialAria, { serial: device.serial ?? '' })}
               onClick={onCopySerial}
-            >
-              <Copy size={14} />
-            </button>
+            />
+          </>
+        ) : null}
+        {device.status === 'hibernating' ? (
+          <>
+            <PopoverIconButton
+              busy
+              icon={<Loader2 size={14} aria-hidden="true" className="busy-icon" />}
+              label={statusLabels.hibernating}
+              ariaLabel={format(copy.hibernatingAria, { name: device.name })}
+            />
+            {/* 退出失败的重试/停止出口（保存失败已自动回运行态） */}
+            {device.lastError?.code === 'hibernate-exit-failed' ? (
+              <>
+                <PopoverIconButton
+                  icon={<Pause size={14} />}
+                  label={copy.hibernateRetryAction}
+                  ariaLabel={format(copy.retryHibernateAria, { name: device.name })}
+                  detail={copy.hibernateRetryTitle}
+                  onClick={onHibernate}
+                />
+                <PopoverIconButton
+                  icon={<Square size={14} />}
+                  label={copy.stop}
+                  ariaLabel={format(copy.stopAria, { name: device.name })}
+                  detail={copy.hibernateGiveUpStopTitle}
+                  onClick={onStop}
+                />
+              </>
+            ) : null}
+          </>
+        ) : null}
+        {device.status === 'hibernated' ? (
+          <PopoverIconButton
+            icon={<Play size={14} />}
+            label={copy.resumeAction}
+            ariaLabel={format(copy.resumeAria, { name: device.name })}
+            onClick={onResume}
+          />
+        ) : null}
+        {device.status === 'resuming' ? (
+          <>
+            <PopoverIconButton
+              busy
+              icon={<Loader2 size={14} aria-hidden="true" className="busy-icon" />}
+              label={statusLabels.resuming}
+              ariaLabel={format(copy.resumingAria, { name: device.name })}
+            />
+            <PopoverIconButton
+              icon={<X size={14} />}
+              label={copy.cancelResumeAction}
+              ariaLabel={format(copy.cancelResumeAria, { name: device.name })}
+              onClick={onCancelStart}
+            />
           </>
         ) : null}
         {device.status === 'stopping' ? (
           <>
-            <span
-              className="busy-slot"
-              role="img"
-              aria-label={format(copy.stoppingAria, { name: device.name })}
-            >
-              <Loader2 size={14} aria-hidden="true" className="busy-icon" />
-            </span>
+            <PopoverIconButton
+              busy
+              icon={<Loader2 size={14} aria-hidden="true" className="busy-icon" />}
+              label={statusLabels.stopping}
+              ariaLabel={format(copy.stoppingAria, { name: device.name })}
+            />
             {/* 停止失败保留重试入口；未失败时点击无害（合并到在途清理） */}
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={format(copy.retryStopAria, { name: device.name })}
-              title={copy.stop}
+            <PopoverIconButton
+              icon={<Square size={14} />}
+              label={copy.stop}
+              ariaLabel={format(copy.retryStopAria, { name: device.name })}
               onClick={onStop}
-            >
-              <Square size={14} />
-            </button>
+            />
           </>
         ) : null}
-        <button
-          type="button"
-          className="icon-button"
-          aria-label={format(copy.editAria, { name: device.name })}
-          title={
+        <PopoverIconButton
+          icon={<Settings2 size={14} />}
+          label={copy.editAction}
+          ariaLabel={format(copy.editAria, { name: device.name })}
+          detail={
             crossBucket && device.status !== 'running'
               ? copy.crossBucketBlockedTitle
               : device.status === 'creating' || device.status === 'deleting'
                 ? copy.editBusyTitle
-                : copy.editTitle
+                : null
           }
           disabled={
             (crossBucket && device.status !== 'running') ||
@@ -329,31 +400,30 @@ const DeviceRow = ({
             device.status === 'deleting'
           }
           onClick={onEdit}
-        >
-          <Settings2 size={14} />
-        </button>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label={format(copy.deleteAria, { name: device.name })}
-          title={
-            crossBucket
-              ? copy.crossBucketBlockedTitle
-              : metaWritable
-                ? copy.deleteTitle
-                : copy.deleteFrozenTitle
-          }
-          disabled={deleteDisabled}
-          onClick={onDelete}
-        >
-          <Trash2 size={14} />
-        </button>
+        />
+        {deleteRenderable ? (
+          <PopoverIconButton
+            icon={<Trash2 size={14} />}
+            label={copy.delete}
+            ariaLabel={format(copy.deleteAria, { name: device.name })}
+            detail={
+              crossBucket
+                ? copy.crossBucketBlockedTitle
+                : metaWritable
+                  ? null
+                  : copy.deleteFrozenTitle
+            }
+            disabled={deleteDisabled}
+            onClick={onDelete}
+          />
+        ) : null}
       </span>
     </Wrapper>
   )
 }
 
 const Wrapper = styled.div`
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -365,6 +435,35 @@ const Wrapper = styled.div`
 
   &:hover {
     background: var(--board-bg-raised);
+  }
+
+  /* 拖拽换序（plan 2026-11-09）：可拖行禁选字（编辑态行 draggable=false 天然可选可编）；
+     源行半透明 + 目标行插入线——灰阶墨级，排序是纯结构操作不进主题强调色 */
+  &[draggable='true'] {
+    user-select: none;
+  }
+
+  &.drag-source {
+    opacity: 0.45;
+  }
+
+  &[data-drop-pos='before']::before,
+  &[data-drop-pos='after']::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--board-ink);
+    pointer-events: none;
+  }
+
+  &[data-drop-pos='before']::before {
+    top: -1px;
+  }
+
+  &[data-drop-pos='after']::after {
+    bottom: -1px;
   }
 
   &[aria-current] {
@@ -393,12 +492,20 @@ const Wrapper = styled.div`
     background: var(--loading);
   }
 
-  /* 过渡态（非停止/运行）用琥珀点提示忙碌 */
+  /* 过渡态（非停止/运行）用琥珀点提示忙碌；休眠事务过渡同口径 */
   .status-dot[data-status='creating'],
   .status-dot[data-status='starting'],
   .status-dot[data-status='stopping'],
-  .status-dot[data-status='deleting'] {
+  .status-dot[data-status='deleting'],
+  .status-dot[data-status='hibernating'],
+  .status-dot[data-status='resuming'] {
     background: var(--board-tile-ink);
+  }
+
+  /* 已休眠：现场已保存、进程已释放——用主题 accent 弱化色区分于停止 */
+  .status-dot[data-status='hibernated'] {
+    background: var(--loading);
+    opacity: 0.55;
   }
 
   /* 选中态反白后原状态色在 accent 背景上对比不足（灰 2.6:1、深琥珀约 3:1），与文字行同口径改用 ink */

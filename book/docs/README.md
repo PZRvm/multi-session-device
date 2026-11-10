@@ -1,16 +1,15 @@
 ---
-description: docs/ 的地图——产品需求、架构快照、API 设计、架构决策记录
+description: Map of docs/ — architecture snapshots, API design, and architecture decision records
 ---
 
 # Docs
 
-技术文档：系统长什么样，以及为什么长这样。
+Technical documentation: what the system looks like and why it looks that way.
 
-| 目录            | 内容                                                 | 与 guidelines 的区别                                            |
-| --------------- | ---------------------------------------------------- | --------------------------------------------------------------- |
-| `PRD.md`        | 产品需求文档——一期范围、验收标准、决策记录的唯一依据 | guidelines 说永远怎么工作；PRD 说这一期做什么、做到什么算数     |
-| `architecture/` | 实现快照——模块和数据流的当前状态                     | `guidelines/architecture.md` 装长期规则；快照装带日期的当下真相 |
-| `api/`          | API 设计与接口契约                                   | guidelines 说怎么审；API 文档说接口是什么                       |
-| `decisions/`    | 架构决策记录（ADR）——选择为什么这么做                | 决策一篇记一个选择；guidelines 沉淀常效规则                     |
+| Directory | Content | Difference from guidelines |
+|-----------|---------|---------------------------|
+| `architecture/` | Implementation snapshots — the current state of modules and data flow | `guidelines/architecture.md` holds long-term rules; snapshots hold dated, current truth |
+| `api/` | API design and interface contracts | Guidelines say how to review; API docs say what the interfaces are |
+| `decisions/` | Architecture decision records (ADR) — why choices were made | Decisions record one choice each; guidelines accumulate the standing rules |
 
-新文档需要 frontmatter `description`（见 `guidelines/writing-style.md`），加完要重新生成索引（`npm run book:index`，仓库根）。
+New documents need a frontmatter `description` (see `guidelines/writing-style.md`), and the index must be regenerated after adding them (`npm run book:index`).

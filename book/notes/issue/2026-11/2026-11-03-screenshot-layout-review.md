@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: 已修复图片编辑页缩放后的三灯定位偏移，以及损坏的 worktree 元数据阻断端口覆盖与构建两项复审问题
 ---
 

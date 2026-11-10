@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: feat/windows-branch 并入 dev 的合并集成 review——0 P1 / 1 P2（dialog avdHome 白名单 win32 失效，孤立报告「打开目录」必被拒）/ 4 P3；接缝文件双侧内容完整、护栏口径一致、npmrc×下载链证伪交互
 created: 2026-10-31
 tags: [windows, review, merge, integration, dev]

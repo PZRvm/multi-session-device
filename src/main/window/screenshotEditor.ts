@@ -6,8 +6,8 @@ import { appIcon } from '../app-icon'
 import { themeWindowBackground } from '../theme'
 import { msg } from '../locale'
 
-// 截图编辑窗控制器（plan 2026-11-02-screenshot-editor T3）：设备单例 Map 登记编辑窗
-// 生命周期——与 settings/logcat 的全局单例差异在多设备并行编辑（一设备一窗）。
+// 截图编辑窗控制器（plan 2026-11-02-screenshot-editor T3）：截图会话 Map 登记编辑窗
+// 生命周期——与 settings/logcat 的全局单例差异在多设备并行编辑（每张截图一窗）。
 // 会话模式（ready/settled/result、15s 超时、did-fail-load、render-process-gone 就绪
 // 前后双路径、迟到事件代次守卫）沿本项目 settings.ts 先例；窗口尺寸自适应算法迁自
 // multi-session-browser captureEditorWindow（锚点常量原值）：
@@ -33,13 +33,14 @@ const DEFAULT_WINDOW_HEIGHT = 520
 const READY_TIMEOUT_MS = 15_000
 
 interface EditorSession {
+  deviceId: string
   window: BrowserWindow | null
   ready: boolean
   settled: boolean
   result: Promise<void>
 }
 
-/** 设备 → 编辑窗会话登记：open 的单例判据与编辑通道 sender 归属（权限单源——
+/** 会话 ID → 编辑窗会话登记：open 的单例判据与编辑通道 sender 归属（权限单源——
  *  归属从登记表解析，不信 renderer 自报）都读这张表 */
 const sessions = new Map<string, EditorSession>()
 
@@ -51,24 +52,25 @@ export function closeAllScreenshotEditorWindows(): void {
   }
 }
 
-/** 编辑窗 sender → 绑定设备 id（screenshot 域编辑通道注入判据）；未登记/已销毁 null */
-export function screenshotEditorDeviceId(sender: WebContents): string | null {
-  for (const [deviceId, session] of sessions) {
+/** sender 归属只取自主进程登记，不接受 renderer 自报身份。 */
+export function screenshotEditorSession(
+  sender: WebContents
+): { deviceId: string; sessionId: string } | null {
+  for (const [sessionId, session] of sessions) {
     const window = session.window
-    if (window && !window.isDestroyed() && window.webContents === sender) return deviceId
+    if (window && !window.isDestroyed() && window.webContents === sender)
+      return { deviceId: session.deviceId, sessionId }
   }
   return null
 }
 
-/** 打开/聚焦该设备的编辑窗（幂等单例）：已存在未销毁则（就绪后）聚焦并返回既有
- *  结果，否则建窗（ready-to-show 后显窗取焦）。imageWidth/imageHeight 为该设备
- *  缓存现图像素尺寸（尺寸自适应入参，缺省走默认度量——调用方截图域读缓存现取，
- *  空缓存不携） */
+/** 同一截图会话复用窗口；尺寸来自开窗时固定的图片。 */
 export function openScreenshotEditorWindow(
+  sessionId: string,
   deviceId: string,
-  options?: { imageWidth: number; imageHeight: number }
+  options?: { imageWidth?: number; imageHeight?: number; onRelease?: () => void }
 ): Promise<void> {
-  const current = sessions.get(deviceId)
+  const current = sessions.get(sessionId)
   if (current && !current.window?.isDestroyed()) {
     if (current.ready && current.window) {
       if (current.window.isMinimized()) current.window.restore()
@@ -80,6 +82,7 @@ export function openScreenshotEditorWindow(
   let resolve!: () => void
   let reject!: (error: Error) => void
   const session: EditorSession = {
+    deviceId,
     window: null,
     ready: false,
     settled: false,
@@ -89,10 +92,12 @@ export function openScreenshotEditorWindow(
     })
   }
   // 构造前保留会话；迟到事件只释放自己的代次
-  sessions.set(deviceId, session)
+  sessions.set(sessionId, session)
   let timeout: ReturnType<typeof setTimeout> | undefined
   const release = (): void => {
-    if (sessions.get(deviceId) === session) sessions.delete(deviceId)
+    if (sessions.get(sessionId) !== session) return
+    sessions.delete(sessionId)
+    options?.onRelease?.()
   }
   const settle = (error?: Error): void => {
     if (session.settled) return
@@ -119,7 +124,12 @@ export function openScreenshotEditorWindow(
     let width = DEFAULT_WINDOW_WIDTH
     let height = DEFAULT_WINDOW_HEIGHT
     const query: Record<string, string> = {}
-    if (options && options.imageWidth > 0 && options.imageHeight > 0) {
+    if (
+      options?.imageWidth &&
+      options.imageHeight &&
+      options.imageWidth > 0 &&
+      options.imageHeight > 0
+    ) {
       const work = screen.getPrimaryDisplay().workAreaSize
       const availWidth = Math.max(1, work.width - WORK_AREA_MARGIN * 2)
       const availHeight = Math.max(1, work.height - WORK_AREA_MARGIN * 2 - TOOLBAR_ALLOWANCE)
@@ -184,7 +194,7 @@ export function openScreenshotEditorWindow(
       release()
     })
     window.once('ready-to-show', () => {
-      if (sessions.get(deviceId) !== session || session.settled || window.isDestroyed()) return
+      if (sessions.get(sessionId) !== session || session.settled || window.isDestroyed()) return
       session.ready = true
       settle()
       window.show()

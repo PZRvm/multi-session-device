@@ -5,6 +5,7 @@ import { useCopy } from '../hooks/useCopy'
 import { useRecordingStore } from '../stores/recordingStore'
 import { activeRecording } from './recordingPresentation'
 import { toolButtonCss } from './toolButtonStyle'
+import { PopoverIconButton } from './PopoverIconButton'
 
 const RecordingControls = ({
   deviceId,
@@ -22,42 +23,35 @@ const RecordingControls = ({
     <Wrapper role="group" aria-label={copy.title}>
       {task ? (
         <>
-          <button
-            type="button"
+          <PopoverIconButton
             className="tool-btn"
+            icon={
+              task.state === 'paused' ? (
+                <Play size={16} aria-hidden="true" />
+              ) : (
+                <Pause size={16} aria-hidden="true" />
+              )
+            }
+            label={task.state === 'paused' ? copy.resume : copy.pause}
             disabled={busy || !['recording', 'paused'].includes(task.state)}
-            aria-label={task.state === 'paused' ? copy.resume : copy.pause}
-            title={task.state === 'paused' ? copy.resume : copy.pause}
             onClick={() => void command(task.taskId, task.state === 'paused' ? 'resume' : 'pause')}
-          >
-            {task.state === 'paused' ? (
-              <Play size={16} aria-hidden="true" />
-            ) : (
-              <Pause size={16} aria-hidden="true" />
-            )}
-          </button>
-          <button
-            type="button"
+          />
+          <PopoverIconButton
             className="tool-btn recording-stop"
+            icon={<Square size={14} fill="currentColor" aria-hidden="true" />}
+            label={copy.stop}
             disabled={busy || task.state === 'stopping'}
-            aria-label={copy.stop}
-            title={copy.stop}
             onClick={() => void command(task.taskId, 'stop')}
-          >
-            <Square size={14} fill="currentColor" aria-hidden="true" />
-          </button>
+          />
         </>
       ) : (
-        <button
-          type="button"
+        <PopoverIconButton
           className="tool-btn"
+          icon={<Video size={16} aria-hidden="true" />}
+          label={copy.start}
           disabled={disabled || busy}
-          aria-label={copy.start}
-          title={copy.start}
           onClick={() => void start(deviceId)}
-        >
-          <Video size={16} aria-hidden="true" />
-        </button>
+        />
       )}
     </Wrapper>
   )

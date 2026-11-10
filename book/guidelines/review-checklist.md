@@ -1,20 +1,23 @@
 ---
-description: 每次改动都必须通过的八项代码评审检查——发现的问题只记录，绝不顺手修
+description: The eleven code-review checks every M/L change must pass — findings are recorded, never fixed in passing
 ---
 
-# 代码评审清单
+# Code review checklist
 
-## 必查项
+## Required checks
 
-- [ ] 重复代码
-- [ ] 授权 / 权限漏洞
-- [ ] 竞态条件
-- [ ] 事务边界
-- [ ] 漏掉的提醒（设计里要求有的地方）
-- [ ] 漏掉的边界（输入范围 / 空值 / 极值）
-- [ ] 新增的复杂度
-- [ ] 超出批准范围的改动
+- [ ] Duplicated code
+- [ ] Authorization / permission holes
+- [ ] Race conditions
+- [ ] Transaction boundaries
+- [ ] Missed notifications (where the design calls for one)
+- [ ] Missed boundaries (input ranges / empty values / extremes)
+- [ ] Complexity added
+- [ ] Parts that trace to no requirement (delete before optimize)
+- [ ] Experience seams treated as design (defaults, empty states, error messages)
+- [ ] Changes outside the approved scope
+- [ ] Task tier too low (the change meets a higher tier's criteria in `task-tiers.md`) — record an issue, never backfill
 
-## 原则
+## Principle
 
-**只记录，绝不顺手修。** 发现的问题进清单，等下一轮或单独立任务。顺手修会破坏门禁——评审就不再是在评审交付出来的东西了。
+**Record, never fix.** Findings go on the list and wait for the next round or a separate task. Fixing in passing breaks the gate — the review no longer reviews what was built.

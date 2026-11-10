@@ -1,4 +1,5 @@
 ---
+status: open
 description: 应用重启后上代 headless 模拟器进程存活成孤儿——runningCount 预检看不见，迁移与活体模拟器抢镜像文件（EPERM）；P3「孤儿进程」验收项的真机实证变体
 created: 2026-10-31
 tags: [windows, process, migration, acceptance]

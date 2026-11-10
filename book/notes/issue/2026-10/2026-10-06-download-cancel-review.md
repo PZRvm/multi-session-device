@@ -1,4 +1,5 @@
 ---
+status: open
 description: 下载取消分支 code review 发现——P1 两项（sha1 前取消检查点绕过清理域致 tmp 残留、空态提示被挤入第一轨）、P2 两项（互斥释放时序窗、解压取消真机缺口）、P3 两项（死代码、记录表述过强）
 tags: [code-review, download, cancel, grid, downloader]
 ---

@@ -1,15 +1,13 @@
 ---
-description: API 设计文档——接口契约在实现之前和之中写下来的地方
+description: API design docs — where interface contracts are written before and while they are implemented
 ---
 
-# API 文档
+# API docs
 
-接口契约：端点、请求/响应形态、错误码，以及调用方依赖的不变量。设计接口时把契约写在这里，接口活着期间保持它不过时。
+Interface contracts: endpoints, request/response shapes, error codes, and the invariants callers rely on. Write the contract here when designing an interface, keep it current while the interface lives.
 
-当前录屏接口见 [录屏 IPC](2026-10-16-recording.md)。
+## Conventions
 
-## 约定
-
-- 一个 API 表面（或它的一个版本）一篇文档，不是一个端点一篇
-- 每个字段都列出类型、含义、是否可选
-- 错误响应逐一列出并说明含义——不写"以及各种错误"
+- One document per API surface (or per version of it), not per endpoint
+- Every field listed with type, meaning, and whether it's optional
+- Error responses enumerated with their meanings — no "and various errors"

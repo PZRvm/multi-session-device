@@ -1,4 +1,5 @@
 ---
+status: open
 description: 对账功能 code review 记录——四切片并行审查：6 项 P2（skin symlink 绕过判定、事务半成品误报弹窗、loadError 无消费、v1 id 校验不对称等）与约 18 项 P3，全部只记录不修复
 created: 2026-10-08
 ---

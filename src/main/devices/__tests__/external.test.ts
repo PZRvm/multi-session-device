@@ -12,7 +12,15 @@ vi.mock('../../emulator/sdkMigration', () => ({
   }
 }))
 
-vi.mock('electron', () => ({ ipcMain: { handle: vi.fn() } }))
+vi.mock('electron', () => ({
+  ipcMain: { handle: vi.fn() },
+  app: { getPath: vi.fn(() => '/userdata') }
+}))
+
+// externalOrder 偏好落盘接缝（plan 2026-11-09）：import 图内 fs 均为函数体调用，无 import 期 IO；
+// default 别名兜底 CJS/默认导入消费者（纯对象 mock 缺 default 会炸 import）
+const fsMocks = vi.hoisted(() => ({ readFile: vi.fn(), writeFile: vi.fn(), rename: vi.fn() }))
+vi.mock('node:fs/promises', () => ({ ...fsMocks, default: fsMocks }))
 
 // 真机域测试（plan 2026-10-13-real-device-usb-and-apk-install）：纯解析函数 +
 // track 客户端（connect/ensureServer 接缝注入，fake timers 驱动退避与握手超时）。
@@ -206,7 +214,7 @@ describe('createTrackParser', () => {
 })
 
 describe('track 客户端', () => {
-  it('注册幂等：两轮注册无重复通道（无线批后一次注册 6 个）', async () => {
+  it('注册幂等：两轮注册无重复通道（诊断修复后 9 个；2026-11-09 加 reorder 通道后 10 个）', async () => {
     const mod = await fresh()
     const bags = makeDeps()
     mod.registerExternalIpc(bags.deps)
@@ -215,8 +223,8 @@ describe('track 客户端', () => {
       .mocked(ipcMain.handle)
       .mock.calls.map((call) => call[0])
       .sort()
-    expect(channels).toHaveLength(6)
-    expect(new Set(channels).size).toBe(6)
+    expect(channels).toHaveLength(10)
+    expect(new Set(channels).size).toBe(10)
   })
 
   it('迁移在途无线四入口统一拒绝（adb 客户端会拉起 server，review P3-5）', async () => {
@@ -516,5 +524,123 @@ describe('track 客户端', () => {
     expect(bags.broadcast).toHaveBeenLastCalledWith([
       { id: 'A', serial: 'A', transport: 'usb', state: 'device', model: null }
     ])
+  })
+})
+
+describe('真机用户序重排（plan 2026-11-09-device-list-drag-reorder）', () => {
+  type ReorderHandler = (event: { sender: Electron.WebContents }, raw: unknown) => unknown
+  const reorderHandler = (): ReorderHandler => {
+    const call = vi
+      .mocked(ipcMain.handle)
+      .mock.calls.find(([channel]) => channel === 'devices:external-reorder')
+    if (!call) throw new Error('devices:external-reorder handler not registered')
+    return call[1] as never
+  }
+  const sender = (): { sender: Electron.WebContents } => ({ sender: {} as Electron.WebContents })
+
+  /** 注册并推首帧建立 cache（frames 逐帧发）；fresh 后 import externalOrder 与 external 同实例 */
+  const boot = async (
+    frames: string[],
+    overrides: Partial<ExternalDeps> = {}
+  ): Promise<{
+    bags: DepsBag
+    order: typeof import('../externalOrder')
+  }> => {
+    const mod = await fresh()
+    const order = await import('../externalOrder')
+    const bags = makeDeps(overrides)
+    mod.registerExternalIpc(bags.deps)
+    await flush()
+    const sock = bags.sockets[0]
+    sock.emit('connect')
+    sock.emit('data', Buffer.concat([OKAY, ...frames.map(frameOf)]))
+    return { bags, order }
+  }
+
+  beforeEach(() => {
+    fsMocks.readFile.mockRejectedValue(new Error('ENOENT'))
+    fsMocks.writeFile.mockResolvedValue(undefined)
+    fsMocks.rename.mockResolvedValue(undefined)
+  })
+
+  it('载荷与整单校验：非对象/缺 ids/非串/空串/重复/未知/缺项一律整单拒绝且零副作用', async () => {
+    const { bags } = await boot(['A\tdevice\nB\tdevice'])
+    const handler = reorderHandler()
+    for (const bad of [
+      null,
+      'x',
+      {},
+      { ids: 'A' },
+      { ids: [1] },
+      { ids: [''] },
+      { ids: ['A', 'A'] },
+      { ids: ['A', 'X'] },
+      { ids: ['A'] }
+    ]) {
+      expect(() => handler(sender(), bad)).toThrow('devices:external-reorder')
+    }
+    expect(bags.broadcast).toHaveBeenCalledTimes(1) // 仅首帧，拒绝路径零广播
+  })
+
+  it('未登记 sender 拒绝（对齐 devicesExternalList 守卫）', async () => {
+    const { bags } = await boot(['A\tdevice'], { isMainSender: () => false })
+    bags.broadcast.mockClear()
+    expect(() => reorderHandler()(sender(), { ids: ['A'] })).toThrow('devices:external-reorder')
+    expect(bags.broadcast).not.toHaveBeenCalled()
+  })
+
+  it('合法重排：cache 换序、广播与返回值同序、会话桥零事件；external-order.json 尽力落盘', async () => {
+    const { bags } = await boot(['A\tdevice\nB\tdevice\nC\tdevice'])
+    bags.onSession.mockClear()
+    fsMocks.writeFile.mockClear()
+    fsMocks.rename.mockClear()
+    const result = reorderHandler()(sender(), { ids: ['C', 'A', 'B'] }) as never as {
+      id: string
+    }[]
+    expect(result.map((device) => device.id)).toEqual(['C', 'A', 'B'])
+    const broadcasted = bags.broadcast.mock.lastCall?.[0] as never as { id: string }[]
+    expect(broadcasted.map((device) => device.id)).toEqual(['C', 'A', 'B'])
+    expect(bags.onSession).not.toHaveBeenCalled()
+    await flush()
+    expect(fsMocks.writeFile).toHaveBeenCalledWith(
+      '/userdata/external-order.json.tmp',
+      expect.stringContaining('"order"'),
+      'utf8'
+    )
+    expect(fsMocks.rename).toHaveBeenCalledWith(
+      '/userdata/external-order.json.tmp',
+      '/userdata/external-order.json'
+    )
+  })
+
+  it('重排后 track 帧保持用户序：adb 帧序不覆盖，同一集合帧不重播', async () => {
+    const { bags } = await boot(['A\tdevice\nB\tdevice\nC\tdevice'])
+    reorderHandler()(sender(), { ids: ['C', 'A', 'B'] })
+    const callsAfterReorder = bags.broadcast.mock.calls.length
+    bags.sockets[0].emit('data', frameOf('A\tdevice\nB\tdevice\nC\tdevice'))
+    // 合并后与 cache 同集合同序：sameDevices 判等，不重播
+    expect(bags.broadcast.mock.calls.length).toBe(callsAfterReorder)
+  })
+
+  it('状态翻转帧保持用户序（offline/unauthorized 不冲序）', async () => {
+    const { bags } = await boot(['A\tdevice\nB\tdevice\nC\tdevice'])
+    reorderHandler()(sender(), { ids: ['C', 'A', 'B'] })
+    bags.sockets[0].emit('data', frameOf('A\tdevice\nC\tdevice\nB\toffline'))
+    const broadcasted = bags.broadcast.mock.lastCall?.[0] as never as {
+      id: string
+      state: string
+    }[]
+    expect(broadcasted.map((device) => device.id)).toEqual(['C', 'A', 'B'])
+    expect(broadcasted[2]).toMatchObject({ id: 'B', state: 'offline' })
+  })
+
+  it('断线条目序位保留：拔线记忆不丢、重插回原位（帧序无关）', async () => {
+    const { bags, order } = await boot(['A\tdevice\nB\tdevice'])
+    reorderHandler()(sender(), { ids: ['B', 'A'] })
+    bags.sockets[0].emit('data', frameOf('A\tdevice')) // B 拔线
+    expect(order.orderNow()).toEqual(['B', 'A']) // 记忆保留断线 serial
+    bags.sockets[0].emit('data', frameOf('A\tdevice\nB\tdevice')) // B 重插，adb 帧序 A,B
+    const broadcasted = bags.broadcast.mock.lastCall?.[0] as never as { id: string }[]
+    expect(broadcasted.map((device) => device.id)).toEqual(['B', 'A']) // 用户序恢复
   })
 })

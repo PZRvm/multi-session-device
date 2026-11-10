@@ -1,7 +1,7 @@
 ---
 description: 断网开关批 code review（八项清单）——总体 pass；3 项 P3 已修复（解析降级/networkGet 刷新初值/mock helper）、2 项批复语义不修，处置记录在内
 created: 2026-10-12
-status: closed
+status: resolved
 ---
 
 # 断网开关批 code review（含 DeviceWizard 追加修复）

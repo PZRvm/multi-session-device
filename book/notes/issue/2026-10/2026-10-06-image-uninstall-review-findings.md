@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: 系统镜像删除功能 code review 发现——P1 卸载/下载互斥单向、P2 引用守卫 TOCTOU 与残留复核盲区，及 7 项 P3
 tags: [wizard, uninstall, review, race-condition, mutex]
 ---

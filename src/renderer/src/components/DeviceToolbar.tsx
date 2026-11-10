@@ -19,6 +19,7 @@ import type { ScreenshotState } from '../hooks/useScreenshot'
 import RecordingControls from './RecordingControls'
 import ScreenshotPopover from './ScreenshotPopover'
 import { toolButtonCss } from './toolButtonStyle'
+import { PopoverIconButton } from './PopoverIconButton'
 
 type DeviceToolbarProps = {
   deviceId?: string
@@ -83,42 +84,33 @@ const DeviceToolbar = ({
   return (
     <Wrapper role="toolbar" aria-label={copy.toolbarAria}>
       {buttons.map((entry) => (
-        <button
+        <PopoverIconButton
           key={entry.button}
           className="tool-btn"
-          type="button"
-          aria-label={entry.label}
-          title={entry.label}
+          icon={entry.icon}
+          label={entry.label}
           disabled={entry.button === 'power' ? (powerDisabled ?? false) : disabled}
           onClick={() =>
             entry.button === 'power' ? onPower?.() : onButton(entry.button as ScreenToolbarButton)
           }
-        >
-          {entry.icon}
-        </button>
+        />
       ))}
-      <button
+      <PopoverIconButton
         className="tool-btn"
-        type="button"
-        aria-label={copy.rotate}
-        title={copy.rotate}
+        icon={<RotateCw size={16} />}
+        label={copy.rotate}
         disabled={disabled}
         onClick={onRotate}
-      >
-        <RotateCw size={16} />
-      </button>
+      />
       {/* 截屏走 adb 独立链路：busy 只由截屏进行中决定；气泡锚定在本钮上方 */}
       <div className="shot-anchor">
-        <button
+        <PopoverIconButton
           className="tool-btn"
-          type="button"
-          aria-label={copy.screenshotAction}
-          title={copy.screenshotAction}
+          icon={<Camera size={16} />}
+          label={copy.screenshotAction}
           disabled={screenshotBusy}
           onClick={onScreenshot}
-        >
-          <Camera size={16} />
-        </button>
+        />
         {screenshotState.phase === 'copied' ||
         screenshotState.phase === 'saving' ||
         screenshotState.phase === 'saved' ||
@@ -136,39 +128,30 @@ const DeviceToolbar = ({
       {/* 网络开关组：断网总开关（飞行模式，真断网）+ Wi-Fi/移动数据分 radio（场景测试）；
           态以设备读回为唯一事实源，aria-pressed 承载开闭，busy/未知态禁用 */}
       <div className="net-group" role="group" aria-label={copy.networkGroupAria}>
-        <button
+        <PopoverIconButton
           className="tool-btn net-toggle net-airplane"
-          type="button"
-          aria-label={copy.networkAirplaneToggle}
-          title={copy.networkAirplaneToggle}
-          aria-pressed={networkState ? networkState.airplane : undefined}
+          icon={<Plane size={16} />}
+          label={copy.networkAirplaneToggle}
+          pressed={networkState ? networkState.airplane : undefined}
           disabled={networkState === null || networkBusy !== null}
           onClick={() => onNetworkToggle('airplane')}
-        >
-          <Plane size={16} />
-        </button>
-        <button
+        />
+        <PopoverIconButton
           className="tool-btn net-toggle"
-          type="button"
-          aria-label={copy.networkWifiToggle}
-          title={copy.networkWifiToggle}
-          aria-pressed={networkState ? networkState.wifi : undefined}
+          icon={<Wifi size={16} />}
+          label={copy.networkWifiToggle}
+          pressed={networkState ? networkState.wifi : undefined}
           disabled={networkState === null || networkBusy !== null}
           onClick={() => onNetworkToggle('wifi')}
-        >
-          <Wifi size={16} />
-        </button>
-        <button
+        />
+        <PopoverIconButton
           className="tool-btn net-toggle"
-          type="button"
-          aria-label={copy.networkDataToggle}
-          title={copy.networkDataToggle}
-          aria-pressed={networkState ? networkState.data : undefined}
+          icon={<SignalHigh size={16} />}
+          label={copy.networkDataToggle}
+          pressed={networkState ? networkState.data : undefined}
           disabled={networkState === null || networkBusy !== null}
           onClick={() => onNetworkToggle('data')}
-        >
-          <SignalHigh size={16} />
-        </button>
+        />
       </div>
     </Wrapper>
   )

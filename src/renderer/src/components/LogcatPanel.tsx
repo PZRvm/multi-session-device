@@ -4,6 +4,7 @@ import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
 import { useCopy } from '../hooks/useCopy'
 import { useLogcatFeed } from '../hooks/useLogcatFeed'
+import { PopoverIconButton } from './PopoverIconButton'
 
 type LogcatPanelProps = {
   deviceId: string | null
@@ -57,35 +58,26 @@ const LogcatPanel = ({ deviceId, runId, onPopOut }: LogcatPanelProps): React.JSX
           aria-label={copy.logcatFilterPlaceholder}
           onChange={(event) => setFilter(event.target.value)}
         />
-        <button
+        <PopoverIconButton
           className="bar-btn"
-          type="button"
-          aria-label={feed.paused ? copy.logcatResume : copy.logcatPause}
-          aria-pressed={feed.paused}
-          title={feed.paused ? copy.logcatResume : copy.logcatPause}
+          icon={feed.paused ? <Play size={14} /> : <Pause size={14} />}
+          label={feed.paused ? copy.logcatResume : copy.logcatPause}
+          pressed={feed.paused}
           onClick={feed.togglePaused}
-        >
-          {feed.paused ? <Play size={14} /> : <Pause size={14} />}
-        </button>
-        <button
+        />
+        <PopoverIconButton
           className="bar-btn"
-          type="button"
-          aria-label={copy.logcatClear}
-          title={copy.logcatClear}
+          icon={<Eraser size={14} />}
+          label={copy.logcatClear}
           onClick={handleClear}
-        >
-          <Eraser size={14} />
-        </button>
+        />
         {onPopOut ? (
-          <button
+          <PopoverIconButton
             className="bar-btn"
-            type="button"
-            aria-label={copy.logcatPopOut}
-            title={copy.logcatPopOut}
+            icon={<ExternalLink size={14} />}
+            label={copy.logcatPopOut}
             onClick={onPopOut}
-          >
-            <ExternalLink size={14} />
-          </button>
+          />
         ) : null}
       </div>
       {feed.error ? (

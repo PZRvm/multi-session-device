@@ -1,32 +1,34 @@
 ---
-description: 六篇 guideline 的索引与按需查阅路由表——什么任务先读哪篇，无需通读
+description: Index of the guidelines and the input pointer table — which guideline to read for which kind of task, with no blanket pre-reading
 ---
 
-# 规则书（Guidelines）
+# Guidelines
 
-项目的开发规则。每一位贡献者——包括 AI agent——都要遵守。
+The project's development rules. Every contributor — including AI agents — follows them.
 
-| 文件                  | 内容                                                    |
-| --------------------- | ------------------------------------------------------- |
-| `workflow.md`         | 六阶段门禁工作流与 code↔book 交互规则                   |
-| `writing-style.md`    | 所有 book 文档的说人话标准                              |
-| `git-workflow.md`     | Clean Commit 提交格式与 Clean Flow 分支 / PR / 合并规则 |
-| `review-checklist.md` | 八项 code review 检查                                   |
-| `architecture.md`     | 长期架构规则（模板——按你的项目替换）                    |
-| `coding-style.md`     | 语言相关的编码基线（模板——按你的项目替换）              |
+| File | Content |
+|------|---------|
+| `workflow.md` | Six-phase gate workflow and the code↔book interaction rules |
+| `task-tiers.md` | S/M/L grading — which channel a change runs and what each tier owes |
+| `writing-style.md` | Plain-language standard for every book document |
+| `git-workflow.md` | Clean Commit format and Clean Flow branch/PR/merge rules |
+| `review-checklist.md` | The eleven code-review checks |
+| `architecture.md` | Project architecture boundaries and invariants |
+| `coding-style.md` | Project language-specific coding baseline |
 
-## 按需查阅——查任务触达的那篇，永不通读
+## Input pointers — consult on demand, never blanket-read
 
-| 当任务涉及…                  | 先读                         |
-| ---------------------------- | ---------------------------- |
-| 阶段、门禁、book 同步        | `workflow.md`                |
-| 模块边界、数据归属、技术更换 | `architecture.md`            |
-| 模块与数据流的当前形态       | `../docs/architecture/` 快照 |
-| 接口契约                     | `../docs/api/`               |
-| 写任何 book 文档             | `writing-style.md`           |
-| 提交、分支、PR、发布         | `git-workflow.md`            |
-| 语言级代码规则               | `coding-style.md`            |
-| 评审一个 diff                | `review-checklist.md`        |
-| 这个症状或技术以前踩过坑     | 按 tag 搜 `../notes/learn/`  |
+| When the task touches… | Read first |
+|--------|-----------|
+| Phases, gates, book sync | `workflow.md` |
+| Grading a task, which channel it runs | `task-tiers.md` |
+| Module boundaries, data ownership, tech swaps | `architecture.md` |
+| The current shape of modules and data flow | `../docs/architecture/` snapshots |
+| Interface contracts | `../docs/api/` |
+| Writing any book document | `writing-style.md` |
+| Commits, branches, PRs, releases | `git-workflow.md` |
+| Language-level code rules | `coding-style.md` |
+| Reviewing a diff | `review-checklist.md` |
+| Prior experience with this symptom or tech | search `../notes/learn/` by tag |
 
-初次接触仓库：把 `workflow.md` 通读一遍。之后直接跳到任务触达的那篇——上面这张表负责路由。
+First contact with the repo: read `workflow.md` once. After that, jump straight to the guideline the task touches — the table above routes you.

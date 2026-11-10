@@ -17,6 +17,7 @@ import DeviceHealthNotice from './components/DeviceHealthNotice'
 import DeviceListPane from './components/DeviceListPane'
 import ExternalCanvas, { ExternalCanvasPlaceholder } from './components/ExternalCanvas'
 import LogcatPanel from './components/LogcatPanel'
+import { PopoverIconButton } from './components/PopoverIconButton'
 import ResizeHandle from './components/ResizeHandle'
 import { clampListWidth, LIST_MAX_WIDTH } from './components/listWidth'
 import {
@@ -70,6 +71,9 @@ const App = (): React.JSX.Element => {
   const startDevice = useDeviceStore((state) => state.start)
   const stopDevice = useDeviceStore((state) => state.stop)
   const cancelStartDevice = useDeviceStore((state) => state.cancelStart)
+  const hibernateDevice = useDeviceStore((state) => state.hibernate)
+  const resumeDevice = useDeviceStore((state) => state.resume)
+  const discardHibernation = useDeviceStore((state) => state.discardHibernation)
   const setSelected = useDeviceStore((state) => state.setSelected)
   const locale = useLocaleStore((state) => state.locale)
   const copy = useCopy(MAIN_COPY)
@@ -301,21 +305,56 @@ const App = (): React.JSX.Element => {
     if (!result.ok) await showAlert(copy.renameFailed, result.error)
   }
 
+  // 用户删除（plan 2026-11-06 设计 E）：入口仅停止态渲染；确认前后都按最新状态复核
+  // ——确认窗口内设备被启动则放弃删除（main 侧 stopped-only 守卫兜底，零停止副作用）
   const handleDelete = async (device: Device): Promise<void> => {
-    const willStopFirst = device.status === 'running'
+    const latestBefore = useDeviceStore.getState().devices.find((entry) => entry.id === device.id)
+    if (latestBefore?.status !== 'stopped') return
     const result = await toApiResult(
       window.api.dialog.show({
         title: copy.deleteDeviceTitle,
         message: format(copy.deleteConfirm, { name: device.name }),
-        detail: willStopFirst ? copy.deleteRunningDetail : copy.deleteDetail,
+        detail: copy.deleteDetail,
         buttons: [copy.cancel, copy.delete],
         cancelId: 0
       })
     )
     if (!result.ok) return
     if (result.data.response !== 1) return
+    const latestAfter = useDeviceStore.getState().devices.find((entry) => entry.id === device.id)
+    if (latestAfter?.status !== 'stopped') {
+      await showAlert(copy.deleteFailed, copy.deleteNotStoppedHint)
+      return
+    }
     const removed = await removeDevice(device.id)
     if (!removed.ok) await showAlert(copy.deleteFailed, removed.error)
+  }
+
+  const handleHibernate = async (id: string): Promise<void> => {
+    const result = await hibernateDevice(id)
+    if (!result.ok) await showAlert(copy.hibernateFailed, result.error)
+  }
+
+  const handleResume = async (id: string): Promise<void> => {
+    const result = await resumeDevice(id)
+    if (!result.ok) await showAlert(copy.resumeFailedTitle, result.error)
+  }
+
+  // 放弃休眠状态：原生确认说明后果（快照删除、现场不再恢复、之后冷启动）
+  const handleDiscardHibernation = async (device: Device): Promise<void> => {
+    const result = await toApiResult(
+      window.api.dialog.show({
+        title: copy.discardConfirmTitle,
+        message: format(copy.discardConfirmMessage, { name: device.name }),
+        detail: copy.discardConfirmDetail,
+        buttons: [copy.cancel, copy.discardConfirmButton],
+        cancelId: 0
+      })
+    )
+    if (!result.ok) return
+    if (result.data.response !== 1) return
+    const discarded = await discardHibernation(device.id)
+    if (!discarded.ok) await showAlert(copy.discardFailed, discarded.error)
   }
 
   const handleStart = async (id: string): Promise<void> => {
@@ -481,16 +520,13 @@ const App = (): React.JSX.Element => {
     />
   )
   const logToggle = logTarget ? (
-    <button
-      type="button"
+    <PopoverIconButton
       className="log-toggle"
-      aria-label={copy.logcatTitle}
-      aria-pressed={dockVisible}
-      title={copy.logcatTitle}
+      icon={<ScrollText size={16} />}
+      label={copy.logcatTitle}
+      pressed={dockVisible}
       onClick={handleToggleLogDock}
-    >
-      <ScrollText size={16} />
-    </button>
+    />
   ) : null
   return (
     <Wrapper lang={locale} data-windows={isWindows}>
@@ -522,12 +558,18 @@ const App = (): React.JSX.Element => {
           onStart={handleStart}
           onStop={handleStop}
           onCancelStart={handleCancelStart}
+          onHibernate={handleHibernate}
+          onResume={handleResume}
           onCopySerial={handleCopySerial}
           onDelete={handleDelete}
           onRename={handleRename}
           onEdit={handleEdit}
           onRenameBlocked={handleRenameBlocked}
           onCrossBucketBlocked={handleCrossBucketBlocked}
+          onReorderDevices={(ids) => {
+            void useDeviceStore.getState().reorder(ids)
+          }}
+          onReorderExternal={(ids) => useExternalStore.getState().reorder(ids)}
         />
         <footer className="foot">
           <Button
@@ -579,6 +621,8 @@ const App = (): React.JSX.Element => {
               rechecking={rechecking}
               storeState={storeHealth.state}
               createDisabled={!metaWritable}
+              onResume={selected ? () => handleResume(selected.id) : undefined}
+              onDiscard={selected ? () => handleDiscardHibernation(selected) : undefined}
             />
           )}
         </div>

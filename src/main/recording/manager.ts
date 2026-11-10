@@ -1,3 +1,4 @@
+import { adbRecovery } from '../emulator/adbRecovery'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { readdir, rm, lstat } from 'node:fs/promises'
@@ -113,6 +114,7 @@ export class RecordingManager {
     )
   }
   start(deviceId: string): RecordingSnapshot {
+    adbRecovery.assertOpen()
     if (this.frozen) throw new Error(msg('invalidState'))
     const active = [...this.tasks.values()].filter((task) => isRecordingActive(task.view.state))
     if (active.some((task) => task.view.deviceId === deviceId)) throw new Error(msg('busy'))

@@ -1,3 +1,5 @@
+import WirelessRecoveryFeedback from './WirelessRecoveryFeedback'
+import { WIRELESS_RECOVERY_COPY } from '@shared/wirelessRecovery'
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Loader2, Usb, Wifi } from 'lucide-react'
 import styled from 'styled-components'
@@ -10,6 +12,7 @@ import type {
 } from '@shared/types'
 import { toApiResult } from '../api'
 import { useCopy } from '../hooks/useCopy'
+import { useListDragReorder, type RowDragProps } from '../hooks/useListDragReorder'
 import { spinKeyframes } from '../styles/animations'
 import DeviceRow from './DeviceRow'
 import RecordingStatus from './RecordingStatus'
@@ -38,6 +41,10 @@ type DeviceListPaneProps = {
   onStart: (id: string) => void
   onStop: (id: string) => void
   onCancelStart: (id: string) => void
+  /** 手动休眠（含退出失败后的重试；plan 2026-11-06-emulator-hibernation） */
+  onHibernate: (id: string) => void
+  /** 从休眠恢复 */
+  onResume: (id: string) => void
   onCopySerial: (id: string) => void
   onDelete: (device: Device) => void
   onRename: (id: string, name: string) => void
@@ -46,6 +53,10 @@ type DeviceListPaneProps = {
   onRenameBlocked?: () => void
   /** 跨来源桶设备尝试修改（重命名路径）时的反馈入口（用户复核 5） */
   onCrossBucketBlocked?: () => void
+  /** AVD 整单重排（plan 2026-11-09）：主区拖拽 drop 合成的已提交设备全序 */
+  onReorderDevices: (ids: string[]) => void
+  /** 真机整单重排：真机区拖拽 drop 合成的全序 */
+  onReorderExternal: (ids: string[]) => void
 }
 
 const rowHandlers = (
@@ -60,13 +71,16 @@ const rowHandlers = (
     | 'onStart'
     | 'onStop'
     | 'onCancelStart'
+    | 'onHibernate'
+    | 'onResume'
     | 'onCopySerial'
     | 'onDelete'
     | 'onRename'
     | 'onEdit'
     | 'onRenameBlocked'
     | 'onCrossBucketBlocked'
-  >
+  >,
+  drag?: RowDragProps
 ): React.JSX.Element => (
   <DeviceRow
     key={device.id}
@@ -79,12 +93,15 @@ const rowHandlers = (
     onStart={() => shared.onStart(device.id)}
     onStop={() => shared.onStop(device.id)}
     onCancelStart={() => shared.onCancelStart(device.id)}
+    onHibernate={() => shared.onHibernate(device.id)}
+    onResume={() => shared.onResume(device.id)}
     onCopySerial={() => shared.onCopySerial(device.id)}
     onDelete={() => shared.onDelete(device)}
     onRename={(name) => shared.onRename(device.id, name)}
     onEdit={() => shared.onEdit(device.id)}
     onRenameBlocked={shared.onRenameBlocked}
     onCrossBucketBlocked={shared.onCrossBucketBlocked}
+    drag={drag}
   />
 )
 
@@ -103,7 +120,8 @@ const ExternalRow = ({
   onSelect,
   promoteState,
   onPromote,
-  onDisconnect
+  onDisconnect,
+  drag
 }: {
   device: ExternalDevice
   selected: boolean
@@ -111,6 +129,8 @@ const ExternalRow = ({
   promoteState?: PromoteState
   onPromote?: (serial: string) => void
   onDisconnect?: (serial: string) => void
+  /** 拖拽换序（plan 2026-11-09）：真机行任意状态可拖 */
+  drag?: RowDragProps
 }): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
   const stateText =
@@ -125,8 +145,11 @@ const ExternalRow = ({
     <div
       role="button"
       tabIndex={0}
-      className="external-row"
+      className={`external-row${drag?.isSource ? ' drag-source' : ''}`}
       aria-current={selected || undefined}
+      data-external-drag-id={drag ? device.id : undefined}
+      draggable={drag?.draggable}
+      data-drop-pos={drag?.dropPos ?? undefined}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -238,31 +261,62 @@ const DeviceListPane = ({
   onStart,
   onStop,
   onCancelStart,
+  onHibernate,
+  onResume,
   onCopySerial,
   onDelete,
   onRename,
   onEdit,
   onRenameBlocked,
-  onCrossBucketBlocked
+  onCrossBucketBlocked,
+  onReorderDevices,
+  onReorderExternal
 }: DeviceListPaneProps): React.JSX.Element => {
   const copy = useCopy(MAIN_COPY)
+  const recoveryCopy = useCopy(WIRELESS_RECOVERY_COPY)
   const [foldedOpen, setFoldedOpen] = useState(false)
   const [realOpen, setRealOpen] = useState(true)
   // 无线批（plan 2026-10-15-real-device-wireless）：连接器已改 mac 原生弹窗（用户裁定，
   // 渲染层弹层与窗口几何打架）——这里只发起开窗；转无线反馈是行内瞬态，不进 store
   // （无状态裁定：刷新即丢，设备由 track 推送呈现）
+  const [failedAttempt, setFailedAttempt] = useState<{
+    serial: string
+    outcome: Extract<WirelessConnectOutcome, { ok: false }>
+  } | null>(null)
+  const promoteRequest = useRef(0)
   const [promote, setPromote] = useState<PromoteState | null>(null)
   // 断开/删除失败反馈（P3-3）：serial → 文案（map——P3-10：多台先后失败并存不覆盖）
   const [disconnectErrors, setDisconnectErrors] = useState<Record<string, string>>({})
   const { active, folded } = splitByOriginView(devices, sourceBucket)
+  // 拖拽换序（plan 2026-11-09-device-list-drag-reorder）：AVD 主区可拖——hook 吃已提交
+  // 设备全序（含折叠区设备），drop 移动可见子序列在全序中的相对位；折叠区行不带
+  // 标识不可拖不可锚；read-only 禁拖（canDrag 行级门 + 主进程 assertMetaWritable 双闸）。
+  // 宇宙只排除 creating（pending 行不在 metas）；deleting 行仍在 acceptedMetas——
+  // 进宇宙保整单校验通过（review P3-D），行级仍不可拖不可锚（即将离场）
+  const avdDrag = useListDragReorder({
+    mime: 'application/x-msd-avd',
+    rowAttr: 'data-avd-drag-id',
+    ids: devices.filter((device) => device.status !== 'creating').map((device) => device.id),
+    canDrag: () => metaWritable,
+    onReorder: onReorderDevices
+  })
+  // 真机区：任意状态可拖；顺序经主进程合并层防 track 帧冲刷（断线条目保留原位）
+  const externalDrag = useListDragReorder({
+    mime: 'application/x-msd-external',
+    rowAttr: 'data-external-drag-id',
+    ids: externalDevices.map((device) => device.id),
+    onReorder: onReorderExternal
+  })
   // 自清定时器登记（P3-9）：卸载统一清理（对齐 inputErrorTimerRef 先例）
   const timersRef = useRef(new Set<number>())
-  useEffect(
-    () => () => {
-      for (const id of timersRef.current) window.clearTimeout(id)
-    },
-    []
-  )
+  useEffect(() => {
+    const requests = promoteRequest
+    const timers = timersRef.current
+    return () => {
+      requests.current++
+      for (const id of timers) window.clearTimeout(id)
+    }
+  }, [])
   const later = (fn: () => void, ms: number): void => {
     const id = window.setTimeout(() => {
       timersRef.current.delete(id)
@@ -275,25 +329,29 @@ const DeviceListPane = ({
     promote && externalDevices.some((device) => device.serial === promote.serial) ? promote : null
 
   const handlePromote = (serial: string): void => {
+    const request = ++promoteRequest.current
+    setFailedAttempt(null)
     setPromote({ serial, phase: 'working' })
     void toApiResult(window.api.devices.promoteExternalWireless({ serial })).then((result) => {
+      if (request !== promoteRequest.current) return
       if (!result.ok) {
         setPromote({ serial, phase: 'fail', text: result.error })
         return
       }
       const outcome: WirelessConnectOutcome = result.data
+      if (!outcome.ok) setFailedAttempt({ serial, outcome })
       setPromote(
         outcome.ok
           ? { serial, phase: 'done' }
-          : { serial, phase: 'fail', text: wirelessConnectFailureText(copy, outcome) }
+          : { serial, phase: 'fail', text: wirelessConnectFailureText(copy, outcome, recoveryCopy) }
       )
       // done 提示 6 秒后自清（P3-4：重插同 serial 不重显旧提示）；失败态不自动清，
       // 随设备离场消失（派生收口）
       if (outcome.ok) {
-        later(
-          () => setPromote((cur) => (cur?.serial === serial && cur.phase === 'done' ? null : cur)),
-          6_000
-        )
+        later(() => {
+          if (promoteRequest.current === request)
+            setPromote((cur) => (cur?.serial === serial && cur.phase === 'done' ? null : cur))
+        }, 6_000)
       }
     })
   }
@@ -328,6 +386,16 @@ const DeviceListPane = ({
       {/* 单一滚动容器：AVD 分区（或空库提示）之后紧跟真机区——不钉在栏底（用户
           2026-10-13 反馈：真机列表要贴上方列表下方） */}
       <div className="list">
+        {/* 重排失败且重拉也失败（review P3-C）：乐观序滞留时给出原因与重试——复用
+            空库同款文案与链接（零新词条）；重排成功但重拉成功时列表自行归位，不提示 */}
+        {devices.length > 0 && loadError !== null ? (
+          <div className="load-error-line" role="status">
+            {format(copy.loadFailed, { message: loadError })}{' '}
+            <button type="button" className="retry-link" onClick={onRetryLoad}>
+              {copy.retryLoad}
+            </button>
+          </div>
+        ) : null}
         {devices.length === 0 ? (
           loadError !== null ? (
             // invoke 级失败不经过 storeHealth——按读取失败展示并保留重试（plan 差距表）
@@ -347,25 +415,35 @@ const DeviceListPane = ({
           )
         ) : (
           <>
-            <div className="origin-main">
-              {active.map((device) =>
-                rowHandlers(device, {
-                  selectedId,
-                  storeTrusted,
-                  metaWritable,
-                  sourceBucket,
-                  onSelect,
-                  onStart,
-                  onStop,
-                  onCancelStart,
-                  onCopySerial,
-                  onDelete,
-                  onRename,
-                  onEdit,
-                  onRenameBlocked,
-                  onCrossBucketBlocked
-                })
-              )}
+            <div className="origin-main" {...avdDrag.listHandlers}>
+              {active.map((device) => {
+                // creating（不在 metas）与 deleting（即将离场）行不可拖不可锚：
+                // 无标识即不参与手势；deleting 仍在重排宇宙里保整单校验（review P3-D）
+                const committed = device.status !== 'creating' && device.status !== 'deleting'
+                const visual = avdDrag.rowVisual(device.id)
+                return rowHandlers(
+                  device,
+                  {
+                    selectedId,
+                    storeTrusted,
+                    metaWritable,
+                    sourceBucket,
+                    onSelect,
+                    onStart,
+                    onStop,
+                    onCancelStart,
+                    onHibernate,
+                    onResume,
+                    onCopySerial,
+                    onDelete,
+                    onRename,
+                    onEdit,
+                    onRenameBlocked,
+                    onCrossBucketBlocked
+                  },
+                  committed ? { draggable: metaWritable, ...visual } : undefined
+                )
+              })}
             </div>
             {foldedLine !== null ? (
               <div className="origin-folded">
@@ -394,6 +472,8 @@ const DeviceListPane = ({
                         onStart,
                         onStop,
                         onCancelStart,
+                        onHibernate,
+                        onResume,
                         onCopySerial,
                         onDelete,
                         onRename,
@@ -433,8 +513,26 @@ const DeviceListPane = ({
               <Wifi size={12} aria-hidden="true" />
             </button>
           </div>
+          {failedAttempt?.outcome.attemptId ? (
+            <div className="recovery-feedback">
+              {!externalDevices.some((device) => device.serial === failedAttempt.serial) ? (
+                <p role="status">
+                  {wirelessConnectFailureText(copy, failedAttempt.outcome, recoveryCopy)}
+                </p>
+              ) : null}
+              <WirelessRecoveryFeedback
+                key={failedAttempt.outcome.attemptId}
+                outcome={failedAttempt.outcome}
+                onRetry={() => handlePromote(failedAttempt.serial)}
+                onRecovered={() => {
+                  setFailedAttempt(null)
+                  setPromote({ serial: failedAttempt.serial, phase: 'done' })
+                }}
+              />
+            </div>
+          ) : null}
           {realOpen ? (
-            <div className="real-body">
+            <div className="real-body" {...externalDrag.listHandlers}>
               {externalDevices.length === 0 ? (
                 <p className="real-empty">
                   {copy.realDeviceEmpty}
@@ -468,6 +566,7 @@ const DeviceListPane = ({
                       promoteState={rowFeedback}
                       onPromote={handlePromote}
                       onDisconnect={handleDisconnect}
+                      drag={{ draggable: true, ...externalDrag.rowVisual(device.id) }}
                     />
                   )
                 })
@@ -543,6 +642,15 @@ const Wrapper = styled.div`
     color: var(--board-ink-dim);
   }
 
+  /* 重排失败且重拉也失败（review P3-C）：非空列表上的读取失败横条 */
+  .load-error-line {
+    padding: 8px 12px;
+    font-size: 11px;
+    line-height: 1.7;
+    color: var(--danger);
+    border-bottom: 1px solid var(--board-hairline);
+  }
+
   .retry-link {
     padding: 0;
     border: none;
@@ -563,6 +671,11 @@ const Wrapper = styled.div`
      紧跟 AVD 分区（或空库提示）之后，不钉在栏底（用户 2026-10-13 反馈）。
      无线批（2026-10-15）：组头拆成容器行（按钮嵌按钮不合法）+ 右侧常驻无线入口；
      弹层锚在本区（position: relative） */
+  .recovery-feedback {
+    padding: 8px 12px;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
   .real-devices {
     position: relative;
     border-top: 1px solid var(--board-hairline);
@@ -705,6 +818,7 @@ const Wrapper = styled.div`
   }
 
   .external-row {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -713,6 +827,34 @@ const Wrapper = styled.div`
     color: var(--board-ink);
     cursor: pointer;
     transition: background-color 0.12s;
+
+    /* 拖拽换序（plan 2026-11-09）：与 DeviceRow 同款三件——禁选字/半透明/插入线 */
+    &[draggable='true'] {
+      user-select: none;
+    }
+
+    &.drag-source {
+      opacity: 0.45;
+    }
+
+    &[data-drop-pos='before']::before,
+    &[data-drop-pos='after']::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--board-ink);
+      pointer-events: none;
+    }
+
+    &[data-drop-pos='before']::before {
+      top: -1px;
+    }
+
+    &[data-drop-pos='after']::after {
+      bottom: -1px;
+    }
 
     &:hover {
       background: var(--board-bg-raised);

@@ -1,4 +1,5 @@
 ---
+status: open
 description: 向导扩展验收遗留：官方皮肤获取与投屏已接通，Quick 稳定性、摄像头取景、六类设备及部分真机验证仍未完成
 tags: [wizard, emulator, skins, quick-boot, acceptance]
 ---

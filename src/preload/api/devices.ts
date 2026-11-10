@@ -1,3 +1,4 @@
+import type { WirelessRecoveryState, WirelessRepairOutcome } from '@shared/wirelessRecovery'
 import { ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type {
@@ -19,6 +20,18 @@ import type {
 } from '@shared/types'
 
 export const devicesApi = {
+  getWirelessRecoveryState: (): Promise<WirelessRecoveryState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.wirelessRecoveryGet),
+  repairWirelessConnection: (attemptId: string): Promise<WirelessRepairOutcome> =>
+    ipcRenderer.invoke(IPC_CHANNELS.wirelessRecoveryRepair, { attemptId }),
+  copyWirelessDiagnostics: (attemptId: string): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.wirelessRecoveryCopy, { attemptId }),
+  onWirelessRecoveryChanged: (listener: (state: WirelessRecoveryState) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: WirelessRecoveryState): void =>
+      listener(state)
+    ipcRenderer.on(IPC_CHANNELS.wirelessRecoveryChanged, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.wirelessRecoveryChanged, handler)
+  },
   list: (): Promise<DeviceSnapshot> => ipcRenderer.invoke(IPC_CHANNELS.devicesList),
   create: (input: CreateDeviceInput): Promise<CreateDeviceResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.devicesCreate, input),
@@ -39,6 +52,18 @@ export const devicesApi = {
     ipcRenderer.invoke(IPC_CHANNELS.devicesStop, { id }),
   cancelStart: (id: string): Promise<DeviceSnapshot> =>
     ipcRenderer.invoke(IPC_CHANNELS.devicesCancelStart, { id }),
+  /** 整单重排（plan 2026-11-09）：已提交设备全序；devices.json 数组序即持久化序 */
+  reorder: (ids: string[]): Promise<DeviceSnapshot> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesReorder, { ids }),
+  /** 手动休眠：保存命名快照并优雅退出实例（不传路径/端口/快照名——main 单源） */
+  hibernate: (id: string): Promise<DeviceSnapshot> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesHibernate, { id }),
+  /** 从休眠恢复：兼容性校验后以保存的快照启动，获得新 runId */
+  resume: (id: string): Promise<DeviceSnapshot> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesResume, { id }),
+  /** 放弃休眠状态：删除快照与清单回到 stopped（renderer 先确认，main 复核状态） */
+  discardHibernation: (id: string): Promise<DeviceSnapshot> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesDiscardHibernation, { id }),
   /** 复制当前登记 serial——受控通道，main 校验运行态后写入剪贴板 */
   copySerial: (id: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.devicesCopySerial, { id }),
@@ -74,6 +99,9 @@ export const devicesApi = {
   /** 外部设备快照（main 内存缓存；track-devices-l 跟踪） */
   listExternal: (): Promise<ExternalDevice[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.devicesExternalList),
+  /** 真机用户序重排（plan 2026-11-09）：返回重排后的全量列表 */
+  reorderExternal: (ids: string[]): Promise<ExternalDevice[]> =>
+    ipcRenderer.invoke(IPC_CHANNELS.devicesExternalReorder, { ids }),
   /** 外部设备变化订阅（main 侧 diff，变化才推全量），返回解绑函数 */
   onExternalChanged: (callback: (devices: ExternalDevice[]) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, devices: ExternalDevice[]): void => {

@@ -1,4 +1,5 @@
 ---
+status: resolved
 description: 基线 4e01b09 自带 10 个 eslint error（scrcpy 测试与 index 的显式返回类型、renderer 的 react-hooks refs/setState 纪律）与 7 个 warning——已被基上 3f0a977 全部清空，见姊妹 issue
 tags: [lint, baseline, react-hooks, scrcpy]
 ---

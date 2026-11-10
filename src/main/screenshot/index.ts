@@ -1,3 +1,4 @@
+import { adbRecovery } from '../emulator/adbRecovery'
 import { access, constants, link, rm, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -29,8 +30,16 @@ export async function runAdbBinary(
   args: string[],
   { timeoutMs = SCREENCAP_TIMEOUT_MS }: { timeoutMs?: number } = {}
 ): Promise<AdbBinaryResult> {
+  const finishCommand = adbRecovery.command()
   return new Promise<AdbBinaryResult>((resolve, reject) => {
-    const child = spawn(adbPath, args, { env: scrubAdbEnv(process.env), windowsHide: true })
+    let child: ReturnType<typeof spawn>
+    try {
+      child = spawn(adbPath, args, { env: scrubAdbEnv(process.env), windowsHide: true })
+    } catch (error) {
+      finishCommand()
+      reject(error)
+      return
+    }
     const out: Buffer[] = []
     const err: Buffer[] = []
     let settled = false
@@ -60,10 +69,12 @@ export async function runAdbBinary(
       if (!settled) err.push(chunk)
     })
     child.on('error', (error) => {
+      finishCommand()
       clearTimeout(timer)
       reject(error)
     })
     child.on('close', (code) => {
+      finishCommand()
       clearTimeout(timer)
       if (settled) return
       const rawStderr = Buffer.concat(err)
@@ -80,7 +91,9 @@ export async function runAdbBinary(
 }
 
 interface CachedShot {
-  /** 对账标识：新截图与编辑成品回写都换新 id，旧引用自然过期（编辑器域用） */
+  /** 真实截屏的稳定身份；成品回写不改变来源。 */
+  sourceCaptureId: string
+  /** 对账标识：图片版本；每次成品回写换新 id */
   captureId: string
   buffer: Buffer
   width: number
@@ -98,12 +111,17 @@ export interface ScreenshotDeps {
   /** 截屏尾段 running 复核（同步读，不触发 ensureLoaded）：与 cache.set 之间零异步间隙，
    * 停止钩子无法插入——async 复核留一个微任务窗口，清掉的缓存会被迟到回填 */
   isRunningDevice: (id: string) => boolean
-  /** 打开/聚焦该设备的截图编辑窗并等待就绪（尺寸入参取自缓存现图；空缓存不携，
-   *  空态错误由编辑窗取图时如实呈现）。由 ipc 装配注入窗口模块，域不反向依赖 */
-  openEditor: (id: string, options?: { imageWidth: number; imageHeight: number }) => Promise<void>
-  /** 编辑窗 sender → 绑定设备 id（未登记编辑窗返回 null）。编辑通道权限单源：
-   *  取图/导出的设备归属由 main 登记表解析，不信 renderer 自报 id */
-  editorDeviceId: (sender: Electron.WebContents) => string | null
+  /** 主进程会话开窗；释放时解除该代快照引用。 */
+  openEditor: (
+    sessionId: string,
+    deviceId: string,
+    options: {
+      imageWidth?: number
+      imageHeight?: number
+      onRelease: () => void
+    }
+  ) => Promise<void>
+  editorSession: (sender: Electron.WebContents) => { deviceId: string; sessionId: string } | null
   /** 下载目录（默认系统下载目录；测试注入临时目录） */
   downloadsDir?: () => string
   run?: typeof runAdbBinary
@@ -145,14 +163,37 @@ const resolveFileName = async (dir: string, base: string): Promise<string> => {
 
 /** 每设备最近一张（save 消费）；设备停止时经 clearScreenshotCache 清理 */
 const cache = new Map<string, CachedShot>()
+interface EditSession {
+  deviceId: string
+  sourceCaptureId: string | null
+  shot: CachedShot | undefined
+}
+const editSessions = new Map<string, EditSession>()
 /** capture 互斥：同设备同时只允许一次截屏（按钮 busy 之外的 main 侧防线） */
 const captures = new Set<string>()
 /** save 互斥：同设备同时只允许一次保存（双 invoke 与文件名 TOCTOU 的 main 侧防线）；
  *  编辑复制/下载与原保存共用同一占位集合——同设备冲突立即反馈 busy，不另建队列 */
 const saves = new Set<string>()
 
+/**
+ * 有界等待该设备在途截图/编辑保存排空（休眠保存前；plan 设计 D4）。
+ * 超时不算休眠失败——capture 自身有 15s 超时上限，这里只挡常规并发窗口。
+ */
+export const waitScreenshotIdle = async (deviceId: string, timeoutMs: number): Promise<void> => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline && (captures.has(deviceId) || saves.has(deviceId))) {
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}
+
 export const clearScreenshotCache = (deviceId: string): void => {
   cache.delete(deviceId)
+  for (const [id, session] of editSessions) {
+    if (session.deviceId === deviceId) {
+      session.shot = undefined
+      editSessions.delete(id)
+    }
+  }
 }
 
 export function registerScreenshotIpc(deps: ScreenshotDeps): void {
@@ -165,13 +206,16 @@ export function registerScreenshotIpc(deps: ScreenshotDeps): void {
       throw new Error(`${channel}: ${msg('unregisteredWindowSuffix')}`)
   }
   /** 编辑窗专属通道 sender 白名单：归属由窗口登记表解析，未知来源一律拒绝 */
-  const requireEditorDevice = (channel: string, event: Electron.IpcMainInvokeEvent): string => {
-    const deviceId = deps.editorDeviceId(event.sender)
-    if (deviceId === null) {
+  const requireEditorSession = (
+    channel: string,
+    event: Electron.IpcMainInvokeEvent
+  ): { deviceId: string; sessionId: string } => {
+    const binding = deps.editorSession(event.sender)
+    if (binding === null) {
       console.warn(`[screenshot] 拒绝非编辑窗来源的编辑通道请求: ${channel}`)
       throw new Error(`${channel}: ${msg('unregisteredWindowSuffix')}`)
     }
-    return deviceId
+    return binding
   }
   const invalidPayload = (channel: string): Error => new Error(`${channel}${msg('invalidPayload')}`)
 
@@ -204,9 +248,9 @@ export function registerScreenshotIpc(deps: ScreenshotDeps): void {
     return { captureId, png, image }
   }
 
-  /** 缓存对账：空缓存或 captureId 不匹配（编辑期间同设备又截屏）一律「截图已过期」 */
-  const reconcileShot = (deviceId: string, captureId: string): CachedShot => {
-    const cached = cache.get(deviceId)
+  /** 会话对账：会话失效或 captureId 不匹配一律「截图已过期」 */
+  const reconcileShot = (sessionId: string, captureId: string): CachedShot => {
+    const cached = editSessions.get(sessionId)?.shot
     if (!cached || cached.captureId !== captureId) throw new Error(msg('screenshotStale'))
     return cached
   }
@@ -284,8 +328,10 @@ export function registerScreenshotIpc(deps: ScreenshotDeps): void {
         if (!deps.isRunningDevice(id)) throw new Error(msg('screenshotDeviceNotRunning'))
         // 图像进系统剪贴板是受控动作：只写本设备刚截的图（镜像 copy-serial 守卫策略）
         clipboard.writeImage(image)
+        const sourceCaptureId = randomUUID()
         const entry: CachedShot = {
-          captureId: randomUUID(),
+          sourceCaptureId,
+          captureId: sourceCaptureId,
           buffer: png,
           width: size.width,
           height: size.height,
@@ -323,28 +369,48 @@ export function registerScreenshotIpc(deps: ScreenshotDeps): void {
 
   // ===== 截图编辑器域（plan 2026-11-02-screenshot-editor）=====
 
-  // 主窗调：打开/聚焦该设备编辑窗并等待就绪。空缓存不拦截开窗（默认度量开窗，
+  // 主窗调：固定当前截图，打开/聚焦其编辑窗并等待就绪。空缓存不拦截开窗（默认度量开窗，
   // 空态错误由编辑窗 get-edit-image 如实呈现）——同来源语义，不伪造内容
   ipcMain.handle(IPC_CHANNELS.screenshotOpenEditor, async (event, raw: unknown): Promise<void> => {
     requireMainSender(IPC_CHANNELS.screenshotOpenEditor, event)
     if (!isDeviceIdPayload(raw)) throw invalidPayload(IPC_CHANNELS.screenshotOpenEditor)
     const id = raw.id
     const cached = cache.get(id)
-    await deps.openEditor(
-      id,
-      cached && cached.width > 0 && cached.height > 0
-        ? { imageWidth: cached.width, imageHeight: cached.height }
-        : undefined
+    const sourceCaptureId = cached?.sourceCaptureId ?? null
+    const current = [...editSessions].find(
+      ([, session]) => session.deviceId === id && session.sourceCaptureId === sourceCaptureId
     )
+    const sessionId = current?.[0] ?? randomUUID()
+    const session = current?.[1] ?? { deviceId: id, sourceCaptureId, shot: cached }
+    editSessions.set(sessionId, session)
+    const release = (): void => {
+      if (editSessions.get(sessionId) !== session) return
+      session.shot = undefined
+      editSessions.delete(sessionId)
+    }
+    try {
+      await deps.openEditor(sessionId, id, {
+        imageWidth: session.shot?.width,
+        imageHeight: session.shot?.height,
+        onRelease: release
+      })
+    } catch (error) {
+      release()
+      throw error
+    }
   })
 
-  // 编辑窗取本设备缓存现图：归属由 sender 解析；dataUrl 由缓存 PNG 现编码，尺寸随
+  // 编辑窗取本会话快照：归属由 sender 解析；dataUrl 由会话 PNG 现编码，尺寸随
   // 载荷返回（编辑窗显示缩放与导出 pixelRatio 的基准，契约 CaptureEditImagePayload）
   ipcMain.handle(
     IPC_CHANNELS.screenshotGetEditImage,
     async (event): Promise<CaptureEditImagePayload> => {
-      const deviceId = requireEditorDevice(IPC_CHANNELS.screenshotGetEditImage, event)
-      const cached = cache.get(deviceId)
+      const { deviceId, sessionId } = requireEditorSession(
+        IPC_CHANNELS.screenshotGetEditImage,
+        event
+      )
+      const session = editSessions.get(sessionId)
+      const cached = session?.deviceId === deviceId ? session.shot : undefined
       if (!cached) throw new Error(msg('screenshotStale'))
       return {
         captureId: cached.captureId,
@@ -355,24 +421,28 @@ export function registerScreenshotIpc(deps: ScreenshotDeps): void {
     }
   )
 
-  // 编辑成品写系统剪贴板 + 回写本设备缓存（换新 captureId——旧引用自然过期，可
+  // 编辑成品写系统剪贴板 + 回写会话（仍是设备最新图时同步最近缓存）（换新 captureId——旧引用自然过期，可
   // 续编）。对账与回写之间无 await（剪贴板写入同步），无并发交错窗口；同设备与
   // 截屏/保存互斥（占位检查到写入零 await，防检查-占位间隙）
   ipcMain.handle(IPC_CHANNELS.screenshotEditCopy, async (event, raw: unknown): Promise<void> => {
-    const deviceId = requireEditorDevice(IPC_CHANNELS.screenshotEditCopy, event)
+    const { deviceId, sessionId } = requireEditorSession(IPC_CHANNELS.screenshotEditCopy, event)
     const { captureId, png, image } = parseEditApplyPayload(IPC_CHANNELS.screenshotEditCopy, raw)
     if (captures.has(deviceId)) throw new Error(msg('screenshotBusy'))
     if (saves.has(deviceId)) throw new Error(msg('screenshotSaveBusy'))
-    const slot = reconcileShot(deviceId, captureId)
+    const session = editSessions.get(sessionId)
+    if (!session || session.deviceId !== deviceId) throw new Error(msg('screenshotStale'))
+    const slot = reconcileShot(sessionId, captureId)
     clipboard.writeImage(image)
     const size = image.getSize()
-    cache.set(deviceId, {
+    const next: CachedShot = {
       ...slot,
       captureId: randomUUID(),
       buffer: png,
       width: size.width,
       height: size.height
-    })
+    }
+    session.shot = next
+    if (cache.get(deviceId) === slot) cache.set(deviceId, next)
   })
 
   // 编辑成品落系统下载目录（复用 writeShotToDownloads 防覆盖链；命名 = 设备名-保存
@@ -381,14 +451,19 @@ export function registerScreenshotIpc(deps: ScreenshotDeps): void {
   ipcMain.handle(
     IPC_CHANNELS.screenshotEditDownload,
     async (event, raw: unknown): Promise<ScreenshotSaveResult> => {
-      const deviceId = requireEditorDevice(IPC_CHANNELS.screenshotEditDownload, event)
+      const { deviceId, sessionId } = requireEditorSession(
+        IPC_CHANNELS.screenshotEditDownload,
+        event
+      )
       const { captureId, png, image } = parseEditApplyPayload(
         IPC_CHANNELS.screenshotEditDownload,
         raw
       )
       if (captures.has(deviceId)) throw new Error(msg('screenshotBusy'))
       if (saves.has(deviceId)) throw new Error(msg('screenshotSaveBusy'))
-      const slot = reconcileShot(deviceId, captureId)
+      const session = editSessions.get(sessionId)
+      if (!session || session.deviceId !== deviceId) throw new Error(msg('screenshotStale'))
+      const slot = reconcileShot(sessionId, captureId)
       saves.add(deviceId)
       try {
         const size = image.getSize()
@@ -400,7 +475,10 @@ export function registerScreenshotIpc(deps: ScreenshotDeps): void {
           height: size.height
         }
         const result = await writeShotToDownloads({ ...next, capturedAt: Date.now() })
-        if (cache.get(deviceId) === slot) cache.set(deviceId, next)
+        if (editSessions.get(sessionId) === session && session.shot === slot) {
+          session.shot = next
+          if (cache.get(deviceId) === slot) cache.set(deviceId, next)
+        }
         return result
       } finally {
         saves.delete(deviceId)
