@@ -100,7 +100,7 @@ description: Master index of the book — the map of every document. Regenerate 
 
 ### notes/issue/
 
-**Open (46)**
+**Open (47)**
 
 - [2026-10-06-向导独立窗口-review.md](notes/issue/2026-10-06-向导独立窗口-review.md) — 向导独立窗口分支（5 提交）的 code review 发现——两处注释腐化、span 嵌 h3 不合法、dead CSS、非 darwin 标题双显与两条备查信息
 - [2026-10-04-messageport-bridge-no-delivery.md](notes/issue/2026-10/2026-10-04-messageport-bridge-no-delivery.md) — MessagePortMain 经 contextBridge 回传后 port 对象可达但不投递消息——视频包通道退回 webContents.send（每帧拷贝），产品化时可再评估
@@ -146,6 +146,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-06-headless-auto-software-renderer.md](notes/issue/2026-11/2026-11-06-headless-auto-software-renderer.md) — 当前 Mac 的 headless AVD 在 auto 模式实际选择 swangle_indirect，而 Studio 同镜像选 host，桌面动画持续卡顿
 - [2026-11-06-hibernation-review-round.md](notes/issue/2026-11/2026-11-06-hibernation-review-round.md) — 休眠域评审轮发现：恢复后清单消费失败的陈旧投影风险、已休眠设备编辑无前置提示、quit 后 adb serial 残留影响紧接恢复
 - [2026-11-09-device-list-drag-reorder-review.md](notes/issue/2026-11/2026-11-09-device-list-drag-reorder-review.md) — 拖拽换序批 code review（Phase 5）——1 项 P2（陈旧拖拽态下外来源拖放可被接受且无效 drop 不拦 Electron 默认导航）+ 4 项 P3；P2/P3-B 随修复批处理
+- [2026-11-10-dual-entry-concurrent-encoders.md](notes/issue/2026-11/2026-11-10-dual-entry-concurrent-encoders.md) — 同一物理手机 USB+无线双条目并存时，多 app 实例×多条目各建各的 scrcpy 会话，峰值 6 个并发编码器导致画面同步延迟（操作生效但画面滞后）
 - [2026-11-10-screen-runtime-followups.md](notes/issue/2026-11/2026-11-10-screen-runtime-followups.md) — 模拟器失效显示条目、真机重复 scrcpy 会话与安装版缺少投屏诊断日志仍需现场验证
 - [2026-11-10-wireless-robustness-hardware-validation.md](notes/issue/2026-11/2026-11-10-wireless-robustness-hardware-validation.md) — 无线健壮性三项修复的真机整链路验收待执行；dev 实例在 agent 派生环境启动挂起待查明
 
@@ -547,4 +548,4 @@ description: Master index of the book — the map of every document. Regenerate 
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 438 documents -->
+<!-- 439 documents -->
