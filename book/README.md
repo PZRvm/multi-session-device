@@ -389,6 +389,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-06-bocode-upgrade.md](notes/summary/2026-11/2026-11-06-bocode-upgrade.md) — BoCode 已切换到 79426a9 官方英文四技能，同步任务分级及状态索引，保留项目布局和发布约定，目录导航一项 P3 待补
 - [2026-11-06-emulator-hibernation.md](notes/summary/2026-11/2026-11-06-emulator-hibernation.md) — 模拟器手动休眠（官方命名快照+进程退出）与停止态删除入口的完整交付：协议实证、状态机、门控与验证证据
 - [2026-11-09-device-list-drag-reorder.md](notes/summary/2026-11/2026-11-09-device-list-drag-reorder.md) — 左侧列表拖拽排序交付——AVD 主区与真机区行拖拽换序；AVD 走 devices:reorder 整单重排（数组序即持久化序），真机走 applyOrder 合并层 + external-order.json；手势零依赖照 multi-session-browser 先例
+- [2026-11-10-release-1.0.1.md](notes/summary/2026-11/2026-11-10-release-1.0.1.md) — 1.0.1 Preview经PR #2合并main并成功发布macOS ARM64、Windows x64安装包和校验文件
 - [2026-11-10-screen-reset-loop.md](notes/summary/2026-11/2026-11-10-screen-reset-loop.md) — 投屏静置首帧不再立即判超时，尾包定时确认，连续恢复预算跨配置保留；1701项测试通过
 
 ### notes/task/
@@ -542,4 +543,4 @@ description: Master index of the book — the map of every document. Regenerate 
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 433 documents -->
+<!-- 434 documents -->
