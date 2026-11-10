@@ -8,7 +8,7 @@ import { refreshClipboardBinding } from './clipboardBridge'
 import { chunkUtf8, injectInput, validateInputRequest, type InjectContext } from './control'
 import { destroySession } from './lifecycle'
 import { sendResync } from './media'
-import { runAdb } from './proc'
+import { runAdb, wakeDeviceScreen } from './proc'
 import { ensureSession } from './session'
 import { cancelRecovery } from './recovery'
 import { ACK_STALL_MS, type ManagerContext } from './types'
@@ -37,6 +37,11 @@ export const registerIpc = (ctx: ManagerContext): void => {
       const session = ctx.sessions.get(id)
       ctx.active = { deviceId: id, viewToken }
       refreshClipboardBinding(ctx)
+      // 无线熄屏治理（2026-11-10 调查）：打开视图即点亮屏幕——表面编码器熄屏零帧，
+      // 不唤醒则画面冻结。仅无线 serial（含 `:`）；AVD/USB 不受影响。
+      if (session && session.serial.includes(':')) {
+        void wakeDeviceScreen(ctx.deps.runAdb ?? runAdb, ctx.deps.adbPath(), session.serial)
+      }
       if (!session || session.state !== 'ready') {
         // 未就绪也登记：状态推送随后会到，renderer 按连接态渲染
         return session ? ctx.buildState(session) : null

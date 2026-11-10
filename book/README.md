@@ -100,7 +100,7 @@ description: Master index of the book — the map of every document. Regenerate 
 
 ### notes/issue/
 
-**Open (45)**
+**Open (46)**
 
 - [2026-10-06-向导独立窗口-review.md](notes/issue/2026-10-06-向导独立窗口-review.md) — 向导独立窗口分支（5 提交）的 code review 发现——两处注释腐化、span 嵌 h3 不合法、dead CSS、非 darwin 标题双显与两条备查信息
 - [2026-10-04-messageport-bridge-no-delivery.md](notes/issue/2026-10/2026-10-04-messageport-bridge-no-delivery.md) — MessagePortMain 经 contextBridge 回传后 port 对象可达但不投递消息——视频包通道退回 webContents.send（每帧拷贝），产品化时可再评估
@@ -147,6 +147,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-06-hibernation-review-round.md](notes/issue/2026-11/2026-11-06-hibernation-review-round.md) — 休眠域评审轮发现：恢复后清单消费失败的陈旧投影风险、已休眠设备编辑无前置提示、quit 后 adb serial 残留影响紧接恢复
 - [2026-11-09-device-list-drag-reorder-review.md](notes/issue/2026-11/2026-11-09-device-list-drag-reorder-review.md) — 拖拽换序批 code review（Phase 5）——1 项 P2（陈旧拖拽态下外来源拖放可被接受且无效 drop 不拦 Electron 默认导航）+ 4 项 P3；P2/P3-B 随修复批处理
 - [2026-11-10-screen-runtime-followups.md](notes/issue/2026-11/2026-11-10-screen-runtime-followups.md) — 模拟器失效显示条目、真机重复 scrcpy 会话与安装版缺少投屏诊断日志仍需现场验证
+- [2026-11-10-wireless-robustness-hardware-validation.md](notes/issue/2026-11/2026-11-10-wireless-robustness-hardware-validation.md) — 无线健壮性三项修复的真机整链路验收待执行；dev 实例在 agent 派生环境启动挂起待查明
 
 **Resolved (84)**
 
@@ -346,6 +347,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-06-headless-auto-gpu-selection.md](notes/learn/2026-11/2026-11-06-headless-auto-gpu-selection.md) — headless 模拟器的 auto 不保证主机 GPU；当前 M4 实测 auto 选 SwiftShader，必须以有效配置和 SurfaceFlinger 核验
 - [2026-11-09-jsdom-drag-event-testing.md](notes/learn/2026-11/2026-11-09-jsdom-drag-event-testing.md) — jsdom 下测试 HTML5 拖拽手势的三道坎——fireEvent 透传不了 clientY（原生事件 + defineProperty + act）、rect 桩要走原型级 spy、vi.mock fs 配 resetModules 别用 importOriginal
 - [2026-11-10-idle-screen-ack.md](notes/learn/2026-11/2026-11-10-idle-screen-ack.md) — 静置时旧 ACK 时间不能代表新包超时，配置返回也不能证明投屏已经恢复
+- [2026-11-10-无线scrcpy熄屏停帧与建流泄漏谱系.md](notes/learn/2026-11/2026-11-10-无线scrcpy熄屏停帧与建流泄漏谱系.md) — 无线 scrcpy 三事实——熄屏(doze)时表面编码器零帧且 resetVideo 救不回、建流失败/中断会泄漏 server+forward（transport 未归还时不跑 teardown）、无线链路实测基线（5GHz/RTT 50ms/吞吐 31-35Mbps/冷启动 1-2s）
 
 ### notes/summary/2026-10/
 
@@ -391,6 +393,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-09-device-list-drag-reorder.md](notes/summary/2026-11/2026-11-09-device-list-drag-reorder.md) — 左侧列表拖拽排序交付——AVD 主区与真机区行拖拽换序；AVD 走 devices:reorder 整单重排（数组序即持久化序），真机走 applyOrder 合并层 + external-order.json；手势零依赖照 multi-session-browser 先例
 - [2026-11-10-release-1.0.1.md](notes/summary/2026-11/2026-11-10-release-1.0.1.md) — 1.0.1 Preview经PR #2合并main并成功发布macOS ARM64、Windows x64安装包和校验文件
 - [2026-11-10-screen-reset-loop.md](notes/summary/2026-11/2026-11-10-screen-reset-loop.md) — 投屏静置首帧不再立即判超时，尾包定时确认，连续恢复预算跨配置保留；1701项测试通过
+- [2026-11-10-wireless-stream-robustness.md](notes/summary/2026-11/2026-11-10-wireless-stream-robustness.md) — 无线投屏健壮性修复——建流失败不再泄漏 server 进程与 forward、无线视图激活/恢复时唤醒屏幕、建立期失败自动重试一次；真机整链路验收待执行
 
 ### notes/task/
 
@@ -530,6 +533,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-09-device-list-drag-reorder.md](plans/2026-11-09-device-list-drag-reorder.md) — 左侧列表拖拽排序——AVD 主区与真机区行拖拽换序：AVD 走 devices:reorder 整单重排（数组序即持久化序，零 schema 变更），真机走 applyOrder 合并层 + external-order.json 偏好存储
 - [2026-11-10-release-1.0.1.md](plans/2026-11-10-release-1.0.1.md) — 将 dev 版本更新为1.0.1，经同仓库PR合并main，发布双平台预览安装包及更新说明
 - [2026-11-10-screen-reset-loop.md](plans/2026-11-10-screen-reset-loop.md) — 修复静置首帧 ACK 超时误判、尾包回执遗漏和新配置绕过连续重建上限
+- [2026-11-10-wireless-stream-robustness.md](plans/2026-11-10-wireless-stream-robustness.md) — 无线投屏三项健壮性修复——建流失败不泄漏 server 进程、无线视图激活/恢复时唤醒屏幕、建立期首次失败自动重试一次
 - [README.md](plans/README.md) — Plans directory usage — implementation plans land here once the Phase 2 design is complete, with naming and the plan template
 
 ### think-report/
@@ -543,4 +547,4 @@ description: Master index of the book — the map of every document. Regenerate 
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 434 documents -->
+<!-- 438 documents -->

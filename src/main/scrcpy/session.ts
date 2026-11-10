@@ -9,21 +9,42 @@ import { destroySession } from './lifecycle'
 import { handleMediaPacket, sendResync } from './media'
 import { connectTcp, runAdb, spawnProc } from './proc'
 import { establishTransport } from './transport'
-import { ACK_STALL_MS, type ManagerContext, type StreamSession } from './types'
+import type { Transport } from './transport'
+import {
+  ACK_STALL_MS,
+  ESTABLISH_ATTEMPTS,
+  ESTABLISH_RETRY_DELAY_MS,
+  type ManagerContext,
+  type StreamSession
+} from './types'
 
 export const runSession = async (ctx: ManagerContext, session: StreamSession): Promise<void> => {
   const abort = session.abort
   try {
-    const transport = await (ctx.deps.establish ?? establishTransport)({
-      serial: session.serial,
-      adbPath: ctx.deps.adbPath(),
-      serverPath: ctx.serverPathFor(),
-      run: (path, args, timeoutMs) => runAdb(path, args, timeoutMs),
-      spawn: (path, args, env) => spawnProc(path, args, env),
-      connect: (port) => connectTcp(port),
-      toolEnv: ctx.deps.toolEnv,
-      signal: abort.signal
-    })
+    // 无线闪断后重建会话时 adbd 可能仍在恢复窗口——建立首次失败自动再试一次，吸收
+    // 瞬时竞态（2026-11-10 调查：冷启动 1-2s 靠 1s 轮重试收敛，偶发超限失败即用户
+    // 可见的「画面连接失败」）。仅限 transport 从未建立；流阶段错误仍由 renderer 重试点驱动。
+    let transport: Transport | null = null
+    for (let attempt = 1; attempt <= ESTABLISH_ATTEMPTS; attempt += 1) {
+      try {
+        transport = await (ctx.deps.establish ?? establishTransport)({
+          serial: session.serial,
+          adbPath: ctx.deps.adbPath(),
+          serverPath: ctx.serverPathFor(),
+          run: (path, args, timeoutMs) => runAdb(path, args, timeoutMs),
+          spawn: (path, args, env) => spawnProc(path, args, env),
+          connect: (port) => connectTcp(port),
+          toolEnv: ctx.deps.toolEnv,
+          signal: abort.signal
+        })
+        break
+      } catch (error) {
+        if (attempt >= ESTABLISH_ATTEMPTS || abort.signal.aborted) throw error
+        await new Promise((resolve) => setTimeout(resolve, ESTABLISH_RETRY_DELAY_MS))
+        if (abort.signal.aborted) throw error
+      }
+    }
+    if (!transport) throw new Error('establish unreachable')
     if (abort.signal.aborted) {
       await transport.teardown()
       return

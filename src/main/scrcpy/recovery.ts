@@ -1,4 +1,5 @@
 import { msg } from '../locale'
+import { runAdb, wakeDeviceScreen } from './proc'
 import { ACK_STALL_MS, type ManagerContext, type StreamSession } from './types'
 
 /** 包括立即发送的第一次请求；最后一次再等一个间隔才报告失败。 */
@@ -48,6 +49,11 @@ export const startRecovery = (ctx: ManagerContext, session: StreamSession): void
     }
     session.resetAttempts += 1
     void session.writer?.resetVideo().catch(() => undefined)
+    // 熄屏下 resetVideo 产不出新帧（2026-11-10 实测）——恢复节拍同时点亮屏幕，
+    // 让恢复链在熄屏场景也能真正收敛。仅无线 serial；尽力而为。
+    if (session.serial.includes(':')) {
+      void wakeDeviceScreen(ctx.deps.runAdb ?? runAdb, ctx.deps.adbPath(), session.serial)
+    }
     recovery.timer = setTimeout(tick, ACK_STALL_MS)
   }
   tick()

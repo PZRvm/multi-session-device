@@ -52,3 +52,18 @@ export const connectTcp = (port: number): Promise<Socket> =>
     socket.once('connect', () => resolve(socket))
     socket.once('error', reject)
   })
+
+/** 无线熄屏治理（2026-11-10 调查）：KEYCODE_WAKEUP(224) 点亮屏幕，不解锁。表面编码器
+ *  熄屏停帧——不唤醒则画面冻结、恢复链 resetVideo 也产不出新帧。尽力而为：吞错。
+ *  run 走接缝（测试注入 fake；生产传 proc.runAdb 或 ctx.deps.runAdb）。 */
+export const wakeDeviceScreen = async (
+  run: typeof runAdb,
+  adbPath: string,
+  serial: string
+): Promise<void> => {
+  try {
+    await run(adbPath, ['-s', serial, 'shell', 'input', 'keyevent', '224'], 10_000)
+  } catch {
+    // 设备刚离线/adb 忙时静默放弃
+  }
+}
