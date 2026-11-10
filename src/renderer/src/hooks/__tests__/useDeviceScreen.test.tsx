@@ -306,3 +306,65 @@ it('AVD 重试仍发 device.runId（envelope 与之一致）', () => {
   })
   expect(api.screen.retry).toHaveBeenCalledWith('d1', 'r1')
 })
+
+it('尾包在100ms内确认，八包立即确认且取消尾包定时器', async () => {
+  vi.useFakeTimers()
+  try {
+    renderHook(() => useDeviceScreen({ id: 'S', status: 'running' }))
+    emitPacket({ type: 'configuration', seq: 0 })
+    emitPacket({ type: 'data', seq: 1, keyframe: true })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(99)
+    })
+    expect(window.api.screen.ack).not.toHaveBeenCalled()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    expect(window.api.screen.ack).toHaveBeenCalledWith({
+      viewToken: activateToken,
+      generation: 1,
+      throughSeq: 1
+    })
+    for (let seq = 2; seq <= 9; seq++) emitPacket({ type: 'data', seq, keyframe: false })
+    expect(window.api.screen.ack).toHaveBeenCalledTimes(2)
+    expect(window.api.screen.ack).toHaveBeenLastCalledWith({
+      viewToken: activateToken,
+      generation: 1,
+      throughSeq: 9
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+    expect(window.api.screen.ack).toHaveBeenCalledTimes(2)
+  } finally {
+    cleanup()
+    vi.useRealTimers()
+  }
+})
+
+it.each(['configuration', 'switch', 'unmount', 'resync', 'closed'] as const)(
+  '%s 取消旧尾包回执',
+  async (reason) => {
+    vi.useFakeTimers()
+    try {
+      const hook = renderHook(({ id }) => useDeviceScreen({ id, status: 'running' }), {
+        initialProps: { id: 'S' }
+      })
+      emitPacket({ type: 'configuration', seq: 0 })
+      emitPacket({ type: 'data', seq: 1, keyframe: true })
+      if (reason === 'configuration') emitPacket({ type: 'configuration', seq: 2, generation: 2 })
+      if (reason === 'switch') hook.rerender({ id: 'T' })
+      if (reason === 'unmount') hook.unmount()
+      if (reason === 'closed') emitState({ deviceId: 'S', status: 'closed' })
+      if (reason === 'resync') emitPacket({ type: 'data', seq: 3, keyframe: false })
+      const before = vi.mocked(window.api.screen.ack).mock.calls.length
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000)
+      })
+      expect(window.api.screen.ack).toHaveBeenCalledTimes(before)
+    } finally {
+      cleanup()
+      vi.useRealTimers()
+    }
+  }
+)

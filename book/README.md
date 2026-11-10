@@ -100,7 +100,7 @@ description: Master index of the book — the map of every document. Regenerate 
 
 ### notes/issue/
 
-**Open (44)**
+**Open (45)**
 
 - [2026-10-06-向导独立窗口-review.md](notes/issue/2026-10-06-向导独立窗口-review.md) — 向导独立窗口分支（5 提交）的 code review 发现——两处注释腐化、span 嵌 h3 不合法、dead CSS、非 darwin 标题双显与两条备查信息
 - [2026-10-04-messageport-bridge-no-delivery.md](notes/issue/2026-10/2026-10-04-messageport-bridge-no-delivery.md) — MessagePortMain 经 contextBridge 回传后 port 对象可达但不投递消息——视频包通道退回 webContents.send（每帧拷贝），产品化时可再评估
@@ -146,6 +146,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-06-headless-auto-software-renderer.md](notes/issue/2026-11/2026-11-06-headless-auto-software-renderer.md) — 当前 Mac 的 headless AVD 在 auto 模式实际选择 swangle_indirect，而 Studio 同镜像选 host，桌面动画持续卡顿
 - [2026-11-06-hibernation-review-round.md](notes/issue/2026-11/2026-11-06-hibernation-review-round.md) — 休眠域评审轮发现：恢复后清单消费失败的陈旧投影风险、已休眠设备编辑无前置提示、quit 后 adb serial 残留影响紧接恢复
 - [2026-11-09-device-list-drag-reorder-review.md](notes/issue/2026-11/2026-11-09-device-list-drag-reorder-review.md) — 拖拽换序批 code review（Phase 5）——1 项 P2（陈旧拖拽态下外来源拖放可被接受且无效 drop 不拦 Electron 默认导航）+ 4 项 P3；P2/P3-B 随修复批处理
+- [2026-11-10-screen-runtime-followups.md](notes/issue/2026-11/2026-11-10-screen-runtime-followups.md) — 模拟器失效显示条目、真机重复 scrcpy 会话与安装版缺少投屏诊断日志仍需现场验证
 
 **Resolved (84)**
 
@@ -344,6 +345,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-06-emulator-snapshot-save-protocol.md](notes/learn/2026-11/2026-11-06-emulator-snapshot-save-protocol.md) — emulator console 的 snapshot save OK 只是受理而非写盘完成；缺失/半写/配置变化快照都会静默冷启动回退——完成判定与恢复复核的实测协议
 - [2026-11-06-headless-auto-gpu-selection.md](notes/learn/2026-11/2026-11-06-headless-auto-gpu-selection.md) — headless 模拟器的 auto 不保证主机 GPU；当前 M4 实测 auto 选 SwiftShader，必须以有效配置和 SurfaceFlinger 核验
 - [2026-11-09-jsdom-drag-event-testing.md](notes/learn/2026-11/2026-11-09-jsdom-drag-event-testing.md) — jsdom 下测试 HTML5 拖拽手势的三道坎——fireEvent 透传不了 clientY（原生事件 + defineProperty + act）、rect 桩要走原型级 spy、vi.mock fs 配 resetModules 别用 importOriginal
+- [2026-11-10-idle-screen-ack.md](notes/learn/2026-11/2026-11-10-idle-screen-ack.md) — 静置时旧 ACK 时间不能代表新包超时，配置返回也不能证明投屏已经恢复
 
 ### notes/summary/2026-10/
 
@@ -387,6 +389,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-06-bocode-upgrade.md](notes/summary/2026-11/2026-11-06-bocode-upgrade.md) — BoCode 已切换到 79426a9 官方英文四技能，同步任务分级及状态索引，保留项目布局和发布约定，目录导航一项 P3 待补
 - [2026-11-06-emulator-hibernation.md](notes/summary/2026-11/2026-11-06-emulator-hibernation.md) — 模拟器手动休眠（官方命名快照+进程退出）与停止态删除入口的完整交付：协议实证、状态机、门控与验证证据
 - [2026-11-09-device-list-drag-reorder.md](notes/summary/2026-11/2026-11-09-device-list-drag-reorder.md) — 左侧列表拖拽排序交付——AVD 主区与真机区行拖拽换序；AVD 走 devices:reorder 整单重排（数组序即持久化序），真机走 applyOrder 合并层 + external-order.json；手势零依赖照 multi-session-browser 先例
+- [2026-11-10-screen-reset-loop.md](notes/summary/2026-11/2026-11-10-screen-reset-loop.md) — 投屏静置首帧不再立即判超时，尾包定时确认，连续恢复预算跨配置保留；1701项测试通过
 
 ### notes/task/
 
@@ -524,6 +527,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-06-bocode-upgrade.md](plans/2026-11-06-bocode-upgrade.md) — 将中文改编 BoCode 切换为官方原版，同步任务分级、状态索引和升级版本戳，保留项目适配
 - [2026-11-06-emulator-hibernation.md](plans/2026-11-06-emulator-hibernation.md) — 手动快照休眠与恢复的开发施工图，包含持久清单、状态事务、任务互斥、停止态删除及 Mac/Windows 验收门槛
 - [2026-11-09-device-list-drag-reorder.md](plans/2026-11-09-device-list-drag-reorder.md) — 左侧列表拖拽排序——AVD 主区与真机区行拖拽换序：AVD 走 devices:reorder 整单重排（数组序即持久化序，零 schema 变更），真机走 applyOrder 合并层 + external-order.json 偏好存储
+- [2026-11-10-screen-reset-loop.md](plans/2026-11-10-screen-reset-loop.md) — 修复静置首帧 ACK 超时误判、尾包回执遗漏和新配置绕过连续重建上限
 - [README.md](plans/README.md) — Plans directory usage — implementation plans land here once the Phase 2 design is complete, with naming and the plan template
 
 ### think-report/
@@ -537,4 +541,4 @@ description: Master index of the book — the map of every document. Regenerate 
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 428 documents -->
+<!-- 432 documents -->

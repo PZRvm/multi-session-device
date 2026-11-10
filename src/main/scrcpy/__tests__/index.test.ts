@@ -1383,3 +1383,208 @@ describe('recording source subscriptions', () => {
     await vi.waitFor(() => expect(manager.getRecordingSource('r')).toBeNull())
   })
 })
+
+describe('静置与连续重建回归', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.windowRef.current = {
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    } as unknown as BrowserWindow
+  })
+  it.each([false, true])(
+    '所有旧包已确认：静置首帧 keyframe=%s 连续五轮不重建',
+    async (keyframeFirst) => {
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
+      const reset = vi.spyOn(SafeControlMessageWriter.prototype, 'resetVideo')
+      const { manager, transportOf } = await importManager()
+      const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+      try {
+        await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+        await flush()
+        const transport = transportOf('emulator-5554')
+        const push = transport.__push
+        push({ type: 'configuration', data: new Uint8Array([1]) })
+        for (let i = 0; i < 8; i++)
+          push({
+            type: 'data',
+            pts: BigInt(i * 33000),
+            keyframe: i === 0,
+            data: new Uint8Array(10)
+          })
+        await flush()
+        const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+        const ack = await handlerFor(IPC_CHANNELS.screenAck)
+        await activate({}, { id: 'd1', viewToken: 'probe' })
+        const send = (
+          mocks.windowRef.current!.webContents as unknown as { send: ReturnType<typeof vi.fn> }
+        ).send
+        const packets = (): ScreenPacketMessage[] =>
+          send.mock.calls.filter(([ch]) => ch === IPC_CHANNELS.screenPacket).map(([, p]) => p)
+        await ack({}, { viewToken: 'probe', generation: 1, throughSeq: packets().at(-1)!.seq })
+        for (let cycle = 0; cycle < 5; cycle++) {
+          const pts = BigInt(cycle) * 10000000n
+          // 静置前的尾包也已确认，排除真正的在途超时。
+          push({ type: 'data', pts: pts + 250000n, keyframe: false, data: new Uint8Array(10) })
+          await flush()
+          {
+            const last = packets().at(-1)!
+            await ack({}, { viewToken: 'probe', generation: last.generation, throughSeq: last.seq })
+          }
+          clock.mockReturnValue(11000 + cycle * 10000)
+          // 静置后的首帧，没有丢包或解码积压。
+          push({
+            type: 'data',
+            pts: pts + 10000000n,
+            keyframe: keyframeFirst,
+            data: new Uint8Array(10)
+          })
+          await flush()
+          expect(reset).toHaveBeenCalledTimes(0)
+          // 后续正常关键帧与其他帧继续到达，并全部确认。
+          for (let i = 0; i < 8; i++)
+            push({
+              type: 'data',
+              pts: pts + 10000000n + BigInt(i * 33000),
+              keyframe: i === 0,
+              data: new Uint8Array(10)
+            })
+          await flush()
+          const last = packets().at(-1)!
+          await ack({}, { viewToken: 'probe', generation: last.generation, throughSeq: last.seq })
+        }
+      } finally {
+        clock.mockRestore()
+        reset.mockRestore()
+        await manager.destroyAll()
+      }
+    }
+  )
+  it('新配置不重置连续恢复预算：十轮请求最多三次 reset 并报错', async () => {
+    const reset = vi.spyOn(SafeControlMessageWriter.prototype, 'resetVideo')
+    const { manager, transportOf } = await importManager()
+    const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+    try {
+      await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+      await flush()
+      const transport = transportOf('emulator-5554')
+      transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+      transport.__push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+      await flush()
+      const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+      const ack = await handlerFor(IPC_CHANNELS.screenAck)
+      await activate({}, { id: 'd1', viewToken: 'probe' })
+      const send = (
+        mocks.windowRef.current!.webContents as unknown as { send: ReturnType<typeof vi.fn> }
+      ).send
+      for (let cycle = 0; cycle < 10; cycle++) {
+        const last = send.mock.calls
+          .filter(([ch]) => ch === IPC_CHANNELS.screenPacket)
+          .at(-1)![1] as ScreenPacketMessage
+        await ack(
+          {},
+          { viewToken: 'probe', generation: last.generation, throughSeq: last.seq, resync: true }
+        )
+        await flush()
+        transport.__push({ type: 'configuration', data: new Uint8Array([1]) })
+        transport.__push({
+          type: 'data',
+          pts: BigInt(cycle + 1) * 33000n,
+          keyframe: true,
+          data: new Uint8Array(10)
+        })
+        await flush()
+      }
+      expect(reset).toHaveBeenCalledTimes(3)
+      const errors = send.mock.calls.filter(
+        ([ch, p]) => ch === IPC_CHANNELS.screenState && p.status === 'error'
+      )
+      expect(errors).toHaveLength(1)
+    } finally {
+      reset.mockRestore()
+      await manager.destroyAll()
+    }
+  })
+  it.each(['progress', 'duplicate', 'replay', 'gaps'] as const)(
+    '恢复预算只在稳定推进的回执后释放：%s',
+    async (mode) => {
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
+      const reset = vi.spyOn(SafeControlMessageWriter.prototype, 'resetVideo')
+      const { manager, transportOf } = await importManager()
+      const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+      try {
+        await manager.ensureSession({ id: 'd1', runId: 'r1', serial: 'emulator-5554' })
+        await flush()
+        const transport = transportOf('emulator-5554')
+        const push = transport.__push
+        push({ type: 'configuration', data: new Uint8Array([1]) })
+        push({ type: 'data', pts: 0n, keyframe: true, data: new Uint8Array(10) })
+        await flush()
+        const activate = await handlerFor(IPC_CHANNELS.screenActivate)
+        const ack = await handlerFor(IPC_CHANNELS.screenAck)
+        await activate({}, { id: 'd1', viewToken: 'probe' })
+        const send = (
+          mocks.windowRef.current!.webContents as unknown as { send: ReturnType<typeof vi.fn> }
+        ).send
+        const last = (): ScreenPacketMessage =>
+          send.mock.calls.filter(([ch]) => ch === IPC_CHANNELS.screenPacket).at(-1)![1]
+        const confirm = async (): Promise<void> => {
+          const packet = last()
+          await ack(
+            {},
+            { viewToken: 'probe', generation: packet.generation, throughSeq: packet.seq }
+          )
+        }
+        const resync = async (): Promise<void> => {
+          const packet = last()
+          await ack(
+            {},
+            {
+              viewToken: 'probe',
+              generation: packet.generation,
+              throughSeq: packet.seq,
+              resync: true
+            }
+          )
+          await flush()
+        }
+        for (let i = 0; i < 3; i++) {
+          await resync()
+          push({ type: 'configuration', data: new Uint8Array([1]) })
+          push({
+            type: 'data',
+            pts: BigInt(i + 1) * 33000n,
+            keyframe: true,
+            data: new Uint8Array(10)
+          })
+          await flush()
+        }
+        await confirm()
+        for (let i = 1; i <= 3; i++) {
+          clock.mockReturnValue(mode === 'gaps' ? 1000 + i * 4000 : 1000 + i * 1000)
+          if (mode === 'replay') await activate({}, { id: 'd1', viewToken: 'probe' })
+          if (mode !== 'duplicate' && mode !== 'replay') {
+            push({
+              type: 'data',
+              pts: BigInt(i + 4) * 33000n,
+              keyframe: true,
+              data: new Uint8Array(10)
+            })
+            await flush()
+          }
+          await confirm()
+        }
+        await resync()
+        expect(reset).toHaveBeenCalledTimes(mode === 'progress' ? 4 : 3)
+        const errors = send.mock.calls.filter(
+          ([ch, p]) => ch === IPC_CHANNELS.screenState && p.status === 'error'
+        )
+        expect(errors).toHaveLength(mode === 'progress' ? 0 : 1)
+      } finally {
+        clock.mockRestore()
+        reset.mockRestore()
+        await manager.destroyAll()
+      }
+    }
+  )
+})

@@ -11,7 +11,7 @@ import { sendResync } from './media'
 import { runAdb } from './proc'
 import { ensureSession } from './session'
 import { cancelRecovery } from './recovery'
-import type { ManagerContext } from './types'
+import { ACK_STALL_MS, type ManagerContext } from './types'
 
 export const registerIpc = (ctx: ManagerContext): void => {
   ipcMain.handle(
@@ -43,7 +43,6 @@ export const registerIpc = (ctx: ManagerContext): void => {
       }
       // 激活即换绑视图：突发回放衔接（监听已由 renderer 先装好），seq 从回放起连续
       session.outbox = []
-      session.lastAckAt = Date.now()
       session.resyncArmed = false
       sendResync(ctx, session, true)
       return { ...ctx.buildState(session), viewToken }
@@ -93,8 +92,32 @@ export const registerIpc = (ctx: ManagerContext): void => {
       sendResync(ctx, session, true)
       return
     }
+    const advanced = session.outbox.some((packet) => packet.seq <= (ack.throughSeq as number))
     session.outbox = session.outbox.filter((packet) => packet.seq > (ack.throughSeq as number))
-    session.lastAckAt = Date.now()
+    const progress = session.recoveryProgress
+    // 同一缓存链反复回放会重新进入发送窗，但没有新的视频进展。
+    if (
+      advanced &&
+      (!progress || (ack.throughSeq as number) > progress.throughSeq) &&
+      !session.waitingResync &&
+      !session.recovery &&
+      session.resetAttempts > 0
+    ) {
+      const now = Date.now()
+      if (!progress || now - progress.lastAckAt > ACK_STALL_MS) {
+        session.recoveryProgress = {
+          since: now,
+          lastAckAt: now,
+          throughSeq: ack.throughSeq as number
+        }
+      } else if (now - progress.since >= ACK_STALL_MS) {
+        session.resetAttempts = 0
+        session.recoveryProgress = null
+      } else {
+        progress.lastAckAt = now
+        progress.throughSeq = ack.throughSeq as number
+      }
+    }
     session.resyncArmed = true
   })
 

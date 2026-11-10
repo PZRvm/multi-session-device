@@ -17,13 +17,13 @@ export const startRecovery = (ctx: ManagerContext, session: StreamSession): void
   const recovery: NonNullable<StreamSession['recovery']> = {
     timer: null,
     viewToken,
-    generation: session.generation,
-    attempts: 0
+    generation: session.generation
   }
   session.recovery = recovery
   session.waitingResync = true
   session.resyncArmed = false
   session.nullReplayStalls = 0
+  session.recoveryProgress = null
 
   const tick = (): void => {
     if (session.recovery !== recovery) return
@@ -37,7 +37,7 @@ export const startRecovery = (ctx: ManagerContext, session: StreamSession): void
       cancelRecovery(session)
       return
     }
-    if (recovery.attempts >= VIDEO_RESET_ATTEMPTS) {
+    if (session.resetAttempts >= VIDEO_RESET_ATTEMPTS) {
       cancelRecovery(session)
       session.waitingResync = false
       session.outbox = []
@@ -46,8 +46,7 @@ export const startRecovery = (ctx: ManagerContext, session: StreamSession): void
       ctx.sendState(session)
       return
     }
-    recovery.attempts += 1
-    session.lastAckAt = Date.now()
+    session.resetAttempts += 1
     void session.writer?.resetVideo().catch(() => undefined)
     recovery.timer = setTimeout(tick, ACK_STALL_MS)
   }

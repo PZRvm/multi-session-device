@@ -32,7 +32,7 @@ export const sendPacket = (
     keyframe: packet.keyframe,
     data: packet.data
   })
-  if (packet.type === 'data') session.outbox.push(packet)
+  if (packet.type === 'data') session.outbox.push({ ...packet, sentAt: Date.now() })
 }
 
 /**
@@ -66,7 +66,6 @@ export const sendResync = (
   for (const packet of replay) sendPacket(ctx, session, packet, viewToken)
   session.waitingResync = false
   session.resyncArmed = false
-  session.lastAckAt = Date.now()
 }
 
 const unackedBytes = (session: StreamSession): number =>
@@ -83,6 +82,7 @@ export const handleMediaPacket = (
   if (session.state !== 'ready') return // 超时错误态保留重试入口，不再接纳迟到配置/视频
   if (packet.type === 'configuration') {
     cancelRecovery(session)
+    session.recoveryProgress = null
     // encoder 配置/尺寸重建：递增 generation、清旧 GOP 与发送窗
     session.generation += 1
     session.cache = new GopCache()

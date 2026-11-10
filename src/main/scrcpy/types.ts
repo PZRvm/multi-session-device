@@ -46,19 +46,20 @@ export interface StreamSession {
   writer: ScrcpyControlMessageWriter | null
   abort: AbortController
   /** 当前视图代次的未确认发送窗（重同步时整体作废重建） */
-  outbox: CachedPacket[]
+  outbox: (CachedPacket & { sentAt: number })[]
   /** 等待重同步突发（突发前不零散发数据包） */
   waitingResync: boolean
   /** 触发过一次重同步后需等 ACK 再武装（防重同步风暴） */
   resyncArmed: boolean
   /** 重同步时缓存无关键帧的连续次数（≥2 才升级 resetVideo） */
   nullReplayStalls: number
-  lastAckAt: number
+  /** 配置包不能重置连续恢复预算；持续推进的 ACK 才算稳定恢复。 */
+  resetAttempts: number
+  recoveryProgress: { since: number; lastAckAt: number; throughSeq: number } | null
   recovery: {
     timer: ReturnType<typeof setTimeout> | null
     viewToken: string
     generation: number
-    attempts: number
   } | null
   /** 按下指针（兜底释放） */
   pressedPointers: Set<number>

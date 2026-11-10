@@ -68,7 +68,7 @@ export const runSession = async (ctx: ManagerContext, session: StreamSession): P
         if (
           session.resyncArmed &&
           session.outbox.length > 0 &&
-          now - session.lastAckAt > ACK_STALL_MS &&
+          now - session.outbox[0].sentAt > ACK_STALL_MS &&
           ctx.active?.deviceId === session.deviceId
         ) {
           session.waitingResync = true
@@ -119,7 +119,8 @@ export const ensureSession = async (
     waitingResync: false,
     resyncArmed: true,
     nullReplayStalls: 0,
-    lastAckAt: Date.now(),
+    resetAttempts: 0,
+    recoveryProgress: null,
     recovery: null,
     pressedPointers: new Set(),
     pressedKeys: new Set(),
