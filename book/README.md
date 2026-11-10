@@ -527,6 +527,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-06-bocode-upgrade.md](plans/2026-11-06-bocode-upgrade.md) — 将中文改编 BoCode 切换为官方原版，同步任务分级、状态索引和升级版本戳，保留项目适配
 - [2026-11-06-emulator-hibernation.md](plans/2026-11-06-emulator-hibernation.md) — 手动快照休眠与恢复的开发施工图，包含持久清单、状态事务、任务互斥、停止态删除及 Mac/Windows 验收门槛
 - [2026-11-09-device-list-drag-reorder.md](plans/2026-11-09-device-list-drag-reorder.md) — 左侧列表拖拽排序——AVD 主区与真机区行拖拽换序：AVD 走 devices:reorder 整单重排（数组序即持久化序，零 schema 变更），真机走 applyOrder 合并层 + external-order.json 偏好存储
+- [2026-11-10-release-1.0.1.md](plans/2026-11-10-release-1.0.1.md) — 将 dev 版本更新为1.0.1，经同仓库PR合并main，发布双平台预览安装包及更新说明
 - [2026-11-10-screen-reset-loop.md](plans/2026-11-10-screen-reset-loop.md) — 修复静置首帧 ACK 超时误判、尾包回执遗漏和新配置绕过连续重建上限
 - [README.md](plans/README.md) — Plans directory usage — implementation plans land here once the Phase 2 design is complete, with naming and the plan template
 
@@ -541,4 +542,4 @@ description: Master index of the book — the map of every document. Regenerate 
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 432 documents -->
+<!-- 433 documents -->
