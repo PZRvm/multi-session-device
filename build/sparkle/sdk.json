@@ -1,0 +1,10 @@
+{
+  "version": "2.10.1",
+  "electron": "39.8.10",
+  "deploymentTarget": "13.0",
+  "headersSha256": "61069dec76ed8d1c10ab6825b194bdf5a19b653286a7c2684b09c62681427446",
+  "url": "https://github.com/sparkle-project/Sparkle/releases/download/2.10.1/Sparkle-2.10.1.tar.xz",
+  "sha256": "1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27",
+  "license": "MIT",
+  "source": "https://github.com/sparkle-project/Sparkle/tree/2.10.1"
+}

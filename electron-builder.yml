@@ -27,6 +27,8 @@ asarUnpack:
 extraResources:
   - from: resources/scrcpy-server-v3.3.3
     to: scrcpy-server-v3.3.3
+  - from: licenses/multi-session-browser-MIT.txt
+    to: licenses/multi-session-browser-MIT.txt
   - from: node_modules/mediabunny/LICENSE
     to: licenses/mediabunny-MPL-2.0.txt
 win:

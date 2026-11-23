@@ -1,3 +1,4 @@
+import UpdateEntry from '../UpdateEntry'
 import appIcon from '../../../../../resources/icon-windows.png'
 import SettingsParts, { type SettingsPaneProps } from './SettingsParts'
 import { useAboutInfo } from './useAboutInfo'
@@ -34,6 +35,7 @@ const PaneAbout = ({
           {copy.openDirectory}
         </button>
       </div>
+      <UpdateEntry about />
     </SettingsParts>
   )
 }

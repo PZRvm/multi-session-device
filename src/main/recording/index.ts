@@ -1,3 +1,4 @@
+import { handleUpdateMutation } from '../updatePreparation'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
@@ -109,25 +110,31 @@ export const registerRecording = (
     notifications?.update(snapshot)
     return snapshot
   })
-  ipcMain.handle(IPC_CHANNELS.recordingResetPrompts, async (event): Promise<void> => {
+  handleUpdateMutation(IPC_CHANNELS.recordingResetPrompts, async (event): Promise<void> => {
     if (!deps.isSettingsSender?.(event.sender) || event.senderFrame !== event.sender.mainFrame)
       throw new Error('Unauthorized recording settings window')
     await preferences.reset()
   })
-  ipcMain.handle(IPC_CHANNELS.recordingStart, async (event, raw): Promise<RecordingSnapshot> => {
-    authorize(event)
-    const id = text(raw, 'deviceId')
-    await manager.ready()
-    return manager.start(id)
-  })
-  ipcMain.handle(IPC_CHANNELS.recordingCommand, async (event, raw): Promise<RecordingSnapshot> => {
-    authorize(event)
-    const taskId = text(raw, 'taskId'),
-      command = text(raw, 'command')
-    if (!['pause', 'resume', 'stop', 'reveal', 'dismiss', 'retry'].includes(command))
-      throw new Error('Invalid recording command')
-    return manager.command(taskId, command as RecordingCommand)
-  })
+  handleUpdateMutation(
+    IPC_CHANNELS.recordingStart,
+    async (event, raw): Promise<RecordingSnapshot> => {
+      authorize(event)
+      const id = text(raw, 'deviceId')
+      await manager.ready()
+      return manager.start(id)
+    }
+  )
+  handleUpdateMutation(
+    IPC_CHANNELS.recordingCommand,
+    async (event, raw): Promise<RecordingSnapshot> => {
+      authorize(event)
+      const taskId = text(raw, 'taskId'),
+        command = text(raw, 'command')
+      if (!['pause', 'resume', 'stop', 'reveal', 'dismiss', 'retry'].includes(command))
+        throw new Error('Invalid recording command')
+      return manager.command(taskId, command as RecordingCommand)
+    }
+  )
   return manager
 }
 export const confirmRecordingQuit = async (manager: RecordingManager): Promise<boolean> => {

@@ -1,3 +1,4 @@
+import { handleUpdateMutation } from '../updatePreparation'
 import { BrowserWindow, ipcMain } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import { ERRORS_COPY, format, isSettingsLocale, type ErrorsCopy } from '@shared/i18n'
@@ -29,7 +30,7 @@ export function registerLocaleIpc(): void {
     event.returnValue = { locale: getLocaleState() }
   })
 
-  ipcMain.handle(IPC_CHANNELS.localeSet, async (_event, locale: unknown): Promise<void> => {
+  handleUpdateMutation(IPC_CHANNELS.localeSet, async (_event, locale: unknown): Promise<void> => {
     if (!isSettingsLocale(locale))
       throw new Error(`${IPC_CHANNELS.localeSet}: ${msg('invalidLocaleSuffix')}`)
     updateLocaleState(locale)

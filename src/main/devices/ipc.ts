@@ -1,3 +1,4 @@
+import { handleUpdateMutation } from '../updatePreparation'
 import { clipboard, ipcMain } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type {
@@ -67,7 +68,7 @@ export function registerDevicesIpc(): void {
     return snapshotNow()
   })
 
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.devicesCreate,
     async (event, raw: unknown): Promise<CreateDeviceResult> => {
       requireSender(IPC_CHANNELS.devicesCreate, event, 'create')
@@ -79,7 +80,7 @@ export function registerDevicesIpc(): void {
     }
   )
 
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.devicesRename,
     async (event, raw: unknown): Promise<DeviceSnapshot> => {
       requireSender(IPC_CHANNELS.devicesRename, event, 'main')
@@ -92,7 +93,7 @@ export function registerDevicesIpc(): void {
     }
   )
 
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.devicesDelete,
     async (event, raw: unknown): Promise<DeviceSnapshot> => {
       requireSender(IPC_CHANNELS.devicesDelete, event, 'main')
@@ -103,7 +104,7 @@ export function registerDevicesIpc(): void {
     }
   )
 
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.devicesReorder,
     async (event, raw: unknown): Promise<DeviceSnapshot> => {
       requireSender(IPC_CHANNELS.devicesReorder, event, 'main')
@@ -114,7 +115,7 @@ export function registerDevicesIpc(): void {
     }
   )
 
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.devicesStart,
     async (event, raw: unknown): Promise<DeviceSnapshot> => {
       requireSender(IPC_CHANNELS.devicesStart, event, 'main')
@@ -126,17 +127,20 @@ export function registerDevicesIpc(): void {
     }
   )
 
-  ipcMain.handle(IPC_CHANNELS.devicesStop, async (event, raw: unknown): Promise<DeviceSnapshot> => {
-    requireSender(IPC_CHANNELS.devicesStop, event, 'main')
-    if (!isDeviceIdInput(raw)) {
-      throw new Error(`${IPC_CHANNELS.devicesStop}${msg('invalidPayload')}`)
+  handleUpdateMutation(
+    IPC_CHANNELS.devicesStop,
+    async (event, raw: unknown): Promise<DeviceSnapshot> => {
+      requireSender(IPC_CHANNELS.devicesStop, event, 'main')
+      if (!isDeviceIdInput(raw)) {
+        throw new Error(`${IPC_CHANNELS.devicesStop}${msg('invalidPayload')}`)
+      }
+      return stopDevice(raw.id)
     }
-    return stopDevice(raw.id)
-  })
+  )
 
   // ---- 休眠域（plan 2026-11-06-emulator-hibernation；仅登记主窗）----
 
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.devicesHibernate,
     async (event, raw: unknown): Promise<DeviceSnapshot> => {
       requireSender(IPC_CHANNELS.devicesHibernate, event, 'main')
@@ -148,7 +152,7 @@ export function registerDevicesIpc(): void {
     }
   )
 
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.devicesResume,
     async (event, raw: unknown): Promise<DeviceSnapshot> => {
       requireSender(IPC_CHANNELS.devicesResume, event, 'main')
@@ -160,7 +164,7 @@ export function registerDevicesIpc(): void {
     }
   )
 
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.devicesDiscardHibernation,
     async (event, raw: unknown): Promise<DeviceSnapshot> => {
       requireSender(IPC_CHANNELS.devicesDiscardHibernation, event, 'main')
@@ -171,7 +175,7 @@ export function registerDevicesIpc(): void {
     }
   )
 
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.devicesCancelStart,
     async (event, raw: unknown): Promise<DeviceSnapshot> => {
       requireSender(IPC_CHANNELS.devicesCancelStart, event, 'main')
@@ -195,7 +199,7 @@ export function registerDevicesIpc(): void {
     }
   )
 
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.devicesUpdateConfig,
     async (event, raw: unknown): Promise<DeviceSnapshot> => {
       if (!isUpdateDeviceInput(raw)) {
@@ -218,7 +222,7 @@ export function registerDevicesIpc(): void {
     clipboard.writeText(device.serial)
   })
 
-  ipcMain.handle(IPC_CHANNELS.devicesReconcile, async (event): Promise<ReconcileResult> => {
+  handleUpdateMutation(IPC_CHANNELS.devicesReconcile, async (event): Promise<ReconcileResult> => {
     requireSender(IPC_CHANNELS.devicesReconcile, event, 'main')
     return reconcileDevices()
   })
@@ -236,7 +240,7 @@ export function registerDevicesIpc(): void {
     }
   )
 
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.devicesReconciliationAck,
     async (event, raw: unknown): Promise<void> => {
       requireSender(IPC_CHANNELS.devicesReconciliationAck, event, 'main')

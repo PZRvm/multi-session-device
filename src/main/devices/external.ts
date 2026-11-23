@@ -1,3 +1,4 @@
+import { handleUpdateMutation } from '../updatePreparation'
 import { BrowserWindow, clipboard, dialog, ipcMain, webContents } from 'electron'
 import { WirelessRecovery } from './wirelessRecovery'
 import { adbRecovery } from '../emulator/adbRecovery'
@@ -55,6 +56,7 @@ export interface ExternalDeps {
    *  测试替身注入断言） */
   broadcast?: (devices: ExternalDevice[]) => void
   isMainSender: (sender: Electron.WebContents) => boolean
+  trackDevices?: boolean
   /** 会话桥事件（测试断言 / 装配层消费） */
   onSession?: (event: ExternalSessionEvent) => void
   /** socket 工厂接缝（测试替身；默认 node:net connect） */
@@ -337,7 +339,15 @@ let trackingPaused = false
 const openSocket = async (): Promise<void> => {
   if (trackingPaused || adbRecovery.active) return
   const current = deps
-  if (trackingPaused || adbRecovery.active || !current || socket || reconnectTimer) return
+  if (
+    trackingPaused ||
+    adbRecovery.active ||
+    !current ||
+    current.trackDevices === false ||
+    socket ||
+    reconnectTimer
+  )
+    return
   // 迁移在途不 ensure（会 start-server 重生 adb，挡住 win32 删源——issue
   // 2026-10-31-orphan-emulator-after-app-restart）：只按退避续排，journal 清除后
   // 的下一次重连自然恢复（最长一个退避节拍，上限 MAX_BACKOFF_MS）
@@ -535,7 +545,7 @@ export function registerExternalIpc(input: ExternalDeps): void {
     recoveryCaller(event)
     return recovery.state()
   })
-  ipcMain.handle(IPC_CHANNELS.wirelessRecoveryRepair, (event, raw: unknown) => {
+  handleUpdateMutation(IPC_CHANNELS.wirelessRecoveryRepair, (event, raw: unknown) => {
     recoveryCaller(event)
     return recovery.repair(attemptId(raw), event.sender.id)
   })
@@ -550,30 +560,33 @@ export function registerExternalIpc(input: ExternalDeps): void {
   // 真机用户序重排（plan 2026-11-09）：整单校验（与 cache id 集相等）后换序——
   // 会话桥零事件（顺序与 runId 无关）；新记忆 = 当前全序 + 原记忆仍缺席条目
   // （断线序位保留）；落盘尽力（commitOrder 内存先行，失败仅告警）
-  ipcMain.handle(IPC_CHANNELS.devicesExternalReorder, (event, raw: unknown): ExternalDevice[] => {
-    requireMain(IPC_CHANNELS.devicesExternalReorder, event.sender)
-    const ids = parseReorderIds(raw)
-    const byId = new Map(cache.map((device) => [device.id, device]))
-    if (
-      ids.length !== cache.length ||
-      new Set(ids).size !== ids.length ||
-      ids.some((id) => !byId.has(id))
-    ) {
-      throw new Error(`${IPC_CHANNELS.devicesExternalReorder}${msg('invalidPayload')}`)
+  handleUpdateMutation(
+    IPC_CHANNELS.devicesExternalReorder,
+    (event, raw: unknown): ExternalDevice[] => {
+      requireMain(IPC_CHANNELS.devicesExternalReorder, event.sender)
+      const ids = parseReorderIds(raw)
+      const byId = new Map(cache.map((device) => [device.id, device]))
+      if (
+        ids.length !== cache.length ||
+        new Set(ids).size !== ids.length ||
+        ids.some((id) => !byId.has(id))
+      ) {
+        throw new Error(`${IPC_CHANNELS.devicesExternalReorder}${msg('invalidPayload')}`)
+      }
+      cache = ids.map((id) => byId.get(id) as ExternalDevice)
+      const present = new Set(ids)
+      void commitOrder([...ids, ...orderNow().filter((id) => !present.has(id))])
+      ;(deps?.broadcast ?? broadcastDefault)(cache)
+      return cache
     }
-    cache = ids.map((id) => byId.get(id) as ExternalDevice)
-    const present = new Set(ids)
-    void commitOrder([...ids, ...orderNow().filter((id) => !present.has(id))])
-    ;(deps?.broadcast ?? broadcastDefault)(cache)
-    return cache
-  })
+  )
   // ---- 无线域通道（plan 2026-10-15-real-device-wireless）：失败是结果不是错误，
   // outcome 判别联合直达 renderer；载荷非法才 throw（对齐其余通道惯例）----
   ipcMain.handle(IPC_CHANNELS.devicesExternalScan, (event): Promise<WirelessCandidate[]> => {
     requireWirelessCaller(IPC_CHANNELS.devicesExternalScan, event.sender, event.senderFrame)
     return scanWireless(input.wireless)
   })
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.devicesExternalPair,
     (event, raw: unknown): Promise<WirelessPairOutcome> => {
       requireWirelessCaller(IPC_CHANNELS.devicesExternalPair, event.sender, event.senderFrame)
@@ -583,7 +596,7 @@ export function registerExternalIpc(input: ExternalDeps): void {
       return pairWirelessDevice(raw, input.wireless)
     }
   )
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.devicesExternalConnect,
     (event, raw: unknown): Promise<WirelessConnectOutcome> => {
       requireWirelessCaller(IPC_CHANNELS.devicesExternalConnect, event.sender, event.senderFrame)
@@ -597,7 +610,7 @@ export function registerExternalIpc(input: ExternalDeps): void {
       )
     }
   )
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.devicesExternalPromote,
     (event, raw: unknown): Promise<WirelessConnectOutcome> => {
       requireWirelessCaller(IPC_CHANNELS.devicesExternalPromote, event.sender, event.senderFrame)
@@ -615,7 +628,7 @@ export function registerExternalIpc(input: ExternalDeps): void {
       )
     }
   )
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.devicesExternalDisconnect,
     async (event, raw: unknown): Promise<void> => {
       requireWirelessCaller(IPC_CHANNELS.devicesExternalDisconnect, event.sender, event.senderFrame)

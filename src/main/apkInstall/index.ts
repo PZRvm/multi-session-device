@@ -1,5 +1,5 @@
+import { handleUpdateMutation } from '../updatePreparation'
 import { adbRecovery } from '../emulator/adbRecovery'
-import { ipcMain } from 'electron'
 import { basename } from 'node:path'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import type { ApkInstallOutcome } from '@shared/types'
@@ -105,7 +105,7 @@ export function registerApkInstallIpc(deps: ApkInstallDeps): {
     }
   }
 
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.apkInstall,
     async (event, raw: unknown): Promise<ApkInstallOutcome> => {
       if (!deps.isMainSender(event.sender)) {

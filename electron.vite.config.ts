@@ -32,7 +32,16 @@ const stripDevOnlyCsp = (): Plugin => ({
 })
 
 export default defineConfig(({ command }) => ({
-  main: { resolve: { alias: sharedAlias } },
+  main: {
+    resolve: { alias: sharedAlias },
+    define: {
+      __UPDATE_TEST_BUILD__: JSON.stringify(process.env.MSD_UPDATE_TEST_BUILD === 'true'),
+      __UPDATE_POLICY__: JSON.stringify({
+        showHeaderEntry: process.env.MSD_UPDATE_HEADER === 'true',
+        showSettingsEntry: process.env.MSD_UPDATE_SETTINGS === 'true'
+      })
+    }
+  },
   preload: { resolve: { alias: sharedAlias } },
   renderer: {
     // dev server 默认 6174（6173 留给兄弟项目 multi-session-browser 主仓库）；strictPort

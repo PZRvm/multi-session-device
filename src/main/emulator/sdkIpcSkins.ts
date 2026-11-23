@@ -1,3 +1,4 @@
+import { handleUpdateMutation } from '../updatePreparation'
 import { BrowserWindow, app, dialog, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
@@ -113,7 +114,7 @@ export function registerSdkSkinsIpc(deps: SdkIpcDeps): void {
     }
   )
 
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.sdkDownloadDeviceSkin,
     async (event, raw: unknown): Promise<DeviceSkinSummary | null> => {
       requireWizardSender(IPC_CHANNELS.sdkDownloadDeviceSkin, event)

@@ -1,3 +1,4 @@
+import { handleUpdateMutation } from '../updatePreparation'
 import { adbRecovery } from './adbRecovery'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
@@ -42,13 +43,13 @@ export function registerSdkSourceIpc(deps: SdkIpcDeps): void {
     return runStudioDetection()
   })
 
-  ipcMain.handle(IPC_CHANNELS.sdkSourceSet, (event, raw: unknown) => {
+  handleUpdateMutation(IPC_CHANNELS.sdkSourceSet, (event, raw: unknown) => {
     adbRecovery.assertOpen()
     requireSettingsSender(IPC_CHANNELS.sdkSourceSet, event)
     return switchSource(readSourceTargetInput(raw))
   })
 
-  ipcMain.handle(IPC_CHANNELS.sdkSourceMigrate, async (event, raw: unknown) => {
+  handleUpdateMutation(IPC_CHANNELS.sdkSourceMigrate, async (event, raw: unknown) => {
     adbRecovery.assertOpen()
     requireSettingsSender(IPC_CHANNELS.sdkSourceMigrate, event)
     const input = readSourceTargetInput(raw)
@@ -59,19 +60,19 @@ export function registerSdkSourceIpc(deps: SdkIpcDeps): void {
     return startSourceMigration({ ...input, replace })
   })
 
-  ipcMain.handle(IPC_CHANNELS.sdkSourceAdopt, (event, raw: unknown) => {
+  handleUpdateMutation(IPC_CHANNELS.sdkSourceAdopt, (event, raw: unknown) => {
     adbRecovery.assertOpen()
     requireSettingsSender(IPC_CHANNELS.sdkSourceAdopt, event)
     return adoptSourceSwitch(readSourceTargetInput(raw))
   })
 
-  ipcMain.handle(IPC_CHANNELS.sdkSourceMigrateCancel, (event) => {
+  handleUpdateMutation(IPC_CHANNELS.sdkSourceMigrateCancel, (event) => {
     adbRecovery.assertOpen()
     requireSettingsSender(IPC_CHANNELS.sdkSourceMigrateCancel, event)
     return cancelSourceMigration()
   })
 
-  ipcMain.handle(IPC_CHANNELS.sdkSourceClearRetained, async (event, raw: unknown) => {
+  handleUpdateMutation(IPC_CHANNELS.sdkSourceClearRetained, async (event, raw: unknown) => {
     adbRecovery.assertOpen()
     requireSettingsSender(IPC_CHANNELS.sdkSourceClearRetained, event)
     if (
@@ -117,14 +118,17 @@ export function registerSdkSourceIpc(deps: SdkIpcDeps): void {
     return picked.canceled || picked.filePaths.length === 0 ? null : picked.filePaths[0]
   })
 
-  ipcMain.handle(IPC_CHANNELS.sdkBootstrap, async (_event, raw: unknown): Promise<SdkSnapshot> => {
-    assertSdkWritable(IPC_CHANNELS.sdkBootstrap)
-    const root = resolveRoot(raw)
-    const snapshot = await detectSdk(root)
-    if (!snapshot.licensed) {
-      // 许可拒绝 = 用户主动取消（非失败）：静默返回当前态，不进错误通道
-      if (!(await confirmLicenses())) return snapshot
+  handleUpdateMutation(
+    IPC_CHANNELS.sdkBootstrap,
+    async (_event, raw: unknown): Promise<SdkSnapshot> => {
+      assertSdkWritable(IPC_CHANNELS.sdkBootstrap)
+      const root = resolveRoot(raw)
+      const snapshot = await detectSdk(root)
+      if (!snapshot.licensed) {
+        // 许可拒绝 = 用户主动取消（非失败）：静默返回当前态，不进错误通道
+        if (!(await confirmLicenses())) return snapshot
+      }
+      return bootstrapSdk(root, {}, pushProgress)
     }
-    return bootstrapSdk(root, {}, pushProgress)
-  })
+  )
 }

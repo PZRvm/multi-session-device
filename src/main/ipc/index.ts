@@ -59,7 +59,7 @@ export const prepareRecordingQuit = (): Promise<boolean> =>
 /** 录制退出流程被外层中断（清理失败/用户反悔留下）后恢复录制常态 */
 export const cancelRecordingQuit = (): void => recordingQuitRestore?.()
 
-export function registerIpcHandlers(): void {
+export function registerIpcHandlers({ trackDevices = true } = {}): { updateBusy(): boolean } {
   registerDialogIpc()
   registerDevicesIpc()
   // 来源变更 → devices 全量可用性重查（plan 2026-10-12-device-list-source-aware）：
@@ -192,6 +192,7 @@ export function registerIpcHandlers(): void {
   // 变化广播默认发全部窗口（独立日志窗下拉跟随，对齐 devices:changed 语义）
   let restoreLogcatSubscriptions: (() => void) | undefined
   registerExternalIpc({
+    trackDevices,
     recovery: {
       busy: () => {
         const copy = WIRELESS_RECOVERY_COPY[getLocaleState()]
@@ -259,4 +260,15 @@ export function registerIpcHandlers(): void {
       }
     }
   })
+  return {
+    updateBusy: () =>
+      recording.hasPending() ||
+      (installer?.isBusy() ?? false) ||
+      isMigrationActive() ||
+      adbRecovery.active ||
+      adbRecovery.blockers.length > 0 ||
+      listDeviceRuntimeViews().some(({ status }) =>
+        ['creating', 'starting', 'stopping', 'deleting', 'hibernating', 'resuming'].includes(status)
+      )
+  }
 }

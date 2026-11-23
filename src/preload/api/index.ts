@@ -1,3 +1,4 @@
+import { updatesApi } from './updates'
 import { recordingApi, recordingProcessorApi } from './recording'
 import { dialogApi } from './dialog'
 import { devicesApi } from './devices'
@@ -29,6 +30,7 @@ export const api = {
   install: installApi,
   network: networkApi,
   logcat: logcatApi,
+  updates: updatesApi,
   report: reportApi
 }
 

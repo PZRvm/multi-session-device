@@ -16,3 +16,7 @@
 许可证：MIT。完整原文见 [licenses/BoCode-MIT.txt](licenses/BoCode-MIT.txt)，上游文件见 [BoCode LICENSE](https://github.com/Focus695/BoCode/blob/dev/LICENSE)。分发上述内容的副本或实质性部分时，应一并保留上游版权声明和许可文本。
 
 上述许可声明适用于源自 BoCode 的内容。本项目原创代码采用根目录 [LICENSE](LICENSE) 中的 MIT 许可证。其他第三方组件与资源遵循各自的许可证。
+
+## 应用内更新
+
+更新控制器、Sparkle 原生桥接和部分构建工具改编自 [多会话测试浏览器](https://github.com/PZRvm/multi-session-browser/tree/ccf53f0)，按 [MIT 许可证](licenses/multi-session-browser-MIT.txt) 分发。启用更新的 Mac 安装包包含 [Sparkle 2.10.1](https://github.com/sparkle-project/Sparkle/releases/tag/2.10.1) 及其随包许可证。

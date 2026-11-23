@@ -1,4 +1,4 @@
-import { app, dialog } from 'electron'
+import { app, BrowserWindow, dialog, Menu, MenuItem } from 'electron'
 import { createHash } from 'node:crypto'
 import { basename, join } from 'node:path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
@@ -22,6 +22,24 @@ import { restoreLocale } from './locale'
 import { restoreSdkSource } from './emulator/sdkSource'
 import { appIcon } from './app-icon'
 import { msg } from './locale'
+import { registerUpdates } from './updates'
+import { openSettingsWindow, settingsOwns } from './window/settings'
+import { updatePolicy, updateTestBuild } from './updatePolicy'
+import { getLocaleState } from './locale/store'
+import { MAIN_COPY, UPDATE_COPY } from '@shared/i18n'
+import { readDeviceStore } from './store'
+import { enqueueStoreTask } from './devices/persistence'
+import {
+  beginUpdatePreparation,
+  hasUpdateWork,
+  isUpdateInstalling,
+  isUpdatePreparing,
+  resumeUpdatePreparation
+} from './updatePreparation'
+
+if (updateTestBuild) {
+  app.setPath('userData', join(app.getPath('appData'), 'multi-session-device-update-test'))
+}
 
 // 单实例锁（issue 2026-10-22-windows-quit-stay-no-window）：win32「留在应用」折返后主窗
 // 已销毁、无托盘无 dock——二次启动经 second-instance 唤回/聚焦主窗；被拒的第二实例直接退出
@@ -67,7 +85,37 @@ app.whenReady().then(() => {
     window.on('session-end', markSessionEnding)
   })
 
-  registerIpcHandlers()
+  const { updateBusy } = registerIpcHandlers({ trackDevices: !updateTestBuild })
+  let stoppedStreams = false
+  let stoppingDevices = false
+  const checkForUpdates = registerUpdates({
+    windows: () =>
+      BrowserWindow.getAllWindows().filter(
+        (win) => win === getMainWindow() || settingsOwns(win.webContents)
+      ),
+    canInstall: () => !quitGuard && !quitPending && !isUpdatePreparing(),
+    busy: () => updateBusy() || hasUpdateWork(),
+    async save() {
+      beginUpdatePreparation()
+      if (updateBusy() || quitPending) throw new Error('设备任务未结算')
+      await enqueueStoreTask(async () => {
+        if ((await readDeviceStore()).health.state !== 'ok') throw new Error('设备存储不可写')
+      })
+      if (updateBusy()) throw new Error('设备任务未结算')
+      stoppingDevices = true
+      const result = await prepareAppShutdown()
+      if (result.leftovers.length) throw new Error('仍有应用自有模拟器未停止')
+      stoppedStreams = true
+      await shutdownStreams()
+    },
+    resume() {
+      if (stoppingDevices) resumeAfterShutdown()
+      if (stoppedStreams) resumeExternalSessions()
+      stoppingDevices = false
+      stoppedStreams = false
+      resumeUpdatePreparation()
+    }
+  })
 
   app.on('activate', () => {
     if (!getMainWindow()) {
@@ -78,9 +126,41 @@ app.whenReady().then(() => {
   // 主题/语言/SDK 来源恢复先于建窗：nativeTheme.themeSource 与建窗 backgroundColor 依赖
   // 主题读盘；主进程可见文案依赖语言内存态；SDK 活动根在建窗前就绪（IPC 根解析不落到缺省）。
   // 三者 load 均不抛错，失败按缺省起步——详见各 store
-  void Promise.all([restoreTheme(), restoreLocale(), restoreSdkSource()]).then(() =>
+  void Promise.all([restoreTheme(), restoreLocale(), restoreSdkSource()]).then(() => {
     createMainWindow()
-  )
+    if (
+      process.platform === 'darwin' &&
+      process.arch === 'arm64' &&
+      app.isPackaged &&
+      (updatePolicy.showHeaderEntry || updatePolicy.showSettingsEntry)
+    ) {
+      const currentMenu = Menu.getApplicationMenu()
+      const appMenu = currentMenu?.items[0]?.submenu
+      if (appMenu) {
+        const locale = getLocaleState()
+        appMenu.insert(
+          1,
+          new MenuItem({
+            label: MAIN_COPY[locale].settings + '…',
+            accelerator: 'Command+,',
+            click: () => {
+              void openSettingsWindow().catch((error: unknown) => console.warn('[settings]', error))
+            }
+          })
+        )
+        appMenu.insert(
+          2,
+          new MenuItem({
+            label: UPDATE_COPY[locale].check,
+            click: () => {
+              void checkForUpdates().catch((error: unknown) => console.warn('[updates]', error))
+            }
+          })
+        )
+        Menu.setApplicationMenu(currentMenu)
+      }
+    }
+  })
 })
 
 app.on('window-all-closed', () => {
@@ -95,8 +175,9 @@ let quitGuard = false
 let quitPending = false
 app.on('before-quit', (event) => {
   // 无单实例锁的进程是被拒的第二实例：让默认退出直行，不走清理链
-  if (quitGuard || !gotSingleInstanceLock) return
+  if (quitGuard || !gotSingleInstanceLock || isUpdateInstalling() || event.defaultPrevented) return
   event.preventDefault()
+  if (isUpdatePreparing()) return
   if (quitPending) return
   quitPending = true
   void (async () => {
