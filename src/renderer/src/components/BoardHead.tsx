@@ -1,4 +1,3 @@
-import UpdateEntry from './UpdateEntry'
 import { Settings } from 'lucide-react'
 import styled from 'styled-components'
 import { MAIN_COPY, format } from '@shared/i18n'
@@ -36,7 +35,6 @@ const BoardHead = ({ count, compact, onOpenSettings }: BoardHeadProps): React.JS
         </span>
       ) : null}
       <span className="head-right">
-        <UpdateEntry />
         <AppearanceModePicker
           mode={mode}
           onChange={setMode}
