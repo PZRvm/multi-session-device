@@ -400,6 +400,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-10-screen-reset-loop.md](notes/summary/2026-11/2026-11-10-screen-reset-loop.md) — 投屏静置首帧不再立即判超时，尾包定时确认，连续恢复预算跨配置保留；1701项测试通过
 - [2026-11-10-wireless-stream-robustness.md](notes/summary/2026-11/2026-11-10-wireless-stream-robustness.md) — 无线投屏健壮性修复——建流失败不再泄漏 server 进程与 forward、无线视图激活/恢复时唤醒屏幕、建立期失败自动重试一次；真机整链路验收待执行
 - [2026-11-23-mac-update-review-fixes.md](notes/summary/2026-11/2026-11-23-mac-update-review-fixes.md) — 使用临时签名包验证 Mac 普通退出不会安装更新，以及下载失败换版后可重新确认和安装
+- [2026-11-23-release-1.0.2.md](notes/summary/2026-11/2026-11-23-release-1.0.2.md) — 首个应用内更新稳定版 1.0.2 的合并、Windows 安装回归、草稿恢复和公开资产复核
 - [2026-11-23-update-ui-parity.md](notes/summary/2026-11/2026-11-23-update-ui-parity.md) — 以多会话测试浏览器的实际渲染为参照，校准多开模拟器的软件更新详情和关于页状态文案
 
 ### notes/task/
@@ -557,4 +558,4 @@ description: Master index of the book — the map of every document. Regenerate 
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 448 documents -->
+<!-- 449 documents -->
