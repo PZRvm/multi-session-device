@@ -43,7 +43,18 @@ const expected = new Map(
 
 const gh = (args) => execFileSync('gh', args, { encoding: 'utf8' })
 const api = 'repos/' + repository + '/releases'
+// 按 Tag 读取的 API 只返回已发布版本。列表对有写权限的发布任务也返回草稿。
+const findByTag = () =>
+  gh([
+    'api',
+    api + '?per_page=100',
+    '--paginate',
+    '--jq',
+    '.[] | select(.tag_name == ' + JSON.stringify(tag) + ')'
+  ]).trim()
+let matches = findByTag()
 if (option !== '--resume-draft') {
+  if (matches) throw new Error('同版本已有发布记录，请先核对草稿或版本：' + tag)
   gh([
     'release',
     'create',
@@ -59,15 +70,8 @@ if (option !== '--resume-draft') {
     '--notes-file',
     join(directory, 'release-notes-' + tag + '.md')
   ])
+  matches = findByTag()
 }
-// 按 Tag 读取的 API 只返回已发布版本。列表对有写权限的发布任务也返回草稿。
-const matches = gh([
-  'api',
-  api + '?per_page=100',
-  '--paginate',
-  '--jq',
-  '.[] | select(.tag_name == ' + JSON.stringify(tag) + ')'
-]).trim()
 if (!matches || matches.includes('\n'))
   throw new Error('同版本草稿不存在或存在多条发布记录：' + tag)
 const release = JSON.parse(matches)
