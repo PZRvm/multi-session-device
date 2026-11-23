@@ -1,6 +1,7 @@
 export const UPDATE_COPY = {
   'zh-CN': {
     title: '软件更新',
+    currentVersion: '当前版本 {v}',
     check: '检查更新',
     download: '更新',
     restart: '重启安装',
@@ -34,6 +35,7 @@ export const UPDATE_COPY = {
   },
   'zh-TW': {
     title: '軟體更新',
+    currentVersion: '目前版本 {v}',
     check: '檢查更新',
     download: '更新',
     restart: '重新啟動安裝',
@@ -67,6 +69,7 @@ export const UPDATE_COPY = {
   },
   'en-US': {
     title: 'Software update',
+    currentVersion: 'Current version {v}',
     check: 'Check for updates',
     download: 'Update',
     restart: 'Restart to install',

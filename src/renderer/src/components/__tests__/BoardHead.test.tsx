@@ -102,8 +102,8 @@ describe('BoardHead', () => {
 
   describe('外观选择（共用 AppearanceModePicker）', () => {
     it.each([
-      ['system', false, 'monitor'],
-      ['system', true, 'monitor'],
+      ['system', false, 'desktop'],
+      ['system', true, 'desktop'],
       ['light', true, 'sun'],
       ['dark', false, 'moon']
     ] as const)('紧凑态 %s / 系统暗色 %s 显示 %s 图标', (mode, prefersDark, icon) => {
@@ -119,7 +119,7 @@ describe('BoardHead', () => {
       try {
         render(<BoardHead count={0} compact />)
         const trigger = screen.getByRole('button', { name: copy.themeSwitch })
-        expect(trigger.querySelector(`svg.lucide-${icon}`)).toBeTruthy()
+        expect(trigger.querySelector(`svg[data-icon="${icon}"]`)).toBeTruthy()
       } finally {
         vi.unstubAllGlobals()
       }
@@ -142,7 +142,7 @@ describe('BoardHead', () => {
       fireEvent.click(items[1])
       expect(writeTheme).toHaveBeenCalledWith('light')
       expect(useThemeStore.getState().mode).toBe('light')
-      expect(trigger.querySelector('svg.lucide-sun')).toBeTruthy()
+      expect(trigger.querySelector('svg[data-icon="sun"]')).toBeTruthy()
       // 选中后菜单收起
       expect(screen.queryByRole('menu')).toBeNull()
     })

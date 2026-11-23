@@ -9,7 +9,7 @@ import windowsIcon from '../../../../resources/icon-windows.png'
 type BoardHeadProps = {
   /** 设备总数，两位补零展示，上限 99 */
   count: number
-  /** 左栏宽 ≤ 320 时外观入口转紧凑态（单图标 + 下拉），否则分段直选 */
+  /** 左栏宽 < 390 时外观入口转紧凑态（单图标 + 下拉），否则分段直选 */
   compact: boolean
   onOpenSettings?: () => void
 }
@@ -108,6 +108,9 @@ const Wrapper = styled.div`
     gap: 6px;
     margin-left: auto;
     -webkit-app-region: no-drag;
+  }
+  .head-right [role='group'] {
+    font-size: 12px;
   }
   .settings-button {
     display: inline-flex;

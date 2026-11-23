@@ -109,7 +109,7 @@ function aboutStatus(state: UpdateSnapshot, copy: Copy, busy: boolean, label: st
   if (state.error) return copy.errors[state.error]
   if (state.candidateVersion) return format(copy.version, { v: state.candidateVersion })
   if (state.status === 'up-to-date') return copy.latest
-  return busy ? label : ''
+  return busy ? label : format(copy.currentVersion, { v: state.currentVersion })
 }
 
 export default function UpdateEntry({
