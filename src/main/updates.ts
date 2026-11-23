@@ -58,9 +58,9 @@ export function registerUpdates(deps: {
         if (mac) await mac.check()
         else await updater?.checkForUpdates()
       },
-      async download() {
-        if (mac) await mac.download()
-        else await updater?.downloadUpdate()
+      async download(expectedVersion) {
+        if (mac) return mac.download(expectedVersion)
+        await updater?.downloadUpdate()
       },
       install() {
         if (mac) mac.install()
@@ -130,10 +130,9 @@ export function registerUpdates(deps: {
         else controller.cancelled()
       }
     })
-    let quitAllowed = false
     let cancellingQuit = false
     app.prependListener('before-quit', (event) => {
-      if (!mac || quitAllowed || mac.canQuitForInstall()) return
+      if (!mac || mac.canQuitForInstall()) return
       if (isUpdatePreparing() && controller.getState().status !== 'installing') {
         event.preventDefault()
         return
@@ -147,7 +146,7 @@ export function registerUpdates(deps: {
         .then(() => {
           if (controller.getState().status === 'installing') handoffFailure('installTimeout')
           controller.cancelled()
-          quitAllowed = true
+          // 取消回执将当前周期置为 idle。用户若留在应用，新周期仍须重新取消。
           app.quit()
         })
         .catch(() => {

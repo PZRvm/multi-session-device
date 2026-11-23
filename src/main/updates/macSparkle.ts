@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
-import type { UpdateEngine } from '../updateController'
+import type { UpdateCandidate, UpdateEngine } from '../updateController'
 import { normalizeUpdateNotes, normalizeUpdateDate } from '../updateReleaseNotes'
 
 type Failure = 'check' | 'download' | 'install' | 'signature' | 'installTimeout' | 'cancelled'
@@ -34,7 +34,7 @@ export function createMacSparkle(deps: {
   let native: NativeBridge | undefined
   let phase = 'idle'
   let generation = 0
-  let version = ''
+  let candidate: UpdateCandidate | null = null
   let check: Pending | undefined
   let download: Pending | undefined
   let cancellation: Pending | undefined
@@ -110,12 +110,15 @@ export function createMacSparkle(deps: {
     if (cancelling || phase === 'cancelling') return
     const current = typeof event.version === 'string' ? event.version : ''
     if (event.type === 'available' && phase === 'checking' && /^\d+\.\d+\.\d+$/.test(current)) {
-      version = current
       phase = 'available'
-      const date = normalizeUpdateDate(
-        typeof event.date === 'number' && event.date > 0 ? new Date(event.date).toString() : null
-      )
-      deps.available(version, normalizeUpdateNotes(event.notes, version), date)
+      candidate = {
+        version: current,
+        releaseNotes: normalizeUpdateNotes(event.notes, current),
+        releaseDate: normalizeUpdateDate(
+          typeof event.date === 'number' && event.date > 0 ? new Date(event.date).toString() : null
+        )
+      }
+      deps.available(candidate.version, candidate.releaseNotes, candidate.releaseDate)
       settle(check)
       check = undefined
     } else if (event.type === 'latest' && phase === 'checking') {
@@ -133,9 +136,13 @@ export function createMacSparkle(deps: {
       }
     } else if (event.type === 'heartbeat') {
       renewDownload()
-    } else if (event.type === 'ready' && current === version && phase === 'downloading') {
+    } else if (
+      event.type === 'ready' &&
+      current === candidate?.version &&
+      phase === 'downloading'
+    ) {
       phase = 'ready'
-      deps.downloaded(version)
+      deps.downloaded(current)
       settle(download)
       download = undefined
     } else if (event.type === 'cycle-finished') {
@@ -178,6 +185,7 @@ export function createMacSparkle(deps: {
   const checkForUpdates = async (): Promise<void> => {
     if (phase !== 'idle') await cancel()
     const bridge = ensure()
+    candidate = null
     phase = 'checking'
     return new Promise<void>((resolve, reject) => {
       check = {
@@ -197,20 +205,17 @@ export function createMacSparkle(deps: {
   }
   return {
     check: checkForUpdates,
-    async download() {
-      if (phase !== 'available') {
-        const expected = version
-        await checkForUpdates()
-        if (version !== expected) throw failure('download')
-      }
+    async download(expectedVersion) {
+      if (phase !== 'available') await checkForUpdates()
+      if (candidate?.version !== expectedVersion) return { candidate }
+      if (phase !== 'available') throw failure('download')
       const bridge = ensure()
-      if (phase !== 'available' || !version) return Promise.reject(failure('download'))
       phase = 'downloading'
       return new Promise<void>((resolve, reject) => {
         download = { resolve, reject, timer: setTimeout(() => {}, 0) }
         renewDownload()
         try {
-          bridge.command('download', version)
+          bridge.command('download', expectedVersion)
         } catch (error) {
           settle(download, error as Error)
           download = undefined
@@ -218,10 +223,10 @@ export function createMacSparkle(deps: {
       })
     },
     install() {
-      if (!native || phase !== 'ready') throw failure('install')
+      if (!native || !candidate || phase !== 'ready') throw failure('install')
       phase = 'installing'
       try {
-        native.command('install', version)
+        native.command('install', candidate.version)
       } catch (error) {
         phase = 'ready'
         throw error

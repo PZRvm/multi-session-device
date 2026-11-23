@@ -1,9 +1,19 @@
 import type { UpdatePolicy, UpdateSnapshot, UpdateError } from '../shared/updates'
 
+export interface UpdateCandidate {
+  version: string
+  releaseNotes: string
+  releaseDate: string | null
+}
+
+export interface UpdateCandidateChange {
+  candidate: UpdateCandidate | null
+}
+
 // 最小适配面可注入受控源；生产下载、版本选择和验签由平台更新引擎承担。
 export interface UpdateEngine {
   check(): Promise<void>
-  download(): Promise<void>
+  download(expectedVersion: string): Promise<UpdateCandidateChange | void>
   install(): void
 }
 export interface UpdateControllerDeps {
@@ -53,6 +63,17 @@ export function createUpdateController(deps: UpdateControllerDeps): {
     deps.publish(snapshot())
   }
   const fail = (error: UpdateError): void => set({ status: 'error', error })
+  const setCandidate = (candidate: UpdateCandidate | null): void => {
+    set({
+      status: candidate ? 'available' : 'up-to-date',
+      candidateVersion: candidate?.version ?? null,
+      releaseNotes: candidate?.releaseNotes ?? '',
+      releaseDate: candidate?.releaseDate ?? null,
+      downloadedVersion: null,
+      progress: null,
+      error: null
+    })
+  }
   const allowed = (): boolean => {
     if (state.status === 'disabled') return false
     if (!deps.enabled) {
@@ -100,11 +121,14 @@ export function createUpdateController(deps: UpdateControllerDeps): {
     download() {
       if (!allowed()) return Promise.resolve(snapshot())
       if (operation) return operation
-      if (!state.candidateVersion || state.downloadedVersion) return Promise.resolve(snapshot())
+      const expected = state.candidateVersion
+      if (!expected || state.downloadedVersion) return Promise.resolve(snapshot())
       return single(async () => {
         set({ status: 'downloading', error: null, progress: null })
         try {
-          await deps.engine.download()
+          const change = await deps.engine.download(expected)
+          if (change) setCandidate(change.candidate)
+          else if (state.status === 'downloading') fail('download')
         } catch (error) {
           const code = (error as { updateError?: string })?.updateError
           if (code === 'cancelled') set({ status: 'available', error: null })
@@ -152,25 +176,13 @@ export function createUpdateController(deps: UpdateControllerDeps): {
         }
       })
     },
-    available(version, notes = '', releaseDate = null) {
+    available(version, releaseNotes = '', releaseDate = null) {
       if (state.status !== 'checking') return
-      set({
-        status: 'available',
-        candidateVersion: version,
-        releaseNotes: notes,
-        releaseDate,
-        error: null
-      })
+      setCandidate({ version, releaseNotes, releaseDate })
     },
     latest() {
       if (state.status !== 'checking') return
-      set({
-        status: 'up-to-date',
-        candidateVersion: null,
-        releaseNotes: '',
-        releaseDate: null,
-        error: null
-      })
+      setCandidate(null)
     },
     downloaded(version) {
       if (state.status !== 'downloading' || version !== state.candidateVersion) return

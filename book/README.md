@@ -101,7 +101,7 @@ description: Master index of the book — the map of every document. Regenerate 
 
 ### notes/issue/
 
-**Open (48)**
+**Open (47)**
 
 - [2026-10-06-向导独立窗口-review.md](notes/issue/2026-10-06-向导独立窗口-review.md) — 向导独立窗口分支（5 提交）的 code review 发现——两处注释腐化、span 嵌 h3 不合法、dead CSS、非 darwin 标题双显与两条备查信息
 - [2026-10-04-messageport-bridge-no-delivery.md](notes/issue/2026-10/2026-10-04-messageport-bridge-no-delivery.md) — MessagePortMain 经 contextBridge 回传后 port 对象可达但不投递消息——视频包通道退回 webContents.send（每帧拷贝），产品化时可再评估
@@ -150,9 +150,8 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-10-dual-entry-concurrent-encoders.md](notes/issue/2026-11/2026-11-10-dual-entry-concurrent-encoders.md) — 同一物理手机 USB+无线双条目并存时，多 app 实例×多条目各建各的 scrcpy 会话，峰值 6 个并发编码器导致画面同步延迟（操作生效但画面滞后）
 - [2026-11-10-screen-runtime-followups.md](notes/issue/2026-11/2026-11-10-screen-runtime-followups.md) — 模拟器失效显示条目、真机重复 scrcpy 会话与安装版缺少投屏诊断日志仍需现场验证
 - [2026-11-10-wireless-robustness-hardware-validation.md](notes/issue/2026-11/2026-11-10-wireless-robustness-hardware-validation.md) — 无线健壮性三项修复的真机整链路验收待执行；dev 实例在 agent 派生环境启动挂起待查明
-- [2026-11-23-app-update-code-review.md](notes/issue/2026-11/2026-11-23-app-update-code-review.md) — 应用内更新审查发现 Mac 退出折返后跳过取消，以及候选换版时下载进度卡住
 
-**Resolved (84)**
+**Resolved (85)**
 
 - [2026-10-10-styled-refactor-review.md](notes/issue/2026-10-10-styled-refactor-review.md) — styled 单 Wrapper 重排过程中发现的既有问题——发丝线隐式 DOM 契约、选中态状态点对比度、重复 CSS 与死钩子等（只记录，未修复）
 - [2026-10-01-book-infra-scripts-missing.md](notes/issue/2026-10/2026-10-01-book-infra-scripts-missing.md) — workflow/git-workflow 引用的 book:index、check-commit-message.mjs、.githooks、git-policy.yml 在本仓库均不存在，规则与基建脱节
@@ -238,6 +237,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-04-screenshot-per-capture-review.md](notes/issue/2026-11/2026-11-04-screenshot-per-capture-review.md) — 多截图编辑复审的真机断连清理和注释问题已修复，新增真实 IPC 装配回归，全仓 1570 项通过
 - [2026-11-05-wireless-recovery-code-review.md](notes/issue/2026-11/2026-11-05-wireless-recovery-code-review.md) — 无线修复复审的三项 P2 已按用户授权修复，截图门、日志失败壳与并发诊断均有失败回归转绿记录
 - [2026-11-09-post-delivery-review-round.md](notes/issue/2026-11/2026-11-09-post-delivery-review-round.md) — 休眠交付后六轮追加提交（GPU 默认/缺陷修复/Popover UI×4）的结构化代码评审：发现 7 项记录待办，无阻断性缺陷
+- [2026-11-23-app-update-code-review.md](notes/issue/2026-11/2026-11-23-app-update-code-review.md) — 应用内更新审查发现 Mac 退出折返后跳过取消，以及候选换版时下载进度卡住
 
 ### notes/learn/
 
@@ -398,6 +398,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-10-release-1.0.1.md](notes/summary/2026-11/2026-11-10-release-1.0.1.md) — 1.0.1 Preview经PR #2合并main并成功发布macOS ARM64、Windows x64安装包和校验文件
 - [2026-11-10-screen-reset-loop.md](notes/summary/2026-11/2026-11-10-screen-reset-loop.md) — 投屏静置首帧不再立即判超时，尾包定时确认，连续恢复预算跨配置保留；1701项测试通过
 - [2026-11-10-wireless-stream-robustness.md](notes/summary/2026-11/2026-11-10-wireless-stream-robustness.md) — 无线投屏健壮性修复——建流失败不再泄漏 server 进程与 forward、无线视图激活/恢复时唤醒屏幕、建立期失败自动重试一次；真机整链路验收待执行
+- [2026-11-23-mac-update-review-fixes.md](notes/summary/2026-11/2026-11-23-mac-update-review-fixes.md) — 使用临时签名包验证 Mac 普通退出不会安装更新，以及下载失败换版后可重新确认和安装
 - [2026-11-23-update-ui-parity.md](notes/summary/2026-11/2026-11-23-update-ui-parity.md) — 以多会话测试浏览器的实际渲染为参照，校准多开模拟器的软件更新详情和关于页状态文案
 
 ### notes/task/
@@ -554,4 +555,4 @@ description: Master index of the book — the map of every document. Regenerate 
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 445 documents -->
+<!-- 446 documents -->
