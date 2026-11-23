@@ -4,27 +4,44 @@ import styled from 'styled-components'
 import { format, UPDATE_COPY } from '@shared/i18n'
 import type { UpdateSnapshot, UpdateStatus } from '@shared/updates'
 import { useCopy } from '../hooks/useCopy'
+import { PopoverIconButton } from './PopoverIconButton'
 
-const HeaderButton = styled.button`
+const HeaderButton = styled(PopoverIconButton)`
   position: relative;
   isolation: isolate;
   overflow: hidden;
   display: grid;
-  flex: none;
   place-items: center;
-  width: 25px;
-  height: 25px;
-  border: 1px solid var(--board-hairline);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
-  background: transparent;
-  color: var(--board-accent, var(--accent));
+  background: var(--accent);
+  color: var(--accent-ink);
   cursor: pointer;
   -webkit-app-region: no-drag;
+
   &:hover:not(:disabled) {
-    background: var(--board-tile);
+    background: var(--accent-strong);
   }
+
+  &:active:not(:disabled) {
+    background: var(--accent-press);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--board-ink);
+    outline-offset: 2px;
+  }
+
   &:disabled {
+    opacity: 0.65;
     cursor: default;
+  }
+
+  &:has([data-update-progress]) {
+    opacity: 1;
   }
 `
 
@@ -57,7 +74,7 @@ const ProgressFill = styled.span<{ $vertical?: boolean }>`
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: var(--accent);
+  background: var(${({ $vertical }) => ($vertical ? '--accent-ink' : '--accent')});
   opacity: 0.3;
   pointer-events: none;
   transform-origin: ${({ $vertical }) => ($vertical ? 'bottom' : 'left')};
@@ -140,21 +157,24 @@ export default function UpdateEntry({
   if (!about)
     return (
       <HeaderButton
-        type="button"
+        label={state.error ? copy.errors[state.error] : label}
+        ariaLabel={label}
         disabled={busy}
-        title={state.error ? copy.errors[state.error] : label}
-        aria-label={label}
         onClick={act}
-      >
-        {progress !== null && (
-          <ProgressFill
-            $vertical
-            aria-hidden="true"
-            style={{ transform: `scaleY(${progress / 100})` }}
-          />
-        )}
-        {state.downloadedVersion ? <RotateCw size={14} /> : <ArrowDownToLine size={14} />}
-      </HeaderButton>
+        icon={
+          <>
+            {progress !== null && (
+              <ProgressFill
+                $vertical
+                data-update-progress
+                aria-hidden="true"
+                style={{ transform: `scaleY(${progress / 100})` }}
+              />
+            )}
+            {state.downloadedVersion ? <RotateCw size={14} /> : <ArrowDownToLine size={14} />}
+          </>
+        }
+      />
     )
 
   return (
