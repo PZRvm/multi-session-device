@@ -166,7 +166,7 @@ describe.each(['darwin', 'win32', 'linux'])('主窗日志 dock（%s）', (platfo
     expect(screen.queryByRole('log')).toBeNull()
     fireEvent.click(button)
     expect(await screen.findByRole('log')).toBeTruthy()
-    expect(subscribe).toHaveBeenCalledWith('d1')
+    await waitFor(() => expect(subscribe).toHaveBeenCalledWith('d1'))
     expect(button.getAttribute('aria-pressed')).toBe('true')
     fireEvent.click(button)
     // 收起链经 isWindowOpen IPC + setLogDockOpen + 卸载 effect 多个微任务拍——
@@ -319,6 +319,7 @@ describe.each(['darwin', 'win32', 'linux'])('主窗日志 dock（%s）', (platfo
     render(<App />)
     fireEvent.click(toggleButton())
     await screen.findByRole('log')
+    await waitFor(() => expect(listener).not.toBeNull())
     act(() => {
       listener?.({
         deviceId: 'd1',
@@ -328,6 +329,6 @@ describe.each(['darwin', 'win32', 'linux'])('主窗日志 dock（%s）', (platfo
         dropped: 0
       })
     })
-    expect(screen.getByText('app-level-line')).toBeTruthy()
+    expect(await screen.findByText('app-level-line')).toBeTruthy()
   })
 })
