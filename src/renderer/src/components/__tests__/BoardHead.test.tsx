@@ -149,11 +149,24 @@ describe('BoardHead', () => {
 
     it('紧凑态：Esc 关闭菜单，触发钮 aria-expanded 归位', () => {
       render(<BoardHead count={0} compact />)
+      const trigger = screen.getByRole('button', { name: copy.themeSwitch })
+      fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+      const items = screen.getAllByRole('menuitemradio')
+      expect(document.activeElement).toBe(items[0])
+      fireEvent.keyDown(items[0], { key: 'ArrowUp' })
+      expect(document.activeElement).toBe(items[2])
+      fireEvent.keyDown(items[2], { key: 'Escape' })
+      expect(screen.queryByRole('menu')).toBeNull()
+      expect(document.activeElement).toBe(trigger)
+    })
+
+    it('紧凑态菜单打开后，切到宽态再缩回时保持关闭', () => {
+      const { rerender } = render(<BoardHead count={0} compact />)
       fireEvent.click(screen.getByRole('button', { name: copy.themeSwitch }))
       expect(screen.getByRole('menu')).toBeTruthy()
-      fireEvent.keyDown(document, { key: 'Escape' })
+      rerender(<BoardHead count={0} compact={false} />)
+      rerender(<BoardHead count={0} compact />)
       expect(screen.queryByRole('menu')).toBeNull()
-      expect(document.activeElement).toBe(screen.getByRole('button', { name: copy.themeSwitch }))
     })
 
     it('紧凑态：点击组件外关闭菜单', () => {

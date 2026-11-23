@@ -73,6 +73,7 @@ const WirelessRecoveryFeedback = ({
           type="button"
           disabled={busy}
           onClick={onRetry}
+          aria-label={inDeviceHeader ? copy.retry : undefined}
           title={inDeviceHeader ? copy.retry : undefined}
         >
           {inDeviceHeader && <RotateCw size={12} aria-hidden="true" />}
@@ -83,6 +84,7 @@ const WirelessRecoveryFeedback = ({
             type="button"
             disabled={busy || state.blocked.length > 0}
             onClick={() => void repair()}
+            aria-label={inDeviceHeader ? copy.repair : undefined}
             title={inDeviceHeader ? copy.repair : undefined}
           >
             {inDeviceHeader && <Wrench size={12} aria-hidden="true" />}
@@ -94,6 +96,7 @@ const WirelessRecoveryFeedback = ({
             type="button"
             disabled={busy}
             onClick={() => void copyDiagnostics()}
+            aria-label={inDeviceHeader ? copy.copy : undefined}
             title={inDeviceHeader ? copy.copy : undefined}
           >
             {inDeviceHeader && <ClipboardCopy size={12} aria-hidden="true" />}

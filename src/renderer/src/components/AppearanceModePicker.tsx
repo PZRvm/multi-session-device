@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import DesktopOutlined from '@ant-design/icons/DesktopOutlined'
 import MoonOutlined from '@ant-design/icons/MoonOutlined'
 import SunOutlined from '@ant-design/icons/SunOutlined'
@@ -31,32 +31,62 @@ const AppearanceModePicker = ({
   const copy = useCopy(SETTINGS_COPY)
   const [menuOpen, setMenuOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  if (!compact && menuOpen) setMenuOpen(false)
+
+  const closeMenu = (): void => {
+    triggerRef.current?.focus()
+    setMenuOpen(false)
+  }
 
   // 菜单打开期间：点击组件外关闭、Esc 关闭并归还焦点（浮层挂在板头拖拽带内）
   useEffect(() => {
     if (!menuOpen) return
+    menuRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus()
     const onPointerDown = (event: PointerEvent): void => {
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) setMenuOpen(false)
     }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        setMenuOpen(false)
-        rootRef.current?.querySelector('button')?.focus()
-      }
-    }
     document.addEventListener('pointerdown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
+    return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [menuOpen])
+
+  const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key === 'Escape' || event.key === 'Tab') {
+      if (event.key === 'Escape') event.preventDefault()
+      closeMenu()
+      return
+    }
+    const items = Array.from(event.currentTarget.querySelectorAll('button'))
+    const active = items.indexOf(event.target as HTMLButtonElement)
+    let next: number
+    switch (event.key) {
+      case 'Home':
+        next = 0
+        break
+      case 'End':
+        next = items.length - 1
+        break
+      case 'ArrowDown':
+        next = (active + 1) % items.length
+        break
+      case 'ArrowUp':
+        next = (active - 1 + items.length) % items.length
+        break
+      default:
+        return
+    }
+    event.preventDefault()
+    items[next]?.focus()
+  }
 
   if (compact) {
     const TriggerIcon = MODE_ICONS[mode]
     return (
       <Wrapper ref={rootRef} data-compact="true">
         <button
+          ref={triggerRef}
           className="trigger"
           type="button"
           aria-label={triggerLabel}
@@ -64,11 +94,23 @@ const AppearanceModePicker = ({
           aria-expanded={menuOpen}
           title={triggerLabel}
           onClick={() => setMenuOpen((open) => !open)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault()
+              setMenuOpen(true)
+            }
+          }}
         >
           <TriggerIcon aria-hidden="true" />
         </button>
         {menuOpen ? (
-          <div className="menu" role="menu" aria-label={triggerLabel}>
+          <div
+            ref={menuRef}
+            className="menu"
+            role="menu"
+            aria-label={triggerLabel}
+            onKeyDown={onMenuKeyDown}
+          >
             {MODES.map((key) => {
               const Icon = MODE_ICONS[key]
               return (
@@ -78,9 +120,10 @@ const AppearanceModePicker = ({
                   type="button"
                   role="menuitemradio"
                   aria-checked={key === mode}
+                  tabIndex={-1}
                   onClick={() => {
                     onChange(key)
-                    setMenuOpen(false)
+                    closeMenu()
                   }}
                 >
                   <Icon aria-hidden="true" />

@@ -108,7 +108,7 @@ const rowHandlers = (
 /** 转无线反馈（行内呈现）：working 进行中 / done 成功待拔线 / fail 带原因文案 */
 type PromoteState =
   | { serial: string; phase: 'working' }
-  | { serial: string; phase: 'done' }
+  | { serial: string; phase: 'done'; repaired: boolean }
   | { serial: string; phase: 'fail'; text: string }
 
 /** 真机行（plan 2026-10-13-real-device-usb-and-apk-install）：复用 AVD 行的视觉语言——
@@ -232,7 +232,9 @@ const ExternalRow = ({
             : copy.realDeviceOfflineHint}
         </span>
       ) : promoteState?.phase === 'done' && promoteState.serial === device.serial ? (
-        <span className="row-hint promote-done">{copy.wirelessPromoteDone}</span>
+        <span className="row-hint promote-done" role="status">
+          {copy.wirelessPromoteDone}
+        </span>
       ) : promoteState?.phase === 'fail' && promoteState.serial === device.serial ? (
         <span className="row-hint promote-fail">{promoteState.text}</span>
       ) : null}
@@ -326,8 +328,19 @@ const DeviceListPane = ({
     timersRef.current.add(id)
   }
   // 反馈只在设备在场时呈现（渲染期派生，不用 effect 清账）：拔线后行不在即不显示
-  const activePromote =
-    promote && externalDevices.some((device) => device.serial === promote.serial) ? promote : null
+  const promoteDevice =
+    promote && externalDevices.find((device) => device.serial === promote.serial)
+  const activePromote = promoteDevice ? promote : null
+  const showFeedbackInHeader = !realOpen || promoteDevice?.state !== 'device'
+
+  const finishPromote = (serial: string, repaired = false): void => {
+    const request = promoteRequest.current
+    setFailedAttempt(null)
+    setPromote({ serial, phase: 'done', repaired })
+    later(() => {
+      if (promoteRequest.current === request) setPromote(null)
+    }, 6_000)
+  }
 
   const handlePromote = (serial: string): void => {
     const request = ++promoteRequest.current
@@ -340,19 +353,15 @@ const DeviceListPane = ({
         return
       }
       const outcome: WirelessConnectOutcome = result.data
-      if (!outcome.ok) setFailedAttempt({ serial, outcome })
-      setPromote(
-        outcome.ok
-          ? { serial, phase: 'done' }
-          : { serial, phase: 'fail', text: wirelessConnectFailureText(copy, outcome, recoveryCopy) }
-      )
-      // done 提示 6 秒后自清（P3-4：重插同 serial 不重显旧提示）；失败态不自动清，
-      // 随设备离场消失（派生收口）
       if (outcome.ok) {
-        later(() => {
-          if (promoteRequest.current === request)
-            setPromote((cur) => (cur?.serial === serial && cur.phase === 'done' ? null : cur))
-        }, 6_000)
+        finishPromote(serial)
+      } else {
+        setFailedAttempt({ serial, outcome })
+        setPromote({
+          serial,
+          phase: 'fail',
+          text: wirelessConnectFailureText(copy, outcome, recoveryCopy)
+        })
       }
     })
   }
@@ -511,10 +520,7 @@ const DeviceListPane = ({
                 outcome={failedAttempt.outcome}
                 inDeviceHeader
                 onRetry={() => handlePromote(failedAttempt.serial)}
-                onRecovered={() => {
-                  setFailedAttempt(null)
-                  setPromote({ serial: failedAttempt.serial, phase: 'done' })
-                }}
+                onRecovered={() => finishPromote(failedAttempt.serial, true)}
               />
             ) : null}
             <button
@@ -527,10 +533,16 @@ const DeviceListPane = ({
               <Wifi size={12} aria-hidden="true" />
             </button>
           </div>
-          {failedAttempt?.outcome.attemptId &&
-          !externalDevices.some((device) => device.serial === failedAttempt.serial) ? (
+          {showFeedbackInHeader && failedAttempt?.outcome.attemptId ? (
             <p className="recovery-feedback" role="status">
               {wirelessConnectFailureText(copy, failedAttempt.outcome, recoveryCopy)}
+            </p>
+          ) : null}
+          {showFeedbackInHeader &&
+          promote?.phase === 'done' &&
+          (activePromote || promote.repaired) ? (
+            <p className="recovery-feedback promote-done" role="status">
+              {copy.wirelessPromoteDone}
             </p>
           ) : null}
           {realOpen ? (

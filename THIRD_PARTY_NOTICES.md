@@ -20,3 +20,7 @@
 ## 应用内更新
 
 更新控制器、Sparkle 原生桥接和部分构建工具改编自 [多会话测试浏览器](https://github.com/PZRvm/multi-session-browser/tree/ccf53f0)，按 [MIT 许可证](licenses/multi-session-browser-MIT.txt) 分发。启用更新的 Mac 安装包包含 [Sparkle 2.10.1](https://github.com/sparkle-project/Sparkle/releases/tag/2.10.1) 及其随包许可证。
+
+## 外观切换图标
+
+安装包的 `licenses/` 目录包含 Ant Design Icons、rc-component util 和 clsx 的 MIT 许可证。
