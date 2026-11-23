@@ -8,7 +8,7 @@ import RecordingPromptReset from './RecordingPromptReset'
 
 const PaneGeneral = ({ model, copy }: SettingsPaneProps): React.JSX.Element => (
   <SettingsParts title={copy.general} lead={copy.generalLead}>
-    <div className="row">
+    <div className="row appearance-row">
       <div className="row-label">
         <span className="label">{copy.appearance}</span>
         <p className="description">{copy.appearanceHint}</p>

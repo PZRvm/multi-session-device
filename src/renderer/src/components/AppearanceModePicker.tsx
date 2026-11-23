@@ -1,17 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
-import { Monitor, Moon, Sun } from 'lucide-react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import DesktopOutlined from '@ant-design/icons/DesktopOutlined'
+import MoonOutlined from '@ant-design/icons/MoonOutlined'
+import SunOutlined from '@ant-design/icons/SunOutlined'
 import styled from 'styled-components'
-import { SETTINGS_COPY, type SettingsCopy } from '@shared/i18n'
+import { SETTINGS_COPY } from '@shared/i18n'
 import type { ThemeMode } from '@shared/types'
 import { useCopy } from '../hooks/useCopy'
 
-const MODES = [
-  { mode: 'system', Icon: Monitor },
-  { mode: 'light', Icon: Sun },
-  { mode: 'dark', Icon: Moon }
-] as const
-
-const MODE_ICONS = { system: Monitor, light: Sun, dark: Moon } as const
+const MODES = ['system', 'light', 'dark'] as const
+const MODE_ICONS = { system: DesktopOutlined, light: SunOutlined, dark: MoonOutlined } as const
 
 interface AppearanceModePickerProps {
   mode: ThemeMode
@@ -34,34 +31,62 @@ const AppearanceModePicker = ({
   const copy = useCopy(SETTINGS_COPY)
   const [menuOpen, setMenuOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  if (!compact && menuOpen) setMenuOpen(false)
+
+  const closeMenu = (): void => {
+    triggerRef.current?.focus()
+    setMenuOpen(false)
+  }
 
   // 菜单打开期间：点击组件外关闭、Esc 关闭并归还焦点（浮层挂在板头拖拽带内）
   useEffect(() => {
     if (!menuOpen) return
+    menuRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus()
     const onPointerDown = (event: PointerEvent): void => {
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) setMenuOpen(false)
     }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        setMenuOpen(false)
-        rootRef.current?.querySelector('button')?.focus()
-      }
-    }
     document.addEventListener('pointerdown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
+    return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [menuOpen])
 
-  const modeLabel = (key: ThemeMode): string => copy[key as keyof SettingsCopy] as string
+  const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key === 'Escape' || event.key === 'Tab') {
+      if (event.key === 'Escape') event.preventDefault()
+      closeMenu()
+      return
+    }
+    const items = Array.from(event.currentTarget.querySelectorAll('button'))
+    const active = items.indexOf(event.target as HTMLButtonElement)
+    let next: number
+    switch (event.key) {
+      case 'Home':
+        next = 0
+        break
+      case 'End':
+        next = items.length - 1
+        break
+      case 'ArrowDown':
+        next = (active + 1) % items.length
+        break
+      case 'ArrowUp':
+        next = (active - 1 + items.length) % items.length
+        break
+      default:
+        return
+    }
+    event.preventDefault()
+    items[next]?.focus()
+  }
 
   if (compact) {
     const TriggerIcon = MODE_ICONS[mode]
     return (
       <Wrapper ref={rootRef} data-compact="true">
         <button
+          ref={triggerRef}
           className="trigger"
           type="button"
           aria-label={triggerLabel}
@@ -69,27 +94,43 @@ const AppearanceModePicker = ({
           aria-expanded={menuOpen}
           title={triggerLabel}
           onClick={() => setMenuOpen((open) => !open)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault()
+              setMenuOpen(true)
+            }
+          }}
         >
-          <TriggerIcon size={15} aria-hidden="true" />
+          <TriggerIcon aria-hidden="true" />
         </button>
         {menuOpen ? (
-          <div className="menu" role="menu" aria-label={triggerLabel}>
-            {MODES.map(({ mode: key, Icon }) => (
-              <button
-                className="menu-item"
-                key={key}
-                type="button"
-                role="menuitemradio"
-                aria-checked={key === mode}
-                onClick={() => {
-                  onChange(key)
-                  setMenuOpen(false)
-                }}
-              >
-                <Icon size={14} aria-hidden="true" />
-                <span>{modeLabel(key)}</span>
-              </button>
-            ))}
+          <div
+            ref={menuRef}
+            className="menu"
+            role="menu"
+            aria-label={triggerLabel}
+            onKeyDown={onMenuKeyDown}
+          >
+            {MODES.map((key) => {
+              const Icon = MODE_ICONS[key]
+              return (
+                <button
+                  className="menu-item"
+                  key={key}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={key === mode}
+                  tabIndex={-1}
+                  onClick={() => {
+                    onChange(key)
+                    closeMenu()
+                  }}
+                >
+                  <Icon aria-hidden="true" />
+                  <span>{copy[key]}</span>
+                </button>
+              )
+            })}
           </div>
         ) : null}
       </Wrapper>
@@ -98,38 +139,41 @@ const AppearanceModePicker = ({
 
   return (
     <Wrapper role="group" aria-label={copy.appearance}>
-      {MODES.map(({ mode: key, Icon }) => (
-        <button
-          className="segment-button"
-          key={key}
-          type="button"
-          aria-label={modeLabel(key)}
-          title={modeLabel(key)}
-          aria-pressed={key === mode}
-          onClick={() => onChange(key)}
-        >
-          <Icon size={16} aria-hidden="true" />
-        </button>
-      ))}
+      {MODES.map((key) => {
+        const Icon = MODE_ICONS[key]
+        return (
+          <button
+            className="segment-button"
+            key={key}
+            type="button"
+            aria-label={copy[key]}
+            title={copy[key]}
+            aria-pressed={key === mode}
+            onClick={() => onChange(key)}
+          >
+            <Icon aria-hidden="true" />
+          </button>
+        )
+      })}
     </Wrapper>
   )
 }
 
-/** 分段轨道：抬升层 + 发丝线（与设置窗 segments 同一视觉词汇，样式随组件单源） */
+/** 浏览器同款小号分段：轨道上下各 2px，选项高 20px。 */
 const Wrapper = styled.div`
   display: inline-flex;
-  gap: 2px;
+  flex: none;
   padding: 2px;
-  border: 1px solid var(--board-control-line);
+  font-size: 13px;
   border-radius: 4px;
   background: var(--board-bg-raised);
   .segment-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 27px;
-    min-height: 26px;
-    padding: 2px;
+    height: 20px;
+    min-height: 20px;
+    padding: 0 7px;
     border: none;
     border-radius: 2px;
     background: transparent;
@@ -145,6 +189,10 @@ const Wrapper = styled.div`
   .segment-button[aria-pressed='true'] {
     color: var(--board-tile-ink);
     background: var(--board-segment-selected-bg);
+    box-shadow:
+      0 1px 2px light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 1%)),
+      0 1px 6px -1px light-dark(rgb(0 0 0 / 3%), rgb(255 255 255 / 0.8%)),
+      0 2px 4px light-dark(rgb(0 0 0 / 3%), rgb(255 255 255 / 0.8%));
   }
 
   &[data-compact='true'] {
@@ -159,8 +207,9 @@ const Wrapper = styled.div`
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
     padding: 0;
     border: none;
     border-radius: 4px;
@@ -168,10 +217,8 @@ const Wrapper = styled.div`
     color: var(--board-ink-dim);
     cursor: pointer;
   }
-  .trigger:hover,
-  .trigger[aria-expanded='true'] {
-    color: var(--board-ink);
-    background: var(--board-hover-veil);
+  .trigger:hover {
+    background: var(--board-bg-raised);
   }
   button:focus-visible {
     outline: 2px solid var(--accent);
@@ -188,7 +235,7 @@ const Wrapper = styled.div`
     width: max-content;
     min-width: 132px;
     padding: 4px;
-    border: 1px solid var(--board-control-line);
+    border: 1px solid var(--board-hairline);
     border-radius: 6px;
     background: var(--board-bg-raised);
     -webkit-app-region: no-drag;
@@ -197,18 +244,18 @@ const Wrapper = styled.div`
     display: inline-flex;
     align-items: center;
     justify-content: flex-start;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
     min-height: 28px;
-    padding: 4px 8px;
+    padding: 5px 8px;
     border: none;
     border-radius: 4px;
     background: transparent;
     color: var(--board-ink);
     cursor: pointer;
     font: inherit;
-    font-size: 13px;
-    line-height: 20px;
+    font-size: 12px;
+    line-height: 18px;
     text-align: left;
     white-space: nowrap;
   }

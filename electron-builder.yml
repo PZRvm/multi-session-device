@@ -31,6 +31,12 @@ extraResources:
     to: licenses/multi-session-browser-MIT.txt
   - from: node_modules/mediabunny/LICENSE
     to: licenses/mediabunny-MPL-2.0.txt
+  - from: node_modules/@ant-design/icons/LICENSE
+    to: licenses/ant-design-icons-MIT.txt
+  - from: node_modules/@rc-component/util/LICENSE
+    to: licenses/rc-component-util-MIT.txt
+  - from: node_modules/clsx/license
+    to: licenses/clsx-MIT.txt
 win:
   icon: build/icon.ico
   executableName: multi-session-device

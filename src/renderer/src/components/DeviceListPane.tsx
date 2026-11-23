@@ -108,7 +108,7 @@ const rowHandlers = (
 /** 转无线反馈（行内呈现）：working 进行中 / done 成功待拔线 / fail 带原因文案 */
 type PromoteState =
   | { serial: string; phase: 'working' }
-  | { serial: string; phase: 'done' }
+  | { serial: string; phase: 'done'; repaired: boolean }
   | { serial: string; phase: 'fail'; text: string }
 
 /** 真机行（plan 2026-10-13-real-device-usb-and-apk-install）：复用 AVD 行的视觉语言——
@@ -232,7 +232,9 @@ const ExternalRow = ({
             : copy.realDeviceOfflineHint}
         </span>
       ) : promoteState?.phase === 'done' && promoteState.serial === device.serial ? (
-        <span className="row-hint promote-done">{copy.wirelessPromoteDone}</span>
+        <span className="row-hint promote-done" role="status">
+          {copy.wirelessPromoteDone}
+        </span>
       ) : promoteState?.phase === 'fail' && promoteState.serial === device.serial ? (
         <span className="row-hint promote-fail">{promoteState.text}</span>
       ) : null}
@@ -276,6 +278,7 @@ const DeviceListPane = ({
   const recoveryCopy = useCopy(WIRELESS_RECOVERY_COPY)
   const [foldedOpen, setFoldedOpen] = useState(false)
   const [realOpen, setRealOpen] = useState(true)
+  const realLabel = format(copy.realDeviceSectionCount, { count: externalDevices.length })
   // 无线批（plan 2026-10-15-real-device-wireless）：连接器已改 mac 原生弹窗（用户裁定，
   // 渲染层弹层与窗口几何打架）——这里只发起开窗；转无线反馈是行内瞬态，不进 store
   // （无状态裁定：刷新即丢，设备由 track 推送呈现）
@@ -325,8 +328,19 @@ const DeviceListPane = ({
     timersRef.current.add(id)
   }
   // 反馈只在设备在场时呈现（渲染期派生，不用 effect 清账）：拔线后行不在即不显示
-  const activePromote =
-    promote && externalDevices.some((device) => device.serial === promote.serial) ? promote : null
+  const promoteDevice =
+    promote && externalDevices.find((device) => device.serial === promote.serial)
+  const activePromote = promoteDevice ? promote : null
+  const showFeedbackInHeader = !realOpen || promoteDevice?.state !== 'device'
+
+  const finishPromote = (serial: string, repaired = false): void => {
+    const request = promoteRequest.current
+    setFailedAttempt(null)
+    setPromote({ serial, phase: 'done', repaired })
+    later(() => {
+      if (promoteRequest.current === request) setPromote(null)
+    }, 6_000)
+  }
 
   const handlePromote = (serial: string): void => {
     const request = ++promoteRequest.current
@@ -339,19 +353,15 @@ const DeviceListPane = ({
         return
       }
       const outcome: WirelessConnectOutcome = result.data
-      if (!outcome.ok) setFailedAttempt({ serial, outcome })
-      setPromote(
-        outcome.ok
-          ? { serial, phase: 'done' }
-          : { serial, phase: 'fail', text: wirelessConnectFailureText(copy, outcome, recoveryCopy) }
-      )
-      // done 提示 6 秒后自清（P3-4：重插同 serial 不重显旧提示）；失败态不自动清，
-      // 随设备离场消失（派生收口）
       if (outcome.ok) {
-        later(() => {
-          if (promoteRequest.current === request)
-            setPromote((cur) => (cur?.serial === serial && cur.phase === 'done' ? null : cur))
-        }, 6_000)
+        finishPromote(serial)
+      } else {
+        setFailedAttempt({ serial, outcome })
+        setPromote({
+          serial,
+          phase: 'fail',
+          text: wirelessConnectFailureText(copy, outcome, recoveryCopy)
+        })
       }
     })
   }
@@ -494,6 +504,7 @@ const DeviceListPane = ({
               type="button"
               className="folded-toggle real-toggle"
               aria-expanded={realOpen}
+              title={realLabel}
               onClick={() => setRealOpen((open) => !open)}
             >
               {realOpen ? (
@@ -501,8 +512,17 @@ const DeviceListPane = ({
               ) : (
                 <ChevronRight size={12} aria-hidden="true" />
               )}
-              {format(copy.realDeviceSectionCount, { count: externalDevices.length })}
+              <span>{realLabel}</span>
             </button>
+            {failedAttempt?.outcome.attemptId ? (
+              <WirelessRecoveryFeedback
+                key={failedAttempt.outcome.attemptId}
+                outcome={failedAttempt.outcome}
+                inDeviceHeader
+                onRetry={() => handlePromote(failedAttempt.serial)}
+                onRecovered={() => finishPromote(failedAttempt.serial, true)}
+              />
+            ) : null}
             <button
               type="button"
               className="real-wireless-btn"
@@ -513,23 +533,17 @@ const DeviceListPane = ({
               <Wifi size={12} aria-hidden="true" />
             </button>
           </div>
-          {failedAttempt?.outcome.attemptId ? (
-            <div className="recovery-feedback">
-              {!externalDevices.some((device) => device.serial === failedAttempt.serial) ? (
-                <p role="status">
-                  {wirelessConnectFailureText(copy, failedAttempt.outcome, recoveryCopy)}
-                </p>
-              ) : null}
-              <WirelessRecoveryFeedback
-                key={failedAttempt.outcome.attemptId}
-                outcome={failedAttempt.outcome}
-                onRetry={() => handlePromote(failedAttempt.serial)}
-                onRecovered={() => {
-                  setFailedAttempt(null)
-                  setPromote({ serial: failedAttempt.serial, phase: 'done' })
-                }}
-              />
-            </div>
+          {showFeedbackInHeader && failedAttempt?.outcome.attemptId ? (
+            <p className="recovery-feedback" role="status">
+              {wirelessConnectFailureText(copy, failedAttempt.outcome, recoveryCopy)}
+            </p>
+          ) : null}
+          {showFeedbackInHeader &&
+          promote?.phase === 'done' &&
+          (activePromote || promote.repaired) ? (
+            <p className="recovery-feedback promote-done" role="status">
+              {copy.wirelessPromoteDone}
+            </p>
           ) : null}
           {realOpen ? (
             <div className="real-body" {...externalDrag.listHandlers}>
@@ -672,30 +686,97 @@ const Wrapper = styled.div`
      无线批（2026-10-15）：组头拆成容器行（按钮嵌按钮不合法）+ 右侧常驻无线入口；
      弹层锚在本区（position: relative） */
   .recovery-feedback {
+    margin: 0;
     padding: 8px 12px;
     font-size: 11px;
     overflow-wrap: anywhere;
   }
   .real-devices {
     position: relative;
+    container-type: inline-size;
     border-top: 1px solid var(--board-hairline);
     background: var(--board-bg-raised);
   }
 
   .real-head {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
-    gap: 2px;
+    column-gap: 2px;
     padding-right: 6px;
   }
 
   .real-toggle {
-    flex: 1;
-    min-width: 0;
+    grid-area: 1 / 1;
+    padding-right: 4px;
+  }
+
+  .real-toggle svg {
+    flex: none;
+  }
+
+  .real-toggle span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .real-head .recovery-actions {
+    grid-area: 1 / 2;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  .recovery-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 22px;
+    white-space: nowrap;
+  }
+
+  .recovery-actions svg {
+    display: none;
+  }
+
+  @container (max-width: 270px) {
+    .real-head .recovery-actions button {
+      width: 22px;
+      padding: 0;
+    }
+
+    .real-head .recovery-actions svg {
+      display: block;
+    }
+
+    .real-head .recovery-actions span {
+      display: none;
+    }
+  }
+
+  @container (max-width: 390px) {
+    .real-head:lang(en) .recovery-actions button {
+      width: 22px;
+      padding: 0;
+    }
+
+    .real-head:lang(en) .recovery-actions svg {
+      display: block;
+    }
+
+    .real-head:lang(en) .recovery-actions span {
+      display: none;
+    }
+  }
+
+  .real-head .recovery-status {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 4px 6px 4px 12px;
   }
 
   .real-wireless-btn {
-    flex: none;
+    grid-area: 1 / 3;
     display: inline-flex;
     align-items: center;
     justify-content: center;

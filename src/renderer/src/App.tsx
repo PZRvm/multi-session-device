@@ -516,7 +516,7 @@ const App = (): React.JSX.Element => {
   const boardHead = (
     <BoardHead
       count={visibleDevices.length}
-      compact={listWidth <= 320}
+      compact={listWidth < 390}
       onOpenSettings={() => void openSettings()}
     />
   )

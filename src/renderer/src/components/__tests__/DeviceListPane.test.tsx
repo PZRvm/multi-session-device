@@ -229,6 +229,7 @@ const wirelessApi = (
     open?: () => Promise<void>
     scan?: () => Promise<unknown>
     promote?: (input: unknown) => Promise<unknown>
+    repair?: (attemptId: string) => Promise<unknown>
     disconnect?: (serial: string) => Promise<unknown>
   } = {}
 ): { open: ReturnType<typeof vi.fn> } => {
@@ -238,6 +239,7 @@ const wirelessApi = (
       openExternalWireless: open,
       onWirelessRecoveryChanged: () => () => {},
       getWirelessRecoveryState: async () => ({ phase: 'idle', blocked: [] }),
+      repairWirelessConnection: over.repair,
       scanExternalWireless: over.scan ?? vi.fn(async () => []),
       promoteExternalWireless:
         over.promote ?? vi.fn(async () => ({ ok: true, serial: '192.168.31.102:5555' })),
@@ -389,8 +391,10 @@ describe('真机区无线入口（plan 2026-10-15-real-device-wireless）', () =
   })
 })
 
-it('renders one stable recovery action group outside the section toggle', async () => {
+it('keeps recovery actions and feedback available when the physical device list is collapsed', async () => {
+  const repair = vi.fn(async () => ({ ok: true, serial: '192.168.31.162:5555' }))
   wirelessApi({
+    repair,
     promote: async () => ({
       ok: false,
       reason: 'unreachable',
@@ -411,6 +415,14 @@ it('renders one stable recovery action group outside the section toggle', async 
   const action = await screen.findByRole('button', { name: '修复连接' })
   expect(screen.getAllByRole('button', { name: '修复连接' })).toHaveLength(1)
   expect(action.parentElement?.closest('button')).toBeNull()
+  const failure = screen.getByText(/疑似 ADB 服务异常/).textContent
+  fireEvent.click(
+    screen.getByRole('button', { name: format(copy.realDeviceSectionCount, { count: 1 }) })
+  )
+  expect(screen.getByRole('status').textContent).toBe(failure)
+  fireEvent.click(action)
+  await waitFor(() => expect(screen.getByRole('status').textContent).toBe(copy.wirelessPromoteDone))
+  expect(repair).toHaveBeenCalledWith('attempt')
 })
 
 // ---- 拖拽换序挂接（plan 2026-11-09-device-list-drag-reorder）----

@@ -51,13 +51,19 @@ const AboutRow = styled.div`
   justify-content: space-between;
   gap: 12px;
   margin-top: 22px;
+  border-top: 1px solid var(--board-hairline);
+  padding-top: 12px;
 
   & h2 {
-    margin: 0 0 4px;
+    margin: 0;
   }
 
   & .description {
     margin: 0;
+  }
+
+  & .description:not(:empty) {
+    margin-top: 4px;
   }
 `
 
@@ -103,7 +109,7 @@ function aboutStatus(state: UpdateSnapshot, copy: Copy, busy: boolean, label: st
   if (state.error) return copy.errors[state.error]
   if (state.candidateVersion) return format(copy.version, { v: state.candidateVersion })
   if (state.status === 'up-to-date') return copy.latest
-  return busy ? label : ''
+  return busy ? label : format(copy.currentVersion, { v: state.currentVersion })
 }
 
 export default function UpdateEntry({
@@ -135,8 +141,10 @@ export default function UpdateEntry({
     }
   }, [])
 
-  if (!state || state.status === 'disabled') return null
-  if (about ? !state.policy.showSettingsEntry : !state.policy.showHeaderEntry) return null
+  if (!state) return null
+  const preview = import.meta.env.DEV && about && state.status === 'disabled'
+  const showEntry = about ? state.policy.showSettingsEntry : state.policy.showHeaderEntry
+  if (!preview && (state.status === 'disabled' || !showEntry)) return null
   const candidate = state.downloadedVersion ?? state.candidateVersion
   if (!about && !candidate) return null
   const busy = busyStatus.includes(state.status)
@@ -178,14 +186,14 @@ export default function UpdateEntry({
     )
 
   return (
-    <AboutRow>
+    <AboutRow title={preview ? copy.errors.development : undefined}>
       <div>
         <h2>{copy.title}</h2>
         <p className="description" role="status">
           {status}
         </p>
       </div>
-      <AboutButton type="button" disabled={busy} onClick={act}>
+      <AboutButton type="button" disabled={busy || preview} onClick={preview ? undefined : act}>
         {progress !== null && (
           <ProgressFill aria-hidden="true" style={{ transform: `scaleX(${progress / 100})` }} />
         )}

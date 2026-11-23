@@ -102,9 +102,9 @@ components:
     backgroundColor: 'transparent'
     textColor: '{colors.board-ink-dim}'
     rounded: '{rounded.segment-inner}'
-    padding: '2px'
+    padding: '0 7px'
     width: '27px'
-    height: '26px'
+    height: '20px'
   settings-theme-swatch:
     textColor: '{colors.accent-ink}'
     rounded: '{rounded.sm}'
@@ -174,7 +174,7 @@ components:
 
 信息板与工作台共用的底色族：
 
-- **亮色板底 / 抬升层 / 发丝线**（#f6f4ee / #ede9df / #d8d2c5）：暖灰信息板的底、行 hover 与唯一分隔手段；主墨 #1e2329，次墨 #616974。**控件描边**（#bcb4a6 / `--board-control-line`）：输入与分段控件边界，与滚动条 hover 同值异义 token。
+- **亮色板底 / 抬升层 / 发丝线**（#f6f4ee / #ede9df / #d8d2c5）：暖灰信息板的底、行 hover 与唯一分隔手段；主墨 #1e2329，次墨 #616974。**控件描边**（#bcb4a6 / `--board-control-line`）：输入与下拉控件边界，与滚动条 hover 同值异义 token。
 - **暗色板底 / 抬升层 / 发丝线**（#101418 / #1a2026 / #232830）：近黑蓝工作台；主墨 #f5f0e8，次墨 #9aa3ad；控件描边 #3a434e。
 - **砖面（Board Tile）**（亮 #ede9df / 暗 #1a2026，`--board-tile`）：键帽与小面积承载面的预留 token，两态都与各自抬升层同值、不同语义。
 - **砖上墨（Board Tile Ink）**（亮 #9a5f00 / 暗 #ffb000，`--board-tile-ink`）：白天降饱和信号深色、黑夜信号基色，昼夜翻转——分段控件选中瓣字形等小信号用。
@@ -267,9 +267,9 @@ Windows 投屏内容区单独预留（20px）顶部空间，叠加子画布原�
 
 ### 分段控件（Segmented Control）— 元素基线
 
-三态并置的外观选择（跟随系统/亮/暗），分别用（16px）显示器、太阳、月亮 SVG 图标呈现。轨道 = board-bg-raised + 控件线描边、选中瓣 = `--board-segment-selected-bg` + `--board-tile-ink`（昼夜翻转的信号深色），未选 = 次墨；外轨圆角（4px）、内缩与间距（2px），内瓣宽（27px）、最小高（26px）、圆角（2px）。当前仅在设置窗静态展示，原生 disabled；按钮有三语 `aria-label` / `title` 和 `aria-pressed`，不提供切换行为。主窗板头保留设置齿轮与设备计数，不再显示外观 tab 或窄窗菜单。
+设置窗的外观行采用 13px 显示器、太阳和月亮图标。85 × 24px 的分段控件内缩 2px，每个选项为 27 × 20px。轨道用 `--board-bg-raised`，选中项用 `--board-segment-selected-bg` 底色和 `--board-tile-ink` 图标色，其他图标用 `--board-ink-dim`。主窗侧栏宽度达到 390px 时显示 12px 图标的分段控件，较窄时显示 20 × 20px 的菜单按钮。两处都可切换外观。
 
-### 设置窗（Settings Window）— 静态呈现
+### 设置窗（Settings Window）— 初版静态设计
 
 五个详情分类共用 `SettingsParts`；窗壳与共用详情各以单个 styled `Wrapper` 管理后代样式，状态与窄窗规则留在各自边界内。
 

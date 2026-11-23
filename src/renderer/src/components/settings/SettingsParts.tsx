@@ -51,6 +51,19 @@ const Wrapper = styled.section`
     padding: 12px 0;
     border-bottom: 1px solid var(--board-hairline);
   }
+  .appearance-row {
+    gap: 20px;
+    min-height: 44px;
+    padding: 6px 0;
+  }
+  .appearance-row .description {
+    margin-top: 2px;
+    font-size: 11px;
+    line-height: 1.45;
+  }
+  .appearance-row .controls {
+    align-self: flex-end;
+  }
   .row:last-child {
     border-bottom: none;
   }

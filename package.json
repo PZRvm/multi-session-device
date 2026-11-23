@@ -1,6 +1,6 @@
 {
   "name": "multi-session-device",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "license": "MIT",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
@@ -44,6 +44,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@ant-design/icons": "6.3.4",
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
