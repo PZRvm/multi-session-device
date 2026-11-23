@@ -18,6 +18,7 @@ import DeviceListPane from './components/DeviceListPane'
 import ExternalCanvas, { ExternalCanvasPlaceholder } from './components/ExternalCanvas'
 import LogcatPanel from './components/LogcatPanel'
 import { PopoverIconButton } from './components/PopoverIconButton'
+import UpdateEntry from './components/UpdateEntry'
 import ResizeHandle from './components/ResizeHandle'
 import { clampListWidth, LIST_MAX_WIDTH } from './components/listWidth'
 import {
@@ -528,6 +529,12 @@ const App = (): React.JSX.Element => {
       onClick={handleToggleLogDock}
     />
   ) : null
+  const updateAndLog = (
+    <>
+      <UpdateEntry />
+      {logToggle}
+    </>
+  )
   return (
     <Wrapper lang={locale} data-windows={isWindows}>
       {isWindows ? <div className="window-drag-region" aria-hidden="true" /> : null}
@@ -628,7 +635,7 @@ const App = (): React.JSX.Element => {
         </div>
         <div className="canvas-tools">
           {indicatorDevice ? <RecordingIndicator deviceId={indicatorDevice.id} /> : null}
-          {!isWindows ? logToggle : null}
+          {!isWindows ? updateAndLog : null}
         </div>
       </main>
       {dockVisible ? (
@@ -659,7 +666,7 @@ const App = (): React.JSX.Element => {
           </aside>
         </>
       ) : null}
-      {isWindows ? <div className="window-actions">{logToggle}</div> : null}
+      {isWindows ? <div className="window-actions">{updateAndLog}</div> : null}
     </Wrapper>
   )
 }
@@ -687,11 +694,13 @@ const Wrapper = styled.div`
     display: flex;
     justify-content: flex-end;
     align-items: center;
+    gap: 8px;
     height: 40px;
     padding-right: 10px;
     pointer-events: none;
     z-index: 2;
   }
+  .window-actions .popover-icon-wrap,
   .window-actions button {
     pointer-events: auto;
     -webkit-app-region: no-drag;

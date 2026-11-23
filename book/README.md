@@ -70,6 +70,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [ADR-005-screenshot-editor-reuse.md](docs/decisions/ADR-005-screenshot-editor-reuse.md) — 截图编辑器直接迁入多会话浏览器实现——Konva/react-konva 是复用源编辑器的绘图依赖而非新 UI 栈；图标、窗口、缓存与文件发布按本项目差异适配
 - [ADR-006-sync-official-bocode.md](docs/decisions/ADR-006-sync-official-bocode.md) — 使用官方英文 BoCode skills 并以 SHA 跟踪升级，项目路径、发布机制与中文历史记录保持独立
 - [ADR-007-emulator-hibernation-snapshot.md](docs/decisions/ADR-007-emulator-hibernation-snapshot.md) — 模拟器休眠采用官方命名快照 + 进程退出的适配边界，版本化清单落在 AVD 目录内，能力按平台独立门控
+- [ADR-008-app-update-engines.md](docs/decisions/ADR-008-app-update-engines.md) — 采用 Sparkle 与 NSIS 单独处理 Mac 和 Windows，主进程负责安装许可和设备状态保护
 - [README.md](docs/decisions/README.md) — How to write an ADR here — sections, naming, numbering, and when a decision needs a record
 
 ### docs/poc/
@@ -100,7 +101,7 @@ description: Master index of the book — the map of every document. Regenerate 
 
 ### notes/issue/
 
-**Open (45)**
+**Open (47)**
 
 - [2026-10-06-向导独立窗口-review.md](notes/issue/2026-10-06-向导独立窗口-review.md) — 向导独立窗口分支（5 提交）的 code review 发现——两处注释腐化、span 嵌 h3 不合法、dead CSS、非 darwin 标题双显与两条备查信息
 - [2026-10-04-messageport-bridge-no-delivery.md](notes/issue/2026-10/2026-10-04-messageport-bridge-no-delivery.md) — MessagePortMain 经 contextBridge 回传后 port 对象可达但不投递消息——视频包通道退回 webContents.send（每帧拷贝），产品化时可再评估
@@ -146,9 +147,11 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-06-headless-auto-software-renderer.md](notes/issue/2026-11/2026-11-06-headless-auto-software-renderer.md) — 当前 Mac 的 headless AVD 在 auto 模式实际选择 swangle_indirect，而 Studio 同镜像选 host，桌面动画持续卡顿
 - [2026-11-06-hibernation-review-round.md](notes/issue/2026-11/2026-11-06-hibernation-review-round.md) — 休眠域评审轮发现：恢复后清单消费失败的陈旧投影风险、已休眠设备编辑无前置提示、quit 后 adb serial 残留影响紧接恢复
 - [2026-11-09-device-list-drag-reorder-review.md](notes/issue/2026-11/2026-11-09-device-list-drag-reorder-review.md) — 拖拽换序批 code review（Phase 5）——1 项 P2（陈旧拖拽态下外来源拖放可被接受且无效 drop 不拦 Electron 默认导航）+ 4 项 P3；P2/P3-B 随修复批处理
+- [2026-11-10-dual-entry-concurrent-encoders.md](notes/issue/2026-11/2026-11-10-dual-entry-concurrent-encoders.md) — 同一物理手机 USB+无线双条目并存时，多 app 实例×多条目各建各的 scrcpy 会话，峰值 6 个并发编码器导致画面同步延迟（操作生效但画面滞后）
 - [2026-11-10-screen-runtime-followups.md](notes/issue/2026-11/2026-11-10-screen-runtime-followups.md) — 模拟器失效显示条目、真机重复 scrcpy 会话与安装版缺少投屏诊断日志仍需现场验证
+- [2026-11-10-wireless-robustness-hardware-validation.md](notes/issue/2026-11/2026-11-10-wireless-robustness-hardware-validation.md) — 无线健壮性三项修复的真机整链路验收待执行；dev 实例在 agent 派生环境启动挂起待查明
 
-**Resolved (84)**
+**Resolved (85)**
 
 - [2026-10-10-styled-refactor-review.md](notes/issue/2026-10-10-styled-refactor-review.md) — styled 单 Wrapper 重排过程中发现的既有问题——发丝线隐式 DOM 契约、选中态状态点对比度、重复 CSS 与死钩子等（只记录，未修复）
 - [2026-10-01-book-infra-scripts-missing.md](notes/issue/2026-10/2026-10-01-book-infra-scripts-missing.md) — workflow/git-workflow 引用的 book:index、check-commit-message.mjs、.githooks、git-policy.yml 在本仓库均不存在，规则与基建脱节
@@ -234,6 +237,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-04-screenshot-per-capture-review.md](notes/issue/2026-11/2026-11-04-screenshot-per-capture-review.md) — 多截图编辑复审的真机断连清理和注释问题已修复，新增真实 IPC 装配回归，全仓 1570 项通过
 - [2026-11-05-wireless-recovery-code-review.md](notes/issue/2026-11/2026-11-05-wireless-recovery-code-review.md) — 无线修复复审的三项 P2 已按用户授权修复，截图门、日志失败壳与并发诊断均有失败回归转绿记录
 - [2026-11-09-post-delivery-review-round.md](notes/issue/2026-11/2026-11-09-post-delivery-review-round.md) — 休眠交付后六轮追加提交（GPU 默认/缺陷修复/Popover UI×4）的结构化代码评审：发现 7 项记录待办，无阻断性缺陷
+- [2026-11-23-app-update-code-review.md](notes/issue/2026-11/2026-11-23-app-update-code-review.md) — 应用内更新审查发现 Mac 退出折返后跳过取消，以及候选换版时下载进度卡住
 
 ### notes/learn/
 
@@ -346,6 +350,8 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-06-headless-auto-gpu-selection.md](notes/learn/2026-11/2026-11-06-headless-auto-gpu-selection.md) — headless 模拟器的 auto 不保证主机 GPU；当前 M4 实测 auto 选 SwiftShader，必须以有效配置和 SurfaceFlinger 核验
 - [2026-11-09-jsdom-drag-event-testing.md](notes/learn/2026-11/2026-11-09-jsdom-drag-event-testing.md) — jsdom 下测试 HTML5 拖拽手势的三道坎——fireEvent 透传不了 clientY（原生事件 + defineProperty + act）、rect 桩要走原型级 spy、vi.mock fs 配 resetModules 别用 importOriginal
 - [2026-11-10-idle-screen-ack.md](notes/learn/2026-11/2026-11-10-idle-screen-ack.md) — 静置时旧 ACK 时间不能代表新包超时，配置返回也不能证明投屏已经恢复
+- [2026-11-10-无线scrcpy熄屏停帧与建流泄漏谱系.md](notes/learn/2026-11/2026-11-10-无线scrcpy熄屏停帧与建流泄漏谱系.md) — 无线 scrcpy 三事实——熄屏(doze)时表面编码器零帧且 resetVideo 救不回、建流失败/中断会泄漏 server+forward（transport 未归还时不跑 teardown）、无线链路实测基线（5GHz/RTT 50ms/吞吐 31-35Mbps/冷启动 1-2s）
+- [2026-11-23-isolated-update-package.md](notes/learn/2026-11/2026-11-23-isolated-update-package.md) — 隔离应用升级测试需要拆分应用身份、数据和更新缓存，关闭真实设备跟踪并明确打包输入
 
 ### notes/summary/2026-10/
 
@@ -389,7 +395,11 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-06-bocode-upgrade.md](notes/summary/2026-11/2026-11-06-bocode-upgrade.md) — BoCode 已切换到 79426a9 官方英文四技能，同步任务分级及状态索引，保留项目布局和发布约定，目录导航一项 P3 待补
 - [2026-11-06-emulator-hibernation.md](notes/summary/2026-11/2026-11-06-emulator-hibernation.md) — 模拟器手动休眠（官方命名快照+进程退出）与停止态删除入口的完整交付：协议实证、状态机、门控与验证证据
 - [2026-11-09-device-list-drag-reorder.md](notes/summary/2026-11/2026-11-09-device-list-drag-reorder.md) — 左侧列表拖拽排序交付——AVD 主区与真机区行拖拽换序；AVD 走 devices:reorder 整单重排（数组序即持久化序），真机走 applyOrder 合并层 + external-order.json；手势零依赖照 multi-session-browser 先例
+- [2026-11-10-release-1.0.1.md](notes/summary/2026-11/2026-11-10-release-1.0.1.md) — 1.0.1 Preview经PR #2合并main并成功发布macOS ARM64、Windows x64安装包和校验文件
 - [2026-11-10-screen-reset-loop.md](notes/summary/2026-11/2026-11-10-screen-reset-loop.md) — 投屏静置首帧不再立即判超时，尾包定时确认，连续恢复预算跨配置保留；1701项测试通过
+- [2026-11-10-wireless-stream-robustness.md](notes/summary/2026-11/2026-11-10-wireless-stream-robustness.md) — 无线投屏健壮性修复——建流失败不再泄漏 server 进程与 forward、无线视图激活/恢复时唤醒屏幕、建立期失败自动重试一次；真机整链路验收待执行
+- [2026-11-23-mac-update-review-fixes.md](notes/summary/2026-11/2026-11-23-mac-update-review-fixes.md) — 使用临时签名包验证 Mac 普通退出不会安装更新，以及下载失败换版后可重新确认和安装
+- [2026-11-23-update-ui-parity.md](notes/summary/2026-11/2026-11-23-update-ui-parity.md) — 以多会话测试浏览器的实际渲染为参照，校准多开模拟器的软件更新详情和关于页状态文案
 
 ### notes/task/
 
@@ -418,6 +428,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [20261105160421-真机通用连接修复入口.md](notes/think-report/20261105160421-真机通用连接修复入口.md) — 将无线失败专用修复扩展为真机区常驻入口，支持 USB 消失时诊断及用户确认后的共享 ADB 重启
 - [20261106131053-BoCode原版升级.md](notes/think-report/20261106131053-BoCode原版升级.md) — 升级官方 BoCode 的差异、原版 skills 替换方案、68 篇状态迁移及项目约定保留清单
 - [20261106144528-模拟器休眠与运行时隐藏删除.md](notes/think-report/20261106144528-模拟器休眠与运行时隐藏删除.md) — 以官方状态快照加进程退出实现释放内存的休眠，先验证既有 Quick Boot 稳定性；删除入口建议仅停止态显示
+- [20261123152107-应用内更新.md](notes/think-report/20261123152107-应用内更新.md) — 追踪多会话测试浏览器的应用内更新链路，评估 Sparkle、NSIS、发布渠道与安装准备如何迁入多开模拟器
 
 ### plans/
 
@@ -529,6 +540,9 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-09-device-list-drag-reorder.md](plans/2026-11-09-device-list-drag-reorder.md) — 左侧列表拖拽排序——AVD 主区与真机区行拖拽换序：AVD 走 devices:reorder 整单重排（数组序即持久化序，零 schema 变更），真机走 applyOrder 合并层 + external-order.json 偏好存储
 - [2026-11-10-release-1.0.1.md](plans/2026-11-10-release-1.0.1.md) — 将 dev 版本更新为1.0.1，经同仓库PR合并main，发布双平台预览安装包及更新说明
 - [2026-11-10-screen-reset-loop.md](plans/2026-11-10-screen-reset-loop.md) — 修复静置首帧 ACK 超时误判、尾包回执遗漏和新配置绕过连续重建上限
+- [2026-11-10-wireless-stream-robustness.md](plans/2026-11-10-wireless-stream-robustness.md) — 无线投屏三项健壮性修复——建流失败不泄漏 server 进程、无线视图激活/恢复时唤醒屏幕、建立期首次失败自动重试一次
+- [2026-11-23-in-app-update.md](plans/2026-11-23-in-app-update.md) — 按多会话测试浏览器的 Sparkle、electron-updater 与 NSIS 机制规划多开模拟器的更新、发布和设备保护
+- [2026-11-23-release-1.0.2.md](plans/2026-11-23-release-1.0.2.md) — 通过同仓库 dev 到 main 的 PR 发布首个支持应用内更新的稳定版，并核验 Windows 安装、签名包和发布资产
 - [README.md](plans/README.md) — Plans directory usage — implementation plans land here once the Phase 2 design is complete, with naming and the plan template
 
 ### think-report/
@@ -542,4 +556,4 @@ description: Master index of the book — the map of every document. Regenerate 
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 433 documents -->
+<!-- 447 documents -->

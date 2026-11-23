@@ -9,3 +9,4 @@ export { ERRORS_COPY, type ErrorsCopy } from './errors'
 export { SCREENSHOT_EDITOR_COPY, type ScreenshotEditorCopy } from './screenshotEditor'
 
 export { RECORDING_COPY, type RecordingCopy } from './recording'
+export { UPDATE_COPY } from './updates'

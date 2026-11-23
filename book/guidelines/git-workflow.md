@@ -122,6 +122,8 @@ Update versions on `dev`, for example `npm version patch --no-git-tag-version` (
 
 Only that merged PR starts `release-installers`: verify the version, build macOS ARM64 DMG and Windows x64 EXE, verify asar, generate SHA256SUMS, then create the `v<version>` tag and Preview Release at the PR's exact merge SHA. The release template supplies the version in its notes.
 
+Stable application updates use the same PR gate. After authorizing a release, the maintainer sets the repository variable `ENABLE_STABLE_APP_UPDATES=true`, configures the Sparkle public variable and private secret, and adds `.github/release-notes/v<version>.md` with the version bump. CI also builds a signed Mac ARM64 ZIP and appcast and the Windows `latest.yml`. It compares the version notes, checksums, and uploaded draft assets before making the release Latest. With the variable unset, the Preview path remains active. See the [application update decision](../docs/decisions/ADR-008-app-update-engines.md).
+
 Ordinary dev pushes, unmerged closed PRs, other PR sources, old release/v* branches and manual buttons do not trigger publication. Published versions skip building and uploading without overwriting tags or attachments, so increment the version on dev first. Residual drafts and GitHub API failures fail safely. Inspect Actions logs and rerun the original merge event when appropriate; inspect an incomplete draft before handling it. Code fixes return through dev and a new PR.
 
 ## Automation and platform settings

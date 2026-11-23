@@ -4,6 +4,7 @@ import App from '../../App'
 import { useDeviceStore } from '../../stores/deviceStore'
 import { MAIN_COPY } from '@shared/i18n'
 import type { Device, DeviceSnapshot, LogcatBatchMessage } from '@shared/types'
+import type { UpdateSnapshot } from '@shared/updates'
 import { networkApiMock } from './networkApiMock'
 
 const copy = MAIN_COPY['zh-CN']
@@ -35,6 +36,19 @@ const snapshotOf = (devices: Device[]): DeviceSnapshot =>
       pendingNotification: false
     }
   }) as unknown as DeviceSnapshot
+
+const availableUpdate: UpdateSnapshot = {
+  revision: 1,
+  currentVersion: '1.0.1',
+  policy: { showHeaderEntry: true, showSettingsEntry: true },
+  status: 'available',
+  releaseNotes: '',
+  releaseDate: null,
+  candidateVersion: '1.0.2',
+  downloadedVersion: null,
+  progress: null,
+  error: null
+}
 
 const openLogcatWindow = vi.fn(async () => undefined)
 const isWindowOpen = vi.fn(async () => false)
@@ -123,6 +137,26 @@ describe.each(['darwin', 'win32', 'linux'])('主窗日志 dock（%s）', (platfo
     await screen.findByRole('log')
     expect(button.closest(selector)).toBeTruthy()
     expect(container.querySelectorAll('.log-toggle')).toHaveLength(1)
+  })
+
+  it('更新入口排在日志左边，无日志目标时留在同一个右侧工具组', async () => {
+    Object.assign(window.api, {
+      updates: { getState: async () => availableUpdate, onChanged: () => () => {} }
+    })
+    const { container } = render(<App />)
+    const log = toggleButton()
+    const update = await screen.findByRole('button', { name: '更新' })
+    const selector = platform === 'win32' ? '.window-actions' : '.canvas-tools'
+    const group = container.querySelector(selector)
+    expect(update.closest(selector)).toBe(group)
+    expect(log.closest(selector)).toBe(group)
+    expect(update.compareDocumentPosition(log) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(container.querySelector('.list-pane')?.contains(update)).toBe(false)
+
+    act(() => useDeviceStore.setState({ selectedId: null }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: copy.logcatTitle })).toBeNull())
+    expect(update.closest(selector)).toBe(group)
+    expect(group?.querySelectorAll('button')).toHaveLength(1)
   })
 
   it('dock 默认收起（不持久化）；点击展开并订阅，再点收起退订', async () => {

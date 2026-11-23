@@ -1,3 +1,4 @@
+import { handleUpdateMutation } from '../updatePreparation'
 import { BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import {
@@ -65,7 +66,7 @@ export function registerThemeIpc(): void {
     event.returnValue = getThemeState()
   })
 
-  ipcMain.handle(IPC_CHANNELS.themeSetMode, async (_event, mode: unknown): Promise<void> => {
+  handleUpdateMutation(IPC_CHANNELS.themeSetMode, async (_event, mode: unknown): Promise<void> => {
     if (!isThemeMode(mode))
       throw new Error(`${IPC_CHANNELS.themeSetMode}: ${msg('invalidModeSuffix')}`)
     updateThemeState({ mode })
@@ -77,7 +78,7 @@ export function registerThemeIpc(): void {
     await persistThemeState()
   })
 
-  ipcMain.handle(
+  handleUpdateMutation(
     IPC_CHANNELS.themeSetSystemId,
     async (_event, systemId: unknown): Promise<void> => {
       if (!isThemeSystemId(systemId)) {

@@ -155,64 +155,102 @@ export async function establishTransport(deps: TransportDeps): Promise<Transport
     deps.toolEnv()
   )
 
-  const fwd = await deps.run(
-    deps.adbPath,
-    ['-s', serial, 'forward', 'tcp:0', `localabstract:${socketName}`],
-    FORWARD_TIMEOUT_MS
-  )
-  if (fwd.code !== 0) throw new Error(`adb forward 失败：${fwd.stderr}`)
-  const port = Number(fwd.stdout.trim())
-
+  // spawn 之后任何失败/中断都要回收 server 进程与 forward 规则——此时 session.transport
+  // 还没建立，lifecycle 的 teardown 不会跑（2026-11-10 无线泄漏调查）；失败一次就留一个
+  // 手机端孤儿 app_process + 本地 adb shell + 遗留 forward。清理吞错，不覆盖原始错误。
+  let forwardPort: number | null = null
   let videoSocket: Socket | null = null
-  let firstChunk: Buffer | null = null
-  const deadline = Date.now() + CONNECT_BUDGET_MS
-  while (!firstChunk) {
-    if (signal.aborted) throw new Error('aborted')
-    if (Date.now() > deadline) throw new Error('连接 scrcpy video socket 超时')
-    const sock = await deps.connect(port)
-    const winner = await Promise.race([
-      readFirstChunk(sock, signal),
-      new Promise<null>((resolve) => {
-        const timer = setTimeout(() => resolve(null), DUMMY_BYTE_TIMEOUT_MS)
-        signal.addEventListener(
-          'abort',
-          () => {
-            clearTimeout(timer)
-            resolve(null)
-          },
-          { once: true }
-        )
-      })
-    ])
-    if (winner === null) {
-      sock.destroy()
-      continue
+  let controlSocket: Socket | null = null
+  try {
+    const fwd = await deps.run(
+      deps.adbPath,
+      ['-s', serial, 'forward', 'tcp:0', `localabstract:${socketName}`],
+      FORWARD_TIMEOUT_MS
+    )
+    if (fwd.code !== 0) throw new Error(`adb forward 失败：${fwd.stderr}`)
+    const port = Number(fwd.stdout.trim())
+    forwardPort = port
+
+    let firstChunk: Buffer | null = null
+    const deadline = Date.now() + CONNECT_BUDGET_MS
+    while (!firstChunk) {
+      if (signal.aborted) throw new Error('aborted')
+      if (Date.now() > deadline) throw new Error('连接 scrcpy video socket 超时')
+      const sock = await deps.connect(port)
+      const winner = await Promise.race([
+        readFirstChunk(sock, signal),
+        new Promise<null>((resolve) => {
+          const timer = setTimeout(() => resolve(null), DUMMY_BYTE_TIMEOUT_MS)
+          signal.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(timer)
+              resolve(null)
+            },
+            { once: true }
+          )
+        })
+      ])
+      if (winner === null) {
+        sock.destroy()
+        continue
+      }
+      videoSocket = sock
+      firstChunk = winner
     }
-    videoSocket = sock
-    firstChunk = winner
-  }
-  if (!videoSocket || !firstChunk) throw new Error('video socket 未建立')
+    if (!videoSocket || !firstChunk) throw new Error('video socket 未建立')
 
-  if (signal.aborted) throw new Error('aborted')
-  const controlSocket = await deps.connect(port)
+    if (signal.aborted) throw new Error('aborted')
+    controlSocket = await deps.connect(port)
 
-  const videoParsed = await options.parseVideoStreamMetadata(
-    socketToStream(videoSocket, firstChunk.subarray(1)) as unknown as Parameters<
-      typeof options.parseVideoStreamMetadata
-    >[0]
-  )
-  // Tango 品牌流与全局 ReadableStream 形改实同，交界处一次 cast
-  const mediaStream = videoParsed.stream.pipeThrough(
-    options.createMediaStreamTransformer()
-  ) as unknown as ReadableStream<ScrcpyMediaStreamPacket>
-  const videoSize = {
-    width: videoParsed.metadata.width ?? 0,
-    height: videoParsed.metadata.height ?? 0
-  }
+    const videoParsed = await options.parseVideoStreamMetadata(
+      socketToStream(videoSocket, firstChunk.subarray(1)) as unknown as Parameters<
+        typeof options.parseVideoStreamMetadata
+      >[0]
+    )
+    // Tango 品牌流与全局 ReadableStream 形改实同，交界处一次 cast
+    const mediaStream = videoParsed.stream.pipeThrough(
+      options.createMediaStreamTransformer()
+    ) as unknown as ReadableStream<ScrcpyMediaStreamPacket>
+    const videoSize = {
+      width: videoParsed.metadata.width ?? 0,
+      height: videoParsed.metadata.height ?? 0
+    }
 
-  const teardown = async (): Promise<void> => {
+    return {
+      scid: scid.toOptionValue() ?? '',
+      serverProc,
+      forwardSpec: `tcp:${port}`,
+      videoSocket,
+      controlSocket,
+      mediaStream,
+      options,
+      videoSize,
+      teardown
+    }
+  } catch (error) {
     try {
-      controlSocket.destroy()
+      if (serverProc.exitCode === null) serverProc.kill('SIGTERM')
+    } catch {
+      // 已退
+    }
+    if (forwardPort !== null) {
+      try {
+        await deps.run(
+          deps.adbPath,
+          ['-s', serial, 'forward', '--remove', `tcp:${forwardPort}`],
+          FORWARD_REMOVE_TIMEOUT_MS
+        )
+      } catch {
+        // adb 不可用时放弃
+      }
+    }
+    throw error
+  }
+
+  async function teardown(): Promise<void> {
+    try {
+      controlSocket?.destroy()
     } catch {
       // 已断
     }
@@ -229,23 +267,11 @@ export async function establishTransport(deps: TransportDeps): Promise<Transport
     try {
       await deps.run(
         deps.adbPath,
-        ['-s', serial, 'forward', '--remove', `tcp:${port}`],
+        ['-s', serial, 'forward', '--remove', `tcp:${forwardPort}`],
         FORWARD_REMOVE_TIMEOUT_MS
       )
     } catch {
       // adb 不可用时放弃
     }
-  }
-
-  return {
-    scid: scid.toOptionValue() ?? '',
-    serverProc,
-    forwardSpec: `tcp:${port}`,
-    videoSocket,
-    controlSocket,
-    mediaStream,
-    options,
-    videoSize,
-    teardown
   }
 }

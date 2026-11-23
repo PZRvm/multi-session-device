@@ -1,6 +1,6 @@
 {
   "name": "multi-session-device",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "license": "MIT",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
@@ -34,6 +34,7 @@
     "@yume-chan/scrcpy-decoder-webcodecs": "^2.5.3",
     "@yume-chan/stream-extra": "^2.6.1",
     "adm-zip": "^0.6.1",
+    "electron-updater": "6.8.9",
     "fast-xml-parser": "^5.11.2",
     "konva": "10.8.0",
     "lucide-react": "^1.49.0",

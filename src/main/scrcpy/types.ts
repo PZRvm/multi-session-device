@@ -14,6 +14,11 @@ export const MAX_UNACKED_PACKETS = 16
 export const MAX_UNACKED_BYTES = 2 * 1024 * 1024
 /** ACK 停滞（renderer 掉队/丢失）后强制重同步的间隔 */
 export const ACK_STALL_MS = 3_000
+// ---- 建立期预算（2026-11-10 无线健壮性）----
+/** 建立尝试次数：首次失败（无线闪断恢复窗口/adbd 竞态）自动再试一次 */
+export const ESTABLISH_ATTEMPTS = 2
+/** 建立重试间隔 */
+export const ESTABLISH_RETRY_DELAY_MS = 1_000
 
 export interface ScrcpyManagerDeps {
   adbPath: () => string

@@ -92,6 +92,9 @@ jobs:
         shell: bash
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      MSD_UPDATE_HEADER: "${{ vars.ENABLE_STABLE_APP_UPDATES == 'true' }}"
+      MSD_UPDATE_SETTINGS: "${{ vars.ENABLE_STABLE_APP_UPDATES == 'true' }}"
+      MSD_UPDATE_TEST_BUILD: 'false'
       NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
       NPM_CONFIG_ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
       ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
@@ -114,16 +117,38 @@ jobs:
         run: npm test
       - run: npm run build
       - name: Package macOS ARM64 DMG
-        if: matrix.platform == 'mac-arm64'
+        if: matrix.platform == 'mac-arm64' && vars.ENABLE_STABLE_APP_UPDATES != 'true'
         run: |
+          # shellcheck disable=SC2016
           npx electron-builder --mac dmg --arm64 --publish never \
             '--config.dmg.artifactName=${name}-${version}-mac-${arch}.${ext}'
           node scripts/verify-packaged-asar.mjs
       - name: Package Windows x64 NSIS installer
-        if: matrix.platform == 'windows-x64'
+        if: matrix.platform == 'windows-x64' && vars.ENABLE_STABLE_APP_UPDATES != 'true'
         run: |
+          # shellcheck disable=SC2016
           npx electron-builder --win nsis --x64 --publish never \
             '--config.nsis.artifactName=${name}-${version}-windows-${arch}-setup.${ext}'
+          node scripts/verify-packaged-asar.mjs dist/win-unpacked/resources/app.asar
+      - name: Package stable Mac and verify the app
+        if: matrix.platform == 'mac-arm64' && vars.ENABLE_STABLE_APP_UPDATES == 'true'
+        env:
+          SPARKLE_PUBLIC_ED_KEY: ${{ vars.SPARKLE_PUBLIC_ED_KEY }}
+        run: |
+          npx electron-builder --config scripts/electron-builder-release.cjs --mac --arm64 --publish never
+          node scripts/verify-packaged-asar.mjs
+          version=$(node -p "require('./package.json').version")
+          hdiutil verify "dist/multi-session-device-$version-mac-arm64.dmg"
+      - name: Sign the Mac update archive and generate appcast
+        if: matrix.platform == 'mac-arm64' && vars.ENABLE_STABLE_APP_UPDATES == 'true'
+        env:
+          SPARKLE_PUBLIC_ED_KEY: ${{ vars.SPARKLE_PUBLIC_ED_KEY }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: node scripts/sparkle-appcast.mjs dist arm64
+      - name: Package stable Windows NSIS installer and update metadata
+        if: matrix.platform == 'windows-x64' && vars.ENABLE_STABLE_APP_UPDATES == 'true'
+        run: |
+          npx electron-builder --config scripts/electron-builder-release.cjs --win nsis --x64 --publish never
           node scripts/verify-packaged-asar.mjs dist/win-unpacked/resources/app.asar
       - uses: actions/upload-artifact@v4
         with:
@@ -131,6 +156,11 @@ jobs:
           path: |
             dist/*.dmg
             dist/*-setup.exe
+            dist/*-setup.exe.blockmap
+            dist/*-mac-arm64.zip
+            dist/appcast-arm64.xml
+            dist/release-notes-v*.md
+            dist/latest.yml
           if-no-files-found: error
           retention-days: 14
 
@@ -150,8 +180,24 @@ jobs:
         with:
           pattern: installers-*
           path: installers
-          merge-multiple: true
+          merge-multiple: ${{ vars.ENABLE_STABLE_APP_UPDATES != 'true' }}
+      - uses: actions/setup-node@v4
+        if: vars.ENABLE_STABLE_APP_UPDATES == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - name: Validate stable update assets and create a verified release
+        if: vars.ENABLE_STABLE_APP_UPDATES == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPARKLE_PUBLIC_ED_KEY: ${{ vars.SPARKLE_PUBLIC_ED_KEY }}
+          RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          npm ci --ignore-scripts
+          node scripts/update-assets.mjs installers stable-assets
+          node scripts/publish-update-release.mjs stable-assets
       - name: Verify files and calculate SHA-256
+        if: vars.ENABLE_STABLE_APP_UPDATES != 'true'
         working-directory: installers
         run: |
           version=$(node -p "require('../package.json').version")
@@ -160,6 +206,7 @@ jobs:
           sha256sum ./*.dmg ./*.exe > SHA256SUMS
           sha256sum --check SHA256SUMS
       - name: Create preview release from the exact build commit
+        if: vars.ENABLE_STABLE_APP_UPDATES != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
