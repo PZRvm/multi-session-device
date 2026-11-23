@@ -141,8 +141,10 @@ export default function UpdateEntry({
     }
   }, [])
 
-  if (!state || state.status === 'disabled') return null
-  if (about ? !state.policy.showSettingsEntry : !state.policy.showHeaderEntry) return null
+  if (!state) return null
+  const preview = import.meta.env.DEV && about && state.status === 'disabled'
+  const showEntry = about ? state.policy.showSettingsEntry : state.policy.showHeaderEntry
+  if (!preview && (state.status === 'disabled' || !showEntry)) return null
   const candidate = state.downloadedVersion ?? state.candidateVersion
   if (!about && !candidate) return null
   const busy = busyStatus.includes(state.status)
@@ -184,14 +186,14 @@ export default function UpdateEntry({
     )
 
   return (
-    <AboutRow>
+    <AboutRow title={preview ? copy.errors.development : undefined}>
       <div>
         <h2>{copy.title}</h2>
         <p className="description" role="status">
           {status}
         </p>
       </div>
-      <AboutButton type="button" disabled={busy} onClick={act}>
+      <AboutButton type="button" disabled={busy || preview} onClick={preview ? undefined : act}>
         {progress !== null && (
           <ProgressFill aria-hidden="true" style={{ transform: `scaleX(${progress / 100})` }} />
         )}
