@@ -542,6 +542,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-10-screen-reset-loop.md](plans/2026-11-10-screen-reset-loop.md) — 修复静置首帧 ACK 超时误判、尾包回执遗漏和新配置绕过连续重建上限
 - [2026-11-10-wireless-stream-robustness.md](plans/2026-11-10-wireless-stream-robustness.md) — 无线投屏三项健壮性修复——建流失败不泄漏 server 进程、无线视图激活/恢复时唤醒屏幕、建立期首次失败自动重试一次
 - [2026-11-23-in-app-update.md](plans/2026-11-23-in-app-update.md) — 按多会话测试浏览器的 Sparkle、electron-updater 与 NSIS 机制规划多开模拟器的更新、发布和设备保护
+- [2026-11-23-release-1.0.2.md](plans/2026-11-23-release-1.0.2.md) — 通过同仓库 dev 到 main 的 PR 发布首个支持应用内更新的稳定版，并核验 Windows 安装、签名包和发布资产
 - [README.md](plans/README.md) — Plans directory usage — implementation plans land here once the Phase 2 design is complete, with naming and the plan template
 
 ### think-report/
@@ -555,4 +556,4 @@ description: Master index of the book — the map of every document. Regenerate 
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 446 documents -->
+<!-- 447 documents -->
