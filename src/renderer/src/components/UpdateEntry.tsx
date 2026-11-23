@@ -51,13 +51,19 @@ const AboutRow = styled.div`
   justify-content: space-between;
   gap: 12px;
   margin-top: 22px;
+  border-top: 1px solid var(--board-hairline);
+  padding-top: 12px;
 
   & h2 {
-    margin: 0 0 4px;
+    margin: 0;
   }
 
   & .description {
     margin: 0;
+  }
+
+  & .description:not(:empty) {
+    margin-top: 4px;
   }
 `
 
