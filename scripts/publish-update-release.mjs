@@ -11,14 +11,17 @@ const { readVersionReleaseNotes } = require('./release-notes.cjs')
 const { name, version } = require('../package.json')
 const repository = process.env.GITHUB_REPOSITORY
 const sha = process.env.RELEASE_SHA
+const [assetsDirectory, option, ...extra] = process.argv.slice(2)
 if (
   repository !== 'PZRvm/multi-session-device' ||
   !/^[0-9a-f]{40}$/.test(sha ?? '') ||
-  !process.argv[2]
+  !assetsDirectory ||
+  (option !== undefined && option !== '--resume-draft') ||
+  extra.length
 )
   throw new Error('稳定版发布需要目标仓库、合并 SHA 和已验证附件目录')
 
-const directory = resolve(process.argv[2])
+const directory = resolve(assetsDirectory)
 const tag = 'v' + version
 const notes = readVersionReleaseNotes(version)
 const assets = validateUpdateAssets(directory, name, version, notes)
@@ -39,23 +42,35 @@ const expected = new Map(
 )
 
 const gh = (args) => execFileSync('gh', args, { encoding: 'utf8' })
-gh([
-  'release',
-  'create',
-  tag,
-  ...Array.from(expected.keys(), (file) => join(directory, file)),
-  '--repo',
-  repository,
-  '--target',
-  sha,
-  '--draft',
-  '--title',
-  tag,
-  '--notes-file',
-  join(directory, 'release-notes-' + tag + '.md')
-])
 const api = 'repos/' + repository + '/releases'
-const release = JSON.parse(gh(['api', api + '/tags/' + tag]))
+if (option !== '--resume-draft') {
+  gh([
+    'release',
+    'create',
+    tag,
+    ...Array.from(expected.keys(), (file) => join(directory, file)),
+    '--repo',
+    repository,
+    '--target',
+    sha,
+    '--draft',
+    '--title',
+    tag,
+    '--notes-file',
+    join(directory, 'release-notes-' + tag + '.md')
+  ])
+}
+// 按 Tag 读取的 API 只返回已发布版本。列表对有写权限的发布任务也返回草稿。
+const matches = gh([
+  'api',
+  api + '?per_page=100',
+  '--paginate',
+  '--jq',
+  '.[] | select(.tag_name == ' + JSON.stringify(tag) + ')'
+]).trim()
+if (!matches || matches.includes('\n'))
+  throw new Error('同版本草稿不存在或存在多条发布记录：' + tag)
+const release = JSON.parse(matches)
 if (
   !release.draft ||
   release.prerelease ||

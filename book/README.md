@@ -101,7 +101,7 @@ description: Master index of the book — the map of every document. Regenerate 
 
 ### notes/issue/
 
-**Open (47)**
+**Open (46)**
 
 - [2026-10-06-向导独立窗口-review.md](notes/issue/2026-10-06-向导独立窗口-review.md) — 向导独立窗口分支（5 提交）的 code review 发现——两处注释腐化、span 嵌 h3 不合法、dead CSS、非 darwin 标题双显与两条备查信息
 - [2026-10-04-messageport-bridge-no-delivery.md](notes/issue/2026-10/2026-10-04-messageport-bridge-no-delivery.md) — MessagePortMain 经 contextBridge 回传后 port 对象可达但不投递消息——视频包通道退回 webContents.send（每帧拷贝），产品化时可再评估
@@ -138,7 +138,6 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-02-windows-test-baseline.md](notes/issue/2026-11/2026-11-02-windows-test-baseline.md) — Windows 图标替换前的全量测试已有 153 项失败，涉及平台假设、路径、符号链接与权限，未在本任务修复
 - [2026-11-02-worktree单实例锁互斥.md](notes/issue/2026-11/2026-11-02-worktree单实例锁互斥.md) — 多 worktree 并行开发时同包名 Electron 应用共享 userData，单实例锁先到先得——后启动的 dev 拿不到锁静默退出，人工验收被挡；create-worktree 只分配了端口未处理锁
 - [2026-11-03-actions-runtime-deprecation.md](notes/issue/2026-11/2026-11-03-actions-runtime-deprecation.md) — GitHub 提示 checkout 和 setup-node v4 使用已弃用的 Node 20 运行时，目前由平台强制切换到 Node 24 并构建成功
-- [2026-11-03-logcat-subscription-test-flake.md](notes/issue/2026-11/2026-11-03-logcat-subscription-test-flake.md) — 全仓测试中日志 dock 展开后的订阅断言偶发失败，无代码改动复跑全部通过，等待时序需单独核查
 - [2026-11-03-low-core-default-settings.md](notes/issue/2026-11/2026-11-03-low-core-default-settings.md) — 少于四核的宿主会产生超出自身能力范围的默认模拟器 CPU 配置，首次发布 CI 暴露此问题
 - [2026-11-03-publication-review.md](notes/issue/2026-11/2026-11-03-publication-review.md) — 首次公开发布检查发现 Logcat 测试偶发失败、hook 未执行和旧产品说明待核对
 - [2026-11-05-commit-msg-hook-not-executable.md](notes/issue/2026-11/2026-11-05-commit-msg-hook-not-executable.md) — 主仓库提交时提示 commit-msg hook 无执行权限而被忽略，本轮手动主题校验通过，未改 hook 权限
@@ -151,7 +150,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-10-screen-runtime-followups.md](notes/issue/2026-11/2026-11-10-screen-runtime-followups.md) — 模拟器失效显示条目、真机重复 scrcpy 会话与安装版缺少投屏诊断日志仍需现场验证
 - [2026-11-10-wireless-robustness-hardware-validation.md](notes/issue/2026-11/2026-11-10-wireless-robustness-hardware-validation.md) — 无线健壮性三项修复的真机整链路验收待执行；dev 实例在 agent 派生环境启动挂起待查明
 
-**Resolved (85)**
+**Resolved (86)**
 
 - [2026-10-10-styled-refactor-review.md](notes/issue/2026-10-10-styled-refactor-review.md) — styled 单 Wrapper 重排过程中发现的既有问题——发丝线隐式 DOM 契约、选中态状态点对比度、重复 CSS 与死钩子等（只记录，未修复）
 - [2026-10-01-book-infra-scripts-missing.md](notes/issue/2026-10/2026-10-01-book-infra-scripts-missing.md) — workflow/git-workflow 引用的 book:index、check-commit-message.mjs、.githooks、git-policy.yml 在本仓库均不存在，规则与基建脱节
@@ -232,6 +231,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-02-windows-icon-master-edge.md](notes/issue/2026-11/2026-11-02-windows-icon-master-edge.md) — 黑屏 Windows 图标母版原尺寸下，手机外沿仍有少量生成杂色，常用小尺寸不影响黑屏识别
 - [2026-11-02-windows-titlebar-narrow-window.md](notes/issue/2026-11/2026-11-02-windows-titlebar-narrow-window.md) — Windows 顶部宽左栏配合窄主窗时 Logcat 越界，已在独立修复轮次处理，三档缩放复验通过
 - [2026-11-03-editor-refresh-comment.md](notes/issue/2026-11/2026-11-03-editor-refresh-comment.md) — 编辑器续编尺寸校验的单槽注释已于 2026-11-04 改为本窗会话的尺寸异常防御说明
+- [2026-11-03-logcat-subscription-test-flake.md](notes/issue/2026-11/2026-11-03-logcat-subscription-test-flake.md) — 全仓测试中日志 dock 展开后的订阅断言偶发失败，无代码改动复跑全部通过，等待时序需单独核查
 - [2026-11-03-screenshot-layout-review.md](notes/issue/2026-11/2026-11-03-screenshot-layout-review.md) — 已修复图片编辑页缩放后的三灯定位偏移，以及损坏的 worktree 元数据阻断端口覆盖与构建两项复审问题
 - [2026-11-03-wireless-unreachable-diagnostics.md](notes/issue/2026-11/2026-11-03-wireless-unreachable-diagnostics.md) — 无线连接把 macOS Local network prohibited 引发的 No route to host 统一提示为确认手机 Wi-Fi，原始 ADB 错误未传给用户
 - [2026-11-04-screenshot-per-capture-review.md](notes/issue/2026-11/2026-11-04-screenshot-per-capture-review.md) — 多截图编辑复审的真机断连清理和注释问题已修复，新增真实 IPC 装配回归，全仓 1570 项通过
@@ -352,6 +352,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-10-idle-screen-ack.md](notes/learn/2026-11/2026-11-10-idle-screen-ack.md) — 静置时旧 ACK 时间不能代表新包超时，配置返回也不能证明投屏已经恢复
 - [2026-11-10-无线scrcpy熄屏停帧与建流泄漏谱系.md](notes/learn/2026-11/2026-11-10-无线scrcpy熄屏停帧与建流泄漏谱系.md) — 无线 scrcpy 三事实——熄屏(doze)时表面编码器零帧且 resetVideo 救不回、建流失败/中断会泄漏 server+forward（transport 未归还时不跑 teardown）、无线链路实测基线（5GHz/RTT 50ms/吞吐 31-35Mbps/冷启动 1-2s）
 - [2026-11-23-isolated-update-package.md](notes/learn/2026-11/2026-11-23-isolated-update-package.md) — 隔离应用升级测试需要拆分应用身份、数据和更新缓存，关闭真实设备跟踪并明确打包输入
+- [2026-11-23-release-draft-lookup.md](notes/learn/2026-11/2026-11-23-release-draft-lookup.md) — GitHub 待发布草稿须通过有写权限的分页 Releases 列表定位，再以合并 SHA 和产物摘要核对
 
 ### notes/summary/2026-10/
 
@@ -556,4 +557,4 @@ description: Master index of the book — the map of every document. Regenerate 
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 447 documents -->
+<!-- 448 documents -->
