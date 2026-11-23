@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react'
 import { ArrowDownToLine, RotateCw } from 'lucide-react'
 import styled from 'styled-components'
 import { format, UPDATE_COPY } from '@shared/i18n'
-import type { UpdateSnapshot } from '@shared/updates'
+import type { UpdateSnapshot, UpdateStatus } from '@shared/updates'
 import { useCopy } from '../hooks/useCopy'
 
 const HeaderButton = styled.button`
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: grid;
   flex: none;
   place-items: center;
@@ -24,6 +27,67 @@ const HeaderButton = styled.button`
     cursor: default;
   }
 `
+
+const AboutRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 22px;
+
+  & h2 {
+    margin: 0 0 4px;
+  }
+
+  & .description {
+    margin: 0;
+  }
+`
+
+const AboutButton = styled.button`
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  flex: none;
+  min-width: 100px;
+  font-variant-numeric: tabular-nums;
+`
+
+const ProgressFill = styled.span<{ $vertical?: boolean }>`
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--accent);
+  opacity: 0.3;
+  pointer-events: none;
+  transform-origin: ${({ $vertical }) => ($vertical ? 'bottom' : 'left')};
+`
+
+type Copy = (typeof UPDATE_COPY)[keyof typeof UPDATE_COPY]
+const busyStatus: readonly UpdateStatus[] = ['checking', 'downloading', 'preparing', 'installing']
+
+function buttonLabel(state: UpdateSnapshot, copy: Copy, progress: number | null): string {
+  switch (state.status) {
+    case 'downloading':
+      return progress === null
+        ? copy.downloading
+        : format(copy.percent, { n: Math.floor(progress) })
+    case 'checking':
+    case 'preparing':
+    case 'installing':
+      return copy[state.status]
+    default:
+      if (state.downloadedVersion) return state.error ? copy.retryInstall : copy.restart
+      return state.candidateVersion ? copy.download : copy.check
+  }
+}
+
+function aboutStatus(state: UpdateSnapshot, copy: Copy, busy: boolean, label: string): string {
+  if (state.error) return copy.errors[state.error]
+  if (state.candidateVersion) return format(copy.version, { v: state.candidateVersion })
+  if (state.status === 'up-to-date') return copy.latest
+  return busy ? label : ''
+}
 
 export default function UpdateEntry({
   about = false
@@ -56,34 +120,16 @@ export default function UpdateEntry({
 
   if (!state || state.status === 'disabled') return null
   if (about ? !state.policy.showSettingsEntry : !state.policy.showHeaderEntry) return null
-  const candidate = state.candidateVersion
+  const candidate = state.downloadedVersion ?? state.candidateVersion
   if (!about && !candidate) return null
-  const busy = ['checking', 'downloading', 'preparing', 'installing'].includes(state.status)
-  const progress = state.progress?.percent
-  const status = state.error
-    ? copy.errors[state.error]
-    : state.status === 'downloading' && progress != null
-      ? format(copy.percent, { n: Math.floor(progress) })
-      : state.status === 'up-to-date'
-        ? copy.latest
-        : state.status === 'ready'
-          ? copy.restart
-          : state.status === 'checking'
-            ? copy.checking
-            : state.status === 'preparing'
-              ? copy.preparing
-              : state.status === 'installing'
-                ? copy.installing
-                : state.status === 'downloading'
-                  ? copy.downloading
-                  : candidate
-                    ? format(copy.version, { v: candidate })
-                    : ''
-  const label = candidate
-    ? state.downloadedVersion
-      ? copy.restart
-      : copy.downloadAction
-    : copy.check
+  const busy = busyStatus.includes(state.status)
+  const percent = state.progress?.percent
+  const progress =
+    state.status === 'downloading' && percent != null && Number.isFinite(percent)
+      ? Math.max(0, Math.min(100, percent))
+      : null
+  const label = buttonLabel(state, copy, progress)
+  const status = aboutStatus(state, copy, busy, label)
   const act = (): void => {
     const api = window.api.updates
     void (candidate ? api.showDetails() : api.check()).catch((error: unknown) =>
@@ -96,25 +142,35 @@ export default function UpdateEntry({
       <HeaderButton
         type="button"
         disabled={busy}
-        title={status || label}
+        title={state.error ? copy.errors[state.error] : label}
         aria-label={label}
         onClick={act}
       >
+        {progress !== null && (
+          <ProgressFill
+            $vertical
+            aria-hidden="true"
+            style={{ transform: `scaleY(${progress / 100})` }}
+          />
+        )}
         {state.downloadedVersion ? <RotateCw size={14} /> : <ArrowDownToLine size={14} />}
       </HeaderButton>
     )
 
   return (
-    <>
-      <h2>{copy.title}</h2>
-      <div className="directory-line">
-        <span className="description" aria-live="polite">
-          {status || state.currentVersion}
-        </span>
-        <button type="button" disabled={busy} onClick={act}>
-          {label}
-        </button>
+    <AboutRow>
+      <div>
+        <h2>{copy.title}</h2>
+        <p className="description" role="status">
+          {status}
+        </p>
       </div>
-    </>
+      <AboutButton type="button" disabled={busy} onClick={act}>
+        {progress !== null && (
+          <ProgressFill aria-hidden="true" style={{ transform: `scaleX(${progress / 100})` }} />
+        )}
+        {label}
+      </AboutButton>
+    </AboutRow>
   )
 }

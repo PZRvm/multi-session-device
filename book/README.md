@@ -397,6 +397,7 @@ description: Master index of the book — the map of every document. Regenerate 
 - [2026-11-10-release-1.0.1.md](notes/summary/2026-11/2026-11-10-release-1.0.1.md) — 1.0.1 Preview经PR #2合并main并成功发布macOS ARM64、Windows x64安装包和校验文件
 - [2026-11-10-screen-reset-loop.md](notes/summary/2026-11/2026-11-10-screen-reset-loop.md) — 投屏静置首帧不再立即判超时，尾包定时确认，连续恢复预算跨配置保留；1701项测试通过
 - [2026-11-10-wireless-stream-robustness.md](notes/summary/2026-11/2026-11-10-wireless-stream-robustness.md) — 无线投屏健壮性修复——建流失败不再泄漏 server 进程与 forward、无线视图激活/恢复时唤醒屏幕、建立期失败自动重试一次；真机整链路验收待执行
+- [2026-11-23-update-ui-parity.md](notes/summary/2026-11/2026-11-23-update-ui-parity.md) — 以多会话测试浏览器的实际渲染为参照，校准多开模拟器的软件更新详情和关于页状态文案
 
 ### notes/task/
 
@@ -552,4 +553,4 @@ description: Master index of the book — the map of every document. Regenerate 
 
 - [windows-support.md](todos/windows-support.md) — Windows 支持的六份开发计划清单——每份做什么、解决什么问题
 
-<!-- 443 documents -->
+<!-- 444 documents -->
