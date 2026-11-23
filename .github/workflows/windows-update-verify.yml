@@ -1,0 +1,38 @@
+name: Verify Windows NSIS upgrade
+on:
+  push:
+    branches: [codex/verify-windows-update]
+permissions:
+  contents: read
+jobs:
+  update:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+      NPM_CONFIG_ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
+      ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
+      NPM_CONFIG_ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
+      MSD_UPDATE_TEST_BUILD: 'true'
+      MSD_UPDATE_TEST_ORIGIN: http://127.0.0.1:16387
+      MSD_UPDATE_HEADER: 'true'
+      MSD_UPDATE_SETTINGS: 'true'
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Build two isolated NSIS installers
+        shell: bash
+        run: |
+          for version in 90.0.1 90.0.2; do
+            MSD_UPDATE_TEST_VERSION="$version" npx electron-builder --config scripts/electron-builder-release.cjs --win nsis --x64 --publish never --config.directories.output="dist/windows-verify/$version"
+            node scripts/verify-packaged-asar.mjs "dist/windows-verify/$version/win-unpacked/resources/app.asar"
+          done
+      - name: Install and update on Windows
+        run: node .github/windows-update-probe.mjs
